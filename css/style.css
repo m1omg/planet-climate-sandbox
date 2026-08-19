@@ -64,8 +64,13 @@ body{
 .ctl{margin-bottom:13px}
 .ctl-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
 .ctl-top label{font-size:12px;color:var(--fg-dim)}
-.ctl-top output{font:11.5px/1 var(--mono);color:var(--fg);background:var(--panel-2);
-  padding:3px 6px;border-radius:5px;border:1px solid var(--line);white-space:nowrap}
+.ctl-top input.val{font:11.5px/1 var(--mono);color:var(--fg);background:var(--panel-2);
+  padding:4px 6px;border-radius:5px;border:1px solid var(--line);white-space:nowrap;
+  width:92px;text-align:right;transition:border-color .15s,background .15s}
+.ctl-top input.val:hover{border-color:var(--line-2)}
+.ctl-top input.val:focus{outline:none;border-color:var(--accent);background:rgba(127,212,255,.10);
+  color:var(--fg);text-align:left}
+.ctl-top input.val.bad{border-color:var(--bad);color:var(--bad)}
 .ctl-note{font-size:10.5px;color:var(--fg-faint);margin-top:3px}
 
 input[type=range]{
@@ -92,6 +97,14 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .switch[aria-pressed=true]{background:var(--accent)}
 .switch[aria-pressed=true]::after{transform:translateX(17px)}
 
+.panel-note{font-size:11px;line-height:1.55;color:var(--fg-faint);margin:2px 0 0;
+  padding:9px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px}
+
+/* controls the simulation drives by itself */
+.ctl.live .ctl-top label::after{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--accent);margin-left:6px;vertical-align:middle;opacity:.75}
+.ctl.live input.val{color:var(--accent)}
+
 .derived{
   display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-top:10px;
   padding:9px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
@@ -116,7 +129,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 /* ---------------- stage ---------------- */
 #stage{position:relative;min-width:0;overflow:hidden;background:#05070d}
-#planet{position:absolute;inset:0;width:100%;height:100%;display:block}
+#planet{position:absolute;inset:0;width:100%;height:100%;display:block;
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+#planet.dragging{cursor:grabbing}
+
+#view-controls{position:absolute;right:16px;bottom:70px;z-index:4;display:flex;flex-direction:column;gap:6px}
+#view-controls .icon-btn{width:32px;font-size:15px;line-height:1}
+#view-controls .icon-btn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
 
 #state-banner{
   position:absolute;top:18px;left:50%;transform:translateX(-50%);

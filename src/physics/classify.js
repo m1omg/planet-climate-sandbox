@@ -28,7 +28,7 @@ export function classify(w) {
   const lam = lockFactor(p);
   const T = dg.Tmean, ice = dg.iceMean;
   const water = dg.totalWater;
-  const initialWater = p.water;
+  const initialWater = w.waterInitial ?? p.water;
   const esc = w.escape ?? { fStrat: 0, water: 0 };
   const lossPerGyr = (esc.water ?? 0) * 1e9 / dg.d.eoColumn;
   const pTot = dg.pTotMean;

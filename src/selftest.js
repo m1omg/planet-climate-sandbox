@@ -5,6 +5,7 @@ import { EARTH, PRESETS } from './game/presets.js';
 import { classify } from './physics/classify.js';
 import { runawayLimit, olr } from './physics/radiation.js';
 import { NBANDS } from './physics/climate.js';
+import { SLIDERS, parseValue, toSlider, fromSlider } from './game/controls.js';
 
 let pass = 0, fail = 0;
 const log = [];
@@ -166,6 +167,42 @@ export function run() {
     check('All three advanced the same simulated time (to within one step)',
       spread < 0.01 * a.world.time,
       `${a.world.time.toFixed(0)} / ${b.world.time.toFixed(0)} / ${c.world.time.toFixed(0)} yr`);
+  }
+
+  // ---- 8. the controls: typed values and slider round-trips ----------------
+  {
+    const by = (k) => SLIDERS.find((d) => d.key === k);
+    const cases = [
+      ['co2Bar', '420ppm', 280e-6, 420e-6], ['co2Bar', '420', 280e-6, 420e-6],
+      ['co2Bar', '0.5 bar', 0.02, 0.5],     ['co2Bar', '1%', 280e-6, 0.01],
+      ['n2Bar', '800 mbar', 0.79, 0.8],     ['n2Bar', '1 atm', 0.79, 1.01325],
+      ['water', '0.5 EO', 1, 0.5],          ['water', 'none', 1, 0],
+      ['landFraction', '30%', 0.3, 0.3],    ['landFraction', '45', 0.3, 0.45],
+      ['rotationHours', '2 days', 24, 48],  ['rotationHours', '1 yr', 24, 8766],
+      ['insolation', '1.5', 1, 1.5],        ['xuvFraction', '100x', 3.4e-6, 3.4e-4],
+      ['obliquity', '23.5°', 23.5, 23.5],   ['outgassing', '3×', 1, 3],
+    ];
+    let bad = null;
+    for (const [k, typed, cur, want] of cases) {
+      const got = parseValue(by(k), typed, cur);
+      if (got === null || Math.abs(got - want) > Math.abs(want) * 1e-6 + 1e-12) {
+        bad = `${k} "${typed}" -> ${got}, wanted ${want}`; break;
+      }
+    }
+    check('Typed values parse, with units and sensible defaults', !bad, bad || `${cases.length} forms`);
+    check('Nonsense input is rejected rather than guessed at',
+      parseValue(by('co2Bar'), 'garbage', 280e-6) === null, 'returns null');
+
+    let worst = 0, worstKey = '';
+    for (const d of SLIDERS) {
+      for (const v of [d.zero ? 0 : d.min, d.min, (d.min + d.max) / 2, d.max]) {
+        const back = fromSlider(d, toSlider(d, v));
+        const err = Math.abs(back - v) / (Math.abs(v) || 1);
+        if (err > worst) { worst = err; worstKey = d.key; }
+      }
+    }
+    check('Every control survives a slider round-trip', worst < 3e-3,
+      `worst ${(worst * 100).toFixed(3)}% on ${worstKey}`);
   }
 
   const summary = `${pass} passed, ${fail} failed`;

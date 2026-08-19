@@ -135,7 +135,9 @@ export function drawWater(canvas, world) {
   const pad = { l: 38, r: 8, t: 10, b: 18 };
   const H = world.history;
   axes(ctx, w, h, pad);
-  const total = world.params.water;
+  const w = world.water;
+  const total = Math.max(world.waterInitial ?? world.params.water,
+                         w.ocean + w.ice + w.vapour + w.lost);
   if (total <= 0 || H.length < 2) {
     label(ctx, total <= 0 ? 'no water on this world' : 'collecting…', w / 2, h / 2, 'center');
     return;

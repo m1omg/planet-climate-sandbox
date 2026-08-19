@@ -25,6 +25,8 @@ uniform float uPTot;        // bar
 uniform float uCO2;         // 0..1 how CO2-dominated the air is
 uniform float uMagma;       // 0..1 molten surface
 uniform float uLocked;      // 0 = free rotator, 1 = tidally locked
+uniform float uYaw;         // camera orbit, radians
+uniform float uPitch;
 uniform float uNightGlow;   // thermal emission on the dark side
 uniform float uBandT[18];
 uniform float uBandIce[18];
@@ -65,6 +67,7 @@ float bandVal(float x, int which){
 }
 
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0.0,-s, 0.0,1.0,0.0, s,0.0,c); }
+mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1.0,0.0,0.0, 0.0,c,s, 0.0,-s,c); }
 
 // ---------- surface colour ----------
 vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float height){
@@ -116,8 +119,12 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
 
 void main(){
   vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / min(uRes.x, uRes.y);
-  vec3 ro = vec3(0.0, 0.0, 3.0);
-  vec3 rd = normalize(vec3(uv*2.05, -1.6));
+  // Dragging orbits the camera rather than turning the planet, so the star, the
+  // terminator and the ice caps all stay where they belong while you look from
+  // a new angle.
+  mat3 view = rotY(uYaw) * rotX(uPitch);
+  vec3 ro = view * vec3(0.0, 0.0, 3.0);
+  vec3 rd = view * normalize(vec3(uv*2.05, -1.6));
 
   vec3 col = vec3(0.0);
 

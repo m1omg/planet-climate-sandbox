@@ -27,12 +27,15 @@ export class PlanetView {
     this.u = {};
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
-      'uNightGlow', 'uBandT', 'uBandIce']) {
+      'uNightGlow', 'uYaw', 'uPitch', 'uBandT', 'uBandIce']) {
       this.u[name] = gl.getUniformLocation(this.prog, name === 'uBandT' || name === 'uBandIce' ? name + '[0]' : name);
     }
     this.bandT = new Float32Array(NBANDS);
     this.bandIce = new Float32Array(NBANDS);
     this.spin = 0;
+    this.yaw = 0; this.pitch = 0;      // camera orbit, driven by dragging
+    this.spinVel = 0;                  // momentum after a flick
+    this.spinPaused = false;
   }
 
   link(vs, fs) {
@@ -87,7 +90,8 @@ export class PlanetView {
     // Spin visually, at a rate suggesting the rotation period but always
     // watchable: real time, not simulated time, and independent of frame rate.
     const lam = dg.lam;
-    const spinRate = (1 - lam) * clamp(0.245 * Math.pow(24 / Math.max(p.rotationHours, 0.5), 0.35), 0.014, 0.63);
+    const spinRate = this.spinPaused ? 0
+      : (1 - lam) * clamp(0.245 * Math.pow(24 / Math.max(p.rotationHours, 0.5), 0.35), 0.014, 0.63);
     this.spin = (this.spin + spinRate * dtReal) % (Math.PI * 2);
 
     for (let i = 0; i < NBANDS; i++) {
@@ -118,6 +122,8 @@ export class PlanetView {
     gl.uniform1f(this.u.uMagma, clamp((dg.Tmean - 1200) / 400, 0, 1));
     gl.uniform1f(this.u.uLocked, lam);
     gl.uniform1f(this.u.uNightGlow, glow);
+    gl.uniform1f(this.u.uYaw, this.yaw);
+    gl.uniform1f(this.u.uPitch, this.pitch);
     gl.uniform1fv(this.u.uBandT, this.bandT);
     gl.uniform1fv(this.u.uBandIce, this.bandIce);
 

@@ -9,71 +9,13 @@ import { clamp } from './physics/constants.js';
 import { PlanetView } from './render/planet.js';
 import { drawHistory, drawProfile, drawWater, drawPhase } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
+import { SLIDERS, parseValue, toSlider, fromSlider } from './game/controls.js';
 
 const $ = (s) => document.querySelector(s);
 
 // ---------------------------------------------------------------------------
 // Slider definitions
 // ---------------------------------------------------------------------------
-const fmtBar = (v) => v >= 1 ? `${v.toFixed(v < 10 ? 2 : 0)} bar`
-  : v >= 1e-3 ? `${(v * 1e3).toFixed(v * 1e3 < 10 ? 2 : 0)} mbar`
-  : `${(v * 1e6).toFixed(0)} µbar`;
-const ppm = (v) => v * 1e6 >= 1e4 ? `${(v * 100).toFixed(1)} %` : `${(v * 1e6).toFixed(0)} ppm`;
-
-const SLIDERS = [
-  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.05, max: 5, log: true,
-    fmt: (v) => `${v.toFixed(2)} M⊕`, note: 'Sets radius, gravity and how well the world holds its air.' },
-  { g: 'body', key: 'water', label: 'Water inventory', min: 0, max: 12, log: true, zero: true,
-    fmt: (v) => v <= 0 ? 'none' : `${v.toFixed(v < 1 ? 3 : 2)} EO`, note: '1 EO = one Earth ocean. Less water means drier air — and a wider habitable zone.' },
-  { g: 'body', key: 'landFraction', label: 'Land fraction', min: 0, max: 1,
-    fmt: (v) => `${(v * 100).toFixed(0)} %`, note: 'No land means no silicate weathering, so no CO₂ thermostat.' },
-
-  { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 4, log: true,
-    fmt: (v) => `${v.toFixed(3)} S⊕`, note: 'Relative to Earth. 1 S⊕ = 1361 W/m².' },
-  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2600, max: 9000, step: 10,
-    fmt: (v) => `${v.toFixed(0)} K` },
-  { g: 'star', key: 'xuvFraction', label: 'Stellar XUV activity', min: 1e-6, max: 1e-2, log: true,
-    fmt: (v) => `${(v / 3.4e-6).toFixed(v / 3.4e-6 < 10 ? 1 : 0)}× Sun`,
-    note: 'Drives hydrogen escape. Young suns and red dwarfs are 100–1000× more active.' },
-  { g: 'star', key: 'rotationHours', label: 'Rotation period', min: 2, max: 20000, log: true,
-    fmt: (v) => v < 48 ? `${v.toFixed(1)} h` : `${(v / 24).toFixed(0)} d`,
-    note: 'Slow rotators grow a thick reflective cloud deck and move heat much more freely.' },
-  { g: 'star', key: 'obliquity', label: 'Axial tilt', min: 0, max: 90, step: 0.5,
-    fmt: (v) => `${v.toFixed(1)}°` },
-
-  { g: 'atmo', key: 'n2Bar', label: 'Nitrogen (N₂)', min: 0, max: 20, log: true, zero: true,
-    fmt: fmtBar, note: 'Radiatively inert, but broadens everything else’s absorption lines.' },
-  { g: 'atmo', key: 'co2Bar', label: 'Carbon dioxide', min: 0, max: 100, log: true, zero: true,
-    fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), note: 'Free to evolve afterwards: volcanoes add it, weathering removes it.' },
-  { g: 'atmo', key: 'ch4Bar', label: 'Methane', min: 0, max: 1, log: true, zero: true,
-    fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v) },
-
-  { g: 'surface', key: 'landAlbedo', label: 'Ground brightness', min: 0.05, max: 0.6,
-    fmt: (v) => v.toFixed(2), note: 'Dark basalt 0.10 · rock 0.25 · bright sand 0.40' },
-  { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
-    fmt: (v) => v <= 0 ? 'dead' : `${v.toFixed(2)}× Earth`, note: 'The only CO₂ source. Your one lever inside a snowball.' },
-];
-
-// log/linear mapping for the range inputs (0..1000 internally)
-function toSlider(d, v) {
-  if (d.log) {
-    if (d.zero && v <= 0) return 0;
-    const lo = Math.log(d.min <= 0 ? d.max * 1e-6 : d.min), hi = Math.log(d.max);
-    const t = (Math.log(Math.max(v, Math.exp(lo))) - lo) / (hi - lo);
-    return d.zero ? 8 + t * 992 : t * 1000;
-  }
-  return ((v - d.min) / (d.max - d.min)) * 1000;
-}
-function fromSlider(d, s) {
-  if (d.log) {
-    if (d.zero && s < 8) return 0;
-    const lo = Math.log(d.min <= 0 ? d.max * 1e-6 : d.min), hi = Math.log(d.max);
-    const t = d.zero ? (s - 8) / 992 : s / 1000;
-    return Math.exp(lo + t * (hi - lo));
-  }
-  const v = d.min + (s / 1000) * (d.max - d.min);
-  return d.step ? Math.round(v / d.step) * d.step : v;
-}
 
 // ---------------------------------------------------------------------------
 // App
@@ -90,20 +32,36 @@ function buildSliders() {
   for (const d of SLIDERS) {
     const host = $(`#sliders-${d.g}`);
     const wrap = document.createElement('div');
-    wrap.className = 'ctl';
+    wrap.className = 'ctl' + (d.live ? ' live' : '');
     wrap.innerHTML = `
-      <div class="ctl-top"><label for="s-${d.key}">${d.label}</label><output id="o-${d.key}"></output></div>
-      <input id="s-${d.key}" type="range" min="0" max="1000" step="1">
+      <div class="ctl-top">
+        <label for="s-${d.key}"${d.live ? ' title="The simulation moves this one on its own"' : ''}>${d.label}</label>
+        <input class="val" id="o-${d.key}" type="text" inputmode="decimal" spellcheck="false"
+               aria-label="${d.label} value, type to set exactly">
+      </div>
+      <input id="s-${d.key}" type="range" min="0" max="1000" step="1"
+             aria-label="${d.label}">
       ${d.note ? `<div class="ctl-note">${d.note}</div>` : ''}`;
     host.appendChild(wrap);
-    const input = wrap.querySelector('input'), out = wrap.querySelector('output');
-    els[d.key] = { input, out, def: d };
+    const input = wrap.querySelector('input[type=range]'), out = wrap.querySelector('input.val');
+    els[d.key] = { input, out, def: d, editing: false, dragging: false };
+
     input.addEventListener('input', () => {
       const v = fromSlider(d, +input.value);
       params[d.key] = v;
-      out.textContent = d.fmt(v);
+      if (!els[d.key].editing) out.value = d.fmt(v);
       input.style.setProperty('--fill', `${input.value / 10}%`);
       applyParams(d.key);
+    });
+    input.addEventListener('pointerdown', () => { els[d.key].dragging = true; });
+    addEventListener('pointerup', () => { els[d.key].dragging = false; });
+
+    // typing an exact value
+    out.addEventListener('focus', () => { els[d.key].editing = true; out.select(); });
+    out.addEventListener('blur', () => { els[d.key].editing = false; commitTyped(d); });
+    out.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); out.blur(); }
+      if (e.key === 'Escape') { els[d.key].editing = false; out.value = d.fmt(params[d.key]); out.blur(); }
     });
   }
 
@@ -123,15 +81,60 @@ function buildSliders() {
   els._lock = btn;
 }
 
+function commitTyped(d) {
+  const e = els[d.key];
+  const v = parseValue(d, e.out.value, params[d.key]);
+  if (v === null || !isFinite(v)) { e.out.value = d.fmt(params[d.key]); e.out.classList.remove('bad'); return; }
+  const clamped = clamp(v, d.zero ? 0 : d.min, d.max);
+  params[d.key] = clamped;
+  const sPos = clamp(toSlider(d, clamped), 0, 1000);
+  e.input.value = String(sPos);
+  e.input.style.setProperty('--fill', `${sPos / 10}%`);
+  e.out.value = d.fmt(clamped);
+  if (Math.abs(clamped - v) > Math.abs(v) * 1e-6) {
+    e.out.classList.add('bad');
+    setTimeout(() => e.out.classList.remove('bad'), 900);
+    toast(`${d.label} limited to ${d.fmt(clamped)}`);
+  }
+  applyParams(d.key);
+}
+
 function syncSliders() {
   for (const d of SLIDERS) {
     const e = els[d.key];
     const s = clamp(toSlider(d, params[d.key]), 0, 1000);
     e.input.value = String(s);
     e.input.style.setProperty('--fill', `${s / 10}%`);
-    e.out.textContent = d.fmt(params[d.key]);
+    e.out.value = d.fmt(params[d.key]);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
+}
+
+// Reading the live value of a control the simulation evolves on its own.
+const LIVE_READERS = {
+  co2: (w) => w.co2 * w.diag.g / 1e5,
+  n2: (w) => w.n2 * w.diag.g / 1e5,
+  ch4: (w) => w.ch4 * w.diag.g / 1e5,
+  water: (w) => w.water.ocean + w.water.ice + w.water.vapour,
+};
+
+// The four reservoirs above are *outputs* as much as inputs: volcanoes, weathering,
+// cold traps and escape to space all move them while the clock runs. Their controls
+// follow the planet, except while you are touching them.
+function syncLiveControls() {
+  const w = sim.world;
+  for (const d of SLIDERS) {
+    if (!d.live) continue;
+    const e = els[d.key];
+    if (e.editing || e.dragging) continue;
+    const v = LIVE_READERS[d.live](w);
+    if (Math.abs(v - params[d.key]) <= Math.abs(params[d.key]) * 1e-4) continue;
+    params[d.key] = v;
+    const pos = clamp(toSlider(d, v), 0, 1000);
+    e.input.value = String(pos);
+    e.input.style.setProperty('--fill', `${pos / 10}%`);
+    e.out.value = d.fmt(v);
+  }
 }
 
 // Changing a *composition* slider rewrites the reservoir; changing an external
@@ -149,12 +152,15 @@ function applyParams(key) {
       w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g; w.ch4 = params.ch4Bar * 1e5 / d.g;
     }
     if (key === 'water') {
+      // The control shows the water still present, so set that directly and
+      // leave the record of what has already been lost to space intact.
       const cur = w.water.ocean + w.water.ice + w.water.vapour;
-      const target = Math.max(0, params.water - w.water.lost);
+      const target = Math.max(0, params.water);
       if (cur > 1e-9) {
         const f = target / cur;
         w.water.ocean *= f; w.water.ice *= f; w.water.vapour *= f;
       } else { w.water.ocean = target; }
+      w.waterInitial = Math.max(w.waterInitial ?? 0, target + w.water.lost);
     }
     sim.setParams({});
   }
@@ -292,6 +298,7 @@ function updateReadout() {
     `<div>escape v <b>${(d.vesc / 1000).toFixed(1)} km/s</b></div>` +
     `<div>ocean <b>${(w.water.ocean * 2750).toFixed(0)} m</b></div>`;
 
+  syncLiveControls();
   $('#simtime').textContent = fmtTime(w.time);
 
   // When the planet is in a stiff transition the integrator cannot keep up with
@@ -358,6 +365,17 @@ function bindControls() {
   };
   rate.addEventListener('input', applyRate); applyRate();
 
+  bindPlanetDrag();
+
+  $('#btn-spin').addEventListener('click', () => {
+    view.spinPaused = !view.spinPaused;
+    $('#btn-spin').setAttribute('aria-pressed', String(view.spinPaused));
+    $('#btn-spin').title = view.spinPaused ? "Resume the planet's rotation" : "Pause the planet's rotation";
+  });
+  $('#btn-view').addEventListener('click', () => {
+    view.yaw = 0; view.pitch = 0; view.spinVel = 0;
+  });
+
   $('#scenario-banner .sc-close').addEventListener('click', closeScenario);
   $('#mobile-toggle').addEventListener('click', () => {
     if (document.body.classList.contains('show-left')) {
@@ -377,6 +395,49 @@ function bindControls() {
 // ---------------------------------------------------------------------------
 // Main loop. Real elapsed time in, simulated years out; the physics itself
 // never sees a frame.
+// ---------------------------------------------------------------------------
+// Grab the planet and turn it, with a mouse or a finger. Dragging orbits the
+// camera, so the star and the terminator stay put and you simply look from
+// somewhere else. Flick it and it keeps going, with a little friction.
+// ---------------------------------------------------------------------------
+function bindPlanetDrag() {
+  const cv = $('#planet');
+  let active = null, lastX = 0, lastY = 0, lastT = 0, moved = 0;
+
+  cv.addEventListener('pointerdown', (e) => {
+    active = e.pointerId; lastX = e.clientX; lastY = e.clientY;
+    lastT = performance.now(); moved = 0;
+    view.spinVel = 0;
+    cv.setPointerCapture(e.pointerId);
+    cv.classList.add('dragging');
+  });
+
+  cv.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== active) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    const k = 0.0075;
+    view.yaw += dx * k;
+    view.pitch = clamp(view.pitch + dy * k, -1.45, 1.45);   // keep the poles reachable, not flippable
+    const now = performance.now();
+    const dt = Math.max(now - lastT, 1) / 1000;
+    view.spinVel = clamp((dx * k) / dt, -6, 6);
+    lastT = now;
+  });
+
+  const end = (e) => {
+    if (e.pointerId !== active) return;
+    active = null;
+    cv.classList.remove('dragging');
+    if (moved < 3) view.spinVel = 0;   // a tap should not fling the planet
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+  // A two-finger pinch is the browser's job, not ours; we only take single drags.
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
 let settleRounds = 0;
 
 // "Settle" fast-forwards to equilibrium, but a slice per frame rather than in
@@ -405,6 +466,12 @@ let last = performance.now(), chartClock = 0, reportedError = false;
 function tick(dtReal) {
   renderState.time += dtReal;
   try {
+    // let a flick coast to a stop
+    if (view.spinVel) {
+      view.yaw += view.spinVel * dtReal;
+      view.spinVel *= Math.pow(0.06, dtReal);
+      if (Math.abs(view.spinVel) < 0.02) view.spinVel = 0;
+    }
     if (settling) advanceSettle();
     else sim.advance(dtReal);
     view.render(sim.world, renderState, dtReal);

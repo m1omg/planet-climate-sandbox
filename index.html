@@ -24,6 +24,11 @@
         <div id="presets" class="chip-row"></div>
       </section>
 
+      <p class="panel-note">Every control is live. Change one mid-run and the planet keeps its
+      current temperature, ice and history — you are intervening on a running world, not restarting
+      it. The four highlighted below also move on their own as the simulation evolves them.
+      Click any value to type it exactly.</p>
+
       <section class="group">
         <h2>Body</h2>
         <div id="sliders-body"></div>
@@ -63,6 +68,11 @@
       <div class="sc-status"></div>
     </div>
 
+    <div id="view-controls">
+      <button id="btn-spin" class="icon-btn" title="Pause the planet's rotation" aria-pressed="false">⟳</button>
+      <button id="btn-view" class="icon-btn" title="Recentre the view">⌖</button>
+    </div>
+
     <div id="toast"></div>
 
     <!-- ================= BOTTOM: clock ================= -->
@@ -78,7 +88,7 @@
 
       <div class="rate">
         <label for="rate">time acceleration</label>
-        <input id="rate" type="range" min="0" max="7.69897" step="0.01" value="3">
+        <input id="rate" type="range" min="0" max="8.17609" step="0.01" value="3">
         <output id="rate-out">1 kyr / s</output>
       </div>
     </div>

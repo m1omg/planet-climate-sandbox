@@ -51,7 +51,23 @@ The user-visible point of the model is that nothing snaps. Three things enforce 
 * **The carbonate–silicate thermostat.** Buffered by the ocean and reactive crust, it relaxes on
   ~1 Myr; inside a snowball the sink shuts off and volcanic CO₂ piles up for millions of years.
 
-An adjustable clock (1 yr/s → 10 Myr/s) lets you watch any of it.
+An adjustable clock (1 yr/s → 150 Myr/s) lets you watch any of it. Acceleration costs nothing in
+accuracy: step size is chosen from the state of the planet, never from the clock, so the same
+300 Myr run gives the same temperature to three decimals and the same CO₂ to 0.1 ppm whether it is
+played at 100 kyr/s or 150 Myr/s. A world in a stiff transition simply advances more slowly and
+says so.
+
+### Handling the planet
+
+Drag the planet with a mouse or a finger to orbit the camera; flick it to spin and it coasts to a
+stop. `⟳` pauses the planet's own rotation, `⌖` recentres the view.
+
+Every control is live. Change one mid-run and the planet keeps its current temperature, ice cover
+and history — you are intervening on a running world, not restarting it. Four of them (CO₂, N₂,
+methane and the water inventory) are outputs as well as inputs, because volcanoes, weathering, cold
+traps and escape to space all move them; those controls follow the simulation, except while you are
+touching them. Click any value to type it exactly, with units — `420ppm`, `0.5 bar`, `1 atm`,
+`2 days`, `30%`, `100x`.
 
 ### Climate states it recognises
 

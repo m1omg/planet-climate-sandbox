@@ -44,6 +44,9 @@ export function resetWorld(w, params) {
   w.o2 = 0;
   w.co2Frozen = 0;
   w.water = { ocean: params.water, ice: 0, vapour: 0, lost: 0 };
+  // The inventory the world started with. The `water` control tracks what is
+  // left, so charts and classification need this as a fixed reference.
+  w.waterInitial = params.water;
   const T0 = params.startT ?? 288;
   for (let i = 0; i < NBANDS; i++) w.T[i] = T0;
   w.history = [];
