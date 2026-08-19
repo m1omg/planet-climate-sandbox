@@ -11,8 +11,13 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 26 physics + determinism checks
+node src/selftest.js            # 30 physics, determinism and control checks
+node tools/smoketest.mjs        # loads every module against a stub DOM
 ```
+
+Run both before pushing. `node --check` parses files as CommonJS and will happily
+miss ESM-only errors, which is exactly how a duplicate declaration once shipped a
+blank page; the smoke test loads the real module graph and fails on it.
 Open with `?selftest=1` to run the same suite in the browser console.
 
 ---
