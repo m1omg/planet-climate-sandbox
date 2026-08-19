@@ -1,0 +1,157 @@
+import {
+  clamp, smoothstep, psatH2O, psatCO2, frostPointCO2, YEAR,
+  OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH,
+} from './constants.js';
+import { iceFraction } from './radiation.js';
+import { outgassingScale, radiusFromMass } from './planet.js';
+import { NBANDS } from './climate.js';
+
+// ---------------------------------------------------------------------------
+// Where the water sits: ocean / ice / vapour / lost to space.
+// ---------------------------------------------------------------------------
+export function partitionWater(w) {
+  const dg = w.diag, d = dg.d;
+  const total = w.water.ocean + w.water.ice + w.water.vapour;
+  if (total <= 0) { w.water.ocean = w.water.ice = w.water.vapour = 0; return; }
+
+  const vapour = clamp(dg.vapourCol / d.eoColumn, 0, total);
+  let rest = total - vapour;
+
+  // Ice: the frozen share of the surface, but a band can only freeze as much
+  // water as is actually there.
+  let frozenShare = 0;
+  for (let i = 0; i < NBANDS; i++) frozenShare += iceFraction(w.T[i]) / NBANDS;
+  const ice = clamp(rest * frozenShare, 0, rest);
+
+  w.water.vapour = vapour;
+  w.water.ice = ice;
+  w.water.ocean = Math.max(0, rest - ice);
+}
+
+// ---------------------------------------------------------------------------
+// Hydrogen escape. Two independent ceilings, whichever is tighter:
+//
+//  * diffusion limit  -- how fast H can even reach the exosphere, set by the
+//    cold-trap mixing ratio. Kasting's moist-greenhouse criterion is f > 1e-3.
+//  * energy limit     -- how much XUV heating is available to lift it out.
+//
+// For a Sun-like star the energy limit dominates and a full ocean takes
+// 10^8-10^9 yr to disappear, which is the Venus story and the reason a wet
+// runaway drifts into a dry one over hundreds of millions of years.
+// ---------------------------------------------------------------------------
+export function escapeRates(w) {
+  const p = w.params, dg = w.diag, d = dg.d;
+  const pTot = Math.max(1e-6, dg.pTotMean);
+  const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
+
+  // Stratospheric water mixing ratio. The cold trap suppresses it enormously,
+  // but the suppression weakens as the lower atmosphere gets wetter. This power
+  // law is pinned to two points: modern Earth (surface mixing ratio 0.011 gives
+  // the observed ~4 ppm in the stratosphere) and the moist-greenhouse onset
+  // (surface 0.25, i.e. a 340 K surface, gives Kasting's 1e-3 criterion). The
+  // x^8 term takes over when the air is mostly steam and there is no trap left.
+  // Evaluated band by band and then area-averaged: escape is dominated by the
+  // warmest, wettest latitudes, not by the global mean.
+  const xSteam = pH2Omean / pTot;
+  const Tct = clamp(190 + 0.62 * (dg.Tmean - 288), 120, 700);
+  let fStrat = 0;
+  for (let i = 0; i < NBANDS; i++) {
+    const x = clamp(dg.pH2O[i] / Math.max(dg.pTot[i], 1e-9), 0, 1);
+    fStrat += clamp(0.0115 * Math.pow(x, 1.764) + Math.pow(x, 8), 0, 1) / NBANDS;
+  }
+
+  // Diffusion-limited: 2.5e13 * f H atoms/cm^2/s  ->  kg/m^2/yr of water
+  const diffusion = fStrat * 0.118 * (dg.g / G_EARTH);
+
+  // Energy-limited: eps * F_xuv * (R_xuv/R)^3 / (g R), integrated over a year.
+  // A hot steam envelope puffs up enormously -- the XUV absorption radius moves
+  // outward by many scale heights -- so a runaway greenhouse bleeds water far
+  // faster than a temperate planet under the same star.
+  const xuv = p.insolation * 1361 * p.xuvFraction / 4;
+  const H = 1.381e-23 * dg.Tmean / (18 * 1.661e-27 * dg.g);   // steam scale height
+  const inflate = clamp(1 + 60 * H / d.R, 1, 2.2);
+  const energy = 0.15 * xuv * Math.pow(inflate, 3) / (dg.g * d.R) * YEAR;
+
+  const water = Math.min(diffusion, energy) * (dg.totalWater > 0 ? 1 : 0);
+
+  // Background gas loss. Gated on the cosmic shoreline: XUV irradiation has to
+  // overcome gravitational binding (~ v_esc^4) before N2/CO2 go anywhere.
+  const vescRel = d.vesc / 11186;
+  const fCrit = 1.15e-3 * Math.pow(vescRel, 4) * 30;
+  const gate = smoothstep(0.3, 3, xuv / Math.max(fCrit, 1e-12));
+  const background = 0.005 * xuv / (dg.g * d.R) * YEAR * gate;
+
+  return { water, background, fStrat, Tct, diffusion, energy, xSteam };
+}
+
+// ---------------------------------------------------------------------------
+// Carbonate-silicate thermostat, CO2 condensation, and escape, all advanced on
+// the same accelerated clock as the temperatures.
+// ---------------------------------------------------------------------------
+export function stepVolatiles(w, dtYears) {
+  const p = w.params, dg = w.diag, d = dg.d;
+  const esc = escapeRates(w);
+
+  // --- water inventory -----------------------------------------------------
+  if (dg.totalWater > 0) {
+    const lostCol = esc.water * dtYears;                 // kg/m^2
+    const lostEO = Math.min(lostCol / d.eoColumn, dg.totalWater);
+    const pool = w.water.vapour + w.water.ocean + w.water.ice;
+    if (pool > 0) {
+      const f = 1 - lostEO / pool;
+      w.water.vapour *= f; w.water.ocean *= f; w.water.ice *= f;
+      w.water.lost += lostEO;
+      // oxygen left behind when the hydrogen goes; some is taken up by the crust
+      w.o2 += lostEO * d.eoColumn * (32 / 18) * 0.15;
+    }
+  }
+  partitionWater(w);
+
+  // --- carbonate-silicate cycle -------------------------------------------
+  const V = OUTGAS_EARTH * outgassingScale(p.mass) * p.outgassing;
+  const liquid = clamp(1 - dg.iceMean, 0, 1) * smoothstep(0, 0.02, w.water.ocean);
+  const landExposed = clamp(p.landFraction * (1 - dg.iceMean), 0, 1);
+  const pCO2rel = Math.max(dg.pCO2 / 280e-6, 1e-6);
+  const Wr = OUTGAS_EARTH * outgassingScale(p.mass)
+           * (landExposed / 0.3)
+           * Math.pow(pCO2rel, 0.3)
+           * Math.exp(clamp((dg.Tmean - 288) / 13.7, -8, 8))
+           * liquid;
+  // Ocean + reactive crust buffer the atmosphere, stretching the feedback from
+  // millennia to ~1 Myr. In a hard snowball the sink is gone and CO2 simply
+  // piles up until it can break the ice: 0.1-0.3 bar over 5-30 Myr.
+  const kappa = 1 + (CARBON_RESERVOIR_FACTOR - 1) * liquid;
+  w.co2 = Math.max(0, w.co2 + (V - Wr) * dtYears / kappa);
+
+  // --- CO2 condensation onto polar caps (Mars-like collapse) ---------------
+  let coldFrac = 0, Tcold = 1e9;
+  for (let i = 0; i < NBANDS; i++) { if (w.T[i] < Tcold) Tcold = w.T[i]; }
+  const pCO2Pa = w.co2 * dg.g;
+  const pEq = psatCO2(Tcold);
+  const tau = 2000; // years
+  const relax = 1 - Math.exp(-dtYears / tau);
+  if (pCO2Pa > pEq * 1.001) {
+    for (let i = 0; i < NBANDS; i++) if (w.T[i] < frostPointCO2(pCO2Pa)) coldFrac += 1 / NBANDS;
+    if (coldFrac > 0) {
+      const target = pEq / dg.g;
+      const move = (w.co2 - target) * relax * clamp(coldFrac * 3, 0, 1);
+      w.co2 -= move; w.co2Frozen += move;
+    }
+  } else if (w.co2Frozen > 0) {
+    const target = Math.min(w.co2Frozen, (pEq / dg.g - w.co2));
+    const move = Math.max(0, target) * relax;
+    w.co2 += move; w.co2Frozen -= move;
+  }
+
+  // --- atmospheric escape of the background gas ---------------------------
+  if (esc.background > 0) {
+    const f = Math.max(0, 1 - esc.background * dtYears / Math.max(w.n2 + w.co2 + w.o2, 1e-6));
+    w.n2 *= f; w.co2 *= f; w.o2 *= f;
+  }
+
+  // --- a molten surface degasses hard -------------------------------------
+  if (dg.Tmean > 1400) w.co2 += V * 30 * dtYears / 1;
+
+  w.escape = esc;
+  w.weathering = { V, W: Wr, kappa, liquid };
+}

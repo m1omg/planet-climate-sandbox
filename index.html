@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Planet Climate Sandbox</title>
+<meta name="description" content="Build a terrestrial planet and watch its climate evolve over geological time — snowball, habitable, dune world, moist greenhouse, runaway greenhouse.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ================= LEFT: controls ================= -->
+  <aside id="controls" class="panel">
+    <header class="panel-head">
+      <h1>Planet Climate<span>Sandbox</span></h1>
+    </header>
+
+    <div class="scroller">
+      <section class="group">
+        <h2>Worlds</h2>
+        <div id="presets" class="chip-row"></div>
+      </section>
+
+      <section class="group">
+        <h2>Body</h2>
+        <div id="sliders-body"></div>
+        <div class="derived" id="derived"></div>
+      </section>
+
+      <section class="group">
+        <h2>Orbit &amp; Star</h2>
+        <div id="sliders-star"></div>
+      </section>
+
+      <section class="group">
+        <h2>Atmosphere</h2>
+        <div id="sliders-atmo"></div>
+      </section>
+
+      <section class="group">
+        <h2>Surface &amp; Interior</h2>
+        <div id="sliders-surface"></div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ================= CENTRE: planet ================= -->
+  <main id="stage">
+    <canvas id="planet"></canvas>
+
+    <div id="state-banner">
+      <div class="state-name"><span class="swatch"></span><span class="txt">—</span></div>
+      <div class="state-reason">—</div>
+    </div>
+
+    <div id="scenario-banner" hidden>
+      <div class="sc-head"><span class="sc-icon"></span><strong class="sc-name"></strong>
+        <button class="sc-close" title="Abandon scenario">✕</button></div>
+      <p class="sc-brief"></p>
+      <div class="sc-status"></div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- ================= BOTTOM: clock ================= -->
+    <div id="timebar">
+      <button id="btn-play" class="icon-btn" title="Play / pause (space)">⏸</button>
+      <button id="btn-settle" class="icon-btn wide" title="Run until the climate stops changing">Settle</button>
+      <button id="btn-reset" class="icon-btn wide" title="Restart this world at t = 0">Reset</button>
+
+      <div class="clock">
+        <span class="t-label">elapsed</span>
+        <span id="simtime">0 yr</span>
+      </div>
+
+      <div class="rate">
+        <label for="rate">time acceleration</label>
+        <input id="rate" type="range" min="0" max="7" step="0.01" value="3">
+        <output id="rate-out">1 kyr / s</output>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= RIGHT: readout ================= -->
+  <aside id="readout" class="panel">
+    <div class="scroller">
+      <section class="group">
+        <h2>Diagnostics</h2>
+        <div id="stats" class="stats"></div>
+      </section>
+
+      <section class="group">
+        <h2>Temperature history</h2>
+        <canvas class="chart" id="chart-history"></canvas>
+      </section>
+
+      <section class="group">
+        <h2>Energy balance <small>where the curves cross, the climate rests</small></h2>
+        <canvas class="chart" id="chart-phase"></canvas>
+      </section>
+
+      <section class="group">
+        <h2>Zonal profile</h2>
+        <canvas class="chart" id="chart-profile"></canvas>
+      </section>
+
+      <section class="group">
+        <h2>Water inventory</h2>
+        <canvas class="chart" id="chart-water"></canvas>
+      </section>
+
+      <section class="group">
+        <h2>Scenarios</h2>
+        <div id="scenarios" class="chip-col"></div>
+      </section>
+
+      <section class="group">
+        <h2>Discovered climates <small><span id="found-count">0</span>/16</small></h2>
+        <div id="statelog" class="state-grid"></div>
+        <div id="state-detail" class="state-detail">Reach a climate state to unlock its entry.</div>
+      </section>
+
+      <section class="group about">
+        <h2>About the model</h2>
+        <p>A zonal energy-balance model over 18 equal-area bands. Longwave radiation uses a semi-grey
+        two-stream fit anchored to modern Earth (240 W/m²), Venus (161 W/m²) and the
+        <em>Simpson–Nakajima runaway limit</em> of 283 W/m² — which the fit reproduces rather than
+        imposes, so the runaway greenhouse emerges from the physics.</p>
+        <p>Slow processes run on the same accelerated clock: the carbonate–silicate thermostat
+        (~1 Myr), snowball CO₂ build-up (5–50 Myr), and hydrogen escape (10⁸–10⁹ yr to lose an ocean).
+        Physics advances on simulated time only — the trajectory is identical at any frame rate.</p>
+        <p><a href="https://github.com/" id="repo-link" target="_blank" rel="noopener">Source &amp; references</a></p>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<button id="mobile-toggle" class="icon-btn" title="Show panels">☰</button>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
