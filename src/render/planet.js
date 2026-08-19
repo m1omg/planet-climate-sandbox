@@ -1,18 +1,35 @@
-import { VERT, FRAG } from './shaders.js';
+import { loadShaders } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp } from '../physics/constants.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
 // fragment shader. No geometry, no dependencies, and complete control over the
 // atmosphere, the terminator and the steam envelope.
+// The generated albedo maps, in the order the shader expects them.
+export const TEXTURE_SET = ['rock', 'desert', 'vegetation', 'ice', 'ocean', 'lava'];
+const TEX_UNIFORMS = ['uTexRock', 'uTexDesert', 'uTexVeg', 'uTexIce', 'uTexOcean', 'uTexLava'];
+
 export class PlanetView {
   constructor(canvas) {
     this.canvas = canvas;
+    this.ready = false;
+    this.texturesLoaded = false;
+    this.useTextures = 0;      // fades 0 -> 1 as the maps arrive
+    this.wantTextures = true;
     const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
     if (!gl) { this.failed = true; return; }
     this.gl = gl;
-    this.prog = this.link(VERT, FRAG);
-    if (!this.prog) { this.failed = true; return; }
+  }
+
+  // Shaders live in real .glsl files now, so start-up is asynchronous.
+  async init() {
+    if (this.failed) return false;
+    const gl = this.gl;
+    let src;
+    try { src = await loadShaders(); }
+    catch (e) { console.error(e); this.failed = true; return false; }
+    this.prog = this.link(src.vert, src.frag);
+    if (!this.prog) { this.failed = true; return false; }
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -27,7 +44,7 @@ export class PlanetView {
     this.u = {};
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
-      'uNightGlow', 'uYaw', 'uPitch', 'uBandT', 'uBandIce']) {
+      'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uBandT', 'uBandIce']) {
       this.u[name] = gl.getUniformLocation(this.prog, name === 'uBandT' || name === 'uBandIce' ? name + '[0]' : name);
     }
     this.bandT = new Float32Array(NBANDS);
@@ -36,6 +53,49 @@ export class PlanetView {
     this.yaw = 0; this.pitch = 0;      // camera orbit, driven by dragging
     this.spinVel = 0;                  // momentum after a flick
     this.spinPaused = false;
+    this.ready = true;
+    return true;
+  }
+
+  // Load the generated albedo maps. Failure is not fatal: the planet simply
+  // stays on the procedural path, which is a complete look in its own right.
+  async loadTextures(dir = 'assets/textures/') {
+    if (this.failed || !this.ready) return false;
+    const gl = this.gl;
+    const base = new URL(dir, location.href);
+    try {
+      const imgs = await Promise.all(TEXTURE_SET.map((name) => new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => rej(new Error(`missing texture ${name}.jpg`));
+        im.src = new URL(`${name}.jpg`, base).href;
+      })));
+      this.textures = imgs.map((im, i) => {
+        const t = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE0 + i);
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
+        // Repeat horizontally (the maps tile in longitude), clamp vertically.
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        return t;
+      });
+      gl.useProgram(this.prog);
+      TEX_UNIFORMS.forEach((name, i) => {
+        const loc = gl.getUniformLocation(this.prog, name);
+        if (loc) gl.uniform1i(loc, i);
+      });
+      this.texturesLoaded = true;
+      return true;
+    } catch (e) {
+      console.warn('generated textures unavailable, staying procedural:', e.message);
+      this.texturesLoaded = false;
+      return false;
+    }
   }
 
   link(vs, fs) {
@@ -79,7 +139,7 @@ export class PlanetView {
   }
 
   render(world, state, dtReal) {
-    if (this.failed) return;
+    if (this.failed || !this.ready) return;
     const gl = this.gl;
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -122,6 +182,16 @@ export class PlanetView {
     gl.uniform1f(this.u.uMagma, clamp((dg.Tmean - 1200) / 400, 0, 1));
     gl.uniform1f(this.u.uLocked, lam);
     gl.uniform1f(this.u.uNightGlow, glow);
+    // Cross-fade rather than snap, so toggling the surface style is a dissolve.
+    const target = (this.wantTextures && this.texturesLoaded) ? 1 : 0;
+    this.useTextures += clamp(target - this.useTextures, -3 * dtReal, 3 * dtReal);
+    if (this.textures) {
+      for (let i = 0; i < this.textures.length; i++) {
+        gl.activeTexture(gl.TEXTURE0 + i);
+        gl.bindTexture(gl.TEXTURE_2D, this.textures[i]);
+      }
+    }
+    gl.uniform1f(this.u.uUseTex, this.useTextures);
     gl.uniform1f(this.u.uYaw, this.yaw);
     gl.uniform1f(this.u.uPitch, this.pitch);
     gl.uniform1fv(this.u.uBandT, this.bandT);

@@ -25,6 +25,16 @@ const sim = new Simulation(params);
 const view = new PlanetView($('#planet'));
 const renderState = { time: 0, seed: Math.random() * 100 };
 const discovered = loadDiscovered();
+
+// Surface style. Generated albedo maps are the default; ?graphics=procedural
+// (or ?graphics=proc) selects the fully procedural look instead, and the button
+// in the view controls switches between them at any time.
+function graphicsFromUrl() {
+  const q = (new URLSearchParams(location.search).get('graphics') || '').toLowerCase();
+  if (q === 'procedural' || q === 'proc') return false;
+  if (q === 'textured' || q === 'tex') return true;
+  return true;   // default
+}
 let activeScenario = null, scenarioResult = null, settling = false, activePreset = 'earth';
 
 const els = {};
@@ -340,7 +350,21 @@ function toast(msg, ms = 2600) {
 
 // ---------------------------------------------------------------------------
 // Controls
-function syncPlay() { $('#btn-play').textContent = sim.paused ? '▶' : '⏸'; }
+function syncPlay() {
+  const b = $('#btn-play');
+  b.textContent = sim.paused ? '▶  Play' : '❚❚  Pause';
+  b.classList.toggle('paused', sim.paused);
+  b.title = sim.paused ? 'Resume the simulation (space)' : 'Pause the simulation (space)';
+}
+
+function updateGfxButton() {
+  const b = $('#btn-gfx');
+  const on = view.wantTextures && view.texturesLoaded;
+  b.textContent = on ? '🛰' : '◍';
+  b.setAttribute('aria-pressed', String(on));
+  b.title = on ? 'Surface: generated maps — click for procedural'
+               : 'Surface: procedural — click for generated maps';
+}
 
 function bindControls() {
   $('#btn-play').addEventListener('click', () => { sim.paused = !sim.paused; syncPlay(); });
@@ -374,6 +398,12 @@ function bindControls() {
   });
   $('#btn-view').addEventListener('click', () => {
     view.yaw = 0; view.pitch = 0; view.spinVel = 0;
+  });
+  $('#btn-gfx').addEventListener('click', () => {
+    if (!view.texturesLoaded) { toast('Surface maps are not available in this build'); return; }
+    view.wantTextures = !view.wantTextures;
+    updateGfxButton();
+    toast(view.wantTextures ? 'Generated surface maps' : 'Procedural graphics');
   });
 
   $('#scenario-banner .sc-close').addEventListener('click', closeScenario);
@@ -494,7 +524,8 @@ function frame(now) {
   const dtReal = Math.min((now - last) / 1000, 0.25);
   last = now;
   tick(dtReal);
-  requestAnimationFrame(frame);
+  start();
+requestAnimationFrame(frame);
 }
 
 // ---------------------------------------------------------------------------
@@ -513,10 +544,26 @@ $('#total-count').textContent = String(Object.keys(STATES).length);
 if (Object.keys(paramsFromHash()).length === 0) setPresetActive('earth');
 syncPlay();
 
-if (view.failed) {
-  $('#planet').insertAdjacentHTML('afterend',
-    '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#8e9ab5;padding:32px;text-align:center">' +
-    'This browser could not start WebGL2, so the planet cannot be drawn.<br>The simulation and charts still work.</div>');
+async function start() {
+  const ok = await view.init();
+  if (!ok || view.failed) {
+    $('#planet').insertAdjacentHTML('afterend',
+      '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#8e9ab5;padding:32px;text-align:center">' +
+      'This browser could not start WebGL2, so the planet cannot be drawn.<br>The simulation and charts still work.</div>');
+    return;
+  }
+  view.wantTextures = graphicsFromUrl();
+  const btn = $('#btn-gfx');
+  btn.disabled = true;
+  btn.title = 'Loading surface maps…';
+  const loaded = await view.loadTextures();
+  btn.disabled = false;
+  updateGfxButton();
+  if (!loaded && view.wantTextures) {
+    view.wantTextures = false;
+    updateGfxButton();
+    toast('Surface maps unavailable — using procedural graphics', 4000);
+  }
 }
 
 // Handy from the console, and used by the browser self-test.
@@ -526,4 +573,5 @@ if (new URLSearchParams(location.search).has('selftest')) {
   import('./selftest.js').then((m) => m.run());
 }
 
+start();
 requestAnimationFrame(frame);

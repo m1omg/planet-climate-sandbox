@@ -136,6 +136,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 #view-controls{position:absolute;right:16px;bottom:70px;z-index:4;display:flex;flex-direction:column;gap:6px}
 #view-controls .icon-btn{width:32px;font-size:15px;line-height:1}
 #view-controls .icon-btn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+#view-controls .icon-btn:disabled{opacity:.4}
 
 #state-banner{
   position:absolute;top:18px;left:50%;transform:translateX(-50%);
@@ -185,6 +186,18 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 .icon-btn:hover{color:var(--fg);border-color:var(--line-2);background:rgba(255,255,255,.08)}
 .icon-btn.wide{padding:0 12px}
+.icon-btn:disabled{opacity:.45;cursor:default}
+
+/* The play/pause control is the one button people hunt for, so give it a real
+   label, a fixed width so it does not jump when the label changes, and a colour
+   that says at a glance which state the simulation is in. */
+.play-btn{
+  min-width:92px;font-weight:600;letter-spacing:.02em;
+  color:#071018;background:var(--accent);border-color:var(--accent);
+}
+.play-btn:hover{color:#071018;background:#9adeff;border-color:#9adeff}
+.play-btn.paused{color:#071018;background:var(--good);border-color:var(--good)}
+.play-btn.paused:hover{background:#6fdca2;border-color:#6fdca2}
 .icon-btn.busy{color:var(--accent-2);border-color:var(--accent-2)}
 .clock{display:flex;flex-direction:column;line-height:1.15;padding:0 6px;flex:none;min-width:104px}
 .clock .t-label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint)}

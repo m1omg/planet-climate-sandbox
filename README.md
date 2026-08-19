@@ -13,11 +13,15 @@ the charts.
 python3 -m http.server 8000     # then open http://localhost:8000
 node src/selftest.js            # 30 physics, determinism and control checks
 node tools/smoketest.mjs        # loads every module against a stub DOM
+node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
+node tools/shadercompile.mjs    # optional: compiles them on a real GL driver
 ```
 
-Run both before pushing. `node --check` parses files as CommonJS and will happily
+Run these before pushing. `node --check` parses files as CommonJS and will happily
 miss ESM-only errors, which is exactly how a duplicate declaration once shipped a
-blank page; the smoke test loads the real module graph and fails on it.
+blank page; the smoke test loads the real module graph and fails on it. The shader
+lives in `src/render/glsl/` as real GLSL rather than a JavaScript template literal
+for the same reason — a stray backtick there breaks the whole module silently.
 Open with `?selftest=1` to run the same suite in the browser console.
 
 ---
@@ -61,6 +65,25 @@ accuracy: step size is chosen from the state of the planet, never from the clock
 300 Myr run gives the same temperature to three decimals and the same CO₂ to 0.1 ppm whether it is
 played at 100 kyr/s or 150 Myr/s. A world in a stiff transition simply advances more slowly and
 says so.
+
+### Two ways to draw a planet
+
+The surface can be drawn from **generated albedo maps** (the default) or **fully procedurally**.
+Both share the same lighting, climate response, clouds and atmosphere — only the surface albedo
+differs, and the button in the view controls cross-fades between them at any time.
+
+* `?graphics=procedural` — start in the procedural look
+* `?graphics=textured` — start with the generated maps (the default anyway)
+
+The generated maps live in `assets/textures/` as six equirectangular JPEGs (`rock`, `desert`,
+`vegetation`, `ice`, `ocean`, `lava`), 1024×512 and about 830 KB for the whole set. If they are missing or fail to load, the planet quietly
+stays procedural and says so — the procedural path is a complete look in its own right, not a
+fallback stub.
+
+The procedural renderer uses gradient noise with domain warping for continents (so coastlines
+have bays and peninsulas rather than round islands), a ridged multifractal for mountain belts,
+slope-based relief shading, altitude- and climate-dependent biomes, and a two-layer sheared cloud
+deck.
 
 ### Handling the planet
 
