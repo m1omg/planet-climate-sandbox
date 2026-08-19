@@ -81,8 +81,13 @@ Stated plainly, because a model that hides these is less useful:
   studies. The semi-grey CO₂ opacity is stronger at intermediate pressure than line-by-line models.
   The *behaviour* — hysteresis, multi-Myr duration, unopposed CO₂ build-up — is right; the threshold
   sits low.
-* **The runaway inner edge is at ~1.55 S⊕**, against 1.2–1.4 in published 3-D GCMs (Leconte 2013;
-  Wolf & Toon 2014). Cloud and dry-subsidence parametrisations are crude.
+* **The runaway inner edge is at ~1.85 S⊕**, against 1.2–1.4 in published 3-D GCMs (Leconte 2013;
+  Wolf & Toon 2014). The cloud and dry-subsidence parametrisations are crude, and they buy this
+  model more margin than the real physics does.
+* **The dune-world advantage shows up as margin, not as a shifted threshold.** At the same flux a
+  dry world runs cooler and loses water several times more slowly than an ocean world — the
+  mechanism Abe et al. (2011) identify — but in this model both tip into a runaway at close to the
+  same insolation, where Abe finds the dry world's inner edge moves substantially inward.
 * Earth needs ~396 ppm rather than 280 ppm to reach 288 K once the thermostat has converged.
 
 ## References

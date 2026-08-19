@@ -173,7 +173,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
 .rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
 .rate input{flex:1;min-width:60px}
-.rate output{font:11.5px/1 var(--mono);color:var(--accent);min-width:78px;text-align:right;flex:none}
+.rate output{font:11.5px/1 var(--mono);color:var(--accent);min-width:78px;text-align:right;flex:none;transition:color .2s}
+.rate output.throttled{color:var(--accent-2)}
+.rate output.throttled::after{content:' ⏳'}
 
 /* ---------------- stats & charts ---------------- */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px}

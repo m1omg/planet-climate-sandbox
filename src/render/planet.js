@@ -87,7 +87,7 @@ export class PlanetView {
     // Spin visually, at a rate suggesting the rotation period but always
     // watchable: real time, not simulated time, and independent of frame rate.
     const lam = dg.lam;
-    const spinRate = (1 - lam) * clamp(0.35 * Math.pow(24 / Math.max(p.rotationHours, 0.5), 0.35), 0.02, 0.9);
+    const spinRate = (1 - lam) * clamp(0.245 * Math.pow(24 / Math.max(p.rotationHours, 0.5), 0.35), 0.014, 0.63);
     this.spin = (this.spin + spinRate * dtReal) % (Math.PI * 2);
 
     for (let i = 0; i < NBANDS; i++) {

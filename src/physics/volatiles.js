@@ -121,7 +121,12 @@ export function stepVolatiles(w, dtYears) {
   // millennia to ~1 Myr. In a hard snowball the sink is gone and CO2 simply
   // piles up until it can break the ice: 0.1-0.3 bar over 5-30 Myr.
   const kappa = 1 + (CARBON_RESERVOIR_FACTOR - 1) * liquid;
-  w.co2 = Math.max(0, w.co2 + (V - Wr) * dtYears / kappa);
+  // Semi-implicit, so an arbitrarily long step still lands on the right answer
+  // instead of overshooting past zero. Weathering goes as C^0.3, so dW/dC =
+  // 0.3 W / C. Without this the step-size chooser had to throttle the whole
+  // clock to a crawl whenever CO2 was drawn down near zero.
+  const dWdC = w.co2 > 1e-12 ? 0.3 * Wr / w.co2 : 0;
+  w.co2 = Math.max(0, w.co2 + (V - Wr) * dtYears / kappa / (1 + dtYears * dWdC / kappa));
 
   // --- CO2 condensation onto polar caps (Mars-like collapse) ---------------
   let coldFrac = 0, Tcold = 1e9;

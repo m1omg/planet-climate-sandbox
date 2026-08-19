@@ -78,6 +78,9 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   float h = cont + 0.16*(detail - 0.5) - thr;
   height = h;
   float land = smoothstep(-0.010, 0.026, h);
+  // A world with no ocean has no sea basins either -- the low ground is just
+  // low ground, and must not be painted blue.
+  land = mix(1.0, land, smoothstep(0.0, 0.04, uOceanFrac));
 
   float mount = ridged(q*3.1, 4);
   vec3 rock   = mix(vec3(0.31,0.26,0.21), vec3(0.45,0.38,0.29), detail);
@@ -91,6 +94,8 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
 
   float deep = smoothstep(0.02,-0.20,h);
   vec3 sea = mix(vec3(0.09,0.34,0.56), vec3(0.01,0.06,0.20), deep);
+  // shallow, drying seas turn briny and pale before they vanish altogether
+  sea = mix(mix(desert, rock, 0.35), sea, smoothstep(0.02, 0.25, uWaterCap));
 
   vec3 col = mix(sea, ground, land);
   shininess = (1.0-land)*0.9;
@@ -129,7 +134,10 @@ void main(){
   float c = dot(ro, ro) - 1.0;
   float disc = b*b - c;
 
-  float atmoThick = clamp(0.035 + 0.10*log(1.0 + uPTot) + 0.16*uSteam, 0.02, 0.42);
+  // Thickness follows the actual surface pressure, and goes to nothing when
+  // there is no air left: an airless rock must not wear a halo.
+  float airAmount = smoothstep(0.0, 0.02, uPTot);
+  float atmoThick = airAmount * clamp(0.030 + 0.10*log(1.0 + uPTot) + 0.16*uSteam, 0.0, 0.42);
   float Ra = 1.0 + atmoThick;
   float bA = dot(ro, rd), cA = dot(ro,ro) - Ra*Ra;
   float dA = bA*bA - cA;
@@ -182,7 +190,7 @@ void main(){
 
     // limb darkening + atmospheric rim seen against the surface
     float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
-    lit += airTint * fres * lam * (0.30 + 1.0*atmoThick) * 0.75;
+    lit += airTint * fres * lam * (0.30 + 1.0*atmoThick) * 0.75 * airAmount;
 
     col = lit;
   } else if(dA > 0.0){
@@ -192,7 +200,7 @@ void main(){
     vec3 mid = ro + rd*(t0 + path*0.5);
     float lam = smoothstep(-0.35, 0.5, dot(normalize(mid), uSunDir));
     float dens = pow(clamp(path / (2.0*atmoThick + 0.001), 0.0, 1.0), 1.7);
-    col += airTint * dens * lam * (0.55 + 1.3*uSteam) * 0.9;
+    col += airTint * dens * lam * (0.55 + 1.3*uSteam) * 0.9 * airAmount;
   }
 
   // ---- the star itself ----

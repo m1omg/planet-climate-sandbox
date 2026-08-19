@@ -1,4 +1,4 @@
-import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH } from './constants.js';
+import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL } from './constants.js';
 import { olr, planetaryAlbedo, iceFraction } from './radiation.js';
 import { derive } from './planet.js';
 
@@ -248,11 +248,15 @@ export function maxStep(w, maxDeltaT = 1.0) {
   // ...but never step so far that a slow reservoir jumps discontinuously.
   const esc = w.escape;
   if (esc && esc.water > 0 && dg.totalWater > 0) {
-    dt = Math.min(dt, Math.max(0.02 * dg.totalWater * dg.d.eoColumn / esc.water, 1e-3));
+    dt = Math.min(dt, Math.max(0.05 * dg.totalWater * dg.d.eoColumn / esc.water, 1.0));
   }
+  // The CO2 reservoir is integrated semi-implicitly, so it needs only a loose
+  // bound -- and that bound is measured against a floor, because a planet whose
+  // CO2 has been weathered away to nothing must not drag the clock down with it.
   if (w.weathering) {
     const net = Math.abs(w.weathering.V - w.weathering.W) / Math.max(w.weathering.kappa, 1);
-    if (net > 0) dt = Math.min(dt, Math.max(0.05 * w.co2 / net, 1e-3));
+    const floor = 0.02 * CO2_EARTH_COL;
+    if (net > 0) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
   }
   return dt;
 }

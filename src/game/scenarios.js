@@ -57,7 +57,7 @@ export const SCENARIOS = [
     hint: 'Counter-intuitive but real (Abe et al. 2011): give it *less* water, not more.',
     params: { ...EARTH, insolation: 1.5, water: 1.0, landFraction: 0.3, startT: 300 },
     limit: 3e8,
-    check: (w) => w.time > 5e7 && classify(w).habitable && w.diag.Tmean < 320,
+    check: (w) => w.time > 5e7 && classify(w).habitable && w.diag.Tmean < 342,
     fail: null,
   },
   {

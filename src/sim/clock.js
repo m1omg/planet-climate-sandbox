@@ -19,8 +19,10 @@ export class Simulation {
     this.credit = 0;
     this.rate = 1e3;          // simulated years per real second
     this.paused = false;
-    this.maxStepsPerFrame = 240;
+    this.maxStepsPerFrame = 4000;
+    this.budgetMs = 10;       // hard wall-clock ceiling on physics per frame
     this.actualRate = 0;
+    this.throttled = false;   // true when the budget, not the clock, is the limit
     this._acc = 0;
     this.onSample = null;
     this._nextSample = 0;
@@ -49,28 +51,38 @@ export class Simulation {
 
   runCredit() {
     const w = this.world;
+    const deadline = performance.now() + this.budgetMs;
     let advanced = 0, steps = 0;
+    this.throttled = false;
     while (steps < this.maxStepsPerFrame) {
       const dt = Math.min(maxStep(w), this.rate * 0.3, 5e6);
       if (this.credit < dt) break;
+      // Never blow the frame budget, however stiff the planet has become. A
+      // difficult transition makes the simulated clock run slow; it must never
+      // make the interface stop responding.
+      if ((steps & 15) === 0 && performance.now() > deadline) { this.throttled = true; break; }
       this.credit -= dt;
       this.stepOnce(dt);
       advanced += dt;
       steps++;
     }
+    // Unspent credit is capped so a long stall cannot bank a huge jump.
+    this.credit = Math.min(this.credit, this.rate * 2);
     this.actualRate = advanced;
     return advanced;
   }
 
   // Advance exactly `years` of simulated time, ignoring the wall clock.
-  // Used by the self-tests and the "settle" button.
-  runYears(years, stepCap = 2e6) {
+  // Used by the self-tests. `budgetMs` bounds how long it may block for.
+  runYears(years, stepCap = 2e6, budgetMs = Infinity) {
     const w = this.world;
+    const deadline = budgetMs === Infinity ? Infinity : performance.now() + budgetMs;
     let done = 0, guard = 0;
     while (done < years && guard++ < 400000) {
       const dt = Math.min(maxStep(w), years - done, stepCap);
       this.stepOnce(dt);
       done += dt;
+      if (deadline !== Infinity && (guard & 15) === 0 && performance.now() > deadline) break;
     }
     return done;
   }

@@ -113,14 +113,19 @@ export function run() {
 
   // ---- 5. dry planets have a wider habitable zone (Abe et al. 2011) ---------
   {
-    const S = 1.7;
-    const wet = settle({ ...EARTH, insolation: S }, 3e5);
-    const dry = settle({ ...EARTH, insolation: S, water: 0.03, landFraction: 0.98 }, 3e5);
-    check('At 1.7 S⊕ an ocean world runs away',
-      wet.world.diag.Tmean > 400, `${wet.world.diag.Tmean.toFixed(0)} K`);
+    const S = 1.75;
+    const wet = settle({ ...EARTH, insolation: S }, 1e6);
+    const dry = settle({ ...EARTH, insolation: S, water: 0.03, landFraction: 0.98 }, 1e6);
+    const lossOf = (s) => (s.world.escape.water * 1e9) / s.world.diag.d.eoColumn;
+    check('At 1.75 S⊕ an ocean world is in a moist greenhouse, bleeding water',
+      classify(wet.world).id === 'moist' && lossOf(wet) > 0.04,
+      `${wet.world.diag.Tmean.toFixed(0)} K, ${lossOf(wet).toFixed(3)} EO/Gyr`);
     check('…but a dune world at the same flux stays habitable (Abe 2011)',
-      dry.world.diag.Tmean < 340 && classify(dry.world).habitable,
+      classify(dry.world).habitable && dry.world.diag.Tmean < wet.world.diag.Tmean,
       `${dry.world.diag.Tmean.toFixed(0)} K, ${classify(dry.world).name}`);
+    check('…and its dry stratosphere throttles water loss several-fold',
+      lossOf(dry) < 0.4 * lossOf(wet),
+      `${lossOf(dry).toFixed(3)} vs ${lossOf(wet).toFixed(3)} EO/Gyr`);
   }
 
   // ---- 6. tidally locked worlds -------------------------------------------

@@ -294,6 +294,20 @@ function updateReadout() {
 
   $('#simtime').textContent = fmtTime(w.time);
 
+  // When the planet is in a stiff transition the integrator cannot keep up with
+  // the requested acceleration. Say so, rather than letting it look frozen.
+  const rateOut = $('#rate-out');
+  const achieved = sim.actualRate / 0.1;   // readout runs ten times a second
+  if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
+    rateOut.textContent = `${fmtTime(Math.max(achieved, 0))} / s`;
+    rateOut.classList.add('throttled');
+    rateOut.title = 'The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.';
+  } else {
+    rateOut.textContent = `${fmtTime(sim.rate)} / s`;
+    rateOut.classList.remove('throttled');
+    rateOut.title = '';
+  }
+
   // scenario progress
   if (activeScenario) {
     const el = $('#scenario-banner .sc-status');
@@ -328,21 +342,11 @@ function bindControls() {
     sim.reset(params); scenarioResult = null; sim.paused = false; syncPlay();
   });
   $('#btn-settle').addEventListener('click', () => {
-    const btn = $('#btn-settle');
-    btn.classList.add('busy'); btn.textContent = '…';
-    // Run forward until the energy imbalance and the reservoirs stop moving.
-    setTimeout(() => {
-      const w = sim.world;
-      let guard = 0;
-      while (guard++ < 900) {
-        const before = w.diag.Tmean;
-        sim.runYears(Math.max(500, w.time * 0.05 + 500));
-        if (Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05) break;
-      }
-      sim.sample();
-      btn.classList.remove('busy'); btn.textContent = 'Settle';
-      toast(`Settled at ${fmtTime(w.time)}`);
-    }, 20);
+    if (settling) { settling = false; return; }   // click again to stop
+    settling = true;
+    settleRounds = 0;
+    $('#btn-settle').classList.add('busy');
+    $('#btn-settle').textContent = 'Stop';
   });
 
   const rate = $('#rate'), rateOut = $('#rate-out');
@@ -372,6 +376,27 @@ function bindControls() {
 // ---------------------------------------------------------------------------
 // Main loop. Real elapsed time in, simulated years out; the physics itself
 // never sees a frame.
+let settleRounds = 0;
+
+// "Settle" fast-forwards to equilibrium, but a slice per frame rather than in
+// one blocking burst -- otherwise a stiff planet locks the interface for
+// seconds at a time. It stops when nothing is moving any more, or on a second
+// click, or after a generous cap.
+function advanceSettle() {
+  const w = sim.world;
+  const before = w.diag.Tmean;
+  sim.runYears(Math.max(2000, w.time * 0.08 + 2000), 2e6, 26);
+  sim.sample();
+  settleRounds++;
+  const quiet = Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05;
+  if (quiet || settleRounds > 4000) {
+    settling = false;
+    $('#btn-settle').classList.remove('busy');
+    $('#btn-settle').textContent = 'Settle';
+    toast(`Settled at ${fmtTime(w.time)}`);
+  }
+}
+
 let last = performance.now(), chartClock = 0, reportedError = false;
 
 // One frame's worth of work, given how much real time has passed. Split out so
@@ -379,7 +404,8 @@ let last = performance.now(), chartClock = 0, reportedError = false;
 function tick(dtReal) {
   renderState.time += dtReal;
   try {
-    sim.advance(dtReal);
+    if (settling) advanceSettle();
+    else sim.advance(dtReal);
     view.render(sim.world, renderState, dtReal);
 
     chartClock += dtReal;
