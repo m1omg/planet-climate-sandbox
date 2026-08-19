@@ -4,7 +4,7 @@ Build a terrestrial planet — its mass, water inventory, atmosphere, star and s
 climate evolve over geological time into snowball, temperate, dune-world, eyeball, moist greenhouse,
 runaway greenhouse and beyond.
 
-**▶ [Play it here](https://example.invalid)**  *(link filled in on deploy)*
+**▶ [Play it here](https://m1omg.github.io/planet-climate-sandbox/)**
 
 No build step, no dependencies, no CDN. Plain ES modules, raw WebGL2 for the planet, Canvas2D for
 the charts.
