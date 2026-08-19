@@ -23,7 +23,12 @@ export const CH4_EARTH_COL = 1.8e-6 * P_EARTH / G_EARTH * 44 / 16; // ~0.0068
 // Net volcanic CO2 outgassing, column kg/m^2 per year. Tuned so that a hard
 // snowball takes millions of years to accumulate enough CO2 to break out,
 // matching the observed durations (Marinoan 4-15 Myr, Sturtian ~56 Myr).
-export const OUTGAS_EARTH = 5e-5;
+//
+// Earth's own temperature is almost untouched by this number -- the
+// carbonate-silicate thermostat absorbs it, holding 287.5-287.7 K across a
+// threefold change -- so it can be set from the snowball record without
+// disturbing the modern-Earth anchor.
+export const OUTGAS_EARTH = 4e-6;
 
 // Carbon held in ocean + reactive crust relative to the atmosphere. Makes the
 // carbonate-silicate thermostat relax on ~1 Myr rather than ~5 kyr.

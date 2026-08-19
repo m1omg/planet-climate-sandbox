@@ -1,8 +1,14 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL } from './constants.js';
-import { olr, planetaryAlbedo, iceFraction } from './radiation.js';
+import { olr, planetaryAlbedo, iceFraction, ALB_SEABED } from './radiation.js';
 import { derive } from './planet.js';
+import { floodedFraction } from './hypsometry.js';
 
 export const NBANDS = 18;
+
+// Water currently in the air, as a fraction of an Earth ocean.
+function vapourShare(w, d) {
+  return (w.water.vapour || 0);
+}
 
 // Equal-area grid in x. For a fast rotator x = sin(latitude); for a tidally
 // locked world x = cos(angle from the substellar point), which turns the same
@@ -43,7 +49,7 @@ export function resetWorld(w, params) {
   w.ch4 = params.ch4Bar * 1e5 / d.g;
   w.o2 = 0;
   w.co2Frozen = 0;
-  w.water = { ocean: params.water, ice: 0, vapour: 0, lost: 0 };
+  w.water = { ocean: params.water, seaIce: 0, landIce: 0, vapour: 0, lost: 0 };
   // The inventory the world started with. The `water` control tracks what is
   // left, so charts and classification need this as a fixed reference.
   w.waterInitial = params.water;
@@ -105,13 +111,42 @@ export function update(w, dt) {
   const pO2 = w.o2 * g / 1e5;
 
   // Water available to evaporate, as a column and then as pressure
-  const totalWater = w.water.ocean + w.water.ice + w.water.vapour;
+  const totalWater = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
   const availCol = totalWater * d.eoColumn;
 
-  // How much of the surface is sea. A nearly dry world has scattered seas, and
-  // that alone keeps its air unsaturated -- the Abe et al. (2011) dune world.
-  const oceanFrac = clamp((1 - p.landFraction) * smoothstep(0, 0.12, w.water.ocean + w.water.vapour), 0, 1);
-  const RH = clamp(0.34 + 0.44 * oceanFrac, 0.15, 0.85);
+  // How much of the planet is under water. This is derived, not chosen: it
+  // follows from the water actually sitting in the basins and from the basin
+  // geometry. Water that has evaporated into the air no longer covers
+  // anything, so boiling an ocean uncovers its floor; sea ice floats and still
+  // fills its basin, so freezing one does not.
+  const basinW = w.water.ocean + w.water.seaIce;
+  const flooded = floodedFraction(basinW * d.eoColumn, p.landFraction, d.eoColumn);
+
+  // Frozen share of the flooded area, and what is left open to the sky.
+  let frozenShare = 0;
+  for (let i = 0; i < NBANDS; i++) frozenShare += iceFraction(w.T[i]) / NBANDS;
+  const seaIceFrac = clamp(flooded * frozenShare, 0, flooded);
+  const openOcean = clamp(flooded - seaIceFrac, 0, 1);
+
+  // Evaporation comes from open water only. A sea sealed under ice supplies
+  // almost nothing, which is what makes a hard snowball genuinely arid -- and
+  // what keeps a dry world's air unsaturated, the Abe et al. (2011) dune world.
+  const oceanFrac = flooded;
+  const RH = clamp(0.34 + 0.44 * openOcean, 0.15, 0.85);
+
+  // Land uncovered by a sea that has retreated or boiled away is bare ocean
+  // floor -- dark basalt, not weathered continental rock -- so a drying world
+  // darkens rather than brightens as its basins empty.
+  const basinShare = clamp(1 - p.landFraction, 0, 1);
+  const exposedBasin = clamp(basinShare - flooded, 0, 1);
+  const landTotal = clamp(1 - flooded, 1e-6, 1);
+  const effLandAlbedo = (p.landAlbedo * clamp(landTotal - exposedBasin, 0, 1)
+                       + ALB_SEABED * exposedBasin) / landTotal;
+
+  // Share of land carrying ice. Glaciers need snowfall, so this tracks how much
+  // moisture the planet can actually move onto the continents.
+  const moisture = smoothstep(0, 0.05, openOcean + vapourShare(w, d));
+  const glaciatedShare = clamp(moisture, 0, 1);
 
   // Demanded vapour per band, then rescaled if the planet hasn't got the water
   const demand = new Float64Array(NBANDS);
@@ -152,7 +187,8 @@ export function update(w, dt) {
     pTotArr[i] = pTot;
     const subStellar = lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;
     const a = planetaryAlbedo(w.T[i], {
-      oceanFrac, landAlbedo: p.landAlbedo, hasWater, waterCap,
+      oceanFrac: flooded, landAlbedo: effLandAlbedo, hasWater, waterCap,
+      glaciated: glaciatedShare * iceFraction(w.T[i]),
       pH2O: pH2O[i], pTot, slowness, subStellar,
     });
     alb[i] = a.albedo; cloud[i] = a.cloud;
@@ -173,7 +209,7 @@ export function update(w, dt) {
   //   3. latent heat: every extra kelvin evaporates more sea, and near the
   //      runaway that dwarfs everything else.
   const C = new Float64Array(NBANDS);
-  const oceanDepth = w.water.ocean * d.eoColumn / RHO_WATER;
+  const oceanDepth = (w.water.ocean + w.water.seaIce) * d.eoColumn / RHO_WATER;
   for (let i = 0; i < NBANDS; i++) {
     const deep = MIXED_LAYER + Math.max(0, oceanDepth - MIXED_LAYER) * smoothstep(315, 350, w.T[i]);
     const cOcean = deep * RHO_WATER * CP_WATER * (1 - 0.9 * (hasWater ? iceFraction(w.T[i]) : 0));
@@ -184,12 +220,20 @@ export function update(w, dt) {
       const dps = (psatH2O(T + 0.5) - psatH2O(T - 0.5));  // Pa/K
       cLat = L_VAP * RH * dps / g;
     }
-    C[i] = clamp(oceanFrac * cOcean + (1 - oceanFrac) * C_LAND + cAtm + cLat, 1e5, 1e14);
+    // Sea ice decouples the water below from the air above, so a frozen ocean
+    // behaves far more like land than like a mixed layer.
+    const seal = hasWater ? iceFraction(w.T[i]) : 0;
+    const cSea = cOcean * (1 - 0.92 * seal) + C_LAND * 0.92 * seal;
+    C[i] = clamp(flooded * cSea + (1 - flooded) * C_LAND + cAtm + cLat, 1e5, 1e14);
   }
 
   w.diag = {
     g, d, pN2, pCO2, pCH4, pO2, pH2O, pTot: pTotArr, pTotMean,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
+    flooded, openOcean, seaIceFrac, frozenShare, exposedBasin, effLandAlbedo,
+    landFrac: clamp(1 - flooded, 0, 1),
+    landIceFrac: clamp((1 - flooded) * frozenShare * glaciatedShare, 0, 1),
+    glaciatedShare,
     Tmean, iceMean, absorbed, emitted, imbalance: absorbed - emitted,
     hasWater, vapourCol: vapCol, lam, slowness, totalWater,
     Tmax: Math.max(...w.T), Tmin: Math.min(...w.T),
@@ -218,20 +262,20 @@ export function tendency(w) {
 // Largest step we may take: bounded by how fast anything is actually moving,
 // never by the frame rate. Returned in years.
 export function maxStep(w, maxDeltaT = 1.0) {
-  const { dT, D } = tendency(w);
+  const { dT } = tendency(w);
   const dg = w.diag;
-  const k = dampingRates(w, D);
+  const k = radiativeDamping(w);
 
   let worst = 0, eqDistance = 0, minDamping = Infinity;
   for (let i = 0; i < NBANDS; i++) {
-    minDamping = Math.min(minDamping, k.raw[i]);
+    minDamping = Math.min(minDamping, k[i]);
     // Allow a slightly coarser step on a very hot planet: one kelvin out of 900
     // is not a resolvable change, and it keeps a runaway affordable to watch.
     const allow = Math.max(maxDeltaT, 0.004 * w.T[i]);
     worst = Math.max(worst, Math.abs(dT[i]) / allow);
     // How far this band still is from the equilibrium it is relaxing towards,
     // in kelvin: rate of change times the local relaxation time.
-    eqDistance = Math.max(eqDistance, Math.abs(dT[i]) * dg.C[i] / k[i]);
+    eqDistance = Math.max(eqDistance, Math.abs(dT[i]) * dg.C[i] / Math.max(k[i], 0.05));
   }
   if (worst < 1e-18) return 5e6;
   let dt = clamp(1 / worst / YEAR, 2e-3, 5e6);
@@ -264,18 +308,20 @@ export function maxStep(w, maxDeltaT = 1.0) {
   return dt;
 }
 
-// How stiffly each band resists a temperature change: dOLR/dT plus the
-// diffusion diagonal. Shared by the implicit step and the step-size chooser.
-export function dampingRates(w, D) {
+// Radiative damping: how strongly each band's own energy balance resists a
+// temperature change, in W/m^2/K. Longwave emission pushes back; the shortwave
+// side (melting ice, darkening steam) pushes the other way and can make this
+// negative, which is precisely what a runaway greenhouse is.
+//
+// Diffusion is deliberately NOT included here. It moves heat between bands but
+// removes none from the planet, so it cannot damp a uniform warming -- treating
+// it as damping was making the whole planet heat thousands of times too slowly.
+// It enters the solver below as the off-diagonal terms it actually is.
+export function radiativeDamping(w) {
   const dg = w.diag;
   const k = new Float64Array(NBANDS);
-  const raw = new Float64Array(NBANDS);
   for (let i = 0; i < NBANDS; i++) {
     const T = w.T[i];
-    // Local radiative damping dOLR/dT, plus the diffusion diagonal. The
-    // derivative has to follow the humidity as well as the temperature: in a
-    // steam atmosphere water vapour responds so violently to a kelvin that
-    // holding it fixed here leaves the solver oscillating forever.
     const h = 0.5;
     const scale = dg.humidityScale;
     const pw = (t) => Math.min(dg.pH2O[i] * (psatH2O(t) / Math.max(psatH2O(T), 1e-12)),
@@ -284,35 +330,63 @@ export function dampingRates(w, D) {
     const ptHi = dg.pTot[i] - dg.pH2O[i] + pwHi, ptLo = dg.pTot[i] - dg.pH2O[i] + pwLo;
     const dOLR = (olr(T + h, dg.pCO2, pwHi, dg.pCH4, ptHi)
                 - olr(T - h, dg.pCO2, pwLo, dg.pCH4, ptLo)) / (2 * h);
-    // The shortwave side matters just as much, and it points the other way:
-    // melting ice and darkening steam make a warming planet absorb *more*.
-    // Leaving this out lets the solver believe in equilibria that do not exist.
-    const albOpts = (t, pwx, ptx) => planetaryAlbedo(t, {
-      oceanFrac: dg.oceanFrac, landAlbedo: w.params.landAlbedo, hasWater: dg.hasWater,
-      waterCap: dg.waterCap, pH2O: pwx, pTot: ptx, slowness: dg.slowness,
+    const albAt = (t, pwx, ptx) => planetaryAlbedo(t, {
+      oceanFrac: dg.flooded, landAlbedo: dg.effLandAlbedo, hasWater: dg.hasWater,
+      waterCap: dg.waterCap, glaciated: dg.glaciatedShare * iceFraction(t),
+      pH2O: pwx, pTot: ptx, slowness: dg.slowness,
       subStellar: dg.lam > 0.01 ? clamp(X[i], 0, 1) : 0.35,
     }).albedo;
-    const dABS = dg.S[i] * (albOpts(T - h, pwLo, ptLo) - albOpts(T + h, pwHi, ptHi)) / (2 * h);
-    const xl = -1 + DX * i, xr = -1 + DX * (i + 1);
-    const diag = D * ((1 - xr * xr) + (1 - xl * xl)) / (DX * DX);
-    raw[i] = dOLR - dABS + diag;
-    k[i] = Math.max(0.05, raw[i]);
+    const dABS = dg.S[i] * (albAt(T - h, pwLo, ptLo) - albAt(T + h, pwHi, ptHi)) / (2 * h);
+    k[i] = dOLR - dABS;
   }
-  k.raw = raw;
   return k;
 }
 
-// Semi-implicit (linearised backward Euler) temperature step: unconditionally
-// stable, so a quiet planet can be advanced in million-year strides while a
-// planet in transition automatically drops to short steps.
+// Backward-Euler step on the full coupled system, solved as the tridiagonal
+// problem it is (Thomas algorithm, 18 bands -- trivially cheap). Writing
+//
+//     (C_i/dt + r_i + w_i + w_{i+1}) T'_i  −  w_i T'_{i−1}  −  w_{i+1} T'_{i+1}
+//        =  C_i · (dT_i/dt)
+//
+// keeps the scheme unconditionally stable while letting the whole planet warm
+// together when it is genuinely running away, instead of each band being held
+// back by neighbours the diagonal approximation assumed were staying put.
 export function stepTemperature(w, dtYears) {
   const dt = dtYears * YEAR;
   const dg = w.diag;
   const { dT, D } = tendency(w);
-  const k = dampingRates(w, D);
-  const Tn = new Float64Array(NBANDS);
-  for (let i = 0; i < NBANDS; i++) {
-    Tn[i] = w.T[i] + dt * dT[i] / (1 + dt * k[i] / dg.C[i]);
+  const r = radiativeDamping(w);
+
+  const wgt = new Float64Array(NBANDS + 1);      // edge conductances
+  for (let j = 1; j < NBANDS; j++) {
+    const xe = -1 + DX * j;
+    wgt[j] = D * (1 - xe * xe) / (DX * DX);
   }
-  for (let i = 0; i < NBANDS; i++) w.T[i] = clamp(Tn[i], 2, 4000);
+
+  const lo = new Float64Array(NBANDS), di = new Float64Array(NBANDS);
+  const up = new Float64Array(NBANDS), rhs = new Float64Array(NBANDS);
+  for (let i = 0; i < NBANDS; i++) {
+    lo[i] = -wgt[i];
+    up[i] = -wgt[i + 1];
+    di[i] = dg.C[i] / dt + Math.max(r[i], -0.4 * (wgt[i] + wgt[i + 1]) - 0.05) + wgt[i] + wgt[i + 1];
+    rhs[i] = dg.C[i] * dT[i];
+  }
+
+  // Thomas algorithm
+  const cp = new Float64Array(NBANDS), dp = new Float64Array(NBANDS);
+  cp[0] = up[0] / di[0];
+  dp[0] = rhs[0] / di[0];
+  for (let i = 1; i < NBANDS; i++) {
+    const m = di[i] - lo[i] * cp[i - 1];
+    cp[i] = up[i] / m;
+    dp[i] = (rhs[i] - lo[i] * dp[i - 1]) / m;
+  }
+  const dTn = new Float64Array(NBANDS);
+  dTn[NBANDS - 1] = dp[NBANDS - 1];
+  for (let i = NBANDS - 2; i >= 0; i--) dTn[i] = dp[i] - cp[i] * dTn[i + 1];
+
+  for (let i = 0; i < NBANDS; i++) w.T[i] = clamp(w.T[i] + dTn[i], 2, 4000);
 }
+
+// Largest step we may take: bounded by how fast anything is actually moving,
+// never by the frame rate. Returned in years.

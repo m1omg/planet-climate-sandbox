@@ -13,6 +13,7 @@ uniform float uSeed;
 uniform float uLandFrac;
 uniform float uOceanFrac;
 uniform float uWaterCap;    // 0 = bone dry, 1 = plenty of water for snow/sea
+uniform float uGlaciated;   // share of frozen land carrying an ice sheet
 uniform float uCloud;       // mean cloud cover 0..1
 uniform float uSteam;       // 0..1 thick steam envelope
 uniform float uPTot;        // bar
@@ -151,13 +152,30 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
 
   // Sea ice is floe-broken; land ice is a brighter snowfield that takes the
   // high ground first.
+  // Sea ice and land ice are drawn separately, because a planet can have one
+  // without the other. A frozen ocean still covers its basin, while the
+  // continents beside it may be bare frosted rock if no snow reaches them --
+  // which is what a hard snowball actually looks like.
   float floe = fbm(q*9.0, 4);
   float snowline = smoothstep(-0.06, 0.22, elev);
-  float iceAmt = clamp(ice*(0.75 + 0.55*snowline) - 0.16*floe, 0.0, 1.0) * mix(0.25, 1.0, uWaterCap);
-  vec3 iceCol = mix(mix(vec3(0.72,0.82,0.90), vec3(0.90,0.95,0.99), floe),
-                    mix(vec3(0.86,0.90,0.94), vec3(0.99,1.00,1.00), fine), land);
-  float iceMask = smoothstep(0.06,0.52,iceAmt);
-  col = mix(col, iceCol, iceMask);
+
+  float seaIceAmt = clamp(ice*1.05 - 0.16*floe, 0.0, 1.0) * mix(0.25, 1.0, uWaterCap);
+  vec3 seaIceCol = mix(vec3(0.72,0.82,0.90), vec3(0.90,0.95,0.99), floe);
+  float seaIceMask = smoothstep(0.06,0.52,seaIceAmt) * (1.0 - land);
+
+  // Ice sheets take the high ground first, and only where snow can reach.
+  float sheetAmt = clamp(ice*(0.70 + 0.60*snowline) - 0.18*floe, 0.0, 1.0) * uGlaciated;
+  vec3 sheetCol = mix(vec3(0.86,0.90,0.94), vec3(0.99,1.00,1.00), fine);
+  float sheetMask = smoothstep(0.06,0.52,sheetAmt) * land;
+
+  // Frozen ground with no ice sheet still frosts over: paler than summer rock,
+  // nothing like an ice cap.
+  float frostMask = clamp(ice, 0.0, 1.0) * land * (1.0 - smoothstep(0.06,0.52,sheetAmt));
+  col = mix(col, mix(col, vec3(0.66,0.66,0.68), 0.55), frostMask);
+
+  col = mix(col, seaIceCol, seaIceMask);
+  col = mix(col, sheetCol, sheetMask);
+  float iceMask = max(seaIceMask, sheetMask);
   shininess = mix(shininess, 0.5, iceMask);
 
   float melt = smoothstep(1150.0,1500.0,T);
@@ -221,8 +239,12 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
 
   float floe = fbm(q*9.0, 4);
   float snowline = smoothstep(-0.06, 0.22, elev);
-  float iceAmt = clamp(ice*(0.75 + 0.55*snowline) - 0.16*floe, 0.0, 1.0) * mix(0.25, 1.0, uWaterCap);
-  col = mix(col, tIce, smoothstep(0.06,0.52,iceAmt));
+  float seaIceAmt = clamp(ice*1.05 - 0.16*floe, 0.0, 1.0) * mix(0.25, 1.0, uWaterCap);
+  float sheetAmt  = clamp(ice*(0.70 + 0.60*snowline) - 0.18*floe, 0.0, 1.0) * uGlaciated;
+  float frostMask = clamp(ice,0.0,1.0) * land * (1.0 - smoothstep(0.06,0.52,sheetAmt));
+  col = mix(col, mix(col, vec3(0.66,0.66,0.68), 0.55), frostMask);
+  col = mix(col, tIce, smoothstep(0.06,0.52,seaIceAmt) * (1.0 - land));
+  col = mix(col, tIce, smoothstep(0.06,0.52,sheetAmt) * land);
 
   float melt = smoothstep(1150.0,1500.0,T);
   col = mix(col, tLava, melt);

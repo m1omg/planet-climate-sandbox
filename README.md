@@ -11,7 +11,7 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 30 physics, determinism and control checks
+node src/selftest.js            # 37 physics, coverage, determinism and control checks
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # optional: compiles them on a real GL driver
@@ -118,22 +118,49 @@ does not have.
 
 ---
 
+### Land and ocean coverage
+
+How much of a planet is under water is **derived, not chosen**. The control sets the *basin
+geometry* — how much of this world would stand above the sea at Earth-like water — and the actual
+coverage follows from the water that is really there, through a hypsometric curve
+(`src/physics/hypsometry.js`):
+
+```
+flooded = (1 − L) · (W_basin / 1 EO)^0.25
+```
+
+`W_basin` counts liquid ocean **plus sea ice**, because ice floats and still fills its basin, but
+**not** water vapour. So boiling an ocean uncovers its floor and land climbs to 100%, while freezing
+one does not. The exponent is calibrated against real hypsometry: halving Earth's ocean drops the
+flooded area only ~15%, because the abyssal plains are nearly flat.
+
+Ice is tracked as two reservoirs. Sea ice seals the ocean off and shuts down evaporation; land ice
+needs snowfall to exist at all. In a hard snowball the water cycle collapses, so the continents end
+up frosted but largely unglaciated — as on the real Snowball Earth, and in the Antarctic Dry Valleys
+today — which makes such a planet darker, and easier to escape, than one buried in ice.
+
 ## Known deviations from the literature
 
 Stated plainly, because a model that hides these is less useful:
 
-* **Snowball deglaciation happens at ~0.02 bar CO₂**, against the 0.1–0.3 bar of published snowball
-  studies. The semi-grey CO₂ opacity is stronger at intermediate pressure than line-by-line models.
-  The *behaviour* — hysteresis, multi-Myr duration, unopposed CO₂ build-up — is right; the threshold
-  sits low.
-* **The runaway inner edge is at ~1.85 S⊕**, against 1.2–1.4 in published 3-D GCMs (Leconte 2013;
-  Wolf & Toon 2014). The cloud and dry-subsidence parametrisations are crude, and they buy this
-  model more margin than the real physics does.
-* **The dune-world advantage shows up as margin, not as a shifted threshold.** At the same flux a
-  dry world runs cooler and loses water several times more slowly than an ocean world — the
-  mechanism Abe et al. (2011) identify — but in this model both tip into a runaway at close to the
-  same insolation, where Abe finds the dry world's inner edge moves substantially inward.
-* Earth needs ~396 ppm rather than 280 ppm to reach 288 K once the thermostat has converged.
+* **Snowball deglaciation happens at a few mbar of CO₂**, against the 0.1–0.3 bar of published
+  snowball studies. The semi-grey CO₂ opacity is stronger at intermediate pressure than line-by-line
+  models. The *behaviour* — hysteresis, multi-Myr duration, unopposed CO₂ build-up — is right; the
+  threshold sits low.
+* **The runaway transient runs 10²–10³ yr**, against ~10⁵ yr in Turbet et al. (2023). This is
+  energy conservation: vaporising an Earth ocean needs ~7×10¹² J/m² of latent heat, so the transient
+  is that divided by the planet's net flux. The model reproduces the *scaling* — slow near the
+  threshold, fast when pushed well past it — and the published figure corresponds to a forcing
+  excess of only a few W/m².
+* Earth needs ~330 ppm rather than 280 ppm to reach 288 K once the thermostat has converged.
+
+Two deviations recorded in earlier versions have since been **fixed** rather than excused: the
+runaway inner edge now falls at 1.3–1.4 S⊕ (literature 1.2–1.4), and a dune world stays habitable
+about 0.35 S⊕ further in than an ocean world, which is the Abe et al. (2011) result. Both were
+symptoms of an integrator bug — the implicit step damped the global mean with the diffusion
+coefficient, which only moves heat between latitudes and cannot slow uniform warming — that made
+the whole planet heat thousands of times too slowly. It is now solved as the tridiagonal system it
+actually is.
 
 ## References
 

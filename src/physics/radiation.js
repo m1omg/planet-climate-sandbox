@@ -53,18 +53,44 @@ export function runawayLimit(pCO2, pN2) {
 // Shortwave: surface + cloud + Rayleigh, tuned to Earth's 0.30 planetary albedo
 // ---------------------------------------------------------------------------
 export const ALB_OCEAN = 0.07, ALB_ICE = 0.60, ALB_SNOW = 0.68, ALB_CLOUD = 0.375;
+// Frozen ground that carries no ice sheet is still frosted, and nothing like as
+// dark as the same rock in summer -- but only if the world has water to frost
+// it with. Mars is frozen solid and still reflects like dust.
+export const ALB_FROST = 0.45;
+// Ocean floor uncovered by a retreating or boiling sea: dark basalt and
+// sediment, far darker than weathered continental surface.
+export const ALB_SEABED = 0.12;
 
 // Fractional ice cover: smooth over a 25 K window so nothing ever snaps.
 export function iceFraction(T) { return 1 - smoothstep(253, 278, T); }
 
-// waterCap: a planet with only a film of water cannot build a bright snowfield.
-// Mars has frozen water and still reflects like dust, not like a snowball.
-export function surfaceAlbedo(T, oceanFrac, landAlbedo, hasWater, waterCap = 1) {
-  const bare = ALB_OCEAN * oceanFrac + landAlbedo * (1 - oceanFrac);
-  if (!hasWater) return bare;
+// Four distinct surfaces, because they reflect very differently and a planet
+// can have any mixture of them:
+//
+//   open ocean    0.07   dark, absorbs nearly everything
+//   sea ice       0.60   bright, and the reason ice-albedo feedback runs away
+//   bare land    ~0.25   whatever the ground is made of
+//   frozen land   0.45   frosted, but carrying no ice sheet
+//   land ice      0.68   brightest of all, and it needs snowfall to exist
+//
+// `glaciated` is the share of frozen *land* carrying a real ice sheet, which is
+// not the same as the frozen share: a world whose water cycle has shut down
+// leaves its continents frosted but unglaciated (Snowball Earth; the Antarctic
+// Dry Valleys). Such continents are markedly darker than an ice sheet, which is
+// why a snowball with bare land is easier to escape than one buried in ice.
+export function surfaceAlbedo(T, floodedFrac, landAlbedo, hasWater, glaciated = 0, waterCap = 1) {
+  const flooded = clamp(floodedFrac, 0, 1);
+  const land = 1 - flooded;
+  if (!hasWater) return ALB_OCEAN * flooded + landAlbedo * land;
   const fi = iceFraction(T);
-  const snow = landAlbedo + (ALB_SNOW - landAlbedo) * clamp(waterCap, 0, 1);
-  return bare * (1 - fi) + (ALB_ICE * oceanFrac + snow * (1 - oceanFrac)) * fi;
+  const sea = ALB_OCEAN * (1 - fi) + ALB_ICE * fi;
+  const g = clamp(glaciated, 0, 1);
+  // Frost needs water to deposit; a bone-dry frozen world stays the colour of
+  // its dust.
+  const frost = landAlbedo + (ALB_FROST - landAlbedo) * clamp(waterCap, 0, 1);
+  const frozenGround = frost * (1 - g) + ALB_SNOW * g;
+  const ground = landAlbedo * (1 - fi) + frozenGround * fi;
+  return flooded * sea + land * ground;
 }
 
 // Cloud cover grows with the water-vapour column. Slow rotators and tidally
@@ -76,7 +102,7 @@ export function cloudCover(pH2O, slowness, subStellar) {
 }
 
 export function planetaryAlbedo(T, o) {
-  const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.waterCap);
+  const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated, o.waterCap);
   const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * (o.cloudBoost ?? 1), 0, 0.9);
   const withClouds = ALB_CLOUD * C + surf * (1 - C);
   // Rayleigh + haze from the *dry* gas. Exponent set so a 92 bar CO2 atmosphere

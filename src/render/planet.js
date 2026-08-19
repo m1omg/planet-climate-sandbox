@@ -46,7 +46,7 @@ export class PlanetView {
 
     this.u = {};
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
-      'uOceanFrac', 'uWaterCap', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
+      'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uBandT', 'uBandIce']) {
       this.u[name] = gl.getUniformLocation(this.prog, name === 'uBandT' || name === 'uBandIce' ? name + '[0]' : name);
     }
@@ -177,7 +177,8 @@ export class PlanetView {
     gl.uniform3f(this.u.uStarColor, sc[0], sc[1], sc[2]);
     gl.uniform1f(this.u.uSeed, state.seed);
     gl.uniform1f(this.u.uLandFrac, p.landFraction);
-    gl.uniform1f(this.u.uOceanFrac, dg.oceanFrac);
+    gl.uniform1f(this.u.uOceanFrac, dg.flooded ?? dg.oceanFrac);
+    gl.uniform1f(this.u.uGlaciated, dg.glaciatedShare ?? 1);
     gl.uniform1f(this.u.uWaterCap, dg.waterCap);
     gl.uniform1f(this.u.uCloud, cloudMean);
     gl.uniform1f(this.u.uSteam, steam);

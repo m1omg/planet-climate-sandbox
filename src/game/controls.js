@@ -20,9 +20,9 @@ export const SLIDERS = [
     fmt: (v) => v <= 0 ? 'none' : `${v.toFixed(v < 1 ? 3 : 2)} EO`,
     units: { eo: 1, ocean: 1, oceans: 1, m: 1 / 2750, km: 1000 / 2750 },
     note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water.' },
-  { g: 'body', key: 'landFraction', label: 'Land fraction', min: 0, max: 1,
-    fmt: (v) => `${(v * 100).toFixed(0)} %`, units: { '%': 0.01 }, unitFor: () => '%',
-    note: 'No land means no silicate weathering, so no CO₂ thermostat.' },
+  { g: 'body', key: 'landFraction', label: 'Basin geometry', min: 0, max: 1,
+    fmt: (v) => `${(v * 100).toFixed(0)} % land`, units: { '%': 0.01 }, unitFor: () => '%',
+    note: 'How much of this world would stand above the sea at Earth-like water. Actual coverage is worked out from the water it really has — see the readout.' },
 
   { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 4, log: true,
     fmt: (v) => `${v.toFixed(3)} S⊕`,

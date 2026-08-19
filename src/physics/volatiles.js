@@ -7,25 +7,64 @@ import { outgassingScale, radiusFromMass } from './planet.js';
 import { NBANDS } from './climate.js';
 
 // ---------------------------------------------------------------------------
-// Where the water sits: ocean / ice / vapour / lost to space.
+// Where the water sits: ocean / sea ice / land ice / vapour / lost to space.
+//
+// Sea ice and open ocean are kept apart because they behave completely
+// differently -- sea ice floats, so it still fills its basin and keeps the
+// planet's land fraction down, but it seals the ocean off from the atmosphere
+// and shuts down evaporation. Land ice is a separate reservoir again: it sits
+// on top of exposed ground and does not fill anything.
 // ---------------------------------------------------------------------------
 export function partitionWater(w) {
   const dg = w.diag, d = dg.d;
-  const total = w.water.ocean + w.water.ice + w.water.vapour;
-  if (total <= 0) { w.water.ocean = w.water.ice = w.water.vapour = 0; return; }
+  const total = totalWater(w);
+  if (total <= 0) {
+    w.water.ocean = w.water.seaIce = w.water.landIce = w.water.vapour = 0;
+    return;
+  }
 
   const vapour = clamp(dg.vapourCol / d.eoColumn, 0, total);
-  let rest = total - vapour;
+  const surface = total - vapour;
 
-  // Ice: the frozen share of the surface, but a band can only freeze as much
-  // water as is actually there.
+  // How much of the surface is cold enough to freeze.
   let frozenShare = 0;
   for (let i = 0; i < NBANDS; i++) frozenShare += iceFraction(w.T[i]) / NBANDS;
-  const ice = clamp(rest * frozenShare, 0, rest);
+
+  // Building an ice sheet on land needs a working water cycle to carry the
+  // water there. Once the sea is sealed under ice, evaporation collapses and
+  // the continents stay bare frozen rock -- Snowball Earth, and the Antarctic
+  // Dry Valleys today.
+  const openBefore = clamp(dg.flooded * (1 - frozenShare), 0, 1);
+  const moisture = smoothstep(0, 0.05, openBefore + dg.vapourCol / Math.max(d.eoColumn, 1e-9));
+
+  // Split the surface water by where it physically sits. Basins hold what the
+  // hypsometry says they hold; the rest is what has piled up on land as ice.
+  const landShare = clamp(1 - dg.flooded, 0, 1);
+  const glaciated = clamp(frozenShare * moisture, 0, 1);
+
+  // Land ice is capped by the water actually available above the basins, so a
+  // world cannot glaciate ground it has no water to glaciate.
+  const landIceWanted = surface * landShare * glaciated;
+  const landIce = clamp(landIceWanted, 0, surface * 0.5);
+  const basin = Math.max(0, surface - landIce);
+  const seaIce = clamp(basin * frozenShare, 0, basin);
 
   w.water.vapour = vapour;
-  w.water.ice = ice;
-  w.water.ocean = Math.max(0, rest - ice);
+  w.water.landIce = landIce;
+  w.water.seaIce = seaIce;
+  w.water.ocean = Math.max(0, basin - seaIce);
+}
+
+// Total water still on the planet, however it is currently stored.
+export function totalWater(w) {
+  const x = w.water;
+  return (x.ocean || 0) + (x.seaIce || 0) + (x.landIce || 0) + (x.vapour || 0);
+}
+
+// Water sitting in the basins: liquid, plus the sea ice floating on it. This is
+// what sets how much of the planet is under water.
+export function basinWater(w) {
+  return (w.water.ocean || 0) + (w.water.seaIce || 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -93,13 +132,14 @@ export function stepVolatiles(w, dtYears) {
   const esc = escapeRates(w);
 
   // --- water inventory -----------------------------------------------------
-  if (dg.totalWater > 0) {
+  if (totalWater(w) > 0) {
     const lostCol = esc.water * dtYears;                 // kg/m^2
     const lostEO = Math.min(lostCol / d.eoColumn, dg.totalWater);
-    const pool = w.water.vapour + w.water.ocean + w.water.ice;
+    const pool = totalWater(w);
     if (pool > 0) {
       const f = 1 - lostEO / pool;
-      w.water.vapour *= f; w.water.ocean *= f; w.water.ice *= f;
+      w.water.vapour *= f; w.water.ocean *= f;
+      w.water.seaIce *= f; w.water.landIce *= f;
       w.water.lost += lostEO;
       // oxygen left behind when the hydrogen goes; some is taken up by the crust
       w.o2 += lostEO * d.eoColumn * (32 / 18) * 0.15;

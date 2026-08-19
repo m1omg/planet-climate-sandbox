@@ -106,7 +106,9 @@ export class Simulation {
     w.history.push({
       t: w.time, T: dg.Tmean, Tmax: dg.Tmax, Tmin: dg.Tmin,
       ice: dg.iceMean, pCO2: dg.pCO2, pH2O: dg.pTotMean - dg.pN2 - dg.pCO2,
-      ocean: w.water.ocean, iceW: w.water.ice, vap: w.water.vapour, lost: w.water.lost,
+      ocean: w.water.ocean, seaIce: w.water.seaIce, landIce: w.water.landIce,
+      vap: w.water.vapour, lost: w.water.lost,
+      flooded: dg.flooded, landFrac: dg.landFrac,
       alb: dg.absorbed / Math.max(1e-6, dg.S.reduce((a, b) => a + b, 0) / dg.S.length),
     });
     if (w.history.length > 4000) w.history.splice(0, 2000);

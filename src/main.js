@@ -125,7 +125,7 @@ const LIVE_READERS = {
   co2: (w) => w.co2 * w.diag.g / 1e5,
   n2: (w) => w.n2 * w.diag.g / 1e5,
   ch4: (w) => w.ch4 * w.diag.g / 1e5,
-  water: (w) => w.water.ocean + w.water.ice + w.water.vapour,
+  water: (w) => w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour,
 };
 
 // The four reservoirs above are *outputs* as much as inputs: volcanoes, weathering,
@@ -164,11 +164,11 @@ function applyParams(key) {
     if (key === 'water') {
       // The control shows the water still present, so set that directly and
       // leave the record of what has already been lost to space intact.
-      const cur = w.water.ocean + w.water.ice + w.water.vapour;
+      const cur = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
       const target = Math.max(0, params.water);
       if (cur > 1e-9) {
         const f = target / cur;
-        w.water.ocean *= f; w.water.ice *= f; w.water.vapour *= f;
+        w.water.ocean *= f; w.water.seaIce *= f; w.water.landIce *= f; w.water.vapour *= f;
       } else { w.water.ocean = target; }
       w.waterInitial = Math.max(w.waterInitial ?? 0, target + w.water.lost);
     }
@@ -287,6 +287,9 @@ function updateReadout() {
   $('#stats').innerHTML =
     stat('Mean surface', `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`) +
     stat('Range', `${(dg.Tmin - 273.15).toFixed(0)} → ${(dg.Tmax - 273.15).toFixed(0)}<small> °C</small>`) +
+    stat('Land / ocean', `${(dg.landFrac * 100).toFixed(0)}<small> %</small> / ${(dg.flooded * 100).toFixed(0)}<small> %</small>`,
+      dg.landFrac > 0.98 && w.water.lost > 0.02 ? 'warn' : '') +
+    stat('Sea ice / land ice', `${(dg.seaIceFrac * 100).toFixed(0)}<small> %</small> / ${(dg.landIceFrac * 100).toFixed(0)}<small> %</small>`) +
     stat('Ice cover', `${(dg.iceMean * 100).toFixed(0)}<small> %</small>`) +
     stat('Cloud cover', `${(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS * 100).toFixed(0)}<small> %</small>`) +
     stat('Surface pressure', `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +

@@ -137,7 +137,7 @@ export function drawWater(canvas, world) {
   axes(ctx, w, h, pad);
   const inv = world.water;
   const total = Math.max(world.waterInitial ?? world.params.water,
-                         inv.ocean + inv.ice + inv.vapour + inv.lost);
+                         inv.ocean + inv.seaIce + inv.landIce + inv.vapour + inv.lost);
   if (total <= 0 || H.length < 2) {
     label(ctx, total <= 0 ? 'no water on this world' : 'collecting…', w / 2, h / 2, 'center');
     return;
@@ -148,9 +148,10 @@ export function drawWater(canvas, world) {
 
   const layers = [
     ['ocean', '#2f8fd6', (p) => p.ocean],
-    ['iceW', '#bfe4f5', (p) => p.ocean + p.iceW],
-    ['vap', '#e8c07a', (p) => p.ocean + p.iceW + p.vap],
-    ['lost', 'rgba(255,90,60,0.55)', (p) => p.ocean + p.iceW + p.vap + p.lost],
+    ['seaIce', '#9fd4ec', (p) => p.ocean + (p.seaIce || 0)],
+    ['landIce', '#e6f3fb', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0)],
+    ['vap', '#e8c07a', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + p.vap],
+    ['lost', 'rgba(255,90,60,0.55)', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + p.vap + p.lost],
   ];
   for (let k = layers.length - 1; k >= 0; k--) {
     const [, c, fn] = layers[k];
@@ -162,7 +163,8 @@ export function drawWater(canvas, world) {
   }
   label(ctx, `${total.toFixed(2)} EO`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, '0', pad.l - 4, h - pad.b, 'right');
-  const lg = [['ocean', '#2f8fd6'], ['ice', '#bfe4f5'], ['vapour', '#e8c07a'], ['lost', '#ff5a3c']];
+  const lg = [['ocean', '#2f8fd6'], ['sea ice', '#9fd4ec'], ['land ice', '#e6f3fb'],
+              ['vapour', '#e8c07a'], ['lost', '#ff5a3c']];
   let x = pad.l + 4;
   for (const [n, c] of lg) {
     ctx.fillStyle = c; ctx.fillRect(x, pad.t + 2, 7, 7);
