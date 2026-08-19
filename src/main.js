@@ -415,6 +415,7 @@ buildLogUI($('#statelog'), discovered, (id) => {
     : 'Not yet discovered — build a world that reaches this state.';
 });
 $('#found-count').textContent = String(discovered.size);
+$('#total-count').textContent = String(Object.keys(STATES).length);
 if (Object.keys(paramsFromHash()).length === 0) setPresetActive('earth');
 syncPlay();
 
