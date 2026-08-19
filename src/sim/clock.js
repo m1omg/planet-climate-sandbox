@@ -60,7 +60,7 @@ export class Simulation {
       // Never blow the frame budget, however stiff the planet has become. A
       // difficult transition makes the simulated clock run slow; it must never
       // make the interface stop responding.
-      if ((steps & 15) === 0 && performance.now() > deadline) { this.throttled = true; break; }
+      if ((steps & 7) === 0 && performance.now() > deadline) { this.throttled = true; break; }
       this.credit -= dt;
       this.stepOnce(dt);
       advanced += dt;

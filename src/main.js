@@ -353,7 +353,8 @@ function bindControls() {
   const applyRate = () => {
     sim.rate = Math.pow(10, +rate.value);
     rateOut.textContent = `${fmtTime(sim.rate)} / s`;
-    rate.style.setProperty('--fill', `${(+rate.value / 7) * 100}%`);
+    const lo = +rate.min, hi = +rate.max;
+    rate.style.setProperty('--fill', `${((+rate.value - lo) / (hi - lo)) * 100}%`);
   };
   rate.addEventListener('input', applyRate); applyRate();
 
