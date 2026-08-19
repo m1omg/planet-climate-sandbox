@@ -76,7 +76,8 @@ differs, and the button in the view controls cross-fades between them at any tim
 * `?graphics=textured` — start with the generated maps (the default anyway)
 
 The generated maps live in `assets/textures/` as six equirectangular JPEGs (`rock`, `desert`,
-`vegetation`, `ice`, `ocean`, `lava`), 1024×512 and about 830 KB for the whole set. If they are missing or fail to load, the planet quietly
+`vegetation`, `ice`, `ocean`, `lava`) at the generator's native 1774×887 — about 3.3 MB for the
+whole set, loaded once and mipmapped. If they are missing or fail to load, the planet quietly
 stays procedural and says so — the procedural path is a complete look in its own right, not a
 fallback stub.
 

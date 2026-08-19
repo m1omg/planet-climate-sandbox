@@ -24,6 +24,9 @@ export class PlanetView {
   // Shaders live in real .glsl files now, so start-up is asynchronous.
   async init() {
     if (this.failed) return false;
+    // Idempotent on purpose: re-initialising would reset the camera and the
+    // planet's rotation, so calling this twice must be harmless.
+    if (this.ready) return true;
     const gl = this.gl;
     let src;
     try { src = await loadShaders(); }
@@ -61,6 +64,7 @@ export class PlanetView {
   // stays on the procedural path, which is a complete look in its own right.
   async loadTextures(dir = 'assets/textures/') {
     if (this.failed || !this.ready) return false;
+    if (this.texturesLoaded) return true;
     const gl = this.gl;
     const base = new URL(dir, location.href);
     try {

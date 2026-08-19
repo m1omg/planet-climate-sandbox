@@ -524,8 +524,7 @@ function frame(now) {
   const dtReal = Math.min((now - last) / 1000, 0.25);
   last = now;
   tick(dtReal);
-  start();
-requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
 }
 
 // ---------------------------------------------------------------------------
@@ -544,7 +543,10 @@ $('#total-count').textContent = String(Object.keys(STATES).length);
 if (Object.keys(paramsFromHash()).length === 0) setPresetActive('earth');
 syncPlay();
 
+let started = false;
 async function start() {
+  if (started) return;
+  started = true;
   const ok = await view.init();
   if (!ok || view.failed) {
     $('#planet').insertAdjacentHTML('afterend',
@@ -567,7 +569,7 @@ async function start() {
 }
 
 // Handy from the console, and used by the browser self-test.
-window.__app = { sim, view, tick, params, loadPreset, startScenario };
+window.__app = { sim, view, tick, frame, params, loadPreset, startScenario, graphicsFromUrl };
 
 if (new URLSearchParams(location.search).has('selftest')) {
   import('./selftest.js').then((m) => m.run());
