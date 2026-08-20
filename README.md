@@ -18,6 +18,7 @@ node tools/shadercompile.mjs    # optional: compiles them on a real GL driver
 node tools/rendercheck.mjs      # CPU port of the shader; renders a PPM to look at
 node tools/bakecheck.mjs [512]  # does the baked cube map reproduce the terrain?
 node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
+node tools/gl1check.mjs [--png] # runs the WebGL1 path on a real headless driver
 ```
 
 Run these before pushing. `node --check` parses files as CommonJS and will happily
@@ -135,10 +136,17 @@ Rather than explain that to people, the renderer falls back — twice:
 
 The generated albedo maps need a GPU; software rendering is always procedural.
 
-The button in the view controls reads **GL2**, **GL1** or **CPU** — it names the
-renderer actually in use and switches to software and back, so the fallback can
-be tried on a machine that does not need it. `?renderer=software` does the same,
-and the choice is remembered.
+The button in the view controls reads **GL2**, **GL1** or **CPU**: it names the
+renderer actually in use, and clicking cycles through all three, so every path
+can be seen on any machine rather than only by whoever is unlucky enough to need
+it. `?renderer=webgl1` and `?renderer=software` do the same, and the choice is
+remembered.
+
+`tools/gl1check.mjs` runs the real renderer against a real WebGL1 driver — the
+two-pass bake, the cube-map framebuffer attachments, the absent vertex-array
+object, the unsized texture format — and reads the framebuffer back to confirm a
+planet actually appeared. Compiling the shaders proves the language conversion;
+this proves everything around it.
 
 ### Coming back to the tab
 

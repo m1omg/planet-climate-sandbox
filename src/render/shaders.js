@@ -25,6 +25,12 @@ const CUBE_SAMPLERS = ['uTerrain', 'uDetailMap', 'uCloudMap'];
 
 export function toES100(src, stage) {
   let out = src.replace(/^#version[^\n]*\n/, '');
+  // High precision is optional in ES 1.00 fragment shaders; ask for it only
+  // where the compiler says it exists.
+  if (stage === 'frag') {
+    out = out.replace(/^\s*precision\s+highp\s+float;\s*$/m,
+      '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif');
+  }
   // Multiple render targets do not exist in WebGL1; the bake runs two passes
   // instead, selecting its output with uTarget.
   out = out.replace(/layout\(location\s*=\s*(\d+)\)\s*out\s+vec4\s+(\w+)\s*;/g,

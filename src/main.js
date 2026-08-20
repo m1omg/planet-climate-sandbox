@@ -50,9 +50,13 @@ const RENDERER_KEY = 'planetclimate.renderer.v1';
 function rendererFromUrl() {
   const r = (new URLSearchParams(location.search).get('renderer') || '').toLowerCase();
   if (r === 'software' || r === 'sw' || r === 'cpu') return 'software';
-  if (r === 'gpu' || r === 'webgl' || r === 'webgl2') return 'gpu';
-  try { const v = localStorage.getItem(RENDERER_KEY); if (v === 'software') return v; } catch { }
-  return 'gpu';
+  if (r === 'webgl1' || r === 'gl1') return 'gl1';
+  if (r === 'gpu' || r === 'webgl' || r === 'webgl2' || r === 'gl2') return 'gl2';
+  try {
+    const v = localStorage.getItem(RENDERER_KEY);
+    if (v === 'software' || v === 'gl1') return v;
+  } catch { }
+  return 'gl2';
 }
 
 function updateRendererButton() {
@@ -74,7 +78,8 @@ async function useRenderer(kind) {
   const canvas = $('#planet');
   const fresh = canvas.cloneNode(false);
   canvas.replaceWith(fresh);
-  view = kind === 'software' ? new SoftwareView(fresh) : new PlanetView(fresh);
+  view = kind === 'software' ? new SoftwareView(fresh)
+       : new PlanetView(fresh, kind === 'gl1' ? 'webgl1' : 'webgl2');
   // carry the viewpoint across so the swap is not disorienting
   view.yaw = old.yaw ?? 0; view.pitch = old.pitch ?? 0;
   view.spin = old.spin ?? 0; view.spinPaused = old.spinPaused ?? false;
@@ -499,20 +504,31 @@ function bindControls() {
   $('#btn-view').addEventListener('click', () => {
     view.yaw = 0; view.pitch = 0; view.spinVel = 0;
   });
+  // Cycle through every renderer, so each can be seen on any machine.
+  const RENDER_ORDER = ['gl2', 'gl1', 'software'];
+  const LABELS = {
+    gl2: 'WebGL2 — full detail',
+    gl1: 'WebGL1 — the fallback for machines that refuse WebGL2, same shaders',
+    software: 'Software — drawn on the CPU, no WebGL at all. Simulation unaffected.',
+  };
   $('#btn-renderer').addEventListener('click', async () => {
     const b = $('#btn-renderer');
-    const next = view.software ? 'gpu' : 'software';
+    const current = view.software ? 'software' : (view.api === 'WebGL1' ? 'gl1' : 'gl2');
     b.disabled = true;
-    const ok = await useRenderer(next);
+    // Step through the list, skipping anything this machine cannot give us.
+    let next = current, ok = false;
+    for (let i = 1; i <= RENDER_ORDER.length; i++) {
+      next = RENDER_ORDER[(RENDER_ORDER.indexOf(current) + i) % RENDER_ORDER.length];
+      ok = await useRenderer(next);
+      if (ok && !view.failed) break;
+    }
     b.disabled = false;
-    if (!ok || (next === 'gpu' && view.failed)) {
+    if (!ok || view.failed) {
       await useRenderer('software');
-      toast('WebGL2 is not available on this machine — staying in software');
+      toast('No GPU rendering available here — staying in software');
     } else {
       try { localStorage.setItem(RENDERER_KEY, next); } catch { }
-      toast(next === 'software'
-        ? 'Software rendering — the planet is drawn on the CPU, simulation unaffected'
-        : 'GPU rendering via WebGL2');
+      toast(LABELS[next]);
     }
   });
   $('#btn-quality').addEventListener('click', () => {
@@ -684,11 +700,16 @@ async function start() {
   started = true;
   // A deliberate choice of software rendering is honoured before WebGL2 is even
   // attempted.
-  if (rendererFromUrl() === 'software') {
-    await useRenderer('software');
-    updateRendererButton();
-    toast('Software rendering — the planet is drawn on the CPU', 5000);
-    return;
+  const wanted = rendererFromUrl();
+  if (wanted !== 'gl2') {
+    const ok = await useRenderer(wanted);
+    if (ok && !view.failed) {
+      updateRendererButton();
+      toast(wanted === 'software'
+        ? 'Software rendering — the planet is drawn on the CPU'
+        : 'WebGL1 rendering', 5000);
+      return;
+    }
   }
   let ok = await view.init();
 

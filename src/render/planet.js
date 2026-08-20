@@ -24,7 +24,10 @@ const FACES = [
 ];
 
 export class PlanetView {
-  constructor(canvas) {
+  // `prefer` may ask for WebGL1 even where WebGL2 is available, so the fallback
+  // path can be exercised deliberately rather than only by people whose
+  // machines force it.
+  constructor(canvas, prefer = 'webgl2') {
     this.canvas = canvas;
     this.ready = false;
     this.texturesLoaded = false;
@@ -36,7 +39,7 @@ export class PlanetView {
     // and covered by looser graphics blocklists -- and it still draws the planet
     // at full speed and resolution, which the software path cannot.
     const opts = { antialias: true, alpha: false, powerPreference: 'high-performance' };
-    let gl = canvas.getContext('webgl2', opts);
+    let gl = prefer === 'webgl1' ? null : canvas.getContext('webgl2', opts);
     this.gl1 = false;
     if (!gl) {
       gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
