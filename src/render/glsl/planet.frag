@@ -176,7 +176,7 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   col = mix(col, seaIceCol, seaIceMask);
   col = mix(col, sheetCol, sheetMask);
   float iceMask = max(seaIceMask, sheetMask);
-  shininess = mix(shininess, 0.5, iceMask);
+  shininess = mix(shininess, 0.18, iceMask);
 
   float melt = smoothstep(1150.0,1500.0,T);
   if(melt > 0.001){
@@ -327,12 +327,16 @@ void main(){
     float ndl = dot(n, uSunDir);
     float lam = smoothstep(-0.12, 0.22, ndl);
 
-    // specular glint off water and ice
+    // Sun-glitter off water and ice. Real sea glint is a narrow lobe that
+    // brightens towards grazing angles, so it needs a high exponent and a
+    // Fresnel weight; a broad, strong lobe reads as the star shining straight
+    // through the planet.
     vec3 h = normalize(uSunDir - rd);
-    float spec = pow(max(dot(n,h),0.0), 42.0) * shin * lam;
+    float grazing = pow(1.0 - max(dot(n, -rd), 0.0), 2.5);
+    float spec = pow(max(dot(n,h),0.0), 260.0) * shin * lam * (0.10 + 0.90*grazing);
 
     vec3 lit = base * (0.06 + 0.94*lam) * uStarColor;
-    lit += uStarColor * spec * 0.55;
+    lit += uStarColor * spec * 0.30;
 
     // thermal emission from a hot or molten surface: visible on the night side
     float glow = uNightGlow * (1.0 - lam);

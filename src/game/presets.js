@@ -8,7 +8,7 @@ export const EARTH = {
   rotationHours: 24,
   tidallyLocked: false,
   obliquity: 23.5,
-  n2Bar: 0.79,
+  n2Bar: 0.99,   // N2 + O2 + Ar: the whole non-condensable inventory, ~1013 mbar
   co2Bar: 280e-6,
   ch4Bar: 1.8e-6,
   outgassing: 1.0,

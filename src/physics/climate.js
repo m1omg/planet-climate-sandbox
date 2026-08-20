@@ -1,4 +1,5 @@
-import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL } from './constants.js';
+import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
+         P_TRIPLE_H2O } from './constants.js';
 import { olr, planetaryAlbedo, iceFraction, ALB_SEABED } from './radiation.js';
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
@@ -8,6 +9,13 @@ export const NBANDS = 18;
 // Water currently in the air, as a fraction of an Earth ocean.
 function vapourShare(w, d) {
   return (w.water.vapour || 0);
+}
+
+// Water-vapour partial pressure in Pa, from the reservoir rather than from
+// saturation, so it is defined before the humidity calculation has run.
+function vapourPa(w, g) {
+  const d = derive(w.params);
+  return (w.water.vapour || 0) * d.eoColumn * g;
 }
 
 // Equal-area grid in x. For a fast rotator x = sin(latitude); for a tidally
@@ -129,11 +137,17 @@ export function update(w, dt) {
   const seaIceFrac = clamp(flooded * frozenShare, 0, flooded);
   const openOcean = clamp(flooded - seaIceFrac, 0, 1);
 
+  // Below the triple point there is no liquid water at any temperature: ice
+  // sublimates straight to vapour and standing water boils away. Mars sits just
+  // under that line, which is why it has ice and frost but no lakes.
+  const pSurfPa = (w.n2 + w.co2 + w.ch4 + w.o2) * g + vapourPa(w, g);
+  const liquidAllowed = smoothstep(0.75 * P_TRIPLE_H2O, 1.15 * P_TRIPLE_H2O, pSurfPa);
+
   // Evaporation comes from open water only. A sea sealed under ice supplies
   // almost nothing, which is what makes a hard snowball genuinely arid -- and
   // what keeps a dry world's air unsaturated, the Abe et al. (2011) dune world.
   const oceanFrac = flooded;
-  const RH = clamp(0.34 + 0.44 * openOcean, 0.15, 0.85);
+  const RH = clamp(0.34 + 0.44 * openOcean * liquidAllowed, 0.15, 0.85);
 
   // Land uncovered by a sea that has retreated or boiled away is bare ocean
   // floor -- dark basalt, not weathered continental rock -- so a drying world
@@ -231,7 +245,8 @@ export function update(w, dt) {
   w.diag = {
     g, d, pN2, pCO2, pCH4, pO2, pH2O, pTot: pTotArr, pTotMean,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
-    flooded, openOcean, seaIceFrac, frozenShare, exposedBasin, effLandAlbedo,
+    flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
+    exposedBasin, effLandAlbedo, liquidAllowed, pSurfPa,
     landFrac: clamp(1 - flooded, 0, 1),
     landIceFrac: clamp((1 - flooded) * frozenShare * glaciatedShare, 0, 1),
     glaciatedShare,

@@ -17,9 +17,11 @@ export const STATES = {
   trapped:    { name: 'Nightside-Trapped Desert', color: '#9aa7c9', blurb: 'On a locked world the night side is a permanent cold trap. Every drop of water has migrated there as glacier ice, leaving a bone-dry sunlit desert that cannot recover it.' },
   waterbelt:  { name: 'Waterbelt / Slushball', color: '#8fd8d0', blurb: 'Ice reaches deep into the tropics but a narrow band of open equatorial ocean survives. A genuine stable state, and a far softer landing than a hard snowball.' },
   snowball:   { name: 'Hard Snowball',        color: '#cfe8f5', blurb: 'Runaway ice–albedo feedback has frozen the planet pole to pole. Weathering stops, so volcanic CO2 accumulates unopposed for 5–50 Myr until 0.1–0.3 bar finally breaks the ice.' },
-  marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'A thin, frigid, desiccated atmosphere over a frozen desert. Push it colder and CO2 freezes onto the poles faster than volcanoes resupply it, so the air itself collapses onto the surface as dry ice.' },
+  marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'The air itself has frozen onto the ground. Below the CO2 frost point the atmosphere condenses onto the winter pole faster than volcanoes can resupply it, and the pressure falls until what is left is in equilibrium with the caps. It is escapable: enough outgassing thickens the air, warms the poles above the frost point and puts the atmosphere back where it belongs.' },
   titan:      { name: 'Titan-Like',           color: '#c9a86a', blurb: 'A frigid world under a thick nitrogen–methane haze, far too cold for liquid water but warm enough for other liquids to run on the surface.' },
   frozen:     { name: 'Frozen Desert',        color: '#a8b8c8', blurb: 'Cold, dry and still. Not enough water for a true snowball and not enough greenhouse to thaw.' },
+  thincold:   { name: 'Thin Cold Desert',     color: '#b08a6e', blurb: 'A thin, frigid, desiccated atmosphere over bare ground — Mars today. The air has not collapsed: it is simply all there is. Turn up the volcanoes and it will thicken, warm, and eventually hold liquid water again.' },
+  baked:      { name: 'Baked Desert',         color: '#e08a3a', blurb: 'A hot, waterless world of bare rock. Whatever water it had is long gone, so nothing moderates the surface and the day side simply bakes.' },
   airless:    { name: 'Airless Rock',         color: '#8a8a8a', blurb: 'Beyond the cosmic shoreline: stellar XUV has stripped the atmosphere faster than the planet’s gravity could hold it. No climate to speak of.' },
 };
 
@@ -39,7 +41,9 @@ export function classify(w) {
   const openSub = 1 - iceFraction(Tsub);
 
   let id;
-  const collapsed = w.co2Frozen > 0.3 * (w.co2 + w.co2Frozen + 1e-12);
+  // A real collapse means a good part of the air is lying on the ground as
+  // dry ice -- not merely that the atmosphere is thin and cold.
+  const collapsed = w.co2Frozen > 0.25 * (w.co2 + w.co2Frozen + 1e-12) && w.co2Frozen > 1e-3;
   if (T > 1400) id = 'magma';
   else if (pTot < 0.0015 && water < 0.05) id = 'airless';
   else if (collapsed && pTot < 0.2 && T < 265) id = 'marslike';
@@ -47,7 +51,7 @@ export function classify(w) {
   else if (T > 420) id = 'wetRunaway';
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
-  else if (water < 0.015) id = (T > 260 ? 'frozen' : 'frozen');
+  else if (water < 0.015) id = T > 290 ? 'baked' : 'frozen';
   else if (lam > 0.5 && openSub > 0.25 && ice > 0.25) {
     // eyeball family: how far the open water reaches around the globe
     let openBands = 0;
@@ -55,7 +59,7 @@ export function classify(w) {
     id = openBands / NBANDS > 0.55 ? 'lobster' : 'eyeball';
   }
   else if (lam > 0.5 && ice > 0.9 && dg.oceanFrac < 0.25 && Tsub > 250) id = 'trapped';
-  else if (pTot < 0.05 && T < 265 && water < 0.35) id = 'marslike';
+  else if (pTot < 0.05 && T < 265 && water < 0.35) id = 'thincold';
   else if (ice > 0.93) id = water < 0.1 ? 'frozen' : 'snowball';
   else if (ice > 0.55) id = 'waterbelt';
   else if (water < 0.12 && T > 250 && T < 340) id = 'dune';

@@ -52,7 +52,19 @@ export function partitionWater(w) {
   w.water.vapour = vapour;
   w.water.landIce = landIce;
   w.water.seaIce = seaIce;
-  w.water.ocean = Math.max(0, basin - seaIce);
+  let ocean = Math.max(0, basin - seaIce);
+
+  // Below the triple point liquid water cannot exist at any temperature. What
+  // would have been ocean is ice if the surface is cold enough to hold it, and
+  // vapour otherwise -- there is no third option.
+  const allowed = dg.liquidAllowed ?? 1;
+  if (allowed < 1 && ocean > 0) {
+    const forced = ocean * (1 - allowed);
+    ocean -= forced;
+    if (w.T.some((t) => t < 273.16)) w.water.seaIce += forced;
+    else w.water.vapour += forced;
+  }
+  w.water.ocean = ocean;
 }
 
 // Total water still on the planet, however it is currently stored.

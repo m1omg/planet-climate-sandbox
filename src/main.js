@@ -37,6 +37,16 @@ function graphicsFromUrl() {
 }
 let activeScenario = null, scenarioResult = null, settling = false, activePreset = 'earth';
 
+// The world as it was handed to you. Reset restores exactly this, because the
+// composition controls drift on their own as the simulation runs them and
+// "reset" that kept the drifted values would not put anything back.
+let initialParams = { ...params };
+let initialSeed = renderState.seed;
+function rememberStart() {
+  initialParams = { ...params };
+  initialSeed = renderState.seed;
+}
+
 const els = {};
 function buildSliders() {
   for (const d of SLIDERS) {
@@ -199,6 +209,7 @@ function loadPreset(id) {
   renderState.seed = Math.random() * 100;
   sim.reset(params);
   syncSliders(); setPresetActive(id); writeHash();
+  rememberStart();
   closeScenario();
   toast(`${PRESETS[id].icon} ${PRESETS[id].name}`);
 }
@@ -220,6 +231,7 @@ function startScenario(id) {
   renderState.seed = Math.random() * 100;
   sim.reset(params);
   syncSliders(); setPresetActive(null);
+  rememberStart();
   document.querySelectorAll('[data-scenario]').forEach((b) => b.classList.toggle('active', b.dataset.scenario === id));
   const banner = $('#scenario-banner');
   banner.hidden = false;
@@ -372,8 +384,16 @@ function updateGfxButton() {
 function bindControls() {
   $('#btn-play').addEventListener('click', () => { sim.paused = !sim.paused; syncPlay(); });
   $('#btn-reset').addEventListener('click', () => {
-    renderState.seed = Math.random() * 100;
-    sim.reset(params); scenarioResult = null; sim.paused = false; syncPlay();
+    // Same world, same starting parameters, clock back to zero -- including the
+    // continents, so it really is the planet you began with.
+    Object.assign(params, initialParams);
+    renderState.seed = initialSeed;
+    sim.reset(params);
+    syncSliders();
+    scenarioResult = null; settling = false; sim.paused = false; syncPlay();
+    $('#btn-settle').classList.remove('busy'); $('#btn-settle').textContent = 'Settle';
+    writeHash();
+    toast('Reset to the starting world');
   });
   $('#btn-settle').addEventListener('click', () => {
     if (settling) { settling = false; return; }   // click again to stop

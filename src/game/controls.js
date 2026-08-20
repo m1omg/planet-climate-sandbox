@@ -43,9 +43,9 @@ export const SLIDERS = [
   { g: 'star', key: 'obliquity', label: 'Axial tilt', min: 0, max: 90, step: 0.5,
     fmt: (v) => `${v.toFixed(1)}°`, units: { '°': 1, deg: 1, degrees: 1 } },
 
-  { g: 'atmo', key: 'n2Bar', label: 'Nitrogen (N₂)', min: 0, max: 20, log: true, zero: true, live: 'n2',
+  { g: 'atmo', key: 'n2Bar', label: 'Background air (N₂, O₂…)', min: 0, max: 20, log: true, zero: true, live: 'n2',
     fmt: fmtBar, units: PRESSURE_UNITS, unitFor: (v) => (v >= 1e-3 ? 'bar' : 'µbar'),
-    note: 'Radiatively inert, but broadens everything else’s absorption lines.' },
+    note: 'Every gas that neither condenses nor absorbs much: on Earth 0.99 bar of nitrogen, oxygen and argon. Radiatively inert, but it broadens everything else’s absorption lines.' },
   { g: 'atmo', key: 'co2Bar', label: 'Carbon dioxide', min: 0, max: 100, log: true, zero: true, live: 'co2',
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'Evolves on its own: volcanoes add it, weathering removes it, cold traps freeze it out.' },

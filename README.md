@@ -15,6 +15,7 @@ node src/selftest.js            # 37 physics, coverage, determinism and control 
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # optional: compiles them on a real GL driver
+node tools/rendercheck.mjs      # CPU port of the shader; renders a PPM to look at
 ```
 
 Run these before pushing. `node --check` parses files as CommonJS and will happily
@@ -121,6 +122,19 @@ negative, since that is exactly a runaway and striding over it would invent equi
 does not have.
 
 ---
+
+### Phase limits
+
+Liquid water needs more than the right temperature. Below the **triple point** — 611.7 Pa — it
+cannot exist at any temperature: ice sublimates straight to vapour and standing water boils. That
+is why Mars, whose surface sits at about 610 Pa, has frost and ice but no lakes, and the model
+enforces it rather than letting a warm thin world keep an ocean it could not physically hold.
+
+CO₂ freezing onto the poles is likewise **not** a one-way door. The frost point rises with pressure
+while a thickening atmosphere warms the poles faster, so a collapsed atmosphere can be brought back:
+in this model a cold world driven from 0.01 to 1.7 bar of CO₂ goes from 180 K to 717 K without
+collapsing, which is the bistability Forget et al. describe for Mars (no collapse between roughly
+0.6 and 3 bar).
 
 ### Land and ocean coverage
 

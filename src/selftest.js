@@ -234,6 +234,41 @@ export function run() {
       `${(fd.landIceFrac * 100).toFixed(0)}% of the surface is land ice`);
   }
 
+  // ---- 7c. phase limits and honest labelling -------------------------------
+  {
+    const earthNow = settle(EARTH, 2e7);
+    check('Earth reaches ~1013 mbar of surface pressure',
+      Math.abs(earthNow.world.diag.pTotMean * 1000 - 1013) < 40,
+      `${(earthNow.world.diag.pTotMean * 1000).toFixed(0)} mbar`);
+
+    // Below the triple point (611.7 Pa) liquid water cannot exist at all.
+    const thin = settle({ ...EARTH, n2Bar: 2e-3, co2Bar: 1e-5, water: 0.3, insolation: 1.0 }, 2e5);
+    check('No liquid water below the triple point',
+      thin.world.diag.pSurfPa < 611.7 && thin.world.diag.openOcean < 1e-6,
+      `${thin.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(thin.world.diag.openOcean * 100).toFixed(2)}%`);
+    const justAbove = settle({ ...EARTH, n2Bar: 5e-4, co2Bar: 1e-6, water: 0.3, insolation: 1.3 }, 2e5);
+    check('…but liquid returns once the pressure clears it',
+      justAbove.world.diag.pSurfPa > 611.7 && justAbove.world.diag.openOcean > 0.05,
+      `${justAbove.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(justAbove.world.diag.openOcean * 100).toFixed(0)}%`);
+
+    // A collapsed atmosphere is escapable: enough outgassing thickens the air,
+    // warms the poles past the CO2 frost point and puts it back (Forget et al.).
+    const cold = { ...EARTH, insolation: 0.15, water: 0.05, landFraction: 0.9, co2Bar: 0.01 };
+    const quiet = settle({ ...cold, outgassing: 0.1 }, 3e7);
+    const busy = settle({ ...cold, outgassing: 1000 }, 3e7);
+    check('CO₂ does not freeze out regardless of volcanism — outgassing can win',
+      busy.world.diag.pCO2 > 20 * quiet.world.diag.pCO2 && busy.world.diag.Tmean > quiet.world.diag.Tmean + 50,
+      `${quiet.world.diag.pCO2.toFixed(3)} bar / ${quiet.world.diag.Tmean.toFixed(0)} K  →  ` +
+      `${busy.world.diag.pCO2.toFixed(2)} bar / ${busy.world.diag.Tmean.toFixed(0)} K`);
+
+    // A hot dry world must not be called frozen.
+    const baked = settle({ ...EARTH, tidallyLocked: true, rotationHours: 2000, insolation: 1.6,
+                           water: 0.005, landFraction: 0.9, n2Bar: 0.3 }, 1e6);
+    check('A hot waterless world is not labelled frozen',
+      baked.world.diag.Tmean > 350 && classify(baked.world).id !== 'frozen',
+      `${(baked.world.diag.Tmean - 273.15).toFixed(0)} °C → ${classify(baked.world).name}`);
+  }
+
   // ---- 8. the controls: typed values and slider round-trips ----------------
   {
     const by = (k) => SLIDERS.find((d) => d.key === k);

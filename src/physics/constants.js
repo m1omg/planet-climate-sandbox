@@ -39,6 +39,13 @@ export const XUV_FRACTION_SUN = 3.4e-6;
 
 export const T_FREEZE = 273.15;
 
+// The triple point of water: 611.657 Pa at 273.16 K. Below this pressure liquid
+// water is not merely unlikely, it is thermodynamically impossible -- ice
+// sublimates straight to vapour and any liquid boils. It is the reason Mars,
+// whose surface sits at about 610 Pa, has no standing water.
+export const P_TRIPLE_H2O = 611.657;
+export const T_TRIPLE_H2O = 273.16;
+
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
 export function smoothstep(e0, e1, x) {
