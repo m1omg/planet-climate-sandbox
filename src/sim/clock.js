@@ -20,7 +20,7 @@ export class Simulation {
     this.rate = 1e3;          // simulated years per real second
     this.paused = false;
     this.maxStepsPerFrame = 4000;
-    this.budgetMs = 10;       // hard wall-clock ceiling on physics per frame
+    this.budgetMs = 12;       // hard wall-clock ceiling on physics per frame
     this.actualRate = 0;
     this.throttled = false;   // true when the budget, not the clock, is the limit
     this._acc = 0;
@@ -89,7 +89,11 @@ export class Simulation {
 
   stepOnce(dt) {
     const w = this.world;
-    update(w, dt);
+    // The world is left fully updated by whatever ran last -- reset, a
+    // parameter change, or the previous step -- so re-deriving it here would
+    // simply repeat work. Radiative transfer over eighteen bands is the
+    // expensive part of a step, and this saves a third of it.
+    w.dtPrev = dt;          // the step actually taken, for the size controller
     stepTemperature(w, dt);
     update(w, dt);
     stepVolatiles(w, dt);

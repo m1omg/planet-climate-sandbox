@@ -63,8 +63,12 @@ The user-visible point of the model is that nothing snaps. Three things enforce 
 An adjustable clock (1 yr/s → 150 Myr/s) lets you watch any of it. Acceleration costs nothing in
 accuracy: step size is chosen from the state of the planet, never from the clock, so the same
 300 Myr run gives the same temperature to three decimals and the same CO₂ to 0.1 ppm whether it is
-played at 100 kyr/s or 150 Myr/s. A world in a stiff transition simply advances more slowly and
-says so.
+played at 100 kyr/s or 150 Myr/s.
+
+Most worlds hold the full 150 Myr/s. A planet in a genuinely fast transition — mid-runaway, or a
+tidally locked world still redistributing heat — advances more slowly, because those are the epochs
+that actually have to be resolved, and the rate readout turns amber and reports the speed it is
+really achieving rather than the one you asked for.
 
 ### Two ways to draw a planet
 

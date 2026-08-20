@@ -56,6 +56,7 @@ export function resetWorld(w, params) {
   const T0 = params.startT ?? 288;
   for (let i = 0; i < NBANDS; i++) w.T[i] = T0;
   w.history = [];
+  w.dtPrev = 0;
   update(w, 0);
 }
 
@@ -261,14 +262,20 @@ export function tendency(w) {
 
 // Largest step we may take: bounded by how fast anything is actually moving,
 // never by the frame rate. Returned in years.
-export function maxStep(w, maxDeltaT = 1.0) {
-  const { dT } = tendency(w);
+export function maxStep(w, maxDeltaT = 2.5) {
   const dg = w.diag;
+  // maxStep and the step that follows it need the same tendency and the same
+  // damping, and both cost eighteen radiative-transfer evaluations. Compute
+  // once and hand the result on; the cache is discarded the moment the world
+  // state moves.
+  const tend = tendency(w);
   const k = radiativeDamping(w);
+  const { dT } = tend;
+  w._solve = { diag: dg, tend, k };
 
-  let worst = 0, eqDistance = 0, minDamping = Infinity;
+  let worst = 0, eqDistance = 0, meanDamping = 0;
   for (let i = 0; i < NBANDS; i++) {
-    minDamping = Math.min(minDamping, k[i]);
+    meanDamping += k[i] / NBANDS;
     // Allow a slightly coarser step on a very hot planet: one kelvin out of 900
     // is not a resolvable change, and it keeps a runaway affordable to watch.
     const allow = Math.max(maxDeltaT, 0.004 * w.T[i]);
@@ -285,11 +292,17 @@ export function maxStep(w, maxDeltaT = 1.0) {
   // unconditionally stable solver can stride over millennia at a time without
   // changing the answer. This is what makes a billion-year run affordable.
   //
-  // It must not engage where the radiative damping has gone weak or negative:
+  // It must not engage where the radiative feedback has gone weak or negative:
   // that is precisely a runaway greenhouse, the equilibrium the linearisation
   // would relax towards does not exist, and striding over it would invent a
   // stable climate that the real planet does not have.
-  const quasi = smoothstep(6, 1, eqDistance) * smoothstep(0.10, 0.45, minDamping);
+  //
+  // The test is on the planet as a whole, not on its worst band. Around a
+  // retreating ice edge a few latitudes always have locally negative feedback
+  // -- melting ice darkens them -- while transport from everywhere else holds
+  // them stable, and judging by the worst band alone made the solver crawl
+  // through exactly the epoch a player most wants to watch.
+  const quasi = smoothstep(6, 1, eqDistance) * smoothstep(0.10, 0.45, meanDamping);
   if (quasi > 0) dt = Math.min(dt * (1 + quasi * 4000), 5e6);
 
   // ...but never step so far that a slow reservoir jumps discontinuously.
@@ -304,6 +317,33 @@ export function maxStep(w, maxDeltaT = 1.0) {
     const net = Math.abs(w.weathering.V - w.weathering.W) / Math.max(w.weathering.kappa, 1);
     const floor = 0.02 * CO2_EARTH_COL;
     if (net > 0) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
+  }
+
+  // Smooth the step size. Near a tipping point -- the ice edge, above all --
+  // the instantaneous tendency of a single band flickers between values from
+  // one step to the next, and reading the step size straight off it made the
+  // solver crawl for millions of simulated years while the climate itself was
+  // barely moving. Backward Euler is unconditionally stable here, so the step
+  // may be grown steadily and is only cut sharply when something really is
+  // changing fast.
+  // Low-pass the step size. Backward Euler is unconditionally stable here, so
+  // the step is chosen for accuracy rather than stability -- and near a tipping
+  // point, above all the ice edge, the instantaneous tendency of a single band
+  // flickers from one step to the next, making that accuracy estimate noisy.
+  // Reading the step straight off it made the solver crawl for millions of
+  // simulated years while the climate itself was barely moving. Smoothing in
+  // the log, bounded to a factor of four either way, follows genuine changes
+  // while ignoring the flicker.
+  //
+  // This function must stay free of side effects: the clock asks it what the
+  // next step would be before deciding whether it can afford to take one, so
+  // recording the answer here would make the sequence depend on where frame
+  // boundaries happened to fall. `dtPrev` is advanced in stepOnce instead, once
+  // per step actually taken.
+  const prev = w.dtPrev;
+  if (prev > 0) {
+    const smoothed = Math.exp(0.7 * Math.log(dt) + 0.3 * Math.log(prev));
+    dt = clamp(smoothed, dt * 0.25, dt * 4);
   }
   return dt;
 }
@@ -354,8 +394,10 @@ export function radiativeDamping(w) {
 export function stepTemperature(w, dtYears) {
   const dt = dtYears * YEAR;
   const dg = w.diag;
-  const { dT, D } = tendency(w);
-  const r = radiativeDamping(w);
+  const cached = w._solve && w._solve.diag === dg ? w._solve : null;
+  const { dT, D } = cached ? cached.tend : tendency(w);
+  const r = cached ? cached.k : radiativeDamping(w);
+  w._solve = null;
 
   const wgt = new Float64Array(NBANDS + 1);      // edge conductances
   for (let j = 1; j < NBANDS; j++) {
