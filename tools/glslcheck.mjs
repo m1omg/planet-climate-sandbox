@@ -68,5 +68,30 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
   }
 }
 
+// --- nothing may be drawn over a solid planet ---------------------------------
+// The star lies at infinity, so a ray that hits the planet must not also show
+// it. This was invisible from the default viewpoint, where the star sits behind
+// the camera, and appeared only once the view could be dragged round -- at
+// twenty times the brightness of the surface, which reads as a transparent
+// planet.
+{
+  const src = decomment(read('planet.frag'));
+  const at = src.search(/pow\(\s*sd\s*,\s*900/);
+  if (at < 0) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  star term not found in planet.frag');
+  } else {
+    const before = src.slice(0, at);
+    const guard = before.lastIndexOf('if(!hitPlanet)');
+    const stillOpen = guard >= 0 && !before.slice(guard).includes('}');
+    if (!stillOpen) {
+      failed++;
+      console.log('\x1b[31mFAIL\x1b[0m  the star is drawn without checking the planet is out of the way');
+    } else {
+      console.log('\x1b[32mPASS\x1b[0m  the star is occluded by the planet');
+    }
+  }
+}
+
 console.log(failed ? `\n${failed} shader problem(s)` : '\nshaders parse cleanly');
 process.exit(failed ? 1 : 0);

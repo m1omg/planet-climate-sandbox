@@ -258,7 +258,9 @@ void main(){
   vec3 airTint = mix(vec3(0.35,0.60,1.0), vec3(1.0,0.72,0.34), uCO2);
   airTint = mix(airTint, vec3(1.0,0.96,0.92), uSteam);
 
-  if(disc > 0.0){
+  bool hitPlanet = disc > 0.0;
+
+  if(hitPlanet){
     float t = -b - sqrt(disc);
     vec3 pos = ro + rd*t;
     vec3 n = normalize(pos);
@@ -354,10 +356,17 @@ void main(){
   }
 
   // ---- the star itself ----
-  vec3 sunDirScreen = normalize(uSunDir);
-  float sd = max(dot(normalize(rd), sunDirScreen), 0.0);
-  col += uStarColor * pow(sd, 900.0) * 3.0;
-  col += uStarColor * pow(sd, 24.0) * 0.05;
+  // Only where the planet does not stand in the way. This used to be added
+  // unconditionally, which was invisible from the default viewpoint -- the star
+  // sits behind the camera there -- but the moment you drag the view round far
+  // enough to put the star behind the planet, it shone straight through a solid
+  // world at twenty times the brightness of the surface.
+  if(!hitPlanet){
+    vec3 sunDirScreen = normalize(uSunDir);
+    float sd = max(dot(normalize(rd), sunDirScreen), 0.0);
+    col += uStarColor * pow(sd, 900.0) * 3.0;
+    col += uStarColor * pow(sd, 24.0) * 0.05;
+  }
 
   // tonemap
   col = col / (col + vec3(0.85));
