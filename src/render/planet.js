@@ -1,4 +1,4 @@
-import { loadShaders } from './shaders.js';
+import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp } from '../physics/constants.js';
 
@@ -32,9 +32,19 @@ export class PlanetView {
     this.bakedSeed = null;
     this.useTextures = 0;      // fades 0 -> 1 as the maps arrive
     this.wantTextures = true;
-    const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+    // WebGL2 first, then WebGL1. The second is refused far less often -- older,
+    // and covered by looser graphics blocklists -- and it still draws the planet
+    // at full speed and resolution, which the software path cannot.
+    const opts = { antialias: true, alpha: false, powerPreference: 'high-performance' };
+    let gl = canvas.getContext('webgl2', opts);
+    this.gl1 = false;
+    if (!gl) {
+      gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
+      this.gl1 = !!gl;
+    }
     if (!gl) { this.failed = true; return; }
     this.gl = gl;
+    this.api = this.gl1 ? 'WebGL1' : 'WebGL2';
 
     // Mobile browsers throw the GPU context away when the tab goes to the
     // background, and every program, buffer, texture and framebuffer dies with
@@ -95,20 +105,25 @@ export class PlanetView {
     let src;
     try { src = await loadShaders(); }
     catch (e) { console.error(e); this.failed = true; return false; }
-    this.prog = this.link(src.vert, src.frag);
+    const V = this.gl1 ? (x) => toES100(x, 'vert') : (x) => x;
+    const F = this.gl1 ? (x) => toES100(x, 'frag') : (x) => x;
+    this.prog = this.link(V(src.vert), F(src.frag));
     if (!this.prog) { this.failed = true; return false; }
-    this.bakeProg = this.link(src.bakeVert, src.bakeFrag);
-    this.cloudProg = this.link(src.bakeVert, src.cloudFrag);
+    this.bakeProg = this.link(V(src.bakeVert), this.gl1 ? bakeES100(src.bakeFrag) : src.bakeFrag);
+    this.cloudProg = this.link(V(src.bakeVert), F(src.cloudFrag));
     if (!this.bakeProg || !this.cloudProg) { this.failed = true; return false; }
 
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
     const buf = gl.createBuffer();
+    this.quadBuf = buf;
+    if (!this.gl1) {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      this.vao = vao;
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    this.vao = vao;
 
     this.u = {};
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
@@ -140,13 +155,23 @@ export class PlanetView {
     const t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, t);
     for (const f of FACES) {
-      gl.texImage2D(gl[f], 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      const internal = this.gl1 ? gl.RGBA : gl.RGBA8;
+      gl.texImage2D(gl[f], 0, internal, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     }
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return t;
+  }
+
+  // WebGL1 has no vertex array objects, so the quad is bound before each draw.
+  bindQuad() {
+    const gl = this.gl;
+    if (this.vao) { gl.bindVertexArray(this.vao); return; }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuf);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   }
 
   bakeSurface(seed) {
@@ -161,18 +186,31 @@ export class PlanetView {
     const fb = this.bakeFb ?? (this.bakeFb = gl.createFramebuffer());
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.useProgram(this.bakeProg);
-    gl.bindVertexArray(this.vao);
+    this.bindQuad();
     gl.viewport(0, 0, q.bake, q.bake);
     gl.uniform2f(gl.getUniformLocation(this.bakeProg, 'uSize'), q.bake, q.bake);
     gl.uniform1f(gl.getUniformLocation(this.bakeProg, 'uSeed'), seed);
     const faceLoc = gl.getUniformLocation(this.bakeProg, 'uFace');
-    // Two attachments written in one pass; WebGL2 core, no extension needed.
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-    for (let i = 0; i < 6; i++) {
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], this.terrainCube, 0);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl[FACES[i]], this.detailCube, 0);
-      gl.uniform1i(faceLoc, i);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (this.gl1) {
+      // No multiple render targets: run the same shader twice, once per output.
+      const targetLoc = gl.getUniformLocation(this.bakeProg, 'uTarget');
+      for (const [t, tex] of [[0, this.terrainCube], [1, this.detailCube]]) {
+        gl.uniform1i(targetLoc, t);
+        for (let i = 0; i < 6; i++) {
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], tex, 0);
+          gl.uniform1i(faceLoc, i);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        }
+      }
+    } else {
+      // Two attachments written in one pass; WebGL2 core, no extension needed.
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+      for (let i = 0; i < 6; i++) {
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], this.terrainCube, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl[FACES[i]], this.detailCube, 0);
+        gl.uniform1i(faceLoc, i);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
     }
 
     // Clouds, in their own single-attachment pass.
@@ -182,8 +220,10 @@ export class PlanetView {
     gl.viewport(0, 0, q.cloudBake, q.cloudBake);
     gl.uniform2f(gl.getUniformLocation(this.cloudProg, 'uSize'), q.cloudBake, q.cloudBake);
     const cFaceLoc = gl.getUniformLocation(this.cloudProg, 'uFace');
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
+    if (!this.gl1) {
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
+    }
     for (let i = 0; i < 6; i++) {
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], this.cloudCube, 0);
       gl.uniform1i(cFaceLoc, i);
@@ -304,7 +344,7 @@ export class PlanetView {
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.useProgram(this.prog);
-    gl.bindVertexArray(this.vao);
+    this.bindQuad();
 
     const p = world.params, dg = world.diag;
     // Spin visually, at a rate suggesting the rotation period but always

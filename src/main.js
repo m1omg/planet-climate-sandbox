@@ -59,11 +59,12 @@ function updateRendererButton() {
   const b = $('#btn-renderer');
   if (!b) return;
   const sw = !!view.software;
-  b.textContent = sw ? 'CPU' : 'GPU';
+  const api = sw ? 'CPU' : (view.api === 'WebGL1' ? 'GL1' : 'GL2');
+  b.textContent = api;
   b.dataset.kind = sw ? 'software' : 'gpu';
   b.title = sw
-    ? 'Software rendering (no WebGL2 needed) — click to try the GPU'
-    : 'GPU rendering via WebGL2 — click to switch to software';
+    ? 'Drawn on the CPU — no WebGL needed. Click to try the GPU.'
+    : `Drawn on the GPU via ${view.api}. Click to switch to software rendering.`;
 }
 
 // Swap renderer. A canvas keeps its context type for life, so the element

@@ -20,22 +20,31 @@ float gnoise(vec3 x){
 }
 float vnoise(vec3 x){ return gnoise(x); }
 
-const mat3 ROT = mat3(0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64);
+// Written to compile as GLSL ES 1.00 as well as 3.00, so the same source can
+// serve the WebGL1 fallback: a constant loop bound, no conditional break, and
+// the octave count applied as a weight instead. It costs a few wasted octaves,
+// which is free -- this runs during the one-off bake, not per frame.
+mat3 octaveRot(){ return mat3(0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64); }
 
 float fbm(vec3 p, int oct){
   float a = 0.5, s = 0.0, n = 0.0;
-  for(int i=0;i<8;i++){ if(i>=oct) break; s += a*gnoise(p); n += a; p = ROT*p*2.02; a *= 0.5; }
-  return s/n;
+  mat3 R = octaveRot();
+  for(int i=0;i<8;i++){
+    float m = i < oct ? 1.0 : 0.0;
+    s += a*gnoise(p)*m; n += a*m; p = R*p*2.02; a *= 0.5;
+  }
+  return s/max(n, 1e-6);
 }
 // Ridged multifractal: mountain chains rather than blobs.
 float ridged(vec3 p, int oct){
   float a=0.5, s=0.0, n=0.0, prev=1.0;
+  mat3 R = octaveRot();
   for(int i=0;i<8;i++){
-    if(i>=oct) break;
+    float m = i < oct ? 1.0 : 0.0;
     float r = 1.0-abs(gnoise(p)*2.0-1.0); r *= r;
-    s += a*r*prev; prev = r; n += a; p = ROT*p*2.11; a *= 0.5;
+    s += a*r*prev*m; prev = mix(prev, r, m); n += a*m; p = R*p*2.11; a *= 0.5;
   }
-  return s/n;
+  return s/max(n, 1e-6);
 }
 // Continents: fbm whose input is displaced by more fbm, giving coastlines with
 // bays, peninsulas and inland seas instead of round islands.

@@ -118,18 +118,27 @@ blocklist entry or a failed driver probe is enough, with nothing wrong with the
 card. Firefox reports this as `FEATURE_FAILURE_GLXTEST_FAILED`, meaning its
 start-up GPU probe crashed before it ever asked the driver anything.
 
-Rather than explain that to people, the planet falls back to a **software
-renderer** (`src/render/software.js`), drawing on the CPU via Canvas2D. It is
-not a placeholder: it shares its shading with `src/render/cpushade.js`, the same
-module the verification tools use, so it is the same terrain, biomes, ice,
-lighting and atmosphere as the GPU path — evaluated in JavaScript at a lower
-resolution and refresh rate, and scaled up. Roughly 15 ms a frame at 190 px,
-with a half-second one-time terrain bake. The generated albedo maps are the one
-thing it cannot do; software rendering is always procedural.
+Rather than explain that to people, the renderer falls back — twice:
 
-The **GPU / CPU button** in the view controls shows which renderer is running and
-switches between them, so the software path can be tried on a machine that does
-not need it. `?renderer=software` does the same, and the choice is remembered.
+1. **WebGL1.** Older, and covered by looser graphics blocklists, so it is refused
+   far less often. It draws the planet at full speed and full resolution: same
+   shaders, mechanically rewritten from GLSL ES 3.00 to ES 1.00 by `toES100()` in
+   `src/render/shaders.js`. The noise source is written to compile under both, the
+   bake runs two passes instead of using multiple render targets, and the quad is
+   bound per draw since WebGL1 has no vertex arrays. `tools/shadercompile.mjs`
+   compiles this path on a real headless driver — which is how the missing
+   integer `min()` overload in ES 1.00 was caught.
+2. **Software.** If even WebGL1 is unavailable, `src/render/software.js` draws on
+   the CPU via Canvas2D, sharing its shading with `src/render/cpushade.js` so it
+   is the same terrain, biomes, ice and lighting, at lower resolution and refresh
+   rate. It is a genuine last resort rather than the first answer.
+
+The generated albedo maps need a GPU; software rendering is always procedural.
+
+The button in the view controls reads **GL2**, **GL1** or **CPU** — it names the
+renderer actually in use and switches to software and back, so the fallback can
+be tried on a machine that does not need it. `?renderer=software` does the same,
+and the choice is remembered.
 
 ### Coming back to the tab
 

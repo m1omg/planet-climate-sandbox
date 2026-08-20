@@ -53,8 +53,9 @@ const float PI = 3.14159265;
 // ---------- band lookup ----------
 float bandVal(float x, int which){
   float f = clamp((x+1.0)*0.5, 0.0, 0.99999) * 18.0 - 0.5;
-  int i0 = int(floor(max(f,0.0)));
-  int i1 = min(i0+1, 17);
+  int i0 = int(floor(max(f, 0.0)));
+  // no integer min() in GLSL ES 1.00, so the WebGL1 path needs this spelt out
+  int i1 = i0 + 1; if(i1 > 17) i1 = 17;
   float t = clamp(f - float(i0), 0.0, 1.0);
   float a, b;
   if(which==0){ a = uBandT[i0];  b = uBandT[i1]; }

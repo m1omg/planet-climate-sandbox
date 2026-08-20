@@ -50,8 +50,8 @@ export class SoftwareView {
   // need sixty frames a second.
   settings() {
     return this.quality === 'low'
-      ? { side: 120, bake: [96, 48], interval: 1 / 10 }
-      : { side: 190, bake: [160, 80], interval: 1 / 20 };
+      ? { side: 200, bake: [128, 64], interval: 1 / 12 }
+      : { side: 340, bake: [256, 128], interval: 1 / 24 };
   }
 
   render(world, state, dtReal) {
@@ -78,9 +78,11 @@ export class SoftwareView {
     if (this.accum < cfg.interval && this.drawn) { this.blit(); return; }
     this.accum = 0;
 
+    // The buffer must have the canvas's aspect ratio, or scaling it up turns
+    // the planet into an ellipse.
     const aspect = cw / ch;
-    const W = Math.max(32, Math.round(cfg.side * Math.min(aspect, 1.6)));
-    const H = Math.max(32, Math.round(cfg.side / Math.max(1 / aspect, 0.625)));
+    const H = Math.max(48, Math.round(cfg.side));
+    const W = Math.max(48, Math.round(cfg.side * aspect));
     if (this.buffer.width !== W || this.buffer.height !== H) {
       this.buffer.width = W; this.buffer.height = H;
       this.image = this.bctx.createImageData(W, H);
