@@ -137,6 +137,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 #view-controls .icon-btn{width:32px;font-size:15px;line-height:1}
 #view-controls .icon-btn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
 #view-controls .icon-btn:disabled{opacity:.4}
+#view-controls #btn-quality[aria-pressed=true]{color:var(--accent-2);border-color:var(--accent-2)}
 
 #state-banner{
   position:absolute;top:18px;left:50%;transform:translateX(-50%);

@@ -16,6 +16,7 @@ node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # optional: compiles them on a real GL driver
 node tools/rendercheck.mjs      # CPU port of the shader; renders a PPM to look at
+node tools/bakecheck.mjs [512]  # does the baked cube map reproduce the terrain?
 ```
 
 Run these before pushing. `node --check` parses files as CommonJS and will happily
@@ -90,6 +91,24 @@ The procedural renderer uses gradient noise with domain warping for continents (
 have bays and peninsulas rather than round islands), a ridged multifractal for mountain belts,
 slope-based relief shading, altitude- and climate-dependent biomes, and a two-layer sheared cloud
 deck.
+
+**All of that noise is baked.** It once cost 269 gradient-noise evaluations per pixel — 6,456
+`sin()` calls, some 27 billion per frame at device-pixel-ratio 2 — which is why a tablet managed
+about one frame a second. But none of it varies with time: the fields depend only on position on
+the sphere and on the seed, and the climate merely recolours them. They are therefore computed once
+per world into **cube maps** (not equirectangular maps, which would introduce pole pinching and a
+wrap seam where the 3-D noise has neither) and sampled thereafter. Continent height is stored to 16
+bits across two channels, because the shoreline ramp is only 0.036 wide and 8 bits would visibly
+stair-step every coast. The surface normal is finite-differenced at bake time, which is what removes
+the four extra surface evaluations relief shading used to cost every frame. Clouds, the one field
+that genuinely moves, are baked too and animated by turning the direction they are sampled along.
+
+The runtime shader now evaluates **5** noise fields per pixel, one of which only runs on a molten
+planet, and `tools/glslcheck.mjs` fails the build if that budget creeps back up.
+
+Detail is **High on every device** by default. `?quality=low` — or the ◆ button — halves the bake,
+drops relief shading and the second cloud layer, and renders at 0.6 scale, for hardware that still
+struggles. The simulation is identical in both: rendering and physics share nothing but a clock.
 
 ### Handling the planet
 

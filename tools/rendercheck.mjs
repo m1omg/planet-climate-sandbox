@@ -41,6 +41,15 @@ function warpedFbm(p,oct){
 }
 function rotY(a){ const c=Math.cos(a),s=Math.sin(a); return (v)=>[c*v[0]+s*v[2], v[1], -s*v[0]+c*v[2]]; }
 
+// The time-invariant surface fields, evaluated exactly as the bake shader does.
+export const HEIGHT_QUANTUM = 1/65535;
+export function fieldsAt(sp, seed){
+  const q=add(mul(sp,2.2),[seed*13.7,seed*7.1,seed*3.3]);
+  const cont=warpedFbm(q,6), detail=fbm(mul(q,5),5), fine=fbm(mul(q,17),3);
+  return { cont, detail, fine, mount: ridged(mul(q,3.4),5), floe: fbm(mul(q,9),4),
+           h: cont + 0.10*(detail-0.5) + 0.03*(fine-0.5) };
+}
+
 export function render(opts={}) {
   const W=opts.W??220, H=opts.H??165;
   const U={ seed:12.3, landFrac:0.3, oceanFrac:0.70, waterCap:1, cloud:0.51, steam:0, pTot:0.80,

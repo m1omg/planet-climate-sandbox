@@ -9,11 +9,27 @@ import { clamp } from '../physics/constants.js';
 export const TEXTURE_SET = ['rock', 'desert', 'vegetation', 'ice', 'ocean', 'lava'];
 const TEX_UNIFORMS = ['uTexRock', 'uTexDesert', 'uTexVeg', 'uTexIce', 'uTexOcean', 'uTexLava'];
 
+// Quality settings. High is the default everywhere; Low is a manual choice for
+// hardware that still struggles.
+export const QUALITY = {
+  high: { bake: 512, cloudBake: 256, relief: 1, cloudDetail: 1, scale: 1.0, maxDpr: 2 },
+  low:  { bake: 256, cloudBake: 128, relief: 0, cloudDetail: 0, scale: 0.6, maxDpr: 1 },
+};
+
+// Cube-map faces in GL order; the bake shader's faceDir() matches this exactly.
+const FACES = [
+  'TEXTURE_CUBE_MAP_POSITIVE_X', 'TEXTURE_CUBE_MAP_NEGATIVE_X',
+  'TEXTURE_CUBE_MAP_POSITIVE_Y', 'TEXTURE_CUBE_MAP_NEGATIVE_Y',
+  'TEXTURE_CUBE_MAP_POSITIVE_Z', 'TEXTURE_CUBE_MAP_NEGATIVE_Z',
+];
+
 export class PlanetView {
   constructor(canvas) {
     this.canvas = canvas;
     this.ready = false;
     this.texturesLoaded = false;
+    this.quality = 'high';
+    this.bakedSeed = null;
     this.useTextures = 0;      // fades 0 -> 1 as the maps arrive
     this.wantTextures = true;
     const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -33,21 +49,24 @@ export class PlanetView {
     catch (e) { console.error(e); this.failed = true; return false; }
     this.prog = this.link(src.vert, src.frag);
     if (!this.prog) { this.failed = true; return false; }
+    this.bakeProg = this.link(src.bakeVert, src.bakeFrag);
+    this.cloudProg = this.link(src.bakeVert, src.cloudFrag);
+    if (!this.bakeProg || !this.cloudProg) { this.failed = true; return false; }
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(this.prog, 'aPos');
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     this.vao = vao;
 
     this.u = {};
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
-      'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uBandT', 'uBandIce']) {
+      'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
+      'uTerrain', 'uDetailMap', 'uCloudMap', 'uBandT', 'uBandIce']) {
       this.u[name] = gl.getUniformLocation(this.prog, name === 'uBandT' || name === 'uBandIce' ? name + '[0]' : name);
     }
     this.bandT = new Float32Array(NBANDS);
@@ -58,6 +77,80 @@ export class PlanetView {
     this.spinPaused = false;
     this.ready = true;
     return true;
+  }
+
+  // ---------------------------------------------------------------------
+  // Bake the planet's time-invariant surface fields into cube maps.
+  //
+  // Every noise evaluation the runtime shader used to make depended only on
+  // position on the sphere and on the seed, so all of it can be done once here.
+  // Cube maps rather than an equirectangular map because these are functions of
+  // a direction: no pole pinching, no wrap seam, even resolution everywhere.
+  // ---------------------------------------------------------------------
+  makeCube(size) {
+    const gl = this.gl;
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, t);
+    for (const f of FACES) {
+      gl.texImage2D(gl[f], 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    }
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+
+  bakeSurface(seed) {
+    if (this.failed || !this.ready) return;
+    const gl = this.gl;
+    const q = QUALITY[this.quality] ?? QUALITY.high;
+
+    if (this.terrainCube) { gl.deleteTexture(this.terrainCube); gl.deleteTexture(this.detailCube); }
+    this.terrainCube = this.makeCube(q.bake);
+    this.detailCube = this.makeCube(q.bake);
+
+    const fb = this.bakeFb ?? (this.bakeFb = gl.createFramebuffer());
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.useProgram(this.bakeProg);
+    gl.bindVertexArray(this.vao);
+    gl.viewport(0, 0, q.bake, q.bake);
+    gl.uniform2f(gl.getUniformLocation(this.bakeProg, 'uSize'), q.bake, q.bake);
+    gl.uniform1f(gl.getUniformLocation(this.bakeProg, 'uSeed'), seed);
+    const faceLoc = gl.getUniformLocation(this.bakeProg, 'uFace');
+    // Two attachments written in one pass; WebGL2 core, no extension needed.
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    for (let i = 0; i < 6; i++) {
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], this.terrainCube, 0);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl[FACES[i]], this.detailCube, 0);
+      gl.uniform1i(faceLoc, i);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    // Clouds, in their own single-attachment pass.
+    if (this.cloudCube) gl.deleteTexture(this.cloudCube);
+    this.cloudCube = this.makeCube(q.cloudBake);
+    gl.useProgram(this.cloudProg);
+    gl.viewport(0, 0, q.cloudBake, q.cloudBake);
+    gl.uniform2f(gl.getUniformLocation(this.cloudProg, 'uSize'), q.cloudBake, q.cloudBake);
+    const cFaceLoc = gl.getUniformLocation(this.cloudProg, 'uFace');
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
+    for (let i = 0; i < 6; i++) {
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], this.cloudCube, 0);
+      gl.uniform1i(cFaceLoc, i);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.bakedSeed = seed;
+    this.bakedQuality = this.quality;
+  }
+
+  setQuality(name) {
+    if (!QUALITY[name] || name === this.quality) return;
+    this.quality = name;
+    if (this.ready && this.bakedSeed !== null) this.bakeSurface(this.bakedSeed);
   }
 
   // Load the generated albedo maps. Failure is not fatal: the planet simply
@@ -116,7 +209,12 @@ export class PlanetView {
     const v = mk(gl.VERTEX_SHADER, vs), f = mk(gl.FRAGMENT_SHADER, fs);
     if (!v || !f) return null;
     const p = gl.createProgram();
-    gl.attachShader(p, v); gl.attachShader(p, f); gl.linkProgram(p);
+    gl.attachShader(p, v); gl.attachShader(p, f);
+    // One vertex array is shared by the runtime and the bake programs, so the
+    // attribute must land at the same index in all of them. The driver is free
+    // to choose otherwise unless told.
+    gl.bindAttribLocation(p, 0, 'aPos');
+    gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
       console.error('program link failed:', gl.getProgramInfoLog(p));
       return null;
@@ -126,7 +224,8 @@ export class PlanetView {
 
   resize() {
     const c = this.canvas;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const q = QUALITY[this.quality] ?? QUALITY.high;
+    const dpr = Math.min(window.devicePixelRatio || 1, q.maxDpr) * q.scale;
     const w = Math.max(1, Math.floor(c.clientWidth * dpr));
     const h = Math.max(1, Math.floor(c.clientHeight * dpr));
     if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
@@ -145,6 +244,9 @@ export class PlanetView {
   render(world, state, dtReal) {
     if (this.failed || !this.ready) return;
     const gl = this.gl;
+    // The terrain is a function of the seed alone, so it is rebaked only when
+    // the world itself changes -- never for a climate or slider change.
+    if (this.bakedSeed !== state.seed) this.bakeSurface(state.seed);
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.useProgram(this.prog);
@@ -196,6 +298,16 @@ export class PlanetView {
         gl.bindTexture(gl.TEXTURE_2D, this.textures[i]);
       }
     }
+    // The baked fields live above the albedo maps' texture units.
+    gl.activeTexture(gl.TEXTURE0 + 6); gl.bindTexture(gl.TEXTURE_CUBE_MAP, this.terrainCube);
+    gl.activeTexture(gl.TEXTURE0 + 7); gl.bindTexture(gl.TEXTURE_CUBE_MAP, this.detailCube);
+    gl.activeTexture(gl.TEXTURE0 + 8); gl.bindTexture(gl.TEXTURE_CUBE_MAP, this.cloudCube);
+    gl.uniform1i(this.u.uTerrain, 6);
+    gl.uniform1i(this.u.uDetailMap, 7);
+    gl.uniform1i(this.u.uCloudMap, 8);
+    const q = QUALITY[this.quality] ?? QUALITY.high;
+    gl.uniform1f(this.u.uRelief, q.relief);
+    gl.uniform1f(this.u.uCloudDetail, q.cloudDetail);
     gl.uniform1f(this.u.uUseTex, this.useTextures);
     gl.uniform1f(this.u.uYaw, this.yaw);
     gl.uniform1f(this.u.uPitch, this.pitch);

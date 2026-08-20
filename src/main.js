@@ -29,6 +29,17 @@ const discovered = loadDiscovered();
 // Surface style. Generated albedo maps are the default; ?graphics=procedural
 // (or ?graphics=proc) selects the fully procedural look instead, and the button
 // in the view controls switches between them at any time.
+// Rendering detail. High everywhere by default; Low is a manual choice for
+// hardware that still struggles, and it is remembered between visits.
+const QUALITY_KEY = 'planetclimate.quality.v1';
+function qualityFromUrl() {
+  const q = (new URLSearchParams(location.search).get('quality') || '').toLowerCase();
+  if (q === 'low') return 'low';
+  if (q === 'high') return 'high';
+  try { const v = localStorage.getItem(QUALITY_KEY); if (v === 'low' || v === 'high') return v; } catch { }
+  return 'high';
+}
+
 function graphicsFromUrl() {
   const q = (new URLSearchParams(location.search).get('graphics') || '').toLowerCase();
   if (q === 'procedural' || q === 'proc') return false;
@@ -372,6 +383,14 @@ function syncPlay() {
   b.title = sim.paused ? 'Resume the simulation (space)' : 'Pause the simulation (space)';
 }
 
+function updateQualityButton() {
+  const b = $('#btn-quality');
+  const low = view.quality === 'low';
+  b.textContent = low ? '◇' : '◆';
+  b.setAttribute('aria-pressed', String(low));
+  b.title = low ? 'Detail: low — click for high' : 'Detail: high — click for low';
+}
+
 function updateGfxButton() {
   const b = $('#btn-gfx');
   const on = view.wantTextures && view.texturesLoaded;
@@ -421,6 +440,15 @@ function bindControls() {
   });
   $('#btn-view').addEventListener('click', () => {
     view.yaw = 0; view.pitch = 0; view.spinVel = 0;
+  });
+  $('#btn-quality').addEventListener('click', () => {
+    const next = view.quality === 'high' ? 'low' : 'high';
+    view.setQuality(next);
+    try { localStorage.setItem(QUALITY_KEY, next); } catch { }
+    updateQualityButton();
+    toast(next === 'low'
+      ? 'Low detail — smaller render, no relief shading, simpler clouds'
+      : 'High detail');
   });
   $('#btn-gfx').addEventListener('click', () => {
     if (!view.texturesLoaded) { toast('Surface maps are not available in this build'); return; }
@@ -577,6 +605,8 @@ async function start() {
       'This browser could not start WebGL2, so the planet cannot be drawn.<br>The simulation and charts still work.</div>');
     return;
   }
+  view.setQuality(qualityFromUrl());
+  updateQualityButton();
   view.wantTextures = graphicsFromUrl();
   const btn = $('#btn-gfx');
   btn.disabled = true;
