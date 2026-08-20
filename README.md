@@ -139,8 +139,11 @@ The generated albedo maps need a GPU; software rendering is always procedural.
 The button in the view controls reads **GL2**, **GL1** or **CPU**: it names the
 renderer actually in use, and clicking cycles through all three, so every path
 can be seen on any machine rather than only by whoever is unlucky enough to need
-it. `?renderer=webgl1` and `?renderer=software` do the same, and the choice is
-remembered.
+it. `?renderer=webgl1` and `?renderer=software` do the same. The button's choice is
+deliberately **not** remembered between visits: forcing a lesser renderer is a
+diagnostic, and making it stick meant one curious click left the planet drawn on
+the CPU permanently. A reload always returns to the best renderer the machine
+can give. The detail setting, which is a real preference, is still remembered.
 
 `tools/gl1check.mjs` runs the real renderer against a real WebGL1 driver — the
 two-pass bake, the cube-map framebuffer attachments, the absent vertex-array

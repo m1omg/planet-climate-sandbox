@@ -134,8 +134,12 @@ if (app && app.tick && app.view) {
 }
 
 // The renderer must survive a mobile browser throwing the GPU context away.
-if (app && app.view) {
-  const v = app.view;
+// Checked on a real PlanetView rather than whichever view happens to be live,
+// since start() picks that asynchronously and may not have finished.
+{
+  const { PlanetView } = await import(new URL('../src/render/planet.js', import.meta.url).href);
+  const canvas = mkEl('canvas');
+  const v = new PlanetView(canvas);
   const hasHandler = typeof v.forgetGpuState === 'function'
                   && typeof v.restore === 'function'
                   && typeof v.refreshAfterResume === 'function';
@@ -161,6 +165,30 @@ if (app && app.view) {
     } else {
       console.log('\x1b[32mPASS\x1b[0m  canvas subscribes to context lost and restored');
     }
+  }
+}
+
+// Forcing a lesser renderer is a diagnostic. If it were remembered between
+// visits, one curious click would leave the planet drawn on the CPU for good --
+// which is exactly what happened.
+if (app && app.graphicsFromUrl) {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const fn = src.slice(src.indexOf('function rendererFromUrl'), src.indexOf('function graphicsFromUrl'));
+  const persists = /localStorage/.test(fn);
+  if (persists) {
+    console.log('\x1b[31mFAIL\x1b[0m  the forced-renderer override is remembered between visits');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  the forced-renderer override does not outlive the page');
+  }
+  // and the quality preference, which is a real preference, still does
+  const qf = src.slice(src.indexOf('function qualityFromUrl'), src.indexOf('function updateRendererButton'));
+  if (!/localStorage/.test(qf)) {
+    console.log('\x1b[31mFAIL\x1b[0m  the detail preference is no longer remembered');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  the detail preference is still remembered');
   }
 }
 
