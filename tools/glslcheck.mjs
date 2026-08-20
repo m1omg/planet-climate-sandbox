@@ -93,5 +93,62 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
   }
 }
 
+// --- constructs GLSL ES 1.00 does not guarantee ------------------------------
+// The WebGL1 fallback runs on drivers that enforce the ES 1.00 limits strictly.
+// Two of these shipped broken: uniform float arrays indexed by a computed index
+// (Appendix A makes support OPTIONAL, so a driver may legally refuse it), and a
+// uniform budget far past the guaranteed minimum. headless-gl accepts both,
+// which is exactly why they reached real browsers unnoticed.
+{
+  const src = decomment(splice(read('planet.frag')));
+
+  // uniform arrays must not be indexed by a computed index
+  const arrays = [...src.matchAll(/uniform\s+\w+\s+(\w+)\s*\[\s*\d+\s*\]/g)].map((m) => m[1]);
+  const dynamic = [];
+  for (const name of arrays) {
+    for (const use of src.matchAll(new RegExp(`\\b${name}\\s*\\[([^\\]]+)\\]`, 'g'))) {
+      const idx = use[1].trim();
+      if (!/^\d+$/.test(idx)) dynamic.push(`${name}[${idx}]`);
+    }
+  }
+  if (dynamic.length) {
+    failed++;
+    console.log(`\x1b[31mFAIL\x1b[0m  uniform array indexed by a computed index (optional in ES 1.00): ${dynamic.join(', ')}`);
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  no uniform array is indexed by a computed index`);
+  }
+
+  // fragment uniform vectors, against the ES 1.00 guaranteed minimum of 16
+  let vectors = 0;
+  for (const m of src.matchAll(/uniform\s+(\w+)\s+(\w+)(?:\[(\d+)\])?\s*;/g)) {
+    if (m[1].startsWith('sampler')) continue;
+    vectors += Number(m[3] || 1);
+  }
+  const VEC_BUDGET = 32;
+  if (vectors > VEC_BUDGET) {
+    failed++;
+    console.log(`\x1b[31mFAIL\x1b[0m  ${vectors} fragment uniform vectors, budget ${VEC_BUDGET} (ES 1.00 guarantees only 16)`);
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  fragment uniform vectors: ${vectors}/${VEC_BUDGET}`);
+  }
+
+  // texture units, against the ES 1.00 guaranteed minimum of 8
+  const samplers = [...src.matchAll(/uniform\s+sampler\w*\s+(\w+)\s*;/g)].map((m) => m[1]);
+  const core = samplers.filter((n) => !/^uTex(Rock|Desert|Veg|Ice|Ocean|Lava)$/.test(n));
+  if (core.length > 8) {
+    failed++;
+    console.log(`\x1b[31mFAIL\x1b[0m  ${core.length} texture units needed even without the albedo maps (ES 1.00 guarantees 8)`);
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  texture units without albedo maps: ${core.length}/8  (${samplers.length} with them)`);
+  }
+
+  // integer overloads that do not exist in ES 1.00
+  const intFns = [...src.matchAll(/\b(min|max|abs|clamp|mod|sign)\s*\(\s*([a-zA-Z_]\w*)\s*[+\-]?[^,)]*,\s*(\d+)\s*\)/g)]
+    .filter((m) => /^i[A-Z0-9_]|^\w*[iI]dx|^i\d/.test(m[2]));
+  if (intFns.length) {
+    console.log(`\x1b[33mWARN\x1b[0m  possible integer overload, absent in ES 1.00: ${intFns.map((m) => m[0]).join(', ')}`);
+  }
+}
+
 console.log(failed ? `\n${failed} shader problem(s)` : '\nshaders parse cleanly');
 process.exit(failed ? 1 : 0);

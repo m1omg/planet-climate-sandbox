@@ -33,6 +33,11 @@ export class PlanetView {
     this.texturesLoaded = false;
     this.quality = 'high';
     this.bakedSeed = null;
+    // Camera state belongs to the view, not to a GPU context: init() also runs
+    // on restore() after a context loss, and zeroing these there threw the
+    // viewpoint away every time the tab came back or the renderer was swapped.
+    this.spin = 0; this.yaw = 0; this.pitch = 0;
+    this.spinVel = 0; this.spinPaused = false;
     this.useTextures = 0;      // fades 0 -> 1 as the maps arrive
     this.wantTextures = true;
     // WebGL2 first, then WebGL1. The second is refused far less often -- older,
@@ -48,6 +53,14 @@ export class PlanetView {
     if (!gl) { this.failed = true; return; }
     this.gl = gl;
     this.api = this.gl1 ? 'WebGL1' : 'WebGL2';
+
+    // The shader needs three cube maps plus the band texture no matter what;
+    // the six albedo maps are the optional extra. WebGL1 only guarantees eight
+    // texture units, so on a device at that floor the albedo path is compiled
+    // out rather than left to fail at link time.
+    this.maxTexUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) || 8;
+    this.maxFragUniforms = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) || 16;
+    this.albedoCapable = this.maxTexUnits >= 10;
 
     // Mobile browsers throw the GPU context away when the tab goes to the
     // background, and every program, buffer, texture and framebuffer dies with
@@ -74,6 +87,7 @@ export class PlanetView {
     this.prog = this.bakeProg = this.cloudProg = null;
     this.vao = null; this.bakeFb = null;
     this.textures = null;
+    this.bandTex = null;
     this.terrainCube = this.detailCube = this.cloudCube = null;
   }
 
@@ -109,7 +123,11 @@ export class PlanetView {
     try { src = await loadShaders(); }
     catch (e) { console.error(e); this.failed = true; return false; }
     const V = this.gl1 ? (x) => toES100(x, 'vert') : (x) => x;
-    const F = this.gl1 ? (x) => toES100(x, 'frag') : (x) => x;
+    const defines = this.albedoCapable ? '' : '#define NO_ALBEDO 1\n';
+    const withDefines = (x) => (defines
+      ? x.replace(/^(#version[^\n]*\n)?/, (m) => m + defines)
+      : x);
+    const F = this.gl1 ? (x) => withDefines(toES100(x, 'frag')) : (x) => withDefines(x);
     this.prog = this.link(V(src.vert), F(src.frag));
     if (!this.prog) { this.failed = true; return false; }
     this.bakeProg = this.link(V(src.bakeVert), this.gl1 ? bakeES100(src.bakeFrag) : src.bakeFrag);
@@ -132,16 +150,35 @@ export class PlanetView {
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
-      'uTerrain', 'uDetailMap', 'uCloudMap', 'uBandT', 'uBandIce']) {
-      this.u[name] = gl.getUniformLocation(this.prog, name === 'uBandT' || name === 'uBandIce' ? name + '[0]' : name);
+      'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
+      this.u[name] = gl.getUniformLocation(this.prog, name);
     }
-    this.bandT = new Float32Array(NBANDS);
-    this.bandIce = new Float32Array(NBANDS);
-    this.spin = 0;
-    this.yaw = 0; this.pitch = 0;      // camera orbit, driven by dragging
-    this.spinVel = 0;                  // momentum after a flick
-    this.spinPaused = false;
+
+    // Per-band temperature and ice travel to the shader as an 18x1 texture.
+    // NEAREST, because the 16-bit temperature is packed across two channels and
+    // filtering them separately would corrupt every boundary.
+    this.bandBytes = new Uint8Array(NBANDS * 4);
+    this.bandTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.bandTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, NBANDS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.bandBytes);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
     this.ready = true;
+
+    // Prove the whole path works before claiming success. Compiling and linking
+    // says nothing about whether this driver will render to a cube-map face, and
+    // returning true from a renderer that cannot draw is what let a broken
+    // WebGL1 path masquerade as a working one.
+    this.bakeSurface(1.0);
+    if (this.bakeFailed) {
+      this.ready = false;
+      this.failed = true;
+      return false;
+    }
+    this.bakedSeed = null;      // force a real bake with the true seed
     return true;
   }
 
@@ -233,7 +270,22 @@ export class PlanetView {
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
+    // A framebuffer that is not complete draws nothing, silently, and rendering
+    // to a cube-map face is exactly where a driver is most likely to object.
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+      this.diagnostic = `${this.api} cannot render to a cube map (framebuffer status 0x${status.toString(16)})`;
+      this.bakeFailed = true;
+      return;
+    }
+    const err = gl.getError();
+    if (err !== gl.NO_ERROR) {
+      this.diagnostic = `${this.api} bake raised GL error 0x${err.toString(16)}`;
+      this.bakeFailed = true;
+      return;
+    }
+    this.bakeFailed = false;
     this.bakedSeed = seed;
     this.bakedQuality = this.quality;
   }
@@ -248,6 +300,7 @@ export class PlanetView {
   // stays on the procedural path, which is a complete look in its own right.
   async loadTextures(dir = 'assets/textures/') {
     if (this.failed || !this.ready) return false;
+    if (!this.albedoCapable) return false;
     if (this.texturesLoaded) return true;
     const gl = this.gl;
     const base = new URL(dir, location.href);
@@ -292,7 +345,9 @@ export class PlanetView {
       const s = gl.createShader(type);
       gl.shaderSource(s, src); gl.compileShader(s);
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        console.error('shader compile failed:', gl.getShaderInfoLog(s));
+        const log = (gl.getShaderInfoLog(s) || '').trim();
+        this.diagnostic = `${this.api} shader compile failed: ${log.split('\n')[0]}`;
+        console.error('shader compile failed:', log);
         return null;
       }
       return s;
@@ -307,7 +362,9 @@ export class PlanetView {
     gl.bindAttribLocation(p, 0, 'aPos');
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-      console.error('program link failed:', gl.getProgramInfoLog(p));
+      const log = (gl.getProgramInfoLog(p) || '').trim();
+      this.diagnostic = `${this.api} program link failed: ${log.split('\n')[0]}`;
+      console.error('program link failed:', log);
       return null;
     }
     return p;
@@ -358,8 +415,15 @@ export class PlanetView {
     this.spin = (this.spin + spinRate * dtReal) % (Math.PI * 2);
 
     for (let i = 0; i < NBANDS; i++) {
-      this.bandT[i] = world.T[i];
-      this.bandIce[i] = dg.hasWater ? (1 - Math.min(1, Math.max(0, (world.T[i] - 253) / 25))) : 0;
+      // Truncate rather than round the low byte: rounding lets the residual
+      // reach 256, which a byte stores as 0, decoding ~16 K too cold and
+      // painting a flickering stripe across that band.
+      const t = Math.round(clamp(world.T[i] / 4000, 0, 1) * 65535);
+      const hi = t >> 8;
+      this.bandBytes[i * 4] = hi;
+      this.bandBytes[i * 4 + 1] = t & 255;
+      this.bandBytes[i * 4 + 2] = 255 * (dg.hasWater ? clamp(1 - (world.T[i] - 253) / 25, 0, 1) : 0);
+      this.bandBytes[i * 4 + 3] = 255;
     }
 
     const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
@@ -408,8 +472,10 @@ export class PlanetView {
     gl.uniform1f(this.u.uUseTex, this.useTextures);
     gl.uniform1f(this.u.uYaw, this.yaw);
     gl.uniform1f(this.u.uPitch, this.pitch);
-    gl.uniform1fv(this.u.uBandT, this.bandT);
-    gl.uniform1fv(this.u.uBandIce, this.bandIce);
+    gl.activeTexture(gl.TEXTURE0 + 9);
+    gl.bindTexture(gl.TEXTURE_2D, this.bandTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, NBANDS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.bandBytes);
+    gl.uniform1i(this.u.uBands, 9);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }

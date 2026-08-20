@@ -58,6 +58,13 @@ console.log('GLSL ES 1.00 (the WebGL1 fallback), on a real driver:');
 const vs = compile(gl.VERTEX_SHADER, toES100(read('planet.vert'), 'vert'), 'planet.vert');
 const fs = compile(gl.FRAGMENT_SHADER, toES100(splice(read('planet.frag')), 'frag'), 'planet.frag');
 link(vs, fs, 'planet');
+
+// The reduced build, used where there are too few texture units for the albedo
+// maps. An untested variant is how the WebGL1 path came to be broken in the
+// first place, so it gets compiled too.
+const fsNo = compile(gl.FRAGMENT_SHADER,
+  '#define NO_ALBEDO 1\n' + toES100(splice(read('planet.frag')), 'frag'), 'planet.frag (NO_ALBEDO)');
+link(vs, fsNo, 'planet (NO_ALBEDO)');
 const bvs = compile(gl.VERTEX_SHADER, toES100(read('bake.vert'), 'vert'), 'bake.vert');
 const bfs = compile(gl.FRAGMENT_SHADER, bakeES100(splice(read('bake.frag'))), 'bake.frag');
 link(bvs, bfs, 'bake');

@@ -32,35 +32,48 @@ uniform float uLocked;      // 0 = free rotator, 1 = tidally locked
 uniform float uYaw;         // camera orbit, radians
 uniform float uPitch;
 uniform float uNightGlow;   // thermal emission on the dark side
-uniform float uBandT[18];
-uniform float uBandIce[18];
+// Per-band temperature and ice, as a texture rather than two uniform arrays.
+// Uniform arrays cost a vector each -- 36 of them, against a WebGL1 guaranteed
+// maximum of 16 -- and indexing them with a computed index is only OPTIONAL in
+// GLSL ES 1.00, so drivers may legally refuse it. A texture has neither problem:
+// the coordinate is a float, and it costs one sampler.
+//   R,G = temperature packed to 16 bits over 0..4000 K
+//   B   = ice fraction
+uniform sampler2D uBands;
 
 // Texture path. uUseTex fades between the fully procedural look (0) and the
 // generated albedo maps (1), so the two versions share all the same lighting,
 // climate response and atmosphere -- only the surface albedo differs.
 uniform float uUseTex;
+#ifndef NO_ALBEDO
 uniform sampler2D uTexRock;
 uniform sampler2D uTexDesert;
 uniform sampler2D uTexVeg;
 uniform sampler2D uTexIce;
 uniform sampler2D uTexOcean;
 uniform sampler2D uTexLava;
+#endif
 
 const float PI = 3.14159265;
 
 //__NOISE__
 
 // ---------- band lookup ----------
+// Sampled with NEAREST, so each fetch lands squarely on one texel and the
+// interpolation between neighbours stays explicit -- filtering the two halves of
+// a packed 16-bit value independently would produce nonsense at every boundary.
+float bandTexel(float i, int which){
+  vec4 c = texture(uBands, vec2((i + 0.5) / 18.0, 0.5));
+  if(which == 0) return (c.r * 65280.0 + c.g * 255.0) / 65535.0 * 4000.0;
+  return c.b;
+}
+
 float bandVal(float x, int which){
   float f = clamp((x+1.0)*0.5, 0.0, 0.99999) * 18.0 - 0.5;
-  int i0 = int(floor(max(f, 0.0)));
-  // no integer min() in GLSL ES 1.00, so the WebGL1 path needs this spelt out
-  int i1 = i0 + 1; if(i1 > 17) i1 = 17;
-  float t = clamp(f - float(i0), 0.0, 1.0);
-  float a, b;
-  if(which==0){ a = uBandT[i0];  b = uBandT[i1]; }
-  else        { a = uBandIce[i0]; b = uBandIce[i1]; }
-  return mix(a,b,t);
+  float i0 = floor(max(f, 0.0));
+  float i1 = min(i0 + 1.0, 17.0);
+  float t = clamp(f - i0, 0.0, 1.0);
+  return mix(bandTexel(i0, which), bandTexel(i1, which), t);
 }
 
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0.0,-s, 0.0,1.0,0.0, s,0.0,c); }
@@ -170,6 +183,7 @@ vec2 sphereUV(vec3 p){
 // The same climate logic as surfaceColor(), but the palettes come from the
 // generated albedo maps instead of noise. Blending is driven by exactly the
 // same masks, so a planet looks like the same planet either way.
+#ifndef NO_ALBEDO
 vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float height){
   float shinP, hP;
   vec3 proc = surfaceColor(sp, T, ice, shinP, hP);   // reuse its masks
@@ -223,6 +237,7 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
   // Keep a little of the procedural tint so climate colour cues survive.
   return mix(col, proc, 0.22);
 }
+#endif
 
 void main(){
   vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / min(uRes.x, uRes.y);
@@ -275,11 +290,13 @@ void main(){
 
     float shin, height;
     vec3 base = surfaceColor(sp, T, ice, shin, height);
+#ifndef NO_ALBEDO
     if(uUseTex > 0.001){
       float shinT, hT;
       vec3 tex = surfaceTextured(sp, T, ice, shinT, hT);
       base = mix(base, tex, uUseTex);
     }
+#endif
 
     // Relief shading, from the slope the bake already measured. This used to
     // cost four more full surface evaluations per pixel -- 140 of the 269 noise

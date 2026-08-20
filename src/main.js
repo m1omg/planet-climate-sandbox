@@ -57,6 +57,9 @@ function qualityFromUrl() {
 // Which renderer to use. Software is chosen automatically when WebGL2 is
 // missing, and can be chosen deliberately from the button or ?renderer=software
 // — useful for seeing what someone else is getting.
+// Why each renderer was rejected during start-up.
+const rendererLog = [];
+
 // Deliberately NOT remembered between visits. Forcing a lesser renderer is a
 // diagnostic — for looking at what someone else's machine gets — and making it
 // stick meant one curious click left the planet drawn on the CPU for good, hard
@@ -339,7 +342,10 @@ function writeHash() {
   const keep = {};
   for (const k of Object.keys(EARTH)) if (params[k] !== EARTH[k]) keep[k] = params[k];
   const s = Object.entries(keep).map(([k, v]) => `${k}=${typeof v === 'number' ? +v.toPrecision(6) : v}`).join('&');
-  history.replaceState(null, '', s ? `#${s}` : location.pathname);
+  // Keep the query string. It carries ?renderer= and ?quality=, and writing
+  // location.pathname alone silently erased them the moment anything changed --
+  // so a forced renderer never survived to the next reload.
+  history.replaceState(null, '', `${location.pathname}${location.search}${s ? `#${s}` : ''}`);
 }
 function paramsFromHash() {
   const out = {};
@@ -529,18 +535,21 @@ function bindControls() {
     const current = view.software ? 'software' : (view.api === 'WebGL1' ? 'gl1' : 'gl2');
     b.disabled = true;
     // Step through the list, skipping anything this machine cannot give us.
-    let next = current, ok = false;
+    let next = current, ok = false, skipped = [];
     for (let i = 1; i <= RENDER_ORDER.length; i++) {
       next = RENDER_ORDER[(RENDER_ORDER.indexOf(current) + i) % RENDER_ORDER.length];
       ok = await useRenderer(next);
       if (ok && !view.failed) break;
+      skipped.push(`${next}: ${view.diagnostic || 'not available'}`);
     }
+    if (skipped.length) console.warn('skipped renderers —', skipped.join(' · '));
     b.disabled = false;
     if (!ok || view.failed) {
       await useRenderer('software');
       toast('No GPU rendering available here — staying in software');
     } else {
-      toast(LABELS[next] + '  ·  reload returns to the best available');
+      const why = skipped.length ? `  ·  skipped ${skipped[0]}` : '';
+      toast(LABELS[next] + why + '  ·  reload returns to the best available');
     }
   });
   $('#btn-quality').addEventListener('click', () => {
@@ -715,18 +724,29 @@ async function start() {
   // machine will not give us. A forced choice simply starts the list there.
   const wanted = rendererFromUrl();
   const order = wanted === 'software' ? ['software']
-              : wanted === 'gl1' ? ['gl1', 'gl2', 'software']
+              : wanted === 'gl1' ? ['gl1', 'software']
               : ['gl2', 'gl1', 'software'];
 
+  // Why each renderer was turned down, so a silent downgrade can be explained
+  // rather than guessed at. Readable from the console as __app.rendererLog.
+  rendererLog.length = 0;
   for (const kind of order) {
-    if (await useRenderer(kind) && !view.failed) {
+    const ok = await useRenderer(kind);
+    if (ok && !view.failed) {
       if (kind !== 'gl2') {
+        // Do not claim WebGL2 is missing when it was simply not asked for.
+        const forced = wanted === kind;
+        const why = rendererLog.length ? `  (${rendererLog[0].reason})` : '';
         toast(kind === 'software'
-          ? 'Software rendering — drawn on the CPU. The simulation is unaffected.'
-          : 'WebGL2 unavailable — drawing with WebGL1, at full detail.', 6000);
+          ? `Software rendering — drawn on the CPU. The simulation is unaffected.${forced ? '' : why}`
+          : forced
+            ? 'WebGL1, as requested — the same shaders at full detail.'
+            : `WebGL2 unavailable — drawing with WebGL1, at full detail.${why}`, 8000);
       }
       return;
     }
+    rendererLog.push({ kind, reason: view.diagnostic || 'context refused by the browser' });
+    console.warn(`renderer ${kind} unavailable: ${rendererLog[rendererLog.length - 1].reason}`);
   }
 
   $('#planet').insertAdjacentHTML('afterend',
@@ -737,7 +757,33 @@ async function start() {
 // Handy from the console, and used by the browser self-test.
 try { localStorage.removeItem('planetclimate.renderer.v1'); } catch { }
 
-window.__app = { sim, view, tick, frame, params, loadPreset, startScenario, graphicsFromUrl, useRenderer };
+window.__app = {
+  sim, view, tick, frame, params, loadPreset, startScenario, graphicsFromUrl, useRenderer,
+  rendererLog,
+  // Paste __app.diagnose() into the console to see what this machine offers.
+  diagnose() {
+    const probe = (kind) => {
+      const c = document.createElement('canvas');
+      const gl = c.getContext(kind);
+      if (!gl) return { available: false };
+      return {
+        available: true,
+        renderer: gl.getExtension('WEBGL_debug_renderer_info')
+          ? gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+        textureUnits: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS),
+        fragUniformVectors: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+        varyings: gl.getParameter(gl.MAX_VARYING_VECTORS),
+        maxCubeSize: gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE),
+      };
+    };
+    return {
+      active: view.software ? 'software' : view.api,
+      rejected: rendererLog,
+      webgl2: probe('webgl2'),
+      webgl1: probe('webgl'),
+    };
+  },
+};
 
 if (new URLSearchParams(location.search).has('selftest')) {
   import('./selftest.js').then((m) => m.run());

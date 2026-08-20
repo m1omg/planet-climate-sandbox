@@ -130,9 +130,14 @@ Rather than explain that to people, the renderer falls back — twice:
    compiles this path on a real headless driver — which is how the missing
    integer `min()` overload in ES 1.00 was caught.
 2. **Software.** If even WebGL1 is unavailable, `src/render/software.js` draws on
-   the CPU via Canvas2D, sharing its shading with `src/render/cpushade.js` so it
-   is the same terrain, biomes, ice and lighting, at lower resolution and refresh
-   rate. It is a genuine last resort rather than the first answer.
+   the CPU via Canvas2D, sharing its shading with `src/render/cpushade.js`. It
+   carries relief shading from a baked slope field, sun-glitter, depth-graded
+   ocean, separate sea ice, land ice and frost, an advected two-layer cloud deck
+   and an atmospheric limb — the same picture as the shader, evaluated in
+   JavaScript. It draws in two layers: the sky at **full canvas resolution**,
+   cached until the camera moves, and the planet disc over it at a measured pixel
+   budget. Only the disc is shaded, since it covers about a quarter of the frame,
+   and the limb is antialiased so the two layers meet cleanly.
 
 The generated albedo maps need a GPU; software rendering is always procedural.
 
@@ -144,6 +149,16 @@ deliberately **not** remembered between visits: forcing a lesser renderer is a
 diagnostic, and making it stick meant one curious click left the planet drawn on
 the CPU permanently. A reload always returns to the best renderer the machine
 can give. The detail setting, which is a real preference, is still remembered.
+
+GLSL ES 1.00 makes several things *optional* that ES 3.00 guarantees, and
+headless drivers do not enforce the difference. `tools/glslcheck.mjs` therefore
+lints for them directly: uniform arrays indexed by a computed index (which a
+conforming WebGL1 driver may legally refuse, and which is what broke this path —
+ANGLE reports `Index expression must be constant`), the fragment uniform-vector
+count against the guaranteed 16, and the texture-unit count against the
+guaranteed 8. Per-band temperature and ice now travel as a texture rather than
+two 18-element uniform arrays, which removes both problems at once, and the
+albedo maps are compiled out on devices too small to sample them.
 
 `tools/gl1check.mjs` runs the real renderer against a real WebGL1 driver — the
 two-pass bake, the cube-map framebuffer attachments, the absent vertex-array
