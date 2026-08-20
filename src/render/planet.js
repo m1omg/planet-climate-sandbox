@@ -35,6 +35,54 @@ export class PlanetView {
     const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
     if (!gl) { this.failed = true; return; }
     this.gl = gl;
+
+    // Mobile browsers throw the GPU context away when the tab goes to the
+    // background, and every program, buffer, texture and framebuffer dies with
+    // it. Without this the canvas comes back black -- and stays that way,
+    // because the terrain is only rebaked when the world changes, so nothing
+    // would ever notice the cube maps had ceased to exist.
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();          // required, or the browser never restores it
+      this.forgetGpuState();
+      console.warn('WebGL context lost; rebuilding when the browser restores it');
+    }, false);
+    canvas.addEventListener('webglcontextrestored', () => {
+      console.warn('WebGL context restored; rebuilding');
+      this.restore();
+    }, false);
+  }
+
+  // Drop every handle: they are all invalid once the context has gone, and
+  // holding them would only invite drawing with rubbish.
+  forgetGpuState() {
+    this.ready = false;
+    this.texturesLoaded = false;
+    this.bakedSeed = null;
+    this.prog = this.bakeProg = this.cloudProg = null;
+    this.vao = null; this.bakeFb = null;
+    this.textures = null;
+    this.terrainCube = this.detailCube = this.cloudCube = null;
+  }
+
+  // Called when the tab comes back to the foreground. Some drivers quietly
+  // evict textures while a page is away without ever reporting a lost context,
+  // which leaves the planet drawing from cube maps that are no longer there.
+  // Rebaking costs a few milliseconds and removes the whole class of "came back
+  // blank" bugs.
+  refreshAfterResume() {
+    if (this.failed || !this.gl) return;
+    if (this.gl.isContextLost()) { this.forgetGpuState(); return; }
+    this.bakedSeed = null;      // force a rebake on the next frame
+    this.forceResize = true;    // and a fresh drawing buffer to paint it into
+  }
+
+  // Rebuild after a restore. init() and loadTextures() are both guarded by the
+  // flags cleared above, so they run again from scratch; the bake follows on the
+  // next frame because bakedSeed is null.
+  async restore() {
+    if (this.failed) return;
+    const ok = await this.init();
+    if (ok) await this.loadTextures();
   }
 
   // Shaders live in real .glsl files now, so start-up is asynchronous.
@@ -228,7 +276,10 @@ export class PlanetView {
     const dpr = Math.min(window.devicePixelRatio || 1, q.maxDpr) * q.scale;
     const w = Math.max(1, Math.floor(c.clientWidth * dpr));
     const h = Math.max(1, Math.floor(c.clientHeight * dpr));
-    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    if (c.width !== w || c.height !== h || this.forceResize) {
+      c.width = w; c.height = h;
+      this.forceResize = false;
+    }
   }
 
   // Blackbody-ish tint for the star
@@ -244,6 +295,9 @@ export class PlanetView {
   render(world, state, dtReal) {
     if (this.failed || !this.ready) return;
     const gl = this.gl;
+    // Some devices lose the context without ever firing the event. Notice, and
+    // stop drawing until it comes back rather than painting garbage.
+    if (gl.isContextLost()) { this.forgetGpuState(); return; }
     // The terrain is a function of the seed alone, so it is rebaked only when
     // the world itself changes -- never for a climate or slider change.
     if (this.bakedSeed !== state.seed) this.bakeSurface(state.seed);

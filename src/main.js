@@ -466,6 +466,14 @@ function bindControls() {
     } else document.body.classList.add('show-left');
   });
 
+  // Coming back from another app: the GPU context may have been thrown away
+  // while we were gone, and the wall clock has run on without us.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    last = performance.now();       // do not bill the time spent away to the sim
+    view.refreshAfterResume();
+  });
+
   addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
     if (e.code === 'Space') { e.preventDefault(); sim.paused = !sim.paused; syncPlay(); }

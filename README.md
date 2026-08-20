@@ -110,6 +110,16 @@ Detail is **High on every device** by default. `?quality=low` — or the ◆ but
 drops relief shading and the second cloud layer, and renders at 0.6 scale, for hardware that still
 struggles. The simulation is identical in both: rendering and physics share nothing but a clock.
 
+### Coming back to the tab
+
+Mobile browsers throw the GPU context away when a page goes to the background,
+taking every program, buffer and texture with it. The renderer subscribes to
+`webglcontextlost` and `webglcontextrestored` and rebuilds from scratch, and on
+becoming visible again it rebakes the terrain and reallocates the drawing buffer
+— because some drivers evict textures while a page is away without ever
+reporting a lost context, which otherwise leaves the planet drawing from cube
+maps that no longer exist.
+
 ### Handling the planet
 
 Drag the planet with a mouse or a finger to orbit the camera; flick it to spin and it coasts to a

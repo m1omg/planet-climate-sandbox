@@ -19,16 +19,26 @@ const stub2d = () => new Proxy({}, {
   set: () => true,
 });
 
+// Enough of a WebGL2 context for the renderer's constructor, which only stores
+// it and attaches event handlers.
+const stubGl = () => new Proxy({ isContextLost: () => false }, {
+  get: (t, k) => (k in t ? t[k] : typeof k === 'string' && k.toUpperCase() === k ? 1 : () => {}),
+});
+
 const mkEl = (tag = 'div') => ({
   tagName: String(tag).toUpperCase(), children: [], style: { setProperty() {} },
   classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
   dataset: {}, value: '', textContent: '', innerHTML: '', title: '', hidden: false,
   min: '0', max: '1000', clientWidth: 800, clientHeight: 600, width: 800, height: 600,
+  listeners: {},
   appendChild(c) { this.children.push(c); return c; },
   insertAdjacentHTML() {}, setAttribute() {}, getAttribute: () => null,
-  addEventListener() {}, removeEventListener() {}, select() {}, blur() {}, focus() {},
+  addEventListener(type) { (this.listeners[type] = this.listeners[type] || []).push(1); },
+  removeEventListener() {}, select() {}, blur() {}, focus() {},
   setPointerCapture() {},
-  getContext: (kind) => (kind === '2d' ? stub2d() : null),
+  // A canvas that records its listeners and hands out a token WebGL context, so
+  // the renderer really constructs and its context-loss wiring can be checked.
+  getContext: (kind) => (kind === '2d' ? stub2d() : kind === 'webgl2' ? stubGl() : null),
   querySelector: () => mkEl(), querySelectorAll: () => [],
   getBoundingClientRect: () => ({ width: 800, height: 600, left: 0, top: 0 }),
 });
@@ -120,6 +130,37 @@ if (app && app.tick && app.view) {
     failed++;
   } else {
     console.log(`\x1b[32mPASS\x1b[0m  frame loop rendered ${v._renders} frames`);
+  }
+}
+
+// The renderer must survive a mobile browser throwing the GPU context away.
+if (app && app.view) {
+  const v = app.view;
+  const hasHandler = typeof v.forgetGpuState === 'function'
+                  && typeof v.restore === 'function'
+                  && typeof v.refreshAfterResume === 'function';
+  if (!hasHandler) {
+    console.log('\x1b[31mFAIL\x1b[0m  renderer has no context-loss recovery');
+    failed++;
+  } else {
+    // Losing the context must invalidate the baked terrain, or the planet comes
+    // back drawing from cube maps that no longer exist.
+    v.bakedSeed = 7; v.texturesLoaded = true; v.ready = true;
+    v.forgetGpuState();
+    if (v.bakedSeed !== null || v.ready || v.texturesLoaded) {
+      console.log('\x1b[31mFAIL\x1b[0m  losing the context left stale GPU state behind');
+      failed++;
+    } else {
+      console.log('\x1b[32mPASS\x1b[0m  context loss clears the baked terrain and forces a rebuild');
+    }
+    // ...and the browser events that signal it must actually be subscribed to.
+    const L = (v.canvas && v.canvas.listeners) || {};
+    if (!L.webglcontextlost || !L.webglcontextrestored) {
+      console.log('\x1b[31mFAIL\x1b[0m  canvas does not listen for webglcontextlost/restored');
+      failed++;
+    } else {
+      console.log('\x1b[32mPASS\x1b[0m  canvas subscribes to context lost and restored');
+    }
   }
 }
 
