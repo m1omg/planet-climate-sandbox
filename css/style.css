@@ -132,12 +132,20 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 #planet{position:absolute;inset:0;width:100%;height:100%;display:block;
   cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 #planet.dragging{cursor:grabbing}
+/* software rendering: the planet is drawn small and scaled up, so let the
+   browser smooth it rather than showing the pixels */
+body.software-render #planet{image-rendering:auto}
 
 #view-controls{position:absolute;right:16px;bottom:70px;z-index:4;display:flex;flex-direction:column;gap:6px}
 #view-controls .icon-btn{width:32px;font-size:15px;line-height:1}
 #view-controls .icon-btn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
 #view-controls .icon-btn:disabled{opacity:.4}
 #view-controls #btn-quality[aria-pressed=true]{color:var(--accent-2);border-color:var(--accent-2)}
+/* Which renderer is running, and the switch between them. Reads as a label
+   because that is mostly what it is: the state matters more than the action. */
+#view-controls .renderer-btn{width:auto;padding:0 8px;font:10px/1 var(--mono);letter-spacing:.08em}
+#view-controls .renderer-btn[data-kind=software]{color:var(--accent-2);border-color:var(--accent-2)}
+#view-controls .renderer-btn[data-kind=gpu]{color:var(--good);border-color:rgba(78,201,138,.5)}
 
 #state-banner{
   position:absolute;top:18px;left:50%;transform:translateX(-50%);

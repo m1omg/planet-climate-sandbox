@@ -7,6 +7,7 @@ import { runawayLimit } from './physics/radiation.js';
 import { NBANDS, lockFactor } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView } from './render/planet.js';
+import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
 import { SLIDERS, parseValue, toSlider, fromSlider } from './game/controls.js';
@@ -22,7 +23,9 @@ const $ = (s) => document.querySelector(s);
 // ---------------------------------------------------------------------------
 const params = { ...EARTH, ...paramsFromHash() };
 const sim = new Simulation(params);
-const view = new PlanetView($('#planet'));
+// `view` is not const: if WebGL2 turns out to be unavailable we swap in the
+// software renderer rather than showing an apology.
+let view = new PlanetView($('#planet'));
 const renderState = { time: 0, seed: Math.random() * 100 };
 const discovered = loadDiscovered();
 
@@ -38,6 +41,60 @@ function qualityFromUrl() {
   if (q === 'high') return 'high';
   try { const v = localStorage.getItem(QUALITY_KEY); if (v === 'low' || v === 'high') return v; } catch { }
   return 'high';
+}
+
+// Which renderer to use. Software is chosen automatically when WebGL2 is
+// missing, and can be chosen deliberately from the button or ?renderer=software
+// — useful for seeing what someone else is getting.
+const RENDERER_KEY = 'planetclimate.renderer.v1';
+function rendererFromUrl() {
+  const r = (new URLSearchParams(location.search).get('renderer') || '').toLowerCase();
+  if (r === 'software' || r === 'sw' || r === 'cpu') return 'software';
+  if (r === 'gpu' || r === 'webgl' || r === 'webgl2') return 'gpu';
+  try { const v = localStorage.getItem(RENDERER_KEY); if (v === 'software') return v; } catch { }
+  return 'gpu';
+}
+
+function updateRendererButton() {
+  const b = $('#btn-renderer');
+  if (!b) return;
+  const sw = !!view.software;
+  b.textContent = sw ? 'CPU' : 'GPU';
+  b.dataset.kind = sw ? 'software' : 'gpu';
+  b.title = sw
+    ? 'Software rendering (no WebGL2 needed) — click to try the GPU'
+    : 'GPU rendering via WebGL2 — click to switch to software';
+}
+
+// Swap renderer. A canvas keeps its context type for life, so the element
+// itself has to be replaced rather than re-used.
+async function useRenderer(kind) {
+  const old = view;
+  const canvas = $('#planet');
+  const fresh = canvas.cloneNode(false);
+  canvas.replaceWith(fresh);
+  view = kind === 'software' ? new SoftwareView(fresh) : new PlanetView(fresh);
+  // carry the viewpoint across so the swap is not disorienting
+  view.yaw = old.yaw ?? 0; view.pitch = old.pitch ?? 0;
+  view.spin = old.spin ?? 0; view.spinPaused = old.spinPaused ?? false;
+  window.__app.view = view;
+  const ok = await view.init();
+  bindPlanetDrag();
+  document.body.classList.toggle('software-render', !!view.software);
+  if (ok && !view.software) {
+    view.setQuality(qualityFromUrl());
+    view.wantTextures = graphicsFromUrl();
+    await view.loadTextures();
+    updateGfxButton();
+    $('#btn-gfx').disabled = !view.texturesLoaded;
+  } else if (view.software) {
+    view.setQuality(qualityFromUrl());
+    $('#btn-gfx').disabled = true;
+    $('#btn-gfx').title = 'Surface maps need WebGL2';
+  }
+  updateRendererButton();
+  updateQualityButton();
+  return ok;
 }
 
 function graphicsFromUrl() {
@@ -441,6 +498,22 @@ function bindControls() {
   $('#btn-view').addEventListener('click', () => {
     view.yaw = 0; view.pitch = 0; view.spinVel = 0;
   });
+  $('#btn-renderer').addEventListener('click', async () => {
+    const b = $('#btn-renderer');
+    const next = view.software ? 'gpu' : 'software';
+    b.disabled = true;
+    const ok = await useRenderer(next);
+    b.disabled = false;
+    if (!ok || (next === 'gpu' && view.failed)) {
+      await useRenderer('software');
+      toast('WebGL2 is not available on this machine — staying in software');
+    } else {
+      try { localStorage.setItem(RENDERER_KEY, next); } catch { }
+      toast(next === 'software'
+        ? 'Software rendering — the planet is drawn on the CPU, simulation unaffected'
+        : 'GPU rendering via WebGL2');
+    }
+  });
   $('#btn-quality').addEventListener('click', () => {
     const next = view.quality === 'high' ? 'low' : 'high';
     view.setQuality(next);
@@ -491,6 +564,8 @@ function bindControls() {
 // ---------------------------------------------------------------------------
 function bindPlanetDrag() {
   const cv = $('#planet');
+  if (!cv || cv._dragBound) return;
+  cv._dragBound = true;
   let active = null, lastX = 0, lastY = 0, lastT = 0, moved = 0;
 
   cv.addEventListener('pointerdown', (e) => {
@@ -606,17 +681,50 @@ let started = false;
 async function start() {
   if (started) return;
   started = true;
-  const ok = await view.init();
-  if (!ok || view.failed) {
-    $('#planet').insertAdjacentHTML('afterend',
-      '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#8e9ab5;padding:32px;text-align:center">' +
-      'This browser could not start WebGL2, so the planet cannot be drawn.<br>The simulation and charts still work.</div>');
+  // A deliberate choice of software rendering is honoured before WebGL2 is even
+  // attempted.
+  if (rendererFromUrl() === 'software') {
+    await useRenderer('software');
+    updateRendererButton();
+    toast('Software rendering — the planet is drawn on the CPU', 5000);
     return;
+  }
+  let ok = await view.init();
+
+  // WebGL2 is refused surprisingly often on Linux -- a graphics blocklist entry
+  // or a failed driver probe will do it, with nothing wrong with the card. Fall
+  // back to drawing the planet on the CPU instead of explaining that to people.
+  if (!ok || view.failed) {
+    const canvas = $('#planet');
+    const replacement = canvas.cloneNode(false);      // a canvas keeps its context type for life
+    canvas.replaceWith(replacement);
+    view = new SoftwareView(replacement);
+    window.__app.view = view;
+    ok = await view.init();
+    bindPlanetDrag();
+    if (!ok || view.failed) {
+      replacement.insertAdjacentHTML('afterend',
+        '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#8e9ab5;padding:32px;text-align:center">' +
+        'This browser could not draw the planet at all.<br>The simulation and charts still work.</div>');
+      return;
+    }
+    document.body.classList.add('software-render');
+    updateRendererButton();
+    toast('WebGL2 unavailable — drawing the planet in software. The simulation is unaffected.', 7000);
   }
   view.setQuality(qualityFromUrl());
   updateQualityButton();
+  updateRendererButton();
   view.wantTextures = graphicsFromUrl();
   const btn = $('#btn-gfx');
+  if (view.software) {
+    // The generated albedo maps are a GPU path; software rendering is always
+    // procedural, so the choice would be meaningless.
+    btn.disabled = true;
+    btn.title = 'Surface maps need WebGL2';
+    updateQualityButton();
+    return;
+  }
   btn.disabled = true;
   btn.title = 'Loading surface maps…';
   const loaded = await view.loadTextures();

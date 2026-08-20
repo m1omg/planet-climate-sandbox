@@ -17,6 +17,7 @@ node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # optional: compiles them on a real GL driver
 node tools/rendercheck.mjs      # CPU port of the shader; renders a PPM to look at
 node tools/bakecheck.mjs [512]  # does the baked cube map reproduce the terrain?
+node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
 ```
 
 Run these before pushing. `node --check` parses files as CommonJS and will happily
@@ -109,6 +110,26 @@ planet, and `tools/glslcheck.mjs` fails the build if that budget creeps back up.
 Detail is **High on every device** by default. `?quality=low` — or the ◆ button — halves the bake,
 drops relief shading and the second cloud layer, and renders at 0.6 scale, for hardware that still
 struggles. The simulation is identical in both: rendering and physics share nothing but a clock.
+
+### When there is no WebGL2
+
+WebGL2 is refused more often than it should be, especially on Linux: a graphics
+blocklist entry or a failed driver probe is enough, with nothing wrong with the
+card. Firefox reports this as `FEATURE_FAILURE_GLXTEST_FAILED`, meaning its
+start-up GPU probe crashed before it ever asked the driver anything.
+
+Rather than explain that to people, the planet falls back to a **software
+renderer** (`src/render/software.js`), drawing on the CPU via Canvas2D. It is
+not a placeholder: it shares its shading with `src/render/cpushade.js`, the same
+module the verification tools use, so it is the same terrain, biomes, ice,
+lighting and atmosphere as the GPU path — evaluated in JavaScript at a lower
+resolution and refresh rate, and scaled up. Roughly 15 ms a frame at 190 px,
+with a half-second one-time terrain bake. The generated albedo maps are the one
+thing it cannot do; software rendering is always procedural.
+
+The **GPU / CPU button** in the view controls shows which renderer is running and
+switches between them, so the software path can be tried on a machine that does
+not need it. `?renderer=software` does the same, and the choice is remembered.
 
 ### Coming back to the tab
 
