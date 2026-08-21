@@ -20,36 +20,58 @@ float gnoise(vec3 x){
 }
 float vnoise(vec3 x){ return gnoise(x); }
 
-// Written to compile as GLSL ES 1.00 as well as 3.00, so the same source can
-// serve the WebGL1 fallback: a constant loop bound, no conditional break, and
-// the octave count applied as a weight instead. It costs a few wasted octaves,
-// which is free -- this runs during the one-off bake, not per frame.
+// Fixed octave counts, one function each.
+//
+// These used to be a single loop with a constant bound of 8 and the unwanted
+// octaves multiplied by zero -- "a few wasted octaves, which is free, this runs
+// during the one-off bake". It was not free: it was 1.84x the work, and the
+// bake is the most expensive thing this program does. A literal loop bound also
+// keeps GLSL ES 1.00 happy, which is why the zero-weight trick existed.
+//
+// The zeroed terms contributed nothing to either the sum or its normaliser, so
+// these are bit-for-bit what the old code produced.
 mat3 octaveRot(){ return mat3(0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64); }
 
-float fbm(vec3 p, int oct){
-  float a = 0.5, s = 0.0, n = 0.0;
-  mat3 R = octaveRot();
-  for(int i=0;i<8;i++){
-    float m = i < oct ? 1.0 : 0.0;
-    s += a*gnoise(p)*m; n += a*m; p = R*p*2.02; a *= 0.5;
-  }
+float fbm3(vec3 p){
+  float a = 0.5, s = 0.0, n = 0.0; mat3 R = octaveRot();
+  for(int i=0;i<3;i++){ s += a*gnoise(p); n += a; p = R*p*2.02; a *= 0.5; }
+  return s/max(n, 1e-6);
+}
+float fbm4(vec3 p){
+  float a = 0.5, s = 0.0, n = 0.0; mat3 R = octaveRot();
+  for(int i=0;i<4;i++){ s += a*gnoise(p); n += a; p = R*p*2.02; a *= 0.5; }
+  return s/max(n, 1e-6);
+}
+float fbm5(vec3 p){
+  float a = 0.5, s = 0.0, n = 0.0; mat3 R = octaveRot();
+  for(int i=0;i<5;i++){ s += a*gnoise(p); n += a; p = R*p*2.02; a *= 0.5; }
+  return s/max(n, 1e-6);
+}
+float fbm6(vec3 p){
+  float a = 0.5, s = 0.0, n = 0.0; mat3 R = octaveRot();
+  for(int i=0;i<6;i++){ s += a*gnoise(p); n += a; p = R*p*2.02; a *= 0.5; }
   return s/max(n, 1e-6);
 }
 // Ridged multifractal: mountain chains rather than blobs.
-float ridged(vec3 p, int oct){
-  float a=0.5, s=0.0, n=0.0, prev=1.0;
-  mat3 R = octaveRot();
-  for(int i=0;i<8;i++){
-    float m = i < oct ? 1.0 : 0.0;
+float ridged4(vec3 p){
+  float a=0.5, s=0.0, n=0.0, prev=1.0; mat3 R = octaveRot();
+  for(int i=0;i<4;i++){
     float r = 1.0-abs(gnoise(p)*2.0-1.0); r *= r;
-    s += a*r*prev*m; prev = mix(prev, r, m); n += a*m; p = R*p*2.11; a *= 0.5;
+    s += a*r*prev; prev = r; n += a; p = R*p*2.11; a *= 0.5;
+  }
+  return s/max(n, 1e-6);
+}
+float ridged5(vec3 p){
+  float a=0.5, s=0.0, n=0.0, prev=1.0; mat3 R = octaveRot();
+  for(int i=0;i<5;i++){
+    float r = 1.0-abs(gnoise(p)*2.0-1.0); r *= r;
+    s += a*r*prev; prev = r; n += a; p = R*p*2.11; a *= 0.5;
   }
   return s/max(n, 1e-6);
 }
 // Continents: fbm whose input is displaced by more fbm, giving coastlines with
 // bays, peninsulas and inland seas instead of round islands.
-float warpedFbm(vec3 p, int oct){
-  vec3 q = vec3(fbm(p, 4), fbm(p + vec3(5.2,1.3,2.7), 4), fbm(p + vec3(1.7,9.2,3.1), 4));
-  return fbm(p + 2.4*(q - 0.5), oct);
+float warpedFbm6(vec3 p){
+  vec3 q = vec3(fbm4(p), fbm4(p + vec3(5.2,1.3,2.7)), fbm4(p + vec3(1.7,9.2,3.1)));
+  return fbm6(p + 2.4*(q - 0.5));
 }
-

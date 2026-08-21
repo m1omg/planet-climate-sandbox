@@ -37,7 +37,7 @@ vec3 fieldPoint(vec3 sp){ return sp*2.2 + vec3(uSeed*13.7, uSeed*7.1, uSeed*3.3)
 // The same combination the runtime shader used to compute inline.
 float heightAt(vec3 sp){
   vec3 q = fieldPoint(sp);
-  return warpedFbm(q, 6) + 0.10*(fbm(q*5.0, 5) - 0.5) + 0.03*(fbm(q*17.0, 3) - 0.5);
+  return warpedFbm6(q) + 0.10*(fbm5(q*5.0) - 0.5) + 0.03*(fbm3(q*17.0) - 0.5);
 }
 
 // 16-bit fixed point across two 8-bit channels.
@@ -52,11 +52,11 @@ void main(){
   vec3 sp = faceDir(uFace, uv);
   vec3 q = fieldPoint(sp);
 
-  float cont   = warpedFbm(q, 6);
-  float detail = fbm(q*5.0, 5);
-  float fine   = fbm(q*17.0, 3);
-  float mount  = ridged(q*3.4, 5);
-  float floe   = fbm(q*9.0, 4);
+  float cont   = warpedFbm6(q);
+  float detail = fbm5(q*5.0);
+  float fine   = fbm3(q*17.0);
+  float mount  = ridged5(q*3.4);
+  float floe   = fbm4(q*9.0);
 
   // Surface normal, finite-differenced from the height field along two tangent
   // directions. Doing it here is what removes the four extra surface

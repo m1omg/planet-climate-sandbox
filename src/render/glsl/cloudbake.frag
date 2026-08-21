@@ -27,9 +27,9 @@ void main(){
   vec3 cq = faceDir(uFace, gl_FragCoord.xy / uSize);
   // Three scales: the broad deck, the churn within it, and the warp field that
   // shears one against the other at runtime.
-  float lo   = fbm(cq*2.4, 5);
-  float hi   = fbm(cq*6.5, 4);
-  float warp = fbm(cq*1.7, 3);
-  float band = fbm(cq*3.0, 3);
+  float lo   = fbm5(cq*2.4);
+  float hi   = fbm4(cq*6.5);
+  float warp = fbm3(cq*1.7);
+  float band = fbm3(cq*3.0);
   oCloud = vec4(lo, hi, warp, band);
 }

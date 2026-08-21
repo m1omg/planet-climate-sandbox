@@ -165,7 +165,7 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   if(melt > 0.001){
     // The lava crust is the one field still evaluated live: it only ever runs
     // on a molten planet, and only inside this branch.
-    float crack = ridged(sp*13.2 + vec3(uSeed*13.7, uSeed*7.1, uSeed*3.3), 4);
+    float crack = ridged4(sp*13.2 + vec3(uSeed*13.7, uSeed*7.1, uSeed*3.3));
     float glow  = smoothstep(0.45,0.95,crack);
     vec3 crust  = mix(vec3(0.05,0.04,0.04), vec3(0.14,0.11,0.10), detail);
     vec3 magma  = mix(vec3(0.85,0.16,0.02), vec3(1.0,0.85,0.35), pow(glow,2.0));

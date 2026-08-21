@@ -45,26 +45,126 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
   else console.log('\x1b[32mPASS\x1b[0m  every function planet.frag calls is defined');
 }
 
-// --- per-pixel noise budget --------------------------------------------------
+// --- noise cost budgets ------------------------------------------------------
 // The runtime shader once evaluated 269 gradient-noise fields per pixel, every
 // frame, which is why a tablet managed one frame a second. Those fields are
-// time-invariant and now come from baked cube maps. Guard the budget.
+// time-invariant and now come from baked cube maps.
+//
+// The bake then became the expensive thing, and its cost was invisible in two
+// ways at once. fbm and ridged ran a fixed eight octaves and multiplied the
+// unwanted ones by zero, so a call written fbm(p, 3) cost eight; and the four
+// gradient samples in bake.frag each re-evaluated the whole height field, which
+// no call-site count would show. Together that made one 512² draw call 1.6
+// billion sin() calls, which Android's GPU watchdog treats as a hung driver and
+// resets -- the freeze and the black screen on a perfectly capable tablet.
+//
+// So resolve the real cost through the call graph rather than counting call
+// sites, and budget it.
 {
-  const src = decomment(read('planet.frag'));
-  const OCT = { warpedFbm: (o) => 3 * 4 + o, fbm: (o) => o, ridged: (o) => o, gnoise: () => 1 };
-  let total = 0;
-  const detail = [];
-  for (const m of src.matchAll(/\b(warpedFbm|fbm|ridged)\s*\([^;]*?,\s*(\d+)\s*\)/g)) {
-    total += OCT[m[1]](Number(m[2]));
-    detail.push(`${m[1]}(${m[2]})`);
+  const KEYWORDS = new Set(['return', 'if', 'else', 'for', 'while', 'do', 'discard',
+    'const', 'in', 'out', 'inout', 'uniform', 'varying', 'attribute', 'precision',
+    'layout', 'struct', 'break', 'continue', 'case', 'switch', 'else']);
+
+  const matchBrace = (src, from) => {          // from points at the opening '{'
+    let depth = 0, i = from;
+    do { if (src[i] === '{') depth++; else if (src[i] === '}') depth--; i++; }
+    while (depth > 0 && i < src.length);
+    return src.slice(from + 1, i - 1);
+  };
+
+  const extractDefs = (src, into = new Map()) => {
+    for (const m of src.matchAll(/(\w+)\s+(\w+)\s*\([^)]*\)\s*\{/g)) {
+      if (KEYWORDS.has(m[1]) || KEYWORDS.has(m[2])) continue;
+      into.set(m[2], matchBrace(src, m.index + m[0].length - 1));
+    }
+    return into;
+  };
+
+  // Cost of a body in gradient-noise evaluations, with loop bodies multiplied by
+  // their iteration count and every call resolved to the work it really does.
+  const bodyCost = (body, resolve) => {
+    let rest = body, cost = 0;
+    for (;;) {
+      const m = /for\s*\(\s*\w+\s+\w+\s*=\s*0\s*;\s*\w+\s*<\s*(\d+)\s*;[^)]*\)\s*\{/.exec(rest);
+      if (!m) break;
+      const inner = matchBrace(rest, m.index + m[0].length - 1);
+      cost += Number(m[1]) * bodyCost(inner, resolve);
+      rest = rest.slice(0, m.index) + ' ' + rest.slice(m.index + m[0].length + inner.length + 1);
+    }
+    for (const c of rest.matchAll(/\b(\w+)\s*\(/g)) cost += resolve(c[1]);
+    return cost;
+  };
+
+  const costerFor = (extraSrc = '') => {
+    const defs = extractDefs(decomment(noise));
+    if (extraSrc) extractDefs(decomment(extraSrc), defs);
+    const cache = new Map([['gnoise', 1], ['vnoise', 1]]);
+    const busy = new Set();
+    const resolve = (name) => {
+      if (cache.has(name)) return cache.get(name);
+      if (busy.has(name) || !defs.has(name)) return 0;   // builtin, or recursion
+      busy.add(name);
+      const v = bodyCost(defs.get(name), resolve);
+      busy.delete(name); cache.set(name, v);
+      return v;
+    };
+    return { resolve, defs, cache };
+  };
+
+  // A function called fbm4 must run four octaves, not eight with four thrown
+  // away. That regression cost 1.84x for nothing, and nothing was watching.
+  {
+    const { resolve, cache } = costerFor();
+    for (const n of ['fbm3', 'fbm4', 'fbm5', 'fbm6', 'ridged4', 'ridged5', 'warpedFbm6']) resolve(n);
+    const wrong = [];
+    for (const [name, cost] of cache) {
+      const m = /^(fbm|ridged|warpedFbm)(\d+)$/.exec(name);
+      if (!m) continue;
+      const n = Number(m[2]);
+      const expect = m[1] === 'warpedFbm' ? 3 * (cache.get('fbm4') ?? 4) + n : n;
+      if (cost !== expect) wrong.push(`${name} costs ${cost}, should be ${expect}`);
+    }
+    if (wrong.length) {
+      failed++;
+      console.log(`\x1b[31mFAIL\x1b[0m  noise functions do more work than their names say: ${wrong.join('; ')}`);
+    } else {
+      const shown = [...cache].filter(([k]) => /\d$/.test(k)).map(([k, v]) => `${k}=${v}`).join(' ');
+      console.log(`\x1b[32mPASS\x1b[0m  noise octave counts honest  (${shown})`);
+    }
   }
-  for (const m of src.matchAll(/\bgnoise\s*\(/g)) { total += 1; detail.push('gnoise'); }
-  const BUDGET = 12;
-  if (total > BUDGET) {
+
+  const costOfShader = (file) => {
+    const src = read(file);
+    const { resolve, defs } = costerFor(src);
+    return defs.has('main') ? bodyCost(defs.get('main'), resolve) : 0;
+  };
+
+  let bakeCost = 0;
+  for (const [file, budget] of [['planet.frag', 12], ['bake.frag', 160], ['cloudbake.frag', 24]]) {
+    const total = costOfShader(file);
+    if (file === 'bake.frag') bakeCost = total;
+    const what = file === 'planet.frag' ? 'per pixel, every frame' : 'per texel, once per bake';
+    if (total > budget || total === 0) {
+      failed++;
+      console.log(`\x1b[31mFAIL\x1b[0m  ${file}: ${total} noise evaluations ${what} (budget ${budget})`);
+    } else {
+      console.log(`\x1b[32mPASS\x1b[0m  ${file}: ${total}/${budget} noise evaluations ${what}`);
+    }
+  }
+
+  // And the number that actually killed Android: how much one draw call asks
+  // for. TILE_TEXELS bounds the strip; the bake shader's cost sets the rest.
+  const planetJs = readFileSync(join(root, 'src/render/planet.js'), 'utf8');
+  const tile = Number(/TILE_TEXELS\s*=\s*(\d+)/.exec(planetJs)?.[1] ?? 0);
+  const SIN_PER_NOISE = 24;      // 8 hash3 per gnoise, 3 sin apiece
+  const CAP = 120e6;             // sin() calls in one submit
+  const worst = tile * bakeCost * SIN_PER_NOISE;
+  if (!tile || worst > CAP) {
     failed++;
-    console.log(`\x1b[31mFAIL\x1b[0m  planet.frag evaluates ${total} noise fields per pixel (budget ${BUDGET}): ${detail.join(', ')}`);
+    console.log(`\x1b[31mFAIL\x1b[0m  worst bake submit is ${(worst / 1e6).toFixed(0)}M sin() calls (cap ${CAP / 1e6}M) — Android resets the GPU on submits this long`);
   } else {
-    console.log(`\x1b[32mPASS\x1b[0m  per-pixel noise budget: ${total}/${BUDGET}  (${detail.join(', ') || 'none'})`);
+    console.log(`\x1b[32mPASS\x1b[0m  worst bake submit ${(worst / 1e6).toFixed(0)}M/${CAP / 1e6}M sin()  ` +
+      `(${tile} texels a strip; a whole 512² face would be ${(512 * 512 * bakeCost * SIN_PER_NOISE / 1e9).toFixed(1)}G)`);
   }
 }
 

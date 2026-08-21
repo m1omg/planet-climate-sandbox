@@ -16,6 +16,14 @@ export const QUALITY = {
   low:  { bake: 256, cloudBake: 128, relief: 0, cloudDetail: 0, scale: 0.6, maxDpr: 1 },
 };
 
+// How much of a cube-map face one draw call may cover. The bake shader costs
+// ~139 noise evaluations a texel -- about 3300 sin() calls -- so a whole 512x512
+// face in one submit is 1.6 billion of them, which Android's GPU watchdog treats
+// as a hung driver and resets. Sixteen thousand texels is a few milliseconds on
+// any GPU that can run this at all.
+const TILE_TEXELS = 16384;
+const TILES_PER_FRAME = 4;
+
 // Cube-map faces in GL order; the bake shader's faceDir() matches this exactly.
 const FACES = [
   'TEXTURE_CUBE_MAP_POSITIVE_X', 'TEXTURE_CUBE_MAP_NEGATIVE_X',
@@ -129,6 +137,7 @@ export class PlanetView {
     this.textures = null;
     this.bandTex = null;
     this.terrainCube = this.detailCube = this.cloudCube = null;
+    this.bakeJob = null;
   }
 
   // Called when the tab comes back to the foreground. Some drivers quietly
@@ -241,12 +250,22 @@ export class PlanetView {
     // says nothing about whether this driver will render to a cube-map face, and
     // returning true from a renderer that cannot draw is what let a broken
     // WebGL1 path masquerade as a working one.
-    this.bakeSurface(1.0);
+    // Prove the whole path works before claiming success: compiling and linking
+    // says nothing about whether this driver will render to a cube-map face,
+    // and returning true from a renderer that cannot draw is what let a broken
+    // WebGL1 path masquerade as a working one.
+    //
+    // One strip is enough to find that out. This used to run a complete bake
+    // here and then throw it away by clearing bakedSeed, so start-up paid for
+    // the most expensive operation in the program twice over.
+    this.beginBake(1.0);
+    this.advanceBake(1);
     if (this.bakeFailed) {
       this.ready = false;
       this.fail(this.diagnostic || 'the trial bake did not draw');
       return false;
     }
+    this.bakeJob = null;
     this.bakeFails = 0;
     this.bakedSeed = null;      // force a real bake with the true seed
     return true;
@@ -284,7 +303,24 @@ export class PlanetView {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   }
 
-  bakeSurface(seed) {
+  // ---------------------------------------------------------------------
+  // The bake, in bounded pieces.
+  //
+  // This used to be twelve draw calls, each covering a whole 512x512 cube face
+  // at 139 noise evaluations a texel -- about 1.6 BILLION sin() calls in a
+  // single submit, six times over. A desktop driver just takes the second or
+  // two. Android does not: the driver's hang detector resets the GPU on a
+  // submit that long, which loses the context, which makes this code rebake,
+  // which hangs it again. That was the freeze and the black screen on a tablet
+  // whose GPU is perfectly capable of drawing the planet at sixty frames a
+  // second -- it was never the drawing, it was one enormous piece of work.
+  //
+  // So no submit is unbounded any more. Rasterisation is clipped to a strip
+  // with the scissor box, a fixed number of texels at a time, a few strips per
+  // frame. The total work is identical; it simply arrives in pieces the driver
+  // will accept.
+  // ---------------------------------------------------------------------
+  beginBake(seed) {
     if (this.failed || !this.ready) return;
     const gl = this.gl;
     if (gl.isContextLost()) { this.contextLost = true; this.forgetGpuState(); return; }
@@ -301,75 +337,124 @@ export class PlanetView {
     const q = QUALITY[this.quality] ?? QUALITY.high;
 
     if (this.terrainCube) { gl.deleteTexture(this.terrainCube); gl.deleteTexture(this.detailCube); }
+    if (this.cloudCube) gl.deleteTexture(this.cloudCube);
     this.terrainCube = this.makeCube(q.bake);
     this.detailCube = this.makeCube(q.bake);
+    this.cloudCube = this.makeCube(q.cloudBake);
 
-    const fb = this.bakeFb ?? (this.bakeFb = gl.createFramebuffer());
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.useProgram(this.bakeProg);
-    this.bindQuad();
-    gl.viewport(0, 0, q.bake, q.bake);
-    gl.uniform2f(gl.getUniformLocation(this.bakeProg, 'uSize'), q.bake, q.bake);
-    gl.uniform1f(gl.getUniformLocation(this.bakeProg, 'uSeed'), seed);
-    const faceLoc = gl.getUniformLocation(this.bakeProg, 'uFace');
-    if (this.gl1) {
-      // No multiple render targets: run the same shader twice, once per output.
-      const targetLoc = gl.getUniformLocation(this.bakeProg, 'uTarget');
-      for (const [t, tex] of [[0, this.terrainCube], [1, this.detailCube]]) {
-        gl.uniform1i(targetLoc, t);
-        for (let i = 0; i < 6; i++) {
-          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], tex, 0);
-          gl.uniform1i(faceLoc, i);
-          gl.drawArrays(gl.TRIANGLES, 0, 3);
+    // Strip heights chosen so every draw covers the same number of texels
+    // whatever the bake resolution, because it is the size of one submit that
+    // the driver's watchdog cares about, not the size of the map.
+    const tiles = [];
+    const strip = (size) => Math.max(1, Math.min(size, Math.floor(TILE_TEXELS / size)));
+    const sT = strip(q.bake), sC = strip(q.cloudBake);
+    // WebGL1 has no multiple render targets, so the terrain shader runs twice,
+    // once per output; WebGL2 writes both attachments in one pass.
+    const targets = this.gl1 ? [0, 1] : [-1];
+    for (const t of targets) {
+      for (let f = 0; f < 6; f++) {
+        for (let y = 0; y < q.bake; y += sT) {
+          tiles.push({ cloud: 0, target: t, face: f, y, h: Math.min(sT, q.bake - y) });
         }
       }
-    } else {
-      // Two attachments written in one pass; WebGL2 core, no extension needed.
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-      for (let i = 0; i < 6; i++) {
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], this.terrainCube, 0);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl[FACES[i]], this.detailCube, 0);
-        gl.uniform1i(faceLoc, i);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    for (let f = 0; f < 6; f++) {
+      for (let y = 0; y < q.cloudBake; y += sC) {
+        tiles.push({ cloud: 1, target: -1, face: f, y, h: Math.min(sC, q.cloudBake - y) });
       }
     }
+    this.bakeJob = { seed, quality: this.quality, size: q.bake, cloudSize: q.cloudBake, tiles, i: 0 };
+    if (!this.bakeFb) this.bakeFb = gl.createFramebuffer();
+  }
 
-    // Clouds, in their own single-attachment pass.
-    if (this.cloudCube) gl.deleteTexture(this.cloudCube);
-    this.cloudCube = this.makeCube(q.cloudBake);
-    gl.useProgram(this.cloudProg);
-    gl.viewport(0, 0, q.cloudBake, q.cloudBake);
-    gl.uniform2f(gl.getUniformLocation(this.cloudProg, 'uSize'), q.cloudBake, q.cloudBake);
-    const cFaceLoc = gl.getUniformLocation(this.cloudProg, 'uFace');
-    if (!this.gl1) {
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
+  // Run a few strips. Returns true while there is still work to do.
+  advanceBake(maxTiles = TILES_PER_FRAME) {
+    const job = this.bakeJob;
+    if (!job) return false;
+    const gl = this.gl;
+    if (gl.isContextLost()) {
+      this.bakeJob = null;
+      this.contextLost = true;
+      this.lostSince = this.lostSince ?? performance.now();
+      this.forgetGpuState();
+      return false;
     }
-    for (let i = 0; i < 6; i++) {
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[i]], this.cloudCube, 0);
-      gl.uniform1i(cFaceLoc, i);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.bakeFb);
+    gl.enable(gl.SCISSOR_TEST);
+    let ran = 0;
+    while (job.i < job.tiles.length && ran < maxTiles) {
+      const t = job.tiles[job.i];
+      const prog = t.cloud ? this.cloudProg : this.bakeProg;
+      const size = t.cloud ? job.cloudSize : job.size;
+      gl.useProgram(prog);
+      this.bindQuad();
+      gl.viewport(0, 0, size, size);
+      gl.scissor(0, t.y, size, t.h);
+      gl.uniform2f(gl.getUniformLocation(prog, 'uSize'), size, size);
+      gl.uniform1f(gl.getUniformLocation(prog, 'uSeed'), job.seed);
+      gl.uniform1i(gl.getUniformLocation(prog, 'uFace'), t.face);
+      if (t.cloud) {
+        if (!this.gl1) {
+          gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
+        }
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[t.face]], this.cloudCube, 0);
+      } else if (this.gl1) {
+        gl.uniform1i(gl.getUniformLocation(prog, 'uTarget'), t.target);
+        const tex = t.target === 0 ? this.terrainCube : this.detailCube;
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[t.face]], tex, 0);
+      } else {
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl[FACES[t.face]], this.terrainCube, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl[FACES[t.face]], this.detailCube, 0);
+      }
+
+      // A framebuffer that is not complete draws nothing, silently, and
+      // rendering to a cube-map face is exactly where a driver objects. Check
+      // on the first strip, before spending the rest of the budget on it.
+      if (job.i === 0) {
+        const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+        if (status !== gl.FRAMEBUFFER_COMPLETE) {
+          gl.disable(gl.SCISSOR_TEST);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          this.bakeJob = null;
+          this.diagnostic = `${this.api} cannot render to a cube map (framebuffer status 0x${status.toString(16)})`;
+          this.noteBakeFailure();
+          return false;
+        }
+      }
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      job.i++; ran++;
     }
+    gl.disable(gl.SCISSOR_TEST);
 
-    // A framebuffer that is not complete draws nothing, silently, and rendering
-    // to a cube-map face is exactly where a driver is most likely to object.
-    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    const done = job.i >= job.tiles.length;
+    if (done) {
+      const err = gl.getError();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.bakeJob = null;
+      if (err !== gl.NO_ERROR) {
+        this.diagnostic = `${this.api} bake raised GL error 0x${err.toString(16)}`;
+        this.noteBakeFailure();
+        return false;
+      }
+      this.bakeFailed = false;
+      this.bakeFails = 0;
+      this.bakedSeed = job.seed;
+      this.bakedQuality = job.quality;
+      return false;
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    if (status !== gl.FRAMEBUFFER_COMPLETE) {
-      this.diagnostic = `${this.api} cannot render to a cube map (framebuffer status 0x${status.toString(16)})`;
-      this.noteBakeFailure();
-      return;
-    }
-    const err = gl.getError();
-    if (err !== gl.NO_ERROR) {
-      this.diagnostic = `${this.api} bake raised GL error 0x${err.toString(16)}`;
-      this.noteBakeFailure();
-      return;
-    }
-    this.bakeFailed = false;
-    this.bakeFails = 0;
-    this.bakedSeed = seed;
-    this.bakedQuality = this.quality;
+    return true;
+  }
+
+  // Begin and finish in one go. Used by the start-up capability check and by
+  // the test harnesses; the frame loop always goes through advanceBake.
+  bakeSurface(seed) {
+    this.beginBake(seed);
+    let guard = 0;
+    while (this.advanceBake(Infinity) && guard++ < 10000);
   }
 
   noteBakeFailure() {
@@ -393,7 +478,7 @@ export class PlanetView {
   setQuality(name) {
     if (!QUALITY[name] || name === this.quality) return;
     this.quality = name;
-    if (this.ready && this.bakedSeed !== null) this.bakeSurface(this.bakedSeed);
+    if (this.ready && this.bakedSeed !== null) this.beginBake(this.bakedSeed);
   }
 
   // Load the generated albedo maps. Failure is not fatal: the planet simply
@@ -502,7 +587,10 @@ export class PlanetView {
     if (gl.isContextLost()) { this.forgetGpuState(); return; }
     // The terrain is a function of the seed alone, so it is rebaked only when
     // the world itself changes -- never for a climate or slider change.
-    if (this.bakedSeed !== state.seed) this.bakeSurface(state.seed);
+    // Start a bake when the world changes, and push a few strips along every
+    // frame until it is done. Never all of it at once -- see beginBake.
+    if (!this.bakeJob && this.bakedSeed !== state.seed) this.beginBake(state.seed);
+    if (this.bakeJob) this.advanceBake();
     // Binding a null cube map is legal and samples black, so drawing without the
     // baked fields produces a convincingly rendered black planet rather than an
     // error. Skip the frame instead; the last good one stays on screen.

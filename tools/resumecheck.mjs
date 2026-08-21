@@ -22,7 +22,8 @@ function check(name, ok, detail = '') {
 // --------------------------------------------------------------------------
 // A GL context we can break on demand.
 // --------------------------------------------------------------------------
-const stats = { fetches: 0, decodes: 0, textures: 0, draws: 0 };
+const stats = { fetches: 0, decodes: 0, textures: 0, draws: 0,
+                bakeDraws: 0, unscissored: 0, worstDraw: 0 };
 
 function makeGl(opts = {}) {
   const g = {
@@ -45,12 +46,28 @@ function makeGl(opts = {}) {
     isTexture: (t) => !!(t && t.live && !g.lost),
     bindTexture() {}, activeTexture() {}, texImage2D() {}, texParameteri() {},
     pixelStorei() {}, generateMipmap() {},
-    createFramebuffer: () => ({}), bindFramebuffer() {}, framebufferTexture2D() {},
-    drawBuffers() {}, useProgram() {}, viewport() {},
+    createFramebuffer: () => ({}), framebufferTexture2D() {},
+    bindFramebuffer: (target, fb) => { g.offscreen = !!fb; },
+    drawBuffers() {}, useProgram() {},
+    // Enough state tracking to measure how much a single draw call rasterises,
+    // which is the thing that was killing Android drivers.
+    viewport: (x, y, w, h) => { g.vp = w * h; },
+    scissor: (x, y, w, h) => { g.sc = w * h; },
+    enable: (c) => { if (c === 0x0C11) g.scissorOn = true; },
+    disable: (c) => { if (c === 0x0C11) g.scissorOn = false; },
     checkFramebufferStatus: () => (g.fbComplete ? 0x8CD5 : 0x8CD6),
     getError: () => 0,
-    drawArrays: () => { stats.draws++; },
-    FRAMEBUFFER_COMPLETE: 0x8CD5, NO_ERROR: 0,
+    drawArrays: () => {
+      stats.draws++;
+      // Only draws into an offscreen framebuffer are bake work. The one that
+      // paints the canvas covers the whole canvas by definition, and costs a
+      // few texture fetches a pixel rather than hundreds of noise evaluations.
+      if (!g.offscreen) return;
+      stats.bakeDraws++;
+      if (!g.scissorOn) { stats.unscissored++; return; }
+      stats.worstDraw = Math.max(stats.worstDraw, g.sc ?? 0);
+    },
+    FRAMEBUFFER_COMPLETE: 0x8CD5, NO_ERROR: 0, SCISSOR_TEST: 0x0C11,
   };
   // Everything else the renderer touches is a GL enum or a no-op.
   return new Proxy(g, {
@@ -217,20 +234,46 @@ const state = { time: 0, seed: 7 };
 }
 
 // --------------------------------------------------------------------------
-// 6. Resuming does not rebake unless the cube maps really went away. The
-//    unconditional rebake was eighteen full-resolution noise passes on every
-//    app switch, at the exact moment the compositor was busiest.
+// 6. The bake arrives in bounded pieces, and resuming does not redo it unless
+//    the cube maps really went away.
+//
+//    The bake shader costs ~139 noise evaluations a texel. A whole 512x512 cube
+//    face in one draw call is 1.6 billion sin() calls, and six of those back to
+//    back is a multi-second GPU submit. Android's driver treats that as a hang
+//    and resets the GPU, which loses the context, which makes this code rebake
+//    -- the freeze and the black screen on a tablet that renders the finished
+//    planet at sixty frames a second. Desktop drivers and Firefox just take the
+//    stall, which is why it only showed up in Chromium on Android.
 // --------------------------------------------------------------------------
 {
   const gl = makeGl();
   const view = new PlanetView(makeCanvas(gl));
   await view.init();
+
+  stats.worstDraw = 0; stats.bakeDraws = 0; stats.unscissored = 0;
   view.render(world, state, 1 / 60);
-  check('The first frame bakes', view.bakedSeed === state.seed);
+  check('One frame does not try to bake the whole planet',
+    view.bakedSeed !== state.seed && !!view.bakeJob,
+    `${view.bakeJob ? view.bakeJob.i : 0} of ${view.bakeJob ? view.bakeJob.tiles.length : 0} strips done`);
+
+  let frames = 1;
+  while (view.bakeJob && frames < 500) { view.render(world, state, 1 / 60); frames++; }
+  check('...but a bake does finish, over a handful of frames',
+    view.bakedSeed === state.seed && frames > 1 && frames < 200, `${frames} frames`);
+
+  // The number that actually matters: how much one submit asks the driver for.
+  const CAP = 20000;
+  check('No single bake draw rasterises an unbounded number of texels',
+    stats.worstDraw > 0 && stats.worstDraw <= CAP,
+    `worst of ${stats.bakeDraws} bake draws covered ${stats.worstDraw} texels; ` +
+    `a whole 512² face is ${512 * 512}, which at ~139 noise evaluations a texel ` +
+    `is ${(512 * 512 * 139 * 24 / 1e9).toFixed(1)} billion sin() calls in one submit`);
+  check('...and every bake draw is scissored, so none can grow back',
+    stats.unscissored === 0, `${stats.unscissored} unscissored`);
 
   view.refreshAfterResume();
   check('Resuming with the surface intact does not rebake',
-    view.bakedSeed === state.seed);
+    view.bakedSeed === state.seed && !view.bakeJob);
   check('...but it does ask for a fresh drawing buffer', view.forceResize === true);
 
   gl.deleteTexture(view.detailCube);        // as a driver evicting it would
