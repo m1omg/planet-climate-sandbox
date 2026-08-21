@@ -1,3 +1,12 @@
+// Earth as it is now: 427 ppm CO2 (NOAA global mean, 2025) and a global mean
+// surface temperature of 15.15 C. Pre-industrial is the same world at 280 ppm
+// and 1.45 K cooler -- the warming the WMO reports for 2023 against the
+// 1850-1900 baseline.
+//
+// Starting modern Earth below its own equilibrium is deliberate and physical:
+// the ocean has not finished responding to the CO2 already in the air, so a
+// modern Earth left to run warms a few tenths of a degree further with nothing
+// added. That is the committed warming.
 export const EARTH = {
   mass: 1.0,
   landFraction: 0.30,
@@ -9,15 +18,18 @@ export const EARTH = {
   tidallyLocked: false,
   obliquity: 23.5,
   n2Bar: 0.99,   // N2 + O2 + Ar: the whole non-condensable inventory, ~1013 mbar
-  co2Bar: 280e-6,
-  ch4Bar: 1.8e-6,
+  co2Bar: 427e-6,
+  ch4Bar: 1.9e-6,
   outgassing: 1.0,
   landAlbedo: 0.25,
-  startT: 288,
+  startT: 288.3,
 };
+
+export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
 
 export const PRESETS = {
   earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH } },
+  preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL } },
   venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
   mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
   earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, insolation: 0.77, landFraction: 0.1, co2Bar: 0.02, ch4Bar: 1e-3, startT: 290 } },

@@ -40,7 +40,10 @@ export function partitionWater(w) {
   // Split the surface water by where it physically sits. Basins hold what the
   // hypsometry says they hold; the rest is what has piled up on land as ice.
   const landShare = clamp(1 - dg.flooded, 0, 1);
-  const glaciated = clamp(frozenShare * moisture, 0, 1);
+  // The sheet extent is a state variable with its own multi-millennial memory
+  // (see update()); the mass of ice has to follow the same extent the albedo
+  // sees, or the two disagree about how glaciated the planet is.
+  const glaciated = clamp(dg.glaciatedShare ?? frozenShare * moisture, 0, 1);
 
   // Land ice is capped by the water actually available above the basins, so a
   // world cannot glaciate ground it has no water to glaciate.
@@ -139,7 +142,20 @@ export function escapeRates(w) {
 // Carbonate-silicate thermostat, CO2 condensation, and escape, all advanced on
 // the same accelerated clock as the temperatures.
 // ---------------------------------------------------------------------------
+// Ice sheets take tens of thousands of years to grow and rather less to melt:
+// ~15 kyr and ~5 kyr e-folding here, which is the asymmetry that gives the
+// glacial cycles their sawtooth -- a long ragged descent, an abrupt termination
+// (Abe-Ouchi et al. 2013). Advanced once per step, unlike update(), which may
+// run several times.
+function advanceIceSheet(w, dtYears) {
+  const target = w.diag.iceSheetTarget ?? 0;
+  if (w.iceSheet == null) { w.iceSheet = target; return; }
+  const tau = target > w.iceSheet ? 15000 : 5000;
+  w.iceSheet += (target - w.iceSheet) * (1 - Math.exp(-Math.max(dtYears, 0) / tau));
+}
+
 export function stepVolatiles(w, dtYears) {
+  advanceIceSheet(w, dtYears);
   const p = w.params, dg = w.diag, d = dg.d;
   const esc = escapeRates(w);
 

@@ -36,20 +36,45 @@ A **zonal energy-balance model** over 18 equal-area latitude bands. For a fast r
 coordinate is `sin(latitude)`; for a tidally locked world it becomes `cos(angle from substellar
 point)`, so the same solver produces eyeball and lobster states.
 
-Longwave radiation uses a semi-grey two-stream form, `OLR = σT⁴ / (1 + ¾τ)`, with band optical
-depths `τ = k · p_gas^m · p_total^0.3`. The coefficients were fitted simultaneously to three
-independent anchors:
+Longwave radiation uses a semi-grey two-stream form, `OLR = σT⁴ / (1 + ¾τ)`, broadened by the
+background air as `p_total^0.3`. Water and methane contribute power-law optical depths; **CO₂ is
+logarithmic**:
 
-| Anchor | Target | Model |
+```
+τ_CO2 = 0.0514 · ln(1 + p / 5.46 µbar)  +  0.674 · p^0.87
+```
+
+The first term is the 15 µm band, whose core is already saturated at Earth-like amounts, so more CO₂
+only widens the wings — the classic `5.35 ln(C/C₀)`, about 3.9 W/m² per doubling. The second is the
+pressure-induced continuum: negligible below a few percent of a bar, and what carries Venus's 92 bar.
+
+A single power law fitted Venus and got Earth badly wrong: it made **every doubling hit harder than
+the last** (7.9, 9.6, 11.4 W/m²…), which tipped the planet into a runaway at 1.8% CO₂ — an outcome
+the literature places a hundred times further out.
+
+`tools/calibrate.mjs` checks twenty anchors against published values in one run:
+
+| Anchor | Literature | Model |
 |---|---|---|
-| Modern Earth | 240 W/m² at 288 K, 280 ppm CO₂ | 233 W/m² |
-| Venus | ~160 W/m² at 737 K, 92 bar CO₂ | 161 W/m² |
-| Simpson–Nakajima runaway limit | 282 W/m² (Goldblatt 2013) | **283 W/m² at 351 K** |
+| CO₂ forcing per doubling | 3.71 (Myhre 1998) / 3.93 (AR6) | **3.85 W/m²**, and flat across doublings |
+| Pre-industrial Earth | 13.7 °C (1850–1900) | **13.9 °C** |
+| Warming at 427 ppm | 1.45 K observed (transient) | **2.0 K** equilibrium |
+| Equilibrium climate sensitivity | 3.0 K, likely 2.5–4.0 (AR6) | **3.1 K** |
+| Glacial CO₂, 190 ppm | part of the LGM's −6.1 K (Tierney 2020) | **−3.5 K** |
+| Planetary albedo | 0.293 (CERES) | 0.293 |
+| Cloud cover | ~0.67 (ISCCP/MODIS) | 0.669 |
+| Cloud feedback | +0.42 W/m²/K (AR6) | +0.06 |
+| Equator-to-pole range | ~40 K annual mean | 36 K |
+| Modern Earth OLR | ~239 W/m² at 288 K | 239 |
+| Venus | 737 K, ~161 W/m² at 92 bar | 733 K, 161 |
+| Mars | ~215 K | 212 K |
+| Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **287 W/m² at 351 K** |
+| Runaway from CO₂ alone | stable (Ramirez 2014); ~100× (Goldblatt 2013) | needs >500× pre-industrial |
 
-The third is not imposed anywhere in the code. Hold water at saturation and the fitted expression
-*peaks* at 283 W/m² — so the runaway greenhouse falls out of the radiative physics rather than being
-triggered by a threshold test. Push absorbed sunlight past that peak and no equilibrium exists at
-any temperature.
+The runaway limit is not imposed anywhere in the code. Hold water at saturation and the fitted
+expression *peaks* at 287 W/m² — so the runaway greenhouse falls out of the radiative physics rather
+than being triggered by a threshold test. Push absorbed sunlight past that peak and no equilibrium
+exists at any temperature.
 
 ### Why transitions take the time they really take
 
@@ -215,6 +240,17 @@ cannot exist at any temperature: ice sublimates straight to vapour and standing 
 is why Mars, whose surface sits at about 610 Pa, has frost and ice but no lakes, and the model
 enforces it rather than letting a warm thin world keep an ocean it could not physically hold.
 
+At the other end there is the **critical point**: 647 K and 220.6 bar. Above it the liquid and the
+vapour stop being distinguishable — one supercritical fluid, no surface, no boiling, and no ocean at
+all. A planet in a full wet runaway is past it, so it shows 100% land under a steam envelope rather
+than a hot sea.
+
+Between the two, an ocean at low pressure does not sit there placidly. Near the triple point water
+boils and freezes at once: evaporation is violent, and the latent heat it carries away cools what is
+left until it freezes. Mars is the worked example — even where the pressure and temperature briefly
+allow liquid, it either boils off or freezes solid, because nothing supplies the heat that
+evaporative cooling removes.
+
 CO₂ freezing onto the poles is likewise **not** a one-way door. The frost point rises with pressure
 while a thickening atmosphere warms the poles faster, so a collapsed atmosphere can be brought back:
 in this model a cold world driven from 0.01 to 1.7 bar of CO₂ goes from 180 K to 717 K without
@@ -237,7 +273,16 @@ flooded = (1 − L) · (W_basin / 1 EO)^0.25
 one does not. The exponent is calibrated against real hypsometry: halving Earth's ocean drops the
 flooded area only ~15%, because the abyssal plains are nearly flat.
 
-Ice is tracked as two reservoirs. Sea ice seals the ocean off and shuts down evaporation; land ice
+Ice is tracked as two reservoirs with **different thresholds and different timescales**. Sea ice
+forms as soon as the water freezes. An ice sheet needs somewhere cold enough for snow to survive the
+summer — roughly −8 °C in the annual mean, which is why Siberia is frozen most of the year and
+carries no sheet while Greenland does — and it needs tens of thousands of years to build:
+**τ ≈ 15 kyr growing, 5 kyr melting**. That asymmetry is the sawtooth of the glacial cycles, a long
+ragged descent and an abrupt termination (Abe-Ouchi et al. 2013).
+
+Painting a sheet on the instant a continent dropped below freezing gave the albedo a hair trigger:
+the model sat one part in a thousand of cloud albedo away from a runaway snowball, with an implied
+climate sensitivity of 5–7 K. Sea ice seals the ocean off and shuts down evaporation; land ice
 needs snowfall to exist at all. In a hard snowball the water cycle collapses, so the continents end
 up frosted but largely unglaciated — as on the real Snowball Earth, and in the Antarctic Dry Valleys
 today — which makes such a planet darker, and easier to escape, than one buried in ice.
@@ -246,7 +291,7 @@ today — which makes such a planet darker, and easier to escape, than one burie
 
 Stated plainly, because a model that hides these is less useful:
 
-* **Snowball deglaciation happens at a few mbar of CO₂**, against the 0.1–0.3 bar of published
+* **Snowball deglaciation happens at 5–10 mbar of CO₂**, against the 0.1–0.3 bar of published
   snowball studies. The semi-grey CO₂ opacity is stronger at intermediate pressure than line-by-line
   models. The *behaviour* — hysteresis, multi-Myr duration, unopposed CO₂ build-up — is right; the
   threshold sits low.
@@ -255,7 +300,17 @@ Stated plainly, because a model that hides these is less useful:
   is that divided by the planet's net flux. The model reproduces the *scaling* — slow near the
   threshold, fast when pushed well past it — and the published figure corresponds to a forcing
   excess of only a few W/m².
-* Earth needs ~330 ppm rather than 280 ppm to reach 288 K once the thermostat has converged.
+* **Glacial cooling is −3.5 K at 190 ppm**, where the LGM was −6.1 K (Tierney et al. 2020). The
+  difference is what the model is not given: the Laurentide and Fennoscandian ice sheets were a
+  *prescribed* forcing set by ice dynamics and sea level, not something a zonal energy balance grows
+  on its own, and glacial dust is absent too.
+* **The cloud feedback is +0.06 W/m²/K**, against AR6's +0.42 (+0.12 to +0.72). Cloud *amount* is now
+  nearly flat where Earth sits, which is right; what is missing is the shift in cloud altitude and
+  optical depth that supplies most of the observed positive feedback.
+* **A CO₂-only runaway needs more than 500× pre-industrial**, where Goldblatt et al. (2013) suggest
+  ~100× may suffice. Ramirez et al. (2014) find Earth stable against CO₂ alone even under extreme
+  assumptions, so the model sits on the conservative side of a genuine disagreement in the
+  literature rather than outside it.
 
 Two deviations recorded in earlier versions have since been **fixed** rather than excused: the
 runaway inner edge now falls at 1.3–1.4 S⊕ (literature 1.2–1.4), and a dune world stays habitable

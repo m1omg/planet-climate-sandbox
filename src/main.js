@@ -10,7 +10,7 @@ import { PlanetView } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
-import { SLIDERS, parseValue, toSlider, fromSlider } from './game/controls.js';
+import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -204,7 +204,7 @@ function buildSliders() {
     els[d.key] = { input, out, def: d, editing: false, dragging: false };
 
     input.addEventListener('input', () => {
-      const v = fromSlider(d, +input.value);
+      const v = snapToDisplay(d, fromSlider(d, +input.value));
       params[d.key] = v;
       if (!els[d.key].editing) out.value = d.fmt(v);
       input.style.setProperty('--fill', `${input.value / 10}%`);

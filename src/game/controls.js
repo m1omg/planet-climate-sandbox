@@ -17,8 +17,17 @@ export const SLIDERS = [
     fmt: (v) => `${v.toFixed(2)} M⊕`, units: { 'm': 1, 'me': 1, 'm⊕': 1, 'earth': 1, 'earths': 1 },
     note: 'Sets radius, gravity and how well the world holds its air.' },
   { g: 'body', key: 'water', label: 'Water inventory', min: 0, max: 12, log: true, zero: true, live: 'water',
-    fmt: (v) => v <= 0 ? 'none' : `${v.toFixed(v < 1 ? 3 : 2)} EO`,
+    // Below a thousandth of an ocean, "0.000 EO" says nothing; a global layer a
+    // few centimetres deep says a great deal. Metres, then, at the dry end.
+    // The precision thresholds sit just below the round numbers on purpose: a
+    // boundary at exactly 1 would round 0.9999 up to "1.00" while still
+    // choosing the three-decimal branch, and the label would then disagree with
+    // itself.
+    fmt: (v) => v <= 0 ? 'none'
+      : v < 1e-3 ? `${(v * 2750).toFixed(v * 2750 < 0.9995 ? 3 : 2)} m`
+      : `${v.toFixed(v < 0.09995 ? 4 : v < 0.9995 ? 3 : 2)} EO`,
     units: { eo: 1, ocean: 1, oceans: 1, m: 1 / 2750, km: 1000 / 2750 },
+    unitFor: (v) => (v > 0 && v < 1e-3 ? 'm' : 'EO'),
     note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water.' },
   { g: 'body', key: 'landFraction', label: 'Basin geometry', min: 0, max: 1,
     fmt: (v) => `${(v * 100).toFixed(0)} % land`, units: { '%': 0.01 }, unitFor: () => '%',
@@ -36,9 +45,11 @@ export const SLIDERS = [
     parseScale: 3.4e-6,
     note: 'Drives hydrogen escape. Young suns and red dwarfs are 100–1000× more active.' },
   { g: 'star', key: 'rotationHours', label: 'Rotation period', min: 2, max: 20000, log: true,
-    fmt: (v) => v < 48 ? `${v.toFixed(1)} h` : `${(v / 24).toFixed(0)} d`,
+    // 47.95, not 48: at 47.98 the hours branch rounds the label to "48.0 h",
+    // which the days branch would have written as "2 d".
+    fmt: (v) => v < 47.95 ? `${v.toFixed(1)} h` : `${(v / 24).toFixed(0)} d`,
     units: { h: 1, hr: 1, hrs: 1, hour: 1, hours: 1, d: 24, day: 24, days: 24, yr: 8766, year: 8766 },
-    unitFor: (v) => (v < 48 ? 'h' : 'd'),
+    unitFor: (v) => (v < 47.95 ? 'h' : 'd'),
     note: 'Slow rotators grow a thick reflective cloud deck and move heat much more freely.' },
   { g: 'star', key: 'obliquity', label: 'Axial tilt', min: 0, max: 90, step: 0.5,
     fmt: (v) => `${v.toFixed(1)}°`, units: { '°': 1, deg: 1, degrees: 1 } },
@@ -55,7 +66,10 @@ export const SLIDERS = [
   { g: 'surface', key: 'landAlbedo', label: 'Ground brightness', min: 0.05, max: 0.6,
     fmt: (v) => v.toFixed(2), note: 'Dark basalt 0.10 · rock 0.25 · bright sand 0.40' },
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
-    fmt: (v) => v <= 0 ? 'dead' : `${v.toFixed(2)}× Earth`,
+    // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",
+    // which reads as dead when it is not.
+    fmt: (v) => v <= 0 ? 'dead'
+      : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× Earth`,
     units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
     note: 'The only CO₂ source. Your one lever inside a snowball.' },
 ];
@@ -78,15 +92,45 @@ export function parseValue(d, raw, current) {
   }
   if (!unit) return n;
   if (d.units) {
-    for (const [u, mult] of Object.entries(d.units)) {
-      const key = u.replace(/[⊕\s]/g, '').toLowerCase();
-      if (key === unit) return n * mult;
+    // Longest first, so "mbar" is never read as "m"; and a known unit at the
+    // *start* counts, because several labels carry a trailing word -- "30 %
+    // land", "1.0× Sun". Without that, the panel could not read back its own
+    // labels: "1 % land" came out as 1, not 0.01.
+    const keys = Object.entries(d.units)
+      .map(([u, mult]) => [u.replace(/[⊕\s]/g, '').toLowerCase(), mult])
+      .sort((a, b) => b[0].length - a[0].length);
+    for (const [key, mult] of keys) {
+      if (key && (unit === key || unit.startsWith(key))) return n * mult;
     }
   }
   return d.parseScale ? n * d.parseScale : n;   // unknown suffix: take the number
 }
 
 // log/linear mapping for the range inputs (0..1000 internally)
+// The slider has a thousand positions. Spread over a logarithmic range that is
+// about half a percent a step, so the position nearest "1.200 S⊕" really sets
+// 1.1975 -- the label rounds it back to what you asked for, but the planet gets
+// the other number. Dragging to a value and typing the same value therefore
+// produced two different climates, and half a percent of starlight is about a
+// watt per square metre, which close to a threshold decides the outcome.
+//
+// Snapping the slider to the precision its own label shows makes the number you
+// read the number in use, so both routes agree exactly.
+export function snapToDisplay(d, v) {
+  if (!isFinite(v) || v === 0) return v;
+  // Definitionally: land where typing the label would land. If the label cannot
+  // be read back -- or reads back as something quite different, which would mean
+  // the unit was misparsed -- leave the value alone rather than corrupt it.
+  const label = d.fmt(v);
+  const typed = parseValue(d, label, v);
+  if (typed === null || !isFinite(typed)) return v;
+  // Accept only if the snap leaves the label unchanged. That is the invariant
+  // worth having -- what you read is what is set -- and it rejects the case
+  // where the label's unit came back misread, which would move the value by
+  // orders of magnitude rather than by a rounding.
+  return d.fmt(typed) === label ? typed : v;
+}
+
 export function toSlider(d, v) {
   if (d.log) {
     if (d.zero && v <= 0) return 0;

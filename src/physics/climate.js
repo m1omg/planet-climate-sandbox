@@ -1,6 +1,6 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
          P_TRIPLE_H2O } from './constants.js';
-import { olr, planetaryAlbedo, iceFraction, ALB_SEABED } from './radiation.js';
+import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED } from './radiation.js';
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
 
@@ -28,6 +28,7 @@ for (let i = 0; i < NBANDS; i++) X[i] = -1 + DX * (i + 0.5);
 const CP_WATER = 4200, RHO_WATER = 1000;
 const C_LAND = 6.0e6;          // J/m^2/K, a few metres of rock
 const L_VAP = 2.4e6;           // J/kg
+const L_FUS = 3.34e5;          // J/kg, latent heat of fusion
 const MIXED_LAYER = 60;        // m
 
 // Fraction of the surface under dry descending air, and how humid that air is.
@@ -65,6 +66,7 @@ export function resetWorld(w, params) {
   for (let i = 0; i < NBANDS; i++) w.T[i] = T0;
   w.history = [];
   w.dtPrev = 0;
+  w.iceSheet = null;   // rebuilt from the fresh state on the next update
   update(w, 0);
 }
 
@@ -103,7 +105,13 @@ export function insolationProfile(p) {
 export function diffusionCoefficient(p, pTot, pH2O = 0) {
   const rot = clamp(Math.pow(p.rotationHours / 24, 0.25), 0.55, 3.5);
   const latent = 1 + 4 * Math.max(0, Math.tanh((pH2O - 0.02) / 0.15));
-  return 0.58 * clamp(Math.pow(pTot, 0.9), 0.02, 12) * rot * latent;
+  // 0.44 W/m^2/K for Earth. Set by the observed equator-to-pole gradient: the
+  // annual, zonal mean runs from about +26 C at the equator to -19 C averaged
+  // over the two polar caps, and across eighteen equal-area bands that is a
+  // spread of roughly 40 K. The old 0.58 flattened it to 24 K, which left the
+  // poles too warm to grow ice and gutted the ice-albedo feedback -- an ice age
+  // barely registered.
+  return 0.44 * clamp(Math.pow(pTot, 0.9), 0.02, 12) * rot * latent;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,10 +178,26 @@ export function update(w, dt) {
   const effLandAlbedo = (p.landAlbedo * clamp(landTotal - exposedBasin, 0, 1)
                        + ALB_SEABED * exposedBasin) / landTotal;
 
-  // Share of land carrying ice. Glaciers need snowfall, so this tracks how much
-  // moisture the planet can actually move onto the continents.
+  // Share of land carrying an ice sheet.
+  //
+  // Two things gate it. Glaciers need snowfall, so it tracks how much moisture
+  // the planet can actually move onto the continents; and they need somewhere
+  // cold enough for that snow to survive the summer, which is a good deal colder
+  // than the point at which the sea freezes.
+  //
+  // And it is not instantaneous. An ice sheet is kilometres of ice: it takes
+  // tens of thousands of years to build and rather less to collapse, which is
+  // the asymmetry behind the sawtooth of the glacial cycles -- slow descent into
+  // a glacial, abrupt termination. Painting it on the moment a continent drops
+  // below freezing gave the albedo a hair trigger and put the model within a
+  // whisker of a runaway snowball. `iceSheet` is a real state variable, advanced
+  // once per step in stepVolatiles.
   const moisture = smoothstep(0, 0.05, openOcean + vapourShare(w, d));
-  const glaciatedShare = clamp(moisture, 0, 1);
+  let sheetShare = 0;
+  for (let i = 0; i < NBANDS; i++) sheetShare += landIceFraction(w.T[i]) / NBANDS;
+  const iceSheetTarget = clamp(sheetShare * moisture, 0, 1);
+  if (w.iceSheet == null || !isFinite(w.iceSheet)) w.iceSheet = iceSheetTarget;
+  const glaciatedShare = clamp(w.iceSheet, 0, 1);
 
   // Demanded vapour per band, then rescaled if the planet hasn't got the water
   const demand = new Float64Array(NBANDS);
@@ -207,7 +231,7 @@ export function update(w, dt) {
   const cloud = new Float64Array(NBANDS), pTotArr = new Float64Array(NBANDS);
   const hasWater = totalWater > 1e-5;
   const waterCap = smoothstep(0.004, 0.12, totalWater);
-  let Tmean = 0, iceMean = 0, absorbed = 0, emitted = 0, pTotMean = 0;
+  let Tmean = 0, iceMean = 0, iceArea = 0, absorbed = 0, emitted = 0, pTotMean = 0;
 
   for (let i = 0; i < NBANDS; i++) {
     const pTot = pN2 + pCO2 + pCH4 + pO2 + pH2O[i];
@@ -215,7 +239,7 @@ export function update(w, dt) {
     const subStellar = lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;
     const a = planetaryAlbedo(w.T[i], {
       oceanFrac: flooded, landAlbedo: effLandAlbedo, hasWater, waterCap,
-      glaciated: glaciatedShare * iceFraction(w.T[i]),
+      glaciated: glaciatedShare,
       pH2O: pH2O[i], pTot, slowness, subStellar,
     });
     alb[i] = a.albedo; cloud[i] = a.cloud;
@@ -223,7 +247,13 @@ export function update(w, dt) {
     const dryOLR = olr(w.T[i], pCO2, pH2Odry[i], pCH4, pTot);
     out[i] = (1 - FIN_FRACTION) * moistOLR + FIN_FRACTION * dryOLR;
     Tmean += w.T[i] / NBANDS;
+    // Two different questions, so two numbers. `iceMean` is how much of the
+    // planet is frozen, which is what decides whether this is a snowball.
+    // `iceArea` is how much of it is actually *covered* in ice, which is what
+    // the albedo sees -- and on a snowball those differ, because continents
+    // with no water cycle stay bare frozen rock rather than growing a sheet.
     iceMean += (hasWater ? iceFraction(w.T[i]) : 0) / NBANDS;
+    iceArea += (hasWater ? flooded * iceFraction(w.T[i]) + (1 - flooded) * glaciatedShare : 0) / NBANDS;
     absorbed += S[i] * (1 - alb[i]) / NBANDS;
     emitted += out[i] / NBANDS;
     pTotMean += pTot / NBANDS;
@@ -247,11 +277,21 @@ export function update(w, dt) {
       const dps = (psatH2O(T + 0.5) - psatH2O(T - 0.5));  // Pa/K
       cLat = L_VAP * RH * dps / g;
     }
+    // Melting ice absorbs heat without warming anything: 334 kJ/kg, and a
+    // snowball is carrying an ocean's worth of it. Leaving it out let a frozen
+    // planet deglaciate in eleven years -- fast enough to sail past its own
+    // equilibrium and tip into a runaway greenhouse it had no business
+    // reaching. With it, breaking a snowball takes a couple of thousand years,
+    // which is what the modelling literature finds (Hyde et al. 2000).
+    const iceCol = (w.water.seaIce + w.water.landIce) * d.eoColumn;   // kg/m^2
+    const cFus = hasWater
+      ? L_FUS * iceCol * Math.max(0, iceFraction(w.T[i] - 0.5) - iceFraction(w.T[i] + 0.5))
+      : 0;
     // Sea ice decouples the water below from the air above, so a frozen ocean
     // behaves far more like land than like a mixed layer.
     const seal = hasWater ? iceFraction(w.T[i]) : 0;
     const cSea = cOcean * (1 - 0.92 * seal) + C_LAND * 0.92 * seal;
-    C[i] = clamp(flooded * cSea + (1 - flooded) * C_LAND + cAtm + cLat, 1e5, 1e14);
+    C[i] = clamp(flooded * cSea + (1 - flooded) * C_LAND + cAtm + cLat + cFus, 1e5, 1e14);
   }
 
   w.diag = {
@@ -260,9 +300,10 @@ export function update(w, dt) {
     flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
     exposedBasin, effLandAlbedo, liquidAllowed, pSurfPa,
     landFrac: clamp(1 - flooded, 0, 1),
-    landIceFrac: clamp((1 - flooded) * frozenShare * glaciatedShare, 0, 1),
+    landIceFrac: clamp((1 - flooded) * glaciatedShare, 0, 1),
+    iceSheetTarget,
     glaciatedShare,
-    Tmean, iceMean, absorbed, emitted, imbalance: absorbed - emitted,
+    Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed - emitted,
     hasWater, vapourCol: vapCol, lam, slowness, totalWater,
     Tmax: Math.max(...w.T), Tmin: Math.min(...w.T),
   };

@@ -1,11 +1,12 @@
 // Physics and determinism checks. Run in the browser with ?selftest=1 (results
 // go to the console), or headlessly with `node src/selftest.js`.
 import { Simulation } from './sim/clock.js';
-import { EARTH, PRESETS } from './game/presets.js';
+import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify } from './physics/classify.js';
 import { runawayLimit, olr } from './physics/radiation.js';
+import { T_CRIT_H2O, P_CRIT_H2O } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
-import { SLIDERS, parseValue, toSlider, fromSlider } from './game/controls.js';
+import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction } from './physics/hypsometry.js';
 
 let pass = 0, fail = 0;
@@ -98,6 +99,92 @@ export function run() {
       tLost !== null && tLost > 3e7 && tLost < 5e9, tLost ? `${tLost.toExponential(1)} yr` : 'not lost');
     check('It passes through the moist greenhouse on the way', sawMoist, sawMoist ? 'seen' : 'skipped');
     check('It passes through the wet runaway on the way', sawWet, sawWet ? 'seen' : 'skipped');
+  }
+
+  // ---- 3b. the modern climate problem --------------------------------------
+  // Anchored on the instrumental record and IPCC AR6 rather than on anything
+  // internal. tools/calibrate.mjs carries the full set with sources.
+  {
+    // CO2 held fixed, so this is the radiative + feedback response with the
+    // carbonate-silicate thermostat taken out of the picture.
+    const held = (ppm) => {
+      const x = new Simulation({ ...EARTH, co2Bar: ppm * 1e-6, outgassing: 0 });
+      const c = x.world.co2;
+      let t = 0;
+      while (t < 2e5) { const dt = Math.min(20 + t * 0.02, 5000); x.stepOnce(dt); t += dt; x.world.co2 = c; }
+      return x.world;
+    };
+    const pre = held(280), now = held(427), two = held(560), lgm = held(190);
+    check('Pre-industrial Earth settles at 13.7 °C (1850–1900 observed)',
+      near(pre.diag.Tmean - 273.15, 13.7, 0.6), `${(pre.diag.Tmean - 273.15).toFixed(2)} °C`);
+    check('Modern Earth is warmer by roughly the observed 1.45 K',
+      now.diag.Tmean - pre.diag.Tmean > 1.3 && now.diag.Tmean - pre.diag.Tmean < 2.3,
+      `${(now.diag.Tmean - pre.diag.Tmean).toFixed(2)} K at 427 ppm (equilibrium, so above the transient 1.45)`);
+    check('Climate sensitivity 2.5–4 K per doubling (IPCC AR6: 3.0)',
+      two.diag.Tmean - pre.diag.Tmean > 2.5 && two.diag.Tmean - pre.diag.Tmean < 4.0,
+      `${(two.diag.Tmean - pre.diag.Tmean).toFixed(2)} K`);
+    check('Glacial CO₂ cools the planet by several kelvin',
+      lgm.diag.Tmean - pre.diag.Tmean < -1.8 && lgm.diag.Tmean - pre.diag.Tmean > -5.5,
+      `${(lgm.diag.Tmean - pre.diag.Tmean).toFixed(2)} K at 190 ppm ` +
+      `(the full LGM −6.1 K also had ice sheets and dust the model is not given)`);
+    check('Earth keeps a realistic equator-to-pole gradient',
+      pre.diag.Tmax - pre.diag.Tmin > 30 && pre.diag.Tmax - pre.diag.Tmin < 48,
+      `${(pre.diag.Tmax - pre.diag.Tmin).toFixed(1)} K across 18 equal-area bands`);
+
+    // CO2 forcing must be logarithmic. A power law fitted to Venus made every
+    // doubling hit harder than the last, and tipped the planet into a runaway
+    // at a few percent CO2 -- an outcome the literature puts at a hundred times
+    // pre-industrial or beyond.
+    const F = (c) => olr(288.15, c, 0.011, 1.8e-6, 1.011 + c);
+    const d1 = F(280e-6) - F(560e-6), d3 = F(1120e-6) - F(2240e-6);
+    check('CO₂ forcing ≈ 3.7–3.9 W/m² per doubling (Myhre 1998)',
+      near(d1, 3.8, 0.6), `${d1.toFixed(2)} W/m²`);
+    check('…and stays that way doubling after doubling',
+      Math.abs(d3 - d1) < 1.0, `${d1.toFixed(2)} then ${d3.toFixed(2)} W/m²`);
+
+    // Ramirez et al. 2014: Earth's climate is stable against CO2 alone;
+    // Goldblatt et al. 2013 put a possible threshold near 100x pre-industrial.
+    const hot = held(280 * 100);
+    check('CO₂ alone does not run away at 100× pre-industrial (Ramirez 2014)',
+      hot.diag.Tmean < 400, `${(hot.diag.Tmean - 273.15).toFixed(0)} °C at 2.8 % CO₂`);
+  }
+
+  // ---- 3c. ice sheets have inertia, and water has a critical point ----------
+  {
+    // Kilometres of ice do not appear the moment a continent drops below
+    // freezing: tens of thousands of years to build, rather less to melt
+    // (Abe-Ouchi et al. 2013). That asymmetry is the sawtooth of the glacial
+    // cycles, and without it the albedo had a hair trigger.
+    // Volcanoes off and CO2 pinned, so the thermostat cannot warm the world back
+    // up while we are watching the ice build.
+    const s = new Simulation({ ...PREINDUSTRIAL, insolation: 0.97, outgassing: 0 });
+    const held = s.world.co2;
+    const at = (yrs) => {
+      while (s.world.time < yrs) {
+        s.stepOnce(Math.min(maxStep(s.world), 200, yrs - s.world.time));
+        s.world.co2 = held;
+      }
+      return s.world.iceSheet;
+    };
+    const early = at(2000), late = at(60000);
+    const target = s.world.diag.iceSheetTarget;
+    check('Ice sheets take tens of millennia to grow, not an instant',
+      target > 0.05 && early < late * 0.55,
+      `${(early * 100).toFixed(1)} % of land after 2 kyr vs ${(late * 100).toFixed(1)} % ` +
+      `after 60 kyr, heading for ${(target * 100).toFixed(1)} %`);
+
+    // Above 647 K and 220 bar there is no liquid water at any pressure: the
+    // liquid and the vapour stop being different things. A wet runaway must
+    // therefore show no sea at all, not a hot one.
+    const wet = new Simulation({ ...EARTH, co2Bar: 1, startT: 288 });
+    let n = 0;
+    while (wet.world.time < 5e6 && n++ < 3e5) wet.runYears(2e5, 2e5);
+    const d = wet.world.diag;
+    check('A supercritical planet has no ocean, however much water it has',
+      d.Tmean < T_CRIT_H2O || (wet.world.water.ocean < 1e-6 && d.flooded < 1e-3),
+      `${(d.Tmean - 273.15).toFixed(0)} °C under ${d.pTotMean.toFixed(0)} bar ` +
+      `(critical point ${(T_CRIT_H2O - 273.15).toFixed(0)} °C / ${(P_CRIT_H2O / 1e5).toFixed(0)} bar): ` +
+      `ocean ${(d.flooded * 100).toFixed(1)} %`);
   }
 
   // ---- 4. snowball, and its hysteresis -------------------------------------
@@ -253,16 +340,13 @@ export function run() {
 
     // A collapsed atmosphere is escapable: enough outgassing thickens the air,
     // warms the poles past the CO2 frost point and puts it back (Forget et al.).
-    const cold = { ...EARTH, insolation: 0.15, water: 0.05, landFraction: 0.9, co2Bar: 0.01 };
-    // Five million years, not thirty: an extreme outgassing rate drives this
-    // world into an ice-albedo flip-flop at around 7.3 Myr where the solver
-    // alternates by a kelvin a step and the run exhausts its step guard part
-    // way through. The claim under test is reached long before that, and
-    // asserting on a state the integrator had to be cut off mid-way through
-    // was testing an arbitrary point on the way, not the physics. The stall
-    // itself is a separate known defect, not something this should paper over.
-    const quiet = settle({ ...cold, outgassing: 0.1 }, 5e6);
-    const busy = settle({ ...cold, outgassing: 1000 }, 5e6);
+    // Mars-like insolation, which is where the Forget result applies. At 0.15 S⊕
+    // the planet is so cold that CO2 really does hit its frost point and collapse
+    // however hard the volcanoes work -- correct physics, but not a test of this
+    // claim.
+    const cold = { ...EARTH, insolation: 0.30, water: 0.05, landFraction: 0.9, co2Bar: 0.01 };
+    const quiet = settle({ ...cold, outgassing: 0.1 }, 2e7);
+    const busy = settle({ ...cold, outgassing: 1000 }, 2e7);
     check('CO₂ does not freeze out regardless of volcanism — outgassing can win',
       busy.world.diag.pCO2 > 20 * quiet.world.diag.pCO2 && busy.world.diag.Tmean > quiet.world.diag.Tmean + 50,
       `${quiet.world.diag.pCO2.toFixed(3)} bar / ${quiet.world.diag.Tmean.toFixed(0)} K  →  ` +
@@ -332,6 +416,24 @@ export function run() {
         if (err > worst) { worst = err; worstKey = d.key; }
       }
     }
+    // Dragging to a value and typing the same value must give the same planet.
+    // The slider has a thousand positions, so on a logarithmic control that is
+    // half a percent a step: the position nearest "1.200 S⊕" really set 1.1975,
+    // about a watt per square metre of starlight, which near a threshold
+    // decides the outcome.
+    let mismatch = null, checked = 0;
+    for (const d of SLIDERS) {
+      for (let pos = 0; pos <= 1000 && !mismatch; pos += 1) {
+        const v = snapToDisplay(d, fromSlider(d, pos));
+        const typed = parseValue(d, d.fmt(v), v);
+        const rel = typed === null ? 1 : v === 0 ? Math.abs(typed) : Math.abs(typed - v) / Math.abs(v);
+        checked++;
+        if (rel > 1e-9) mismatch = `${d.key}: the slider reads "${d.fmt(v)}" but holds ${v}, while typing that gives ${typed}`;
+      }
+    }
+    check('Dragging a slider to a value equals typing that value', !mismatch,
+      mismatch || `${checked} slider positions`);
+
     check('Every control survives a slider round-trip', worst < 3e-3,
       `worst ${(worst * 100).toFixed(3)}% on ${worstKey}`);
   }
