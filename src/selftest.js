@@ -7,7 +7,7 @@ import { runawayLimit, olr } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
-import { floodedFraction } from './physics/hypsometry.js';
+import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 
 let pass = 0, fail = 0;
 const log = [];
@@ -212,6 +212,8 @@ export function run() {
     check('…while keeping the water it started with, just not as liquid',
       w.diag.totalWater > 0.04 && w.water.ocean / w.diag.totalWater < 0.05,
       `${w.diag.totalWater.toFixed(3)} EO left, ${(w.water.ocean / w.diag.totalWater * 100).toFixed(1)}% of it liquid`);
+    check('…and no sea left on the globe, so the label matches the picture',
+      w.diag.flooded < 0.04, `${(w.diag.flooded * 100).toFixed(1)}% of the surface still flooded`);
     check('…and a sunlit face hot enough to be a desert, not an ice cap',
       st.Tsub > 320 && st.Tsub - st.Tanti > 100,
       `substellar ${(st.Tsub - 273.15).toFixed(0)} °C, antistellar ${(st.Tanti - 273.15).toFixed(0)} °C`);
@@ -223,6 +225,55 @@ export function run() {
     check('…but a world with a real ocean keeps its sunlit sea',
       classify(eyeball.world).id === 'eyeball' || classify(eyeball.world).id === 'lobster',
       `${classify(eyeball.world).name}, ${(eyeball.world.water.landIce / eyeball.world.diag.totalWater * 100).toFixed(0)}% as land ice`);
+  }
+
+  // ---- 3e. terminator habitability -----------------------------------------
+  // A habitable ring between a scorching eye and a glacial night side. It needs
+  // a land planet: water vapour is what carries heat away from the substellar
+  // point, so a wetter world evens the temperatures out and crosses the runaway
+  // limit as a whole instead of leaving a habitable band (Lobo et al. 2023).
+  {
+    const locked = (water, land) => settle({ ...EARTH, tidallyLocked: true,
+      rotationHours: 400, water, landFraction: land, insolation: 1.0,
+      n2Bar: 0.3, co2Bar: 3e-4, outgassing: 0.3, startT: 300 }, 2e7);
+
+    const land = locked(0.08, 0.9), lw = land.world, ls = classify(lw);
+    let ring = 0;
+    for (let i = 0; i < NBANDS; i++) if (lw.T[i] > 275 && lw.T[i] < 320) ring++;
+    check('A locked land planet keeps a habitable ring at the terminator',
+      ls.id === 'twilight', ls.name);
+    check('…with an eye past boiling and a night side under deep frost',
+      ls.Tsub > 340 && ls.Tanti < 265,
+      `eye ${(ls.Tsub - 273.15).toFixed(0)} °C, terminator ring ${ring} bands, night ${(ls.Tanti - 273.15).toFixed(0)} °C`);
+
+    // The paper's central claim, and the reason the state requires a land
+    // planet: give the same world an ocean and the band closes.
+    const aqua = locked(3.0, 0.0), as = classify(aqua.world);
+    check('…but the same world with an ocean is not a Twilight World',
+      as.id !== 'twilight',
+      `${as.name}; day-night contrast ${(aqua.world.diag.Tmax - aqua.world.diag.Tmin).toFixed(0)} K ` +
+      `against the land planet's ${(lw.diag.Tmax - lw.diag.Tmin).toFixed(0)} K`);
+  }
+
+  // ---- 3f. a sea has to be deep enough to be a sea --------------------------
+  // The hypsometric power law is calibrated in the middle of its range and is
+  // badly wrong at the bottom: taken literally it floods 1.6% of a planet with
+  // a millionth of an ocean, twenty centimetres deep. Since the renderer draws
+  // whatever fraction it returns as open water, a world the model itself called
+  // bone dry came out with blue seas along its terminator.
+  {
+    const ref = 2.75e6;                       // kg/m², one Earth ocean
+    const deepest = (basin) => basin / (floodedFraction(basin, 0.5, ref) * 1000);
+    check('A vanishing ocean pools rather than spreading out',
+      floodedFraction(1e-6 * ref, 0.5, ref) < 0.001,
+      `a millionth of an ocean floods ${(floodedFraction(1e-6 * ref, 0.5, ref) * 100).toFixed(3)}% of the surface`);
+    let shallowest = Infinity;
+    for (let e = 0; e >= -8; e -= 0.25) shallowest = Math.min(shallowest, deepest(Math.pow(10, e) * ref));
+    check('…and no sea is ever drawn shallower than it could physically be',
+      shallowest > MIN_SEA_DEPTH * 0.99, `thinnest sea ${shallowest.toFixed(0)} m deep`);
+    check('Earth-sized inventories are untouched by that floor',
+      near(floodedFraction(ref, 0.3, ref), 0.7, 1e-9) && near(floodedFraction(0.5 * ref, 0.3, ref), 0.7 * Math.pow(0.5, 0.25), 1e-9),
+      `1 EO floods ${(floodedFraction(ref, 0.3, ref) * 100).toFixed(1)}%`);
   }
 
   // ---- 4. snowball, and its hysteresis -------------------------------------

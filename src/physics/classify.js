@@ -14,6 +14,7 @@ export const STATES = {
   waterworld: { name: 'Waterworld',           color: '#2f8fd6', blurb: 'A global ocean with no exposed land. Silicate weathering is shut off, so there is no carbonate–silicate thermostat and the climate drifts wherever the forcing takes it.' },
   eyeball:    { name: 'Eyeball World',        color: '#5fb8e8', blurb: 'Tidally locked, with a sunlit ocean under the star and permanent ice everywhere else. The thick substellar cloud deck reflects so much light that these worlds stay habitable out to nearly twice Earth’s insolation (Yang et al. 2014).' },
   lobster:    { name: 'Lobster State',        color: '#7fd0e8', blurb: 'An eyeball whose open water has been stretched along the equator by ocean heat transport, leaving warm claws reaching around toward the night side.' },
+  twilight:   { name: 'Twilight World',          color: '#b98ad6', blurb: 'The eye is scorching, the night side is glacial, and between them a temperate ring of liquid water follows the terminator all the way round the planet. It works only because there is too little water to move the heat: a wetter world would carry enough latent heat away from the substellar point to even the temperatures out, and would then cross the runaway limit as a whole planet instead of leaving a habitable band behind (Lobo et al. 2023).' },
   trapped:    { name: 'Nightside-Trapped Desert', color: '#9aa7c9', blurb: 'On a locked world the night side is a permanent cold trap. Every drop of water has migrated there as glacier ice, leaving a bone-dry sunlit desert that cannot recover it.' },
   waterbelt:  { name: 'Waterbelt / Slushball', color: '#8fd8d0', blurb: 'Ice reaches deep into the tropics but a narrow band of open equatorial ocean survives. A genuine stable state, and a far softer landing than a hard snowball.' },
   snowball:   { name: 'Hard Snowball',        color: '#cfe8f5', blurb: 'Runaway ice–albedo feedback has frozen the planet pole to pole. Weathering stops, so volcanic CO2 accumulates unopposed for 5–50 Myr until 0.1–0.3 bar finally breaks the ice.' },
@@ -48,6 +49,11 @@ export function classify(w) {
   // a real sunlit sea, and the two were indistinguishable while the test was on
   // temperature alone -- a bone-dry 285 K desert scores warmSub = 1.
   const liquidShare = water > 1e-9 ? w.water.ocean / water : 0;
+  // Bands neither boiling nor frozen. On a locked world the band coordinate runs
+  // from the antistellar point to the substellar one, so a temperate band with
+  // extremes on both sides of it is a ring following the terminator.
+  let temperateBands = 0;
+  for (let i = 0; i < NBANDS; i++) if (w.T[i] > 275 && w.T[i] < 320) temperateBands++;
 
   let id;
   // A real collapse means a good part of the air is lying on the ground as
@@ -61,6 +67,29 @@ export function classify(w) {
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
   else if (water < 0.015) id = T > 290 ? 'baked' : 'frozen';
+  // Terminator habitability. The eye is past boiling and the night side is
+  // glacial, yet a ring in between holds liquid water -- which is possible only
+  // on a land planet, because water vapour is what carries heat away from the
+  // substellar point. Give such a world an ocean and the transport evens the
+  // temperatures out until the whole planet crosses the runaway limit together,
+  // leaving no habitable band at all (Lobo et al. 2023). The model gets this
+  // for free: diffusionCoefficient already scales transport with the vapour
+  // column, which is the same mechanism.
+  //
+  // The land-planet requirement is imposed here rather than emerging from the
+  // transport, and that is worth being straight about. In this model a locked
+  // aquaplanet at the same insolation still comes out with a 163 K day-night
+  // contrast against the land planet's 201 K -- a real difference, in the right
+  // direction, but nowhere near enough to close the habitable band. The reason
+  // is that 0.04 EO is already plenty to saturate the air over a boiling eye,
+  // so humidityScale never binds and the two atmospheres end up within a factor
+  // of 1.6 of each other in vapour. Reproducing the rest needs moisture
+  // transport and ocean circulation that a one-dimensional diffusive model does
+  // not have, and forcing it by steepening the latent term would wreck the
+  // Earth, Venus and Mars anchors. So the criterion carries the published
+  // result instead of pretending to derive it.
+  else if (lam > 0.5 && Tsub > 340 && Tanti < 265 && temperateBands >= 2
+           && liquidShare > 0.02 && water > 0.015 && dg.flooded < 0.25) id = 'twilight';
   // An eyeball needs a sunlit *sea*, not merely a sunlit spot warm enough to
   // have one. Without the liquid test this branch swallowed every dry locked
   // world with a warm day side, which is precisely the nightside-trapped state
@@ -75,8 +104,12 @@ export function classify(w) {
   }
   // The water is all still here; it is simply all on the far side, as ice, and
   // the sunlit face is a desert that cannot get it back.
+  // The flooded test is not a duplicate of the liquid one: with a large
+  // inventory, a few percent left liquid is still a real sea. A label that says
+  // bone dry while the globe shows open blue water is simply wrong, so the
+  // state has to require the sea to be gone from the picture too.
   else if (lam > 0.5 && liquidShare < 0.05 && water > 0.02
-           && dg.oceanFrac < 0.3 && Tsub > 255) id = 'trapped';
+           && dg.flooded < 0.04 && Tsub > 255) id = 'trapped';
   else if (pTot < 0.05 && T < 265 && water < 0.35) id = 'thincold';
   else if (ice > 0.93) id = water < 0.1 ? 'frozen' : 'snowball';
   else if (ice > 0.55) id = 'waterbelt';

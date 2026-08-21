@@ -83,7 +83,10 @@ export function partitionWater(w) {
   const sheetCapacity = SHEET_MAX_THICKNESS * RHO_ICE / Math.max(d.eoColumn, 1e-9)
                       * landShare * glaciated;
   const wanted = areaLimited + trap * Math.max(0, sheetCapacity - areaLimited);
-  const landIce = clamp(wanted, 0, surface * 0.98);
+  // A permanent cold trap has no return path, so it does not stop at some
+  // arbitrary residual -- it drains the basins. What is left is whatever is in
+  // transit, which is nothing on the timescales here.
+  const landIce = clamp(wanted, 0, surface * 0.999);
   const basin = Math.max(0, surface - landIce);
   const seaIce = clamp(basin * frozenShare, 0, basin);
 

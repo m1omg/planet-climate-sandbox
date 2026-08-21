@@ -273,6 +273,30 @@ flooded = (1 − L) · (W_basin / 1 EO)^0.25
 one does not. The exponent is calibrated against real hypsometry: halving Earth's ocean drops the
 flooded area only ~15%, because the abyssal plains are nearly flat.
 
+A sea also has to be deep enough to be a sea. The power law above is calibrated in the middle of its
+range, and taken to the limit it is badly wrong: it floods 1.6% of a planet with a *millionth* of an
+ocean, which works out at twenty centimetres deep. Since the renderer draws whatever fraction this
+returns as open water, a world the model itself called bone dry came out with blue seas along its
+terminator. The deepest basin has a finite area, so as the water goes the flooded fraction must fall
+in proportion to the volume rather than to its fourth root; requiring a mean depth of at least 50 m
+imposes exactly that, and it binds only below a couple of thousandths of an ocean.
+
+### Locked worlds
+
+A tidally locked planet has a permanent cold trap. Water sublimates from the day side, deposits on
+the night side as glacier ice, and does not come back — so the planet keeps its whole inventory with
+none of it liquid: a **Nightside-Trapped Desert**. What stops this happening everywhere is that ice
+sheets *flow*: past a couple of kilometres they spread under their own weight and calve back, so the
+night side can only hold so much. Trapping is therefore a small-inventory phenomenon (Menou 2013): a
+world with an ocean keeps its sunlit sea and stays an **Eyeball**, a world with a few percent of one
+loses all of it.
+
+Between the two extremes sits the **Twilight World** — terminator habitability (Lobo et al. 2023).
+The eye is past boiling and the night side is glacial, but a temperate ring of liquid water follows
+the terminator right round the planet. It needs a land planet: water vapour is what carries heat
+away from the substellar point, so a wetter world evens the temperatures out and crosses the runaway
+limit as a whole instead of leaving a habitable band behind.
+
 Ice is tracked as two reservoirs with **different thresholds and different timescales**. Sea ice
 forms as soon as the water freezes. An ice sheet needs somewhere cold enough for snow to survive the
 summer — roughly −8 °C in the annual mean, which is why Siberia is frozen most of the year and
@@ -307,6 +331,14 @@ Stated plainly, because a model that hides these is less useful:
 * **The cloud feedback is +0.06 W/m²/K**, against AR6's +0.42 (+0.12 to +0.72). Cloud *amount* is now
   nearly flat where Earth sits, which is right; what is missing is the shift in cloud altitude and
   optical depth that supplies most of the observed positive feedback.
+* **The Twilight World's land-planet requirement is imposed, not derived.** In this model a locked
+  aquaplanet still comes out with a 164 K day-night contrast against a land planet's 198 K — a real
+  difference, in the right direction, but nowhere near enough to close the habitable band on its
+  own. A few hundredths of an ocean already saturate the air over a boiling eye, so the humidity
+  limiter never binds and the two atmospheres stay within a factor of 1.6 in vapour. Closing the gap
+  needs moisture transport and ocean circulation a one-dimensional diffusive model does not have,
+  and steepening the latent-heat term to force it would wreck the Earth, Venus and Mars anchors. The
+  classifier therefore carries Lobo et al.'s result rather than pretending to derive it.
 * **A CO₂-only runaway needs more than 500× pre-industrial**, where Goldblatt et al. (2013) suggest
   ~100× may suffice. Ramirez et al. (2014) find Earth stable against CO₂ alone even under extreme
   assumptions, so the model sits on the conservative side of a genuine disagreement in the
@@ -322,7 +354,7 @@ actually is.
 
 ## References
 
-Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

@@ -27,6 +27,22 @@ import { clamp } from './constants.js';
 
 export const HYPSOMETRIC_EXPONENT = 0.25;
 
+// The exponent above is calibrated in the middle of the range, where the abyssal
+// plains are flat and a retreating sea uncovers very little. Taken to the limit
+// it is badly wrong: a pure power law says a *millionth* of an Earth ocean still
+// floods 1.6% of the planet, which works out at twenty centimetres deep. That is
+// not a sea, it is a damp patch -- and since the renderer draws whatever
+// fraction this returns as open water, a world the model itself called bone dry
+// came out with blue seas along its terminator.
+//
+// The missing physics is that the deepest basin has a finite area, so as the
+// water goes the flooded fraction has to fall in proportion to the volume rather
+// than to its fourth root. Requiring a sea to be at least this deep on average
+// imposes exactly that, and it binds only below a couple of thousandths of an
+// ocean -- Earth, a waterworld and a dune world are all untouched.
+export const MIN_SEA_DEPTH = 50;     // metres, area-averaged
+const RHO_WATER = 1000;              // kg/m^3
+
 // Fraction of the surface under water (or under sea ice, which floats and so
 // still fills its basin). `basinWater` and `refWater` are column masses in
 // kg/m², so a bigger planet spreading the same water thinner is handled by the
@@ -34,7 +50,9 @@ export const HYPSOMETRIC_EXPONENT = 0.25;
 export function floodedFraction(basinWater, landFraction, refWater) {
   const seaShare = clamp(1 - landFraction, 0, 1);
   if (seaShare <= 0 || basinWater <= 0 || refWater <= 0) return 0;
-  return clamp(seaShare * Math.pow(basinWater / refWater, HYPSOMETRIC_EXPONENT), 0, 1);
+  const broad = seaShare * Math.pow(basinWater / refWater, HYPSOMETRIC_EXPONENT);
+  const deepEnough = basinWater / (RHO_WATER * MIN_SEA_DEPTH);
+  return clamp(Math.min(broad, deepEnough), 0, 1);
 }
 
 // The inverse: how much water it would take to flood a given fraction. Used by
@@ -42,5 +60,9 @@ export function floodedFraction(basinWater, landFraction, refWater) {
 export function waterForFlooded(flooded, landFraction, refWater) {
   const seaShare = clamp(1 - landFraction, 0, 1);
   if (seaShare <= 0 || flooded <= 0) return 0;
-  return refWater * Math.pow(clamp(flooded, 0, 1) / seaShare, 1 / HYPSOMETRIC_EXPONENT);
+  const f = clamp(flooded, 0, 1);
+  // Invert whichever branch is in force: the broad power law, or the shallow
+  // limit where the sea is only as wide as its volume can keep deep.
+  const broad = refWater * Math.pow(f / seaShare, 1 / HYPSOMETRIC_EXPONENT);
+  return Math.max(broad, f * RHO_WATER * MIN_SEA_DEPTH);
 }
