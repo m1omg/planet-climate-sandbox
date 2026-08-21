@@ -1,6 +1,7 @@
 import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, steamOpacity } from '../physics/constants.js';
+import { atmosphereLook } from './atmosphere.js';
 
 // A software renderer, used when the machine cannot give us WebGL2.
 //
@@ -22,6 +23,7 @@ export class SoftwareView {
     this.wantTextures = false;
     this.useTextures = 0;
     this.quality = 'high';
+    this.realistic = false;
     this.spin = 0; this.yaw = 0; this.pitch = 0; this.spinVel = 0;
     this.spinPaused = false;
     this.bakedSeed = null;
@@ -120,11 +122,13 @@ export class SoftwareView {
     const pH2Oq = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
     const steamQ = steamOpacity(pH2Oq);
     const skyKey = [cw, ch, this.yaw.toFixed(3), this.pitch.toFixed(3),
-                    dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp].join('|');
+                    dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp, this.realistic ? 'r' : 's'].join('|');
     if (skyKey !== this.skyKey) {
       if (this.sky.width !== cw || this.sky.height !== ch) { this.sky.width = cw; this.sky.height = ch; }
       const img = this.sctx.createImageData(cw, ch);
+      const skyAtmo = atmosphereLook(world, steamQ, this.realistic);
       renderSky(img.data, cw, ch, {
+        atmoThick: skyAtmo.thickness, veil: skyAtmo.veil, haze: skyAtmo.haze,
         yaw: this.yaw, pitch: this.pitch, sun: [0.62, 0.28, 0.73],
         starColor: SoftwareView.starColor(p.starTemp),
         pTot: dg.pTotMean, steam: steamQ,
@@ -144,7 +148,9 @@ export class SoftwareView {
     const cloud = dg.cloud.reduce((a, b) => a + b, 0) / NBANDS;
     const sc = SoftwareView.starColor(p.starTemp);
 
+    const atmo = atmosphereLook(world, clamp(steamOpacity(pH2O), 0, 1), this.realistic);
     renderPlanet(this.image.data, W, H, {
+      atmoThick: atmo.thickness, veil: atmo.veil, haze: atmo.haze,
       yaw: this.yaw, pitch: this.pitch, spin: this.spin,
       sun: [0.62, 0.28, 0.73], starColor: sc,
       terrain: this.terrain, bandT, bandIce,

@@ -46,6 +46,30 @@ const discovered = loadDiscovered();
 // Rendering detail. High everywhere by default; Low is a manual choice for
 // hardware that still struggles, and it is remembered between visits.
 const QUALITY_KEY = 'planetclimate.quality.v1';
+const ATMO_KEY = 'planetclimate.atmosphere.v1';
+
+// Stylised by default. A real atmosphere is a hairline -- Earth's is 0.7% of its
+// radius -- and the whole point of the app is watching one change, so the
+// exaggerated shell is a deliberate and useful diagram. The realistic mode is
+// there for when you want to know what it would actually look like: a thin
+// bright rim, and no seeing the ground through ninety bar of gas.
+function atmosphereFromUrl() {
+  const a = (new URLSearchParams(location.search).get('atmosphere') || '').toLowerCase();
+  if (a === 'real' || a === 'realistic') return true;
+  if (a === 'stylised' || a === 'stylized') return false;
+  try { return localStorage.getItem(ATMO_KEY) === 'realistic'; } catch { return false; }
+}
+
+function updateAtmoButton() {
+  const b = $('#btn-atmo');
+  if (!b) return;
+  const real = !!view.realistic;
+  b.setAttribute('aria-pressed', String(real));
+  b.textContent = real ? '◉' : '◍';
+  b.title = real
+    ? 'Atmosphere: realistic — true scale height, and an opaque one hides the ground'
+    : 'Atmosphere: stylised — the shell is exaggerated so you can see it change';
+}
 function qualityFromUrl() {
   const q = (new URLSearchParams(location.search).get('quality') || '').toLowerCase();
   if (q === 'low') return 'low';
@@ -115,8 +139,10 @@ async function useRenderer(kind) {
     $('#btn-gfx').disabled = true;
     $('#btn-gfx').title = 'Surface maps need WebGL2';
   }
+  view.realistic = atmosphereFromUrl();
   updateRendererButton();
   updateQualityButton();
+  updateAtmoButton();
   // From here on the view is live, so a later collapse — a driver that gives up
   // mid-session — has somewhere to report to. During start-up the loop below
   // handles failure itself, which is why this is wired only after init().
@@ -607,6 +633,15 @@ function bindControls() {
     toast(next === 'low'
       ? 'Low detail — smaller render, no relief shading, simpler clouds'
       : 'High detail');
+  });
+  $('#btn-atmo').addEventListener('click', () => {
+    view.realistic = !view.realistic;
+    try { localStorage.setItem(ATMO_KEY, view.realistic ? 'realistic' : 'stylised'); } catch { }
+    if (view.software) view.skyKey = '';      // the CPU path caches its sky
+    updateAtmoButton();
+    toast(view.realistic
+      ? 'Realistic atmosphere — true scale height. Earth\u2019s air is 0.7% of its radius, and Venus shows only cloud tops.'
+      : 'Stylised atmosphere — the shell is exaggerated so you can watch it change.', 6000);
   });
   $('#btn-gfx').addEventListener('click', () => {
     if (!view.texturesLoaded) { toast('Surface maps are not available in this build'); return; }

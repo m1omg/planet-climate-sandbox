@@ -1,6 +1,7 @@
 import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, steamOpacity } from '../physics/constants.js';
+import { atmosphereLook } from './atmosphere.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
 // fragment shader. No geometry, no dependencies, and complete control over the
@@ -59,6 +60,7 @@ export class PlanetView {
     this.ready = false;
     this.texturesLoaded = false;
     this.quality = 'high';
+    this.realistic = false;   // stylised atmosphere by default
     this.bakedSeed = null;
     // Camera state belongs to the view, not to a GPU context: init() also runs
     // on restore() after a context loss, and zeroing these there threw the
@@ -228,6 +230,7 @@ export class PlanetView {
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
+      'uAtmoThick', 'uVeil', 'uHaze',
       'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
       this.u[name] = gl.getUniformLocation(this.prog, name);
     }
@@ -626,6 +629,7 @@ export class PlanetView {
     const cloudMean = dg.cloud.reduce((a, b) => a + b, 0) / NBANDS;
     const glow = clamp((dg.Tmean - 700) / 700, 0, 1);
     const sc = PlanetView.starColor(p.starTemp);
+    const atmo = atmosphereLook(world, steam, this.realistic);
 
     gl.uniform2f(this.u.uRes, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.u.uTime, state.time);
@@ -639,6 +643,9 @@ export class PlanetView {
     gl.uniform1f(this.u.uWaterCap, dg.waterCap);
     gl.uniform1f(this.u.uCloud, cloudMean);
     gl.uniform1f(this.u.uSteam, steam);
+    gl.uniform1f(this.u.uAtmoThick, atmo.thickness);
+    gl.uniform1f(this.u.uVeil, atmo.veil);
+    gl.uniform1f(this.u.uHaze, atmo.haze);
     gl.uniform1f(this.u.uPTot, dg.pTotMean);
     gl.uniform1f(this.u.uCO2, co2Frac);
     gl.uniform1f(this.u.uMagma, clamp((dg.Tmean - 1200) / 400, 0, 1));

@@ -226,8 +226,9 @@ export function renderSky(rgba, W, H, s) {
   const ro = view([0, 0, 3]);
   const sun = s.sun, sc = s.starColor;
   const minWH = Math.min(W, H);
-  const atmo = clamp(0.030 + 0.10*Math.log(1 + s.pTot) + 0.16*s.steam, 0, 0.42)
-             * smoothstep(0, 0.02, s.pTot);
+  // Thickness is worked out by the caller now, because the stylised and
+  // realistic modes need different physics -- see render/atmosphere.js.
+  const atmo = (s.atmoThick ?? 0.03) * smoothstep(0, 0.02, s.pTot);
   const tint = [mix(0.35, 1.0, s.co2), mix(0.60, 0.72, s.co2), mix(1.0, 0.34, s.co2)];
   const roDot = ro[0]*ro[0] + ro[1]*ro[1] + ro[2]*ro[2];
   const cSphere = roDot - 1;
@@ -292,8 +293,9 @@ export function renderPlanet(rgba, W, H, s) {
   const sun = s.sun, sc = s.starColor;
   const cs = Math.cos(-s.spin), ss = Math.sin(-s.spin);
   const minWH = Math.min(W, H);
-  const atmo = clamp(0.030 + 0.10*Math.log(1 + s.pTot) + 0.16*s.steam, 0, 0.42)
-             * smoothstep(0, 0.02, s.pTot);
+  // Thickness is worked out by the caller now, because the stylised and
+  // realistic modes need different physics -- see render/atmosphere.js.
+  const atmo = (s.atmoThick ?? 0.03) * smoothstep(0, 0.02, s.pTot);
   const tint = [mix(0.35, 1.0, s.co2), mix(0.60, 0.72, s.co2), mix(1.0, 0.34, s.co2)];
   const relief = s.relief !== undefined ? s.relief : 1;
   const roDot = ro[0]*ro[0] + ro[1]*ro[1] + ro[2]*ro[2];
@@ -455,6 +457,16 @@ export function renderPlanet(rgba, W, H, s) {
             const cl2 = 0.10 + 0.90*lam;
             r = mix(r, tr*cl2*sc[0], cm); g = mix(g, tg*cl2*sc[1], cm); bl = mix(bl, tb*cl2*sc[2], cm);
           }
+        }
+
+        // What the eye would really see through a deep atmosphere: Venus shows
+        // cloud tops, Titan shows haze, and neither shows the ground.
+        const veil = s.veil || 0;
+        if (veil > 0.001) {
+          const vl = 0.12 + 0.88*lam;
+          r += (tint[0]*vl - r) * veil;
+          g += (tint[1]*vl - g) * veil;
+          bl += (tint[2]*vl - bl) * veil;
         }
 
         // atmospheric limb against the surface

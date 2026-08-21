@@ -25,6 +25,9 @@ uniform float uRelief;          // 0 disables relief shading (low quality)
 uniform float uCloudDetail;     // 1 = full churn, 0 = single sample
 uniform float uCloud;       // mean cloud cover 0..1
 uniform float uSteam;       // 0..1 thick steam envelope
+uniform float uAtmoThick;   // shell thickness as a fraction of the planet radius
+uniform float uVeil;        // 0..1 how completely the air hides the ground
+uniform float uHaze;        // 0..1 organic haze, orange and opaque
 uniform float uPTot;        // bar
 uniform float uCO2;         // 0..1 how CO2-dominated the air is
 uniform float uMagma;       // 0..1 molten surface
@@ -263,16 +266,23 @@ void main(){
   float c = dot(ro, ro) - 1.0;
   float disc = b*b - c;
 
-  // Thickness follows the actual surface pressure, and goes to nothing when
-  // there is no air left: an airless rock must not wear a halo.
+  // Thickness comes from the CPU now, because the two modes need different
+  // physics: the stylised one grows with the logarithm of surface pressure so a
+  // thick atmosphere reads at a glance, while the realistic one is a real scale
+  // height and is consequently a thin bright rim -- Earth's air is 0.7% of its
+  // radius, not the 30% a diagram would draw. An airless rock wears no halo
+  // either way.
   float airAmount = smoothstep(0.0, 0.02, uPTot);
-  float atmoThick = airAmount * clamp(0.030 + 0.10*log(1.0 + uPTot) + 0.16*uSteam, 0.0, 0.42);
+  float atmoThick = airAmount * uAtmoThick;
   float Ra = 1.0 + atmoThick;
   float bA = dot(ro, rd), cA = dot(ro,ro) - Ra*Ra;
   float dA = bA*bA - cA;
 
   vec3 airTint = mix(vec3(0.35,0.60,1.0), vec3(1.0,0.72,0.34), uCO2);
   airTint = mix(airTint, vec3(1.0,0.96,0.92), uSteam);
+  // Tholin haze is orange and it is the top of the atmosphere, so it colours
+  // both the rim and whatever it hides.
+  airTint = mix(airTint, vec3(0.93,0.62,0.26), uHaze);
 
   bool hitPlanet = disc > 0.0;
 
@@ -357,6 +367,14 @@ void main(){
     cloudCol = mix(cloudCol, vec3(0.98,0.86,0.72), uCO2*0.5);
     lit *= 1.0 - 0.22*cmask*(1.0-thick);                  // shadowed edges
     lit = mix(lit, cloudCol * uStarColor * (0.10 + 0.90*lam), cmask*0.82);
+
+    // What the eye would actually see. A deep atmosphere is not a window: 92
+    // bar of CO2 scatters so hard that Venus shows only cloud tops, and Titan's
+    // haze hides its surface completely. uVeil is that opacity, and it is only
+    // applied in the realistic mode -- the stylised one keeps showing the
+    // ground, which is the whole point of looking at a climate model.
+    vec3 veilCol = mix(airTint, vec3(0.86,0.88,0.92), 1.0 - uHaze) * uStarColor;
+    lit = mix(lit, veilCol * (0.12 + 0.88*lam), uVeil);
 
     // limb darkening + atmospheric rim seen against the surface
     float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);

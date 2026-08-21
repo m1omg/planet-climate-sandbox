@@ -3,11 +3,12 @@
 import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify } from './physics/classify.js';
-import { runawayLimit, olr } from './physics/radiation.js';
+import { runawayLimit, olr, hazeOpacity, hazeShortwave } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
+import { atmosphereLook, scaleHeight } from './render/atmosphere.js';
 
 let pass = 0, fail = 0;
 const log = [];
@@ -338,6 +339,63 @@ export function run() {
       `(it was 100% by 3 bar, which is 134 °C, with the ocean barely touched)`);
     check('…and closes over completely once the ocean is airborne',
       steamOpacity(270) > 0.99, `${(steamOpacity(270) * 100).toFixed(0)}% at 270 bar`);
+  }
+
+  // ---- 3i. organic haze and the anti-greenhouse -----------------------------
+  // Ultraviolet light polymerises methane into tholins, but only in a reducing
+  // atmosphere: the haze switches on past CH4/CO2 ~ 0.1 and free oxygen
+  // destroys it (Trainer et al. 2006; Zerkle et al. 2012). It absorbs sunlight
+  // high up and is nearly transparent in the thermal infrared, so it cools the
+  // ground without trapping anything -- the anti-greenhouse (McKay, Pollack &
+  // Courtin 1991).
+  {
+    const titan = settle(PRESETS.titan.params, 2e7);
+    check('Titan settles at its observed 94 K',
+      near(titan.world.diag.Tmean, 94, 4), `${titan.world.diag.Tmean.toFixed(1)} K`);
+    check('…and it is the haze that puts it there',
+      titan.world.diag.hazeTau > 0.2 && titan.world.diag.hazeSW < 0.7,
+      `optical depth ${titan.world.diag.hazeTau.toFixed(2)}, ` +
+      `${((1 - titan.world.diag.hazeSW) * 100).toFixed(0)}% of the sunlight stopped above the ground`);
+
+    check('An oxygen-rich world grows no haze however much methane it has',
+      hazeOpacity(0.05, 1e-6, 0.2, 1) === 0);
+    check('Nor does an oxidised one: the CH₄/CO₂ switch',
+      hazeOpacity(1e-3, 0.02, 0, 1) === 0 && hazeOpacity(1e-2, 0.02, 0, 1) > 0.1,
+      `CH₄/CO₂ 0.05 → clear, 0.5 → τ ${hazeOpacity(1e-2, 0.02, 0, 1).toFixed(2)}`);
+    check('Modern Earth is far from hazy', hazeOpacity(1.9e-6, 427e-6, 0.21, 1) === 0);
+
+    // The Archean thermostat: methane warms until the haze it makes shades the
+    // ground, and then more methane *cools* the planet.
+    const arch = (ch4) => {
+      const x = new Simulation({ ...PRESETS.earlyEarth.params, ch4Bar: ch4, outgassing: 0 });
+      const c = x.world.co2;
+      let n = 0;
+      while (x.world.time < 3e5 && n++ < 3e4) { x.stepOnce(Math.min(maxStep(x.world), 2e3)); x.world.co2 = c; }
+      return x.world.diag.Tmean;
+    };
+    const warm = arch(6e-3), hazy = arch(1e-2);
+    check('Archean methane warms until its own haze shades the ground, then cools',
+      hazy < warm - 5, `${(warm - 273.15).toFixed(1)} °C at 6 mbar CH₄ → ${(hazy - 273.15).toFixed(1)} °C at 10 mbar`);
+  }
+
+  // ---- 3j. what the atmosphere actually looks like --------------------------
+  {
+    const earth = settle(EARTH, 2e6).world;
+    const stylised = atmosphereLook(earth, 0, false), real = atmosphereLook(earth, 0, true);
+    check('A real atmosphere is a hairline, and the stylised one is not',
+      real.thickness > 0.004 && real.thickness < 0.011 && stylised.thickness > 0.05,
+      `Earth: ${(real.thickness * 100).toFixed(2)}% of the radius realistically, ` +
+      `${(stylised.thickness * 100).toFixed(0)}% stylised (scale height ${(scaleHeight(earth.diag) / 1000).toFixed(1)} km)`);
+    check('…and the stylised mode never hides the ground', stylised.veil === 0);
+
+    const venus = settle(PRESETS.venus.params, 1e5).world;
+    check('Ninety bar of air shows cloud tops and nothing else',
+      atmosphereLook(venus, 0, true).veil > 0.9,
+      `Venus veiled ${(atmosphereLook(venus, 0, true).veil * 100).toFixed(0)}%`);
+    const titanW = settle(PRESETS.titan.params, 2e7).world;
+    check('…and so does a tholin haze',
+      atmosphereLook(titanW, 0, true).haze > 0.85,
+      `Titan haze opacity ${(atmosphereLook(titanW, 0, true).haze * 100).toFixed(0)}%`);
   }
 
   // ---- 4. snowball, and its hysteresis -------------------------------------

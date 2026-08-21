@@ -1,6 +1,7 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
          P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O } from './constants.js';
-import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED } from './radiation.js';
+import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED,
+         hazeOpacity, hazeShortwave } from './radiation.js';
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
 
@@ -223,6 +224,12 @@ export function update(w, dt) {
     vapCol += col / NBANDS;
   }
 
+  // Photochemical haze absorbs sunlight high up and lets the surface's own heat
+  // straight out, so it cools the ground rather than warming it. `hazeSW` is
+  // what is left of the sunlight by the time it gets down there.
+  const hazeTau = hazeOpacity(pCH4, pCO2, pO2, p.xuvFraction / 3.4e-6);
+  const hazeSW = 1 - hazeShortwave(hazeTau);
+
   const S = insolationProfile(p);
   const lam = lockFactor(p);
   const slowness = clamp(smoothstep(24, 1500, p.rotationHours), 0, 1) * 0.5 + lam * 0.5;
@@ -254,7 +261,7 @@ export function update(w, dt) {
     // with no water cycle stay bare frozen rock rather than growing a sheet.
     iceMean += (hasWater ? iceFraction(w.T[i]) : 0) / NBANDS;
     iceArea += (hasWater ? flooded * iceFraction(w.T[i]) + (1 - flooded) * glaciatedShare : 0) / NBANDS;
-    absorbed += S[i] * (1 - alb[i]) / NBANDS;
+    absorbed += S[i] * (1 - alb[i]) * hazeSW / NBANDS;
     emitted += out[i] / NBANDS;
     pTotMean += pTot / NBANDS;
   }
@@ -316,6 +323,7 @@ export function update(w, dt) {
     glaciatedShare,
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed - emitted,
     hasWater, vapourCol: vapCol, lam, slowness, totalWater, superFrac,
+    hazeTau, hazeSW,
     Tmax: Math.max(...w.T), Tmin: Math.min(...w.T),
   };
   return w.diag;
@@ -334,7 +342,7 @@ export function tendency(w) {
   }
   for (let i = 0; i < NBANDS; i++) {
     const transport = (flux[i + 1] - flux[i]) / DX;
-    dT[i] = (dg.S[i] * (1 - dg.alb[i]) - dg.olr[i] + transport) / dg.C[i];
+    dT[i] = (dg.S[i] * (1 - dg.alb[i]) * dg.hazeSW - dg.olr[i] + transport) / dg.C[i];
   }
   return { dT, D };
 }
@@ -469,7 +477,7 @@ export function radiativeDamping(w) {
       pH2O: pwx, pTot: ptx, slowness: dg.slowness,
       subStellar: dg.lam > 0.01 ? clamp(X[i], 0, 1) : 0.35,
     }).albedo;
-    const dABS = dg.S[i] * (albAt(T - h, pwLo, ptLo) - albAt(T + h, pwHi, ptHi)) / (2 * h);
+    const dABS = dg.S[i] * dg.hazeSW * (albAt(T - h, pwLo, ptLo) - albAt(T + h, pwHi, ptHi)) / (2 * h);
     k[i] = dOLR - dABS;
   }
   return k;

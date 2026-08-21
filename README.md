@@ -287,6 +287,44 @@ terminator. The deepest basin has a finite area, so as the water goes the floode
 in proportion to the volume rather than to its fourth root; requiring a mean depth of at least 50 m
 imposes exactly that, and it binds only below a couple of thousandths of an ocean.
 
+### Organic haze and the anti-greenhouse
+
+Ultraviolet light breaks methane into radicals that polymerise into a tholin smog — but only in a
+*reducing* atmosphere. The haze switches on once **CH₄/CO₂ passes about 0.1** and free oxygen
+destroys it outright (Trainer et al. 2006; Zerkle et al. 2012).
+
+What makes it an *anti*-greenhouse is where the absorption happens. The haze soaks up sunlight high
+up and is nearly transparent in the thermal infrared, so that energy goes straight back to space
+instead of reaching the ground: it cools the surface without trapping anything in return. Titan is
+the calibration point and the only world with a measured value — the model lands at **93.9 K against
+an observed 94 K**, having been 105.8 K with no haze at all.
+
+It also reproduces the Archean thermostat without being told to. Raising methane warms the planet
+until the haze it creates starts shading the ground, after which **more methane cools it**: 49.7 °C
+at 6 mbar CH₄, 36.4 °C at 10 mbar. That negative feedback is why the Archean could not run away on
+methane alone.
+
+### What the atmosphere looks like
+
+Two modes, switchable in-app, by `?atmosphere=realistic`, and remembered.
+
+**Stylised** (default) draws a shell tens of percent of the planet's radius. That is a diagram, not
+a photograph — and it is kept because it is a *useful* diagram: the point of the app is watching an
+atmosphere change, and an honest one would be invisible at every pressure the model can produce.
+
+**Realistic** draws the real thing: five scale heights, `H = RT/μg`, which is where the pressure has
+fallen by about 150× and the air stops being visible. Earth comes out at **0.69% of its radius** — a
+thin bright rim. It also stops pretending you can see through a deep atmosphere: Rayleigh scattering
+alone veils Venus **97%**, and Titan's haze **94%**, so both show only their cloud tops, as they do
+in every photograph ever taken of them.
+
+| | scale height | stylised shell | realistic shell | veil |
+|---|---|---|---|---|
+| Earth | 8.8 km | 10% | 0.69% | 4% |
+| Venus | 15.9 km | 42% | 1.31% | 97% |
+| Mars | 11.1 km | 3.1% | 1.63% | 0% |
+| Titan | 20.7 km | 12% | 4.0% | 94% |
+
 ### Locked worlds
 
 A tidally locked planet has a permanent cold trap. Water sublimates from the day side, deposits on
@@ -371,7 +409,7 @@ actually is.
 
 ## References
 
-Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

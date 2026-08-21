@@ -67,6 +67,56 @@ export function runawayLimit(pCO2, pN2) {
 }
 
 // ---------------------------------------------------------------------------
+// Organic ("tholin") haze, and the anti-greenhouse effect.
+//
+// Ultraviolet light breaks methane into radicals that polymerise into a
+// photochemical smog. It only happens in a *reducing* atmosphere: the haze
+// switches on once CH4/CO2 climbs past roughly 0.1 and is destroyed outright by
+// free oxygen (Trainer et al. 2006; Zerkle et al. 2012). That threshold is why
+// the Archean could flip in and out of a haze while the modern Earth cannot,
+// and why Titan is permanently shrouded.
+//
+// What makes it an *anti*-greenhouse is where the absorption happens. The haze
+// soaks up sunlight high in the atmosphere and is nearly transparent in the
+// thermal infrared, so the energy is radiated straight back to space from above
+// instead of reaching the ground -- it cools the surface without trapping
+// anything in return. On Titan it is worth about -9 K against a +21 K
+// greenhouse, which is why the surface sits at 94 K and not 106
+// (McKay, Pollack & Courtin 1991).
+// ---------------------------------------------------------------------------
+// HAZE_K is set by Titan and nothing else: it is the one world with a measured
+// anti-greenhouse. At 1.27 the model lands on 93.9 K against an observed 94 K,
+// having been 105.8 K without any haze at all -- so the effect is worth -11.9 K
+// here against McKay et al.'s -9 K, close enough given that their split is
+// against a different greenhouse baseline.
+//
+// Note this is the *absorbing* optical depth, not Titan's total extinction,
+// which is several times larger. Most of that is scattering, which sends much
+// of the light onward to the ground rather than removing it from the budget.
+const HAZE_K = 1.27, HAZE_M = 0.33;
+
+// Optical depth of the haze in the visible.
+export function hazeOpacity(pCH4, pCO2, pO2 = 0, xuvRel = 1) {
+  if (!(pCH4 > 0)) return 0;
+  const ratio = pCH4 / Math.max(pCO2, 1e-12);
+  const reducing = smoothstep(0.1, 0.6, ratio);
+  if (reducing <= 0) return 0;
+  // Free oxygen oxidises the precursors before they can polymerise.
+  const survives = 1 - smoothstep(1e-4, 3e-3, pO2);
+  // More ultraviolet, more photochemistry -- but with a strongly diminishing
+  // return, because the haze shields the methane underneath it.
+  const uv = Math.pow(clamp(xuvRel, 0.02, 300), 0.25);
+  return HAZE_K * reducing * survives * uv * Math.pow(pCH4, HAZE_M);
+}
+
+// The share of incoming sunlight the haze intercepts before it can reach the
+// ground. This is absorbed aloft, not reflected, so it does not belong in the
+// planet's albedo -- it is subtracted from what heats the surface.
+export function hazeShortwave(tau) {
+  return tau > 0 ? 1 - Math.exp(-tau) : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Shortwave: surface + cloud + Rayleigh, tuned to Earth's 0.30 planetary albedo
 // ---------------------------------------------------------------------------
 export const ALB_OCEAN = 0.07, ALB_ICE = 0.60, ALB_SNOW = 0.68, ALB_CLOUD = 0.310;
