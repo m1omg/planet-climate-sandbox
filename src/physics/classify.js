@@ -38,7 +38,16 @@ export function classify(w) {
   // substellar / equatorial band temperatures (top of the x grid)
   let Tsub = 0, Tanti = 0;
   for (let i = 0; i < 4; i++) { Tanti += w.T[i] / 4; Tsub += w.T[NBANDS - 1 - i] / 4; }
-  const openSub = 1 - iceFraction(Tsub);
+  // Warm enough under the star for liquid water -- which is a question about
+  // temperature, and says nothing about whether there is any water there.
+  const warmSub = 1 - iceFraction(Tsub);
+  // Where the planet's water actually is. On a locked world the night side is a
+  // permanent cold trap, so water migrates there as glacier ice and never comes
+  // back: the inventory is intact, but none of it is liquid and none of it is
+  // in a basin. That is a completely different world from an eyeball, which has
+  // a real sunlit sea, and the two were indistinguishable while the test was on
+  // temperature alone -- a bone-dry 285 K desert scores warmSub = 1.
+  const liquidShare = water > 1e-9 ? w.water.ocean / water : 0;
 
   let id;
   // A real collapse means a good part of the air is lying on the ground as
@@ -52,13 +61,22 @@ export function classify(w) {
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
   else if (water < 0.015) id = T > 290 ? 'baked' : 'frozen';
-  else if (lam > 0.5 && openSub > 0.25 && ice > 0.25) {
+  // An eyeball needs a sunlit *sea*, not merely a sunlit spot warm enough to
+  // have one. Without the liquid test this branch swallowed every dry locked
+  // world with a warm day side, which is precisely the nightside-trapped state
+  // below -- it left that reachable only in a 10 K window of substellar
+  // temperature, and then only on a planet frozen pole to pole, which is not
+  // what it describes at all. One world in nine hundred found it.
+  else if (lam > 0.5 && warmSub > 0.25 && ice > 0.25 && liquidShare > 0.05) {
     // eyeball family: how far the open water reaches around the globe
     let openBands = 0;
     for (let i = 0; i < NBANDS; i++) if (iceFraction(w.T[i]) < 0.5) openBands++;
     id = openBands / NBANDS > 0.55 ? 'lobster' : 'eyeball';
   }
-  else if (lam > 0.5 && ice > 0.9 && dg.oceanFrac < 0.25 && Tsub > 250) id = 'trapped';
+  // The water is all still here; it is simply all on the far side, as ice, and
+  // the sunlit face is a desert that cannot get it back.
+  else if (lam > 0.5 && liquidShare < 0.05 && water > 0.02
+           && dg.oceanFrac < 0.3 && Tsub > 255) id = 'trapped';
   else if (pTot < 0.05 && T < 265 && water < 0.35) id = 'thincold';
   else if (ice > 0.93) id = water < 0.1 ? 'frozen' : 'snowball';
   else if (ice > 0.55) id = 'waterbelt';

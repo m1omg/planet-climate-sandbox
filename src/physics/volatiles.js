@@ -15,6 +15,11 @@ import { NBANDS } from './climate.js';
 // and shuts down evaporation. Land ice is a separate reservoir again: it sits
 // on top of exposed ground and does not fill anything.
 // ---------------------------------------------------------------------------
+// Area-averaged thickness an ice sheet can reach before it flows and calves
+// faster than it accumulates, and the density of glacier ice.
+const SHEET_MAX_THICKNESS = 2500;   // m
+const RHO_ICE = 917;                // kg/m^3
+
 export function partitionWater(w) {
   const dg = w.diag, d = dg.d;
   const total = totalWater(w);
@@ -45,10 +50,40 @@ export function partitionWater(w) {
   // sees, or the two disagree about how glaciated the planet is.
   const glaciated = clamp(dg.glaciatedShare ?? frozenShare * moisture, 0, 1);
 
-  // Land ice is capped by the water actually available above the basins, so a
-  // world cannot glaciate ground it has no water to glaciate.
-  const landIceWanted = surface * landShare * glaciated;
-  const landIce = clamp(landIceWanted, 0, surface * 0.5);
+  // How much of the planet's water ends up on land as ice.
+  //
+  // Normally this is area-limited: thin sheets over whatever ground is cold
+  // enough, so the mass scales with the glaciated area. That is Earth, and it
+  // is Snowball Earth too -- a uniformly frozen world has nowhere colder than
+  // anywhere else, so the oceans stayed put under a kilometre of sea ice.
+  //
+  // A cold trap changes the limit entirely. On a synchronously rotating world
+  // the night side sits a hundred kelvin or more below the substellar point,
+  // permanently; water sublimates from the warm side, deposits there, and never
+  // comes back. The sheets do not spread, they thicken, so what bounds them is
+  // how much water the planet has, not how much ground (Menou 2013; Leconte et
+  // al. 2013). The trap is driven by the day-night contrast, which is itself
+  // set by how much heat the atmosphere moves -- so a thick atmosphere keeps
+  // its sunlit sea and a thin one loses it, which is the observed distinction.
+  //
+  // This used to be a flat cap of half the surface water, which made a
+  // fully trapped world unreachable by construction: every locked planet in a
+  // 900-world sweep came out at exactly 50.0% land ice.
+  // What stops the trap is that ice sheets flow. They cannot grow arbitrarily
+  // thick: past a couple of kilometres they spread under their own weight and
+  // calve back into the basins. Antarctica averages about 2.1 km and Greenland
+  // 1.7 km, and that is with a continent to sit on.
+  //
+  // So the night side can only hold what its sheets can carry, which makes
+  // trapping a small-inventory phenomenon (Menou 2013): a world with an ocean's
+  // worth of water has far more than the cold trap can store and keeps its
+  // sunlit sea, while a world with a few percent of one loses all of it.
+  const trap = smoothstep(40, 130, (dg.Tmax ?? 0) - (dg.Tmin ?? 0));
+  const areaLimited = surface * landShare * glaciated;
+  const sheetCapacity = SHEET_MAX_THICKNESS * RHO_ICE / Math.max(d.eoColumn, 1e-9)
+                      * landShare * glaciated;
+  const wanted = areaLimited + trap * Math.max(0, sheetCapacity - areaLimited);
+  const landIce = clamp(wanted, 0, surface * 0.98);
   const basin = Math.max(0, surface - landIce);
   const seaIce = clamp(basin * frozenShare, 0, basin);
 

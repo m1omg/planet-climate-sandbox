@@ -187,6 +187,44 @@ export function run() {
       `ocean ${(d.flooded * 100).toFixed(1)} %`);
   }
 
+  // ---- 3d. the night-side cold trap ----------------------------------------
+  // On a synchronously rotating world the far side never sees the star, so it
+  // sits a hundred kelvin or more below the substellar point, permanently.
+  // Water sublimates from the warm side, deposits there, and does not come
+  // back: the planet keeps its whole inventory and none of it is liquid
+  // (Menou 2013; Leconte et al. 2013).
+  //
+  // This state was very nearly unreachable. partitionWater capped land ice at
+  // half the surface water — a flat number, under a comment claiming it was the
+  // water available above the basins — so the trap could never finish, and
+  // every locked world in a 900-world sweep came out at exactly 50.0% land ice.
+  // The classifier then compounded it by asking whether the substellar point
+  // was warm enough for liquid water rather than whether any water was there,
+  // so a bone-dry 285 K desert was filed as an eyeball. One world in nine
+  // hundred reached the trapped state; it is 113 now.
+  {
+    const locked = settle({ ...EARTH, tidallyLocked: true, rotationHours: 240,
+      water: 0.05, landFraction: 0.5, insolation: 1.0, n2Bar: 0.3,
+      co2Bar: 1e-3, outgassing: 0.3, startT: 280 }, 2e7);
+    const w = locked.world, st = classify(w);
+    check('A locked world with a modest ocean traps it all on the night side',
+      st.id === 'trapped', `${st.name}, ${(w.water.landIce / w.diag.totalWater * 100).toFixed(0)}% of the water as night-side ice`);
+    check('…while keeping the water it started with, just not as liquid',
+      w.diag.totalWater > 0.04 && w.water.ocean / w.diag.totalWater < 0.05,
+      `${w.diag.totalWater.toFixed(3)} EO left, ${(w.water.ocean / w.diag.totalWater * 100).toFixed(1)}% of it liquid`);
+    check('…and a sunlit face hot enough to be a desert, not an ice cap',
+      st.Tsub > 320 && st.Tsub - st.Tanti > 100,
+      `substellar ${(st.Tsub - 273.15).toFixed(0)} °C, antistellar ${(st.Tanti - 273.15).toFixed(0)} °C`);
+
+    // An eyeball is the same geometry with enough water that the sheets cannot
+    // hold it: ice flows and calves back, so a deep ocean keeps its sunlit sea.
+    // If this stops being true the two states have collapsed into one.
+    const eyeball = settle(PRESETS.eyeball.params, 2e7);
+    check('…but a world with a real ocean keeps its sunlit sea',
+      classify(eyeball.world).id === 'eyeball' || classify(eyeball.world).id === 'lobster',
+      `${classify(eyeball.world).name}, ${(eyeball.world.water.landIce / eyeball.world.diag.totalWater * 100).toFixed(0)}% as land ice`);
+  }
+
   // ---- 4. snowball, and its hysteresis -------------------------------------
   {
     const cold = settle({ ...EARTH, co2Bar: 1e-6, startT: 240 }, 5e4);
