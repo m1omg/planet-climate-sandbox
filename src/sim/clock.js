@@ -99,6 +99,7 @@ export class Simulation {
     stepVolatiles(w, dt);
     w.time += dt;
     update(w, dt);
+
     if (w.time >= this._nextSample) {
       this.sample();
       this._nextSample = w.time + Math.max(1, w.time * 0.02);

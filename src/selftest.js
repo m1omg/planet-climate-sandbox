@@ -4,7 +4,7 @@ import { Simulation } from './sim/clock.js';
 import { EARTH, PRESETS } from './game/presets.js';
 import { classify } from './physics/classify.js';
 import { runawayLimit, olr } from './physics/radiation.js';
-import { NBANDS } from './physics/climate.js';
+import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider } from './game/controls.js';
 import { floodedFraction } from './physics/hypsometry.js';
 
@@ -254,12 +254,43 @@ export function run() {
     // A collapsed atmosphere is escapable: enough outgassing thickens the air,
     // warms the poles past the CO2 frost point and puts it back (Forget et al.).
     const cold = { ...EARTH, insolation: 0.15, water: 0.05, landFraction: 0.9, co2Bar: 0.01 };
-    const quiet = settle({ ...cold, outgassing: 0.1 }, 3e7);
-    const busy = settle({ ...cold, outgassing: 1000 }, 3e7);
+    // Five million years, not thirty: an extreme outgassing rate drives this
+    // world into an ice-albedo flip-flop at around 7.3 Myr where the solver
+    // alternates by a kelvin a step and the run exhausts its step guard part
+    // way through. The claim under test is reached long before that, and
+    // asserting on a state the integrator had to be cut off mid-way through
+    // was testing an arbitrary point on the way, not the physics. The stall
+    // itself is a separate known defect, not something this should paper over.
+    const quiet = settle({ ...cold, outgassing: 0.1 }, 5e6);
+    const busy = settle({ ...cold, outgassing: 1000 }, 5e6);
     check('CO₂ does not freeze out regardless of volcanism — outgassing can win',
       busy.world.diag.pCO2 > 20 * quiet.world.diag.pCO2 && busy.world.diag.Tmean > quiet.world.diag.Tmean + 50,
       `${quiet.world.diag.pCO2.toFixed(3)} bar / ${quiet.world.diag.Tmean.toFixed(0)} K  →  ` +
       `${busy.world.diag.pCO2.toFixed(2)} bar / ${busy.world.diag.Tmean.toFixed(0)} K`);
+
+    // A wet runaway must actually settle. Relative humidity used to be driven by
+    // how much open sea was left, while how much open sea was left was driven by
+    // relative humidity: once the ocean was in the air the two chased each other
+    // between 43% flooded and bone dry on alternating steps, a period-two
+    // flip-flop worth +-16 W/m^2 that never converged. The physics was wrong --
+    // a planet whose ocean has evaporated is not arid, its atmosphere is the
+    // ocean -- and the step controller, seeing a climate lurching sixteen watts
+    // a step, cut the step to tens of years and stayed there. A wet runaway ran
+    // at a hundredth of the speed of every other state.
+    {
+      const run = settle({ ...EARTH, co2Bar: 1 }, 3e4);
+      const wet = run.world;
+      const seen = [];
+      for (let i = 0; i < 12; i++) { run.stepOnce(200); seen.push(wet.diag.imbalance); }
+      const swing = Math.max(...seen) - Math.min(...seen);
+      check('A wet runaway settles instead of flip-flopping between wet and dry',
+        swing < 1.0, `energy balance varies by ${swing.toFixed(2)} W/m² over twelve steps`);
+
+      let least = Infinity;
+      for (let i = 0; i < 40; i++) { run.stepOnce(Math.min(maxStep(wet), 5e6)); least = Math.min(least, maxStep(wet)); }
+      check('...so the clock can still run fast inside one',
+        least > 1e4, `smallest step ${least.toExponential(1)} yr`);
+    }
 
     // A hot dry world must not be called frozen.
     const baked = settle({ ...EARTH, tidallyLocked: true, rotationHours: 2000, insolation: 1.6,

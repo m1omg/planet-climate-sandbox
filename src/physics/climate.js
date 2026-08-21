@@ -147,7 +147,19 @@ export function update(w, dt) {
   // almost nothing, which is what makes a hard snowball genuinely arid -- and
   // what keeps a dry world's air unsaturated, the Abe et al. (2011) dune world.
   const oceanFrac = flooded;
-  const RH = clamp(0.34 + 0.44 * openOcean * liquidAllowed, 0.15, 0.85);
+  // Water already in the air is a moisture source under the whole sky, so an
+  // ocean that has evaporated completely does not leave an arid planet: the
+  // atmosphere *is* the ocean.
+  //
+  // Counting only the open sea made humidity collapse at the instant the last
+  // basin dried. That cut the vapour demand, which condensed the sea straight
+  // back, which raised the humidity again -- a period-two flip-flop between 43%
+  // flooded and bone dry, worth +-16 W/m^2, that never settled. It is why a wet
+  // runaway crawled: the step controller kept seeing a climate lurching by
+  // sixteen watts a step and shortening the step to tens of years to resolve it.
+  const airborne = clamp((w.water.vapour || 0) / Math.max(totalWater, 1e-12), 0, 1);
+  const wetSky = clamp(openOcean * liquidAllowed + airborne, 0, 1);
+  const RH = clamp(0.34 + 0.44 * wetSky, 0.15, 0.85);
 
   // Land uncovered by a sea that has retreated or boiled away is bare ocean
   // floor -- dark basalt, not weathered continental rock -- so a drying world
@@ -379,8 +391,22 @@ export function radiativeDamping(w) {
     const T = w.T[i];
     const h = 0.5;
     const scale = dg.humidityScale;
-    const pw = (t) => Math.min(dg.pH2O[i] * (psatH2O(t) / Math.max(psatH2O(T), 1e-12)),
-                               scale < 0.999 ? dg.pH2O[i] : Infinity);
+    // How the vapour column responds to a small temperature change. Where the
+    // air is saturated it follows Clausius-Clapeyron. Where it is mass-limited
+    // -- every drop of water the planet has is already airborne -- it does not
+    // move at all, in either direction: there is no reservoir to draw on and
+    // nothing for it to condense onto.
+    //
+    // Clamping only the upward side let cooling drain vapour that had nowhere
+    // to go, which understated the damping by a factor of three or four. The
+    // implicit solve then relaxed towards an equilibrium several kelvin past
+    // the real one, overshot it, overshot back, and the step controller spent
+    // the rest of the run alternating between thousand-year and quarter-year
+    // steps. Only the path is affected, never the equilibrium: this is the
+    // solver's Jacobian, and F = 0 is where it is regardless.
+    const pw = scale < 0.999
+      ? () => dg.pH2O[i]
+      : (t) => dg.pH2O[i] * (psatH2O(t) / Math.max(psatH2O(T), 1e-12));
     const pwHi = pw(T + h), pwLo = pw(T - h);
     const ptHi = dg.pTot[i] - dg.pH2O[i] + pwHi, ptLo = dg.pTot[i] - dg.pH2O[i] + pwLo;
     const dOLR = (olr(T + h, dg.pCO2, pwHi, dg.pCH4, ptHi)
