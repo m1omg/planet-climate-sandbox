@@ -223,7 +223,7 @@ export function renderSky(rgba, W, H, s) {
     const y = cy*v[1] - sy2*v[2], z = sy2*v[1] + cy*v[2];
     return [cyw*v[0] + syw*z, y, -syw*v[0] + cyw*z];
   };
-  const ro = view([0, 0, 3]);
+  const ro = view([0, 0, 3 * (s.zoom ?? 1)]);
   const sun = s.sun, sc = s.starColor;
   const minWH = Math.min(W, H);
   // Thickness is worked out by the caller now, because the stylised and
@@ -289,9 +289,13 @@ export function renderPlanet(rgba, W, H, s) {
     const y = cy*v[1] - sy2*v[2], z = sy2*v[1] + cy*v[2];
     return [cyw*v[0] + syw*z, y, -syw*v[0] + cyw*z];
   };
-  const ro = view([0, 0, 3]);
+  const ro = view([0, 0, 3 * (s.zoom ?? 1)]);
   const sun = s.sun, sc = s.starColor;
   const cs = Math.cos(-s.spin), ss = Math.sin(-s.spin);
+  // The spin axis leans by the obliquity, about X, matching tiltFrame() in the
+  // shader: the bands, the caps and the surface all tilt together, so the
+  // terminator cuts across the latitudes instead of running down the poles.
+  const ct = Math.cos(s.tilt || 0), st = Math.sin(s.tilt || 0);
   const minWH = Math.min(W, H);
   // Thickness is worked out by the caller now, because the stylised and
   // realistic modes need different physics -- see render/atmosphere.js.
@@ -333,11 +337,12 @@ export function renderPlanet(rgba, W, H, s) {
       if (disc > 0) {
         const t = -b - Math.sqrt(disc);
         const nx = ro[0] + rdx*t, ny = ro[1] + rdy*t, nz = ro[2] + rdz*t;
-        // planet-fixed direction: undo the spin about Y
-        const spx = cs*nx + ss*nz, spz = -ss*nx + cs*nz;
-        const sp = [spx, ny, spz];
+        // into the tilted frame, then undo the spin about its axis
+        const ty = ct*ny + st*nz, tz = -st*ny + ct*nz;
+        const spx = cs*nx + ss*tz, spz = -ss*nx + cs*tz;
+        const sp = [spx, ty, spz];
         const ndl = nx*sun[0] + ny*sun[1] + nz*sun[2];
-        const bandX = mix(ny, ndl, s.locked);
+        const bandX = mix(ty, ndl, s.locked);
         const bi = clamp((bandX + 1) * 0.5, 0, 0.9999) * s.bandT.length;
         const i0 = Math.min(Math.floor(bi), s.bandT.length - 1);
         const i1 = Math.min(i0 + 1, s.bandT.length - 1);

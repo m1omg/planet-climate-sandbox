@@ -287,6 +287,20 @@ terminator. The deepest basin has a finite area, so as the water goes the floode
 in proportion to the volume rather than to its fourth root; requiring a mean depth of at least 50 m
 imposes exactly that, and it binds only below a couple of thousandths of an ocean.
 
+### Looking at it
+
+Drag to orbit the camera — the star, the terminator and the ice caps stay where they belong and you
+simply look from somewhere else. **Scroll or pinch to zoom**, double-click to reset. Zoom moves the
+camera rather than narrowing the lens, so the planet keeps its perspective and the atmosphere's limb
+still reads correctly; drag sensitivity scales with it, so the surface moves the same distance under
+your finger however close you are.
+
+**Axial tilt is drawn.** The spin axis leans by the obliquity and the whole planet leans with it —
+bands, ice caps and surface together — so the terminator cuts across the latitudes at an angle
+instead of running straight down the poles. It used to drive the seasons in the physics and be
+completely invisible on the globe. A tidally locked world is exempt: its bands run from the
+substellar point, not from a pole, so obliquity means nothing there.
+
 ### Organic haze and the anti-greenhouse
 
 Ultraviolet light breaks methane into radicals that polymerise into a tholin smog — but only in a

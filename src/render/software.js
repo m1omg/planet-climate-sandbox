@@ -24,7 +24,7 @@ export class SoftwareView {
     this.useTextures = 0;
     this.quality = 'high';
     this.realistic = false;
-    this.spin = 0; this.yaw = 0; this.pitch = 0; this.spinVel = 0;
+    this.spin = 0; this.yaw = 0; this.pitch = 0; this.spinVel = 0; this.zoom = 1;
     this.spinPaused = false;
     this.bakedSeed = null;
     this.terrain = null;
@@ -122,14 +122,14 @@ export class SoftwareView {
     const pH2Oq = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
     const steamQ = steamOpacity(pH2Oq);
     const skyKey = [cw, ch, this.yaw.toFixed(3), this.pitch.toFixed(3),
-                    dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp, this.realistic ? 'r' : 's'].join('|');
+                    dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp, this.realistic ? 'r' : 's', this.zoom.toFixed(3)].join('|');
     if (skyKey !== this.skyKey) {
       if (this.sky.width !== cw || this.sky.height !== ch) { this.sky.width = cw; this.sky.height = ch; }
       const img = this.sctx.createImageData(cw, ch);
       const skyAtmo = atmosphereLook(world, steamQ, this.realistic);
       renderSky(img.data, cw, ch, {
         atmoThick: skyAtmo.thickness, veil: skyAtmo.veil, haze: skyAtmo.haze,
-        yaw: this.yaw, pitch: this.pitch, sun: [0.62, 0.28, 0.73],
+        yaw: this.yaw, pitch: this.pitch, zoom: this.zoom, sun: [0.62, 0.28, 0.73],
         starColor: SoftwareView.starColor(p.starTemp),
         pTot: dg.pTotMean, steam: steamQ,
         co2: clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1),
@@ -151,7 +151,8 @@ export class SoftwareView {
     const atmo = atmosphereLook(world, clamp(steamOpacity(pH2O), 0, 1), this.realistic);
     renderPlanet(this.image.data, W, H, {
       atmoThick: atmo.thickness, veil: atmo.veil, haze: atmo.haze,
-      yaw: this.yaw, pitch: this.pitch, spin: this.spin,
+      yaw: this.yaw, pitch: this.pitch, spin: this.spin, zoom: this.zoom,
+      tilt: (1 - lam) * (p.obliquity || 0) * Math.PI / 180,
       sun: [0.62, 0.28, 0.73], starColor: sc,
       terrain: this.terrain, bandT, bandIce,
       oceanFrac: dg.flooded ?? dg.oceanFrac,

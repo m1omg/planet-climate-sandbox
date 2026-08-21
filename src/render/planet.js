@@ -12,6 +12,10 @@ const TEX_UNIFORMS = ['uTexRock', 'uTexDesert', 'uTexVeg', 'uTexIce', 'uTexOcean
 
 // Quality settings. High is the default everywhere; Low is a manual choice for
 // hardware that still struggles.
+// How close and how far the camera may get. Closer than 0.42 and the near
+// plane clips the sphere; further than 3 and the planet is a dot.
+export const MIN_ZOOM = 0.42, MAX_ZOOM = 3.0;
+
 export const QUALITY = {
   high: { bake: 512, cloudBake: 256, relief: 1, cloudDetail: 1, scale: 1.0, maxDpr: 2 },
   low:  { bake: 256, cloudBake: 128, relief: 0, cloudDetail: 0, scale: 0.6, maxDpr: 1 },
@@ -65,7 +69,7 @@ export class PlanetView {
     // Camera state belongs to the view, not to a GPU context: init() also runs
     // on restore() after a context loss, and zeroing these there threw the
     // viewpoint away every time the tab came back or the renderer was swapped.
-    this.spin = 0; this.yaw = 0; this.pitch = 0;
+    this.spin = 0; this.yaw = 0; this.pitch = 0; this.zoom = 1;
     this.spinVel = 0; this.spinPaused = false;
     this.useTextures = 0;      // fades 0 -> 1 as the maps arrive
     this.wantTextures = true;
@@ -230,7 +234,7 @@ export class PlanetView {
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
-      'uAtmoThick', 'uVeil', 'uHaze',
+      'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt',
       'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
       this.u[name] = gl.getUniformLocation(this.prog, name);
     }
@@ -671,6 +675,10 @@ export class PlanetView {
     gl.uniform1f(this.u.uRelief, q.relief);
     gl.uniform1f(this.u.uCloudDetail, q.cloudDetail);
     gl.uniform1f(this.u.uUseTex, this.useTextures);
+    gl.uniform1f(this.u.uZoom, clamp(this.zoom, MIN_ZOOM, MAX_ZOOM));
+    // A tidally locked world has no meaningful obliquity: its bands run from
+    // the substellar point, not from a pole.
+    gl.uniform1f(this.u.uTilt, (1 - lam) * (p.obliquity || 0) * Math.PI / 180);
     gl.uniform1f(this.u.uYaw, this.yaw);
     gl.uniform1f(this.u.uPitch, this.pitch);
     gl.activeTexture(gl.TEXTURE0 + 9);

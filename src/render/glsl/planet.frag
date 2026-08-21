@@ -32,6 +32,8 @@ uniform float uPTot;        // bar
 uniform float uCO2;         // 0..1 how CO2-dominated the air is
 uniform float uMagma;       // 0..1 molten surface
 uniform float uLocked;      // 0 = free rotator, 1 = tidally locked
+uniform float uZoom;        // camera distance, 1 = default framing
+uniform float uTilt;        // obliquity, radians: the spin axis leans this far
 uniform float uYaw;         // camera orbit, radians
 uniform float uPitch;
 uniform float uNightGlow;   // thermal emission on the dark side
@@ -80,6 +82,10 @@ float bandVal(float x, int which){
 }
 
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0.0,-s, 0.0,1.0,0.0, s,0.0,c); }
+// Bring a direction into the planet's own frame, whose spin axis leans by the
+// obliquity. Leaning about X keeps the tilt broadside to the default view, so
+// it is visible rather than hidden edge-on.
+mat3 tiltFrame(float a){ float c=cos(a),s=sin(a); return mat3(1.0,0.0,0.0, 0.0,c,s, 0.0,-s,c); }
 mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1.0,0.0,0.0, 0.0,c,s, 0.0,-s,c); }
 
 // ---------- surface colour ----------
@@ -248,7 +254,9 @@ void main(){
   // terminator and the ice caps all stay where they belong while you look from
   // a new angle.
   mat3 view = rotY(uYaw) * rotX(uPitch);
-  vec3 ro = view * vec3(0.0, 0.0, 3.0);
+  // Zoom by moving the camera rather than narrowing the lens, so the planet
+  // keeps its perspective and the atmosphere's limb still reads correctly.
+  vec3 ro = view * vec3(0.0, 0.0, 3.0 * uZoom);
   vec3 rd = view * normalize(vec3(uv*2.05, -1.6));
 
   vec3 col = vec3(0.0);
@@ -291,10 +299,15 @@ void main(){
     vec3 pos = ro + rd*t;
     vec3 n = normalize(pos);
 
-    // planet-fixed coordinates
-    vec3 sp = rotY(-uSpin) * n;
+    // Planet-fixed coordinates. The spin axis leans by the obliquity, so the
+    // whole planet -- its bands, its ice caps and its surface -- tilts together,
+    // and the terminator then cuts across the latitudes at an angle instead of
+    // running straight down the poles. Without this the axial tilt controlled
+    // the seasons in the physics and was invisible on the globe.
+    vec3 nT = tiltFrame(uTilt) * n;
+    vec3 sp = rotY(-uSpin) * nT;
     // for a locked world the band axis runs from the substellar point
-    float bandX = mix(n.y, dot(n, uSunDir), uLocked);
+    float bandX = mix(nT.y, dot(n, uSunDir), uLocked);
     float T = bandVal(bandX, 0);
     float ice = bandVal(bandX, 1);
 
@@ -342,7 +355,7 @@ void main(){
     // The deck is baked; the motion comes from turning the direction it is
     // sampled along. Two layers rotated at different rates still shear against
     // each other, and a third sample warps them so the churn is not rigid.
-    vec3 cq = rotY(-uSpin*1.12) * n;
+    vec3 cq = rotY(-uSpin*1.12) * tiltFrame(uTilt) * n;
     float flow = uTime*0.010;
     float w = texture(uCloudMap, rotY(flow*0.35) * cq).b - 0.5;
     vec3 cqA = normalize(rotY(flow) * cq + vec3(w*0.22, w*0.10, -w*0.16));

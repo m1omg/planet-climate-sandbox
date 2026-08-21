@@ -125,7 +125,7 @@ if (app && app.tick && app.view) {
   v.ready = true;                    // no GL here; pretend init succeeded
   v.render = () => { v._renders = (v._renders || 0) + 1; };
   v.wantTextures = false;
-  v.spin = 0.5; v.yaw = 0.25; v.pitch = 0.1;
+  v.spin = 0.5; v.yaw = 0.25; v.pitch = 0.1; v.zoom = 1;
   let initCalls = 0;
   const realInit = v.init.bind(v);
   v.init = () => { initCalls++; return realInit(); };
@@ -140,6 +140,12 @@ if (app && app.tick && app.view) {
     failed++;
   } else {
     console.log('\x1b[32mPASS\x1b[0m  frame loop does not re-initialise the renderer');
+  }
+  if (v.zoom !== 1) {
+    console.log(`\x1b[31mFAIL\x1b[0m  frame loop moved the zoom on its own (${v.zoom})`);
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  zoom stays put when nothing is pinching it');
   }
   if (v.yaw !== 0.25 || v.pitch !== 0.1) {
     console.log(`\x1b[31mFAIL\x1b[0m  frame loop moved the camera on its own (yaw ${v.yaw}, pitch ${v.pitch})`);

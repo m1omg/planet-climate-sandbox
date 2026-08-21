@@ -6,7 +6,7 @@ import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
 import { NBANDS, lockFactor } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
-import { PlanetView } from './render/planet.js';
+import { PlanetView, MIN_ZOOM, MAX_ZOOM } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
@@ -124,6 +124,7 @@ async function useRenderer(kind) {
   view.yaw = old.yaw ?? 0; view.pitch = old.pitch ?? 0;
   view.spin = old.spin ?? 0; view.spinPaused = old.spinPaused ?? false;
   view.spinVel = old.spinVel ?? 0;
+  view.zoom = old.zoom ?? 1;
   window.__app.view = view;
   const ok = await view.init();
   bindPlanetDrag();
@@ -594,7 +595,8 @@ function bindControls() {
     $('#btn-spin').title = view.spinPaused ? "Resume the planet's rotation" : "Pause the planet's rotation";
   });
   $('#btn-view').addEventListener('click', () => {
-    view.yaw = 0; view.pitch = 0; view.spinVel = 0;
+    view.yaw = 0; view.pitch = 0; view.spinVel = 0; view.zoom = 1;
+    if (view.software) view.skyKey = '';
   });
   // Cycle through every renderer, so each can be seen on any machine.
   const RENDER_ORDER = ['gl2', 'gl1', 'software'];
@@ -692,39 +694,91 @@ function bindPlanetDrag() {
   const cv = $('#planet');
   if (!cv || cv._dragBound) return;
   cv._dragBound = true;
-  let active = null, lastX = 0, lastY = 0, lastT = 0, moved = 0;
+  // Every pointer currently down, so a two-finger pinch can be told from a drag.
+  const down = new Map();
+  let lastX = 0, lastY = 0, lastT = 0, moved = 0, pinch = 0;
+
+  const applyZoom = (factor, why) => {
+    const before = view.zoom ?? 1;
+    view.zoom = clamp(before * factor, MIN_ZOOM, MAX_ZOOM);
+    if (view.software && view.zoom !== before) view.skyKey = '';   // the CPU path caches its sky
+    if (why && (view.zoom === MIN_ZOOM || view.zoom === MAX_ZOOM) && view.zoom !== before) {
+      toast(view.zoom === MIN_ZOOM ? 'As close as the view goes' : 'As far out as the view goes', 1400);
+    }
+  };
+
+  const centre = () => {
+    let x = 0, y = 0;
+    for (const p of down.values()) { x += p.x; y += p.y; }
+    return { x: x / down.size, y: y / down.size };
+  };
+  const spread = () => {
+    const [a, b] = [...down.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
 
   cv.addEventListener('pointerdown', (e) => {
-    active = e.pointerId; lastX = e.clientX; lastY = e.clientY;
+    down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const c = centre();
+    lastX = c.x; lastY = c.y;
     lastT = performance.now(); moved = 0;
     view.spinVel = 0;
+    if (down.size === 2) pinch = spread();
     cv.setPointerCapture(e.pointerId);
     cv.classList.add('dragging');
   });
 
   cv.addEventListener('pointermove', (e) => {
-    if (e.pointerId !== active) return;
-    const dx = e.clientX - lastX, dy = e.clientY - lastY;
-    lastX = e.clientX; lastY = e.clientY;
+    if (!down.has(e.pointerId)) return;
+    down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Two fingers: pinch to zoom. The midpoint still drags, so you can move and
+    // scale in one gesture the way every map does.
+    if (down.size === 2) {
+      const now = spread();
+      if (pinch > 4 && now > 4) applyZoom(now / pinch);
+      pinch = now;
+    }
+
+    const c = centre();
+    const dx = c.x - lastX, dy = c.y - lastY;
+    lastX = c.x; lastY = c.y;
     moved += Math.abs(dx) + Math.abs(dy);
-    const k = 0.0075;
+    // Dragging should move the planet the same distance under the finger
+    // whatever the zoom, so the sensitivity scales with how close you are.
+    const k = 0.0075 * clamp(view.zoom ?? 1, MIN_ZOOM, MAX_ZOOM);
     view.yaw += dx * k;
     view.pitch = clamp(view.pitch + dy * k, -1.45, 1.45);   // keep the poles reachable, not flippable
     const now = performance.now();
     const dt = Math.max(now - lastT, 1) / 1000;
-    view.spinVel = clamp((dx * k) / dt, -6, 6);
+    if (down.size === 1) view.spinVel = clamp((dx * k) / dt, -6, 6);
     lastT = now;
   });
 
   const end = (e) => {
-    if (e.pointerId !== active) return;
-    active = null;
-    cv.classList.remove('dragging');
-    if (moved < 3) view.spinVel = 0;   // a tap should not fling the planet
+    if (!down.has(e.pointerId)) return;
+    down.delete(e.pointerId);
+    if (down.size === 0) {
+      cv.classList.remove('dragging');
+      if (moved < 3) view.spinVel = 0;   // a tap should not fling the planet
+    } else {
+      const c = centre();
+      lastX = c.x; lastY = c.y;
+      if (down.size === 2) pinch = spread();
+    }
   };
   cv.addEventListener('pointerup', end);
   cv.addEventListener('pointercancel', end);
-  // A two-finger pinch is the browser's job, not ours; we only take single drags.
+
+  // The wheel zooms. passive:false because the page must not scroll instead.
+  cv.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    // Normalise the three deltaMode units so a trackpad and a mouse behave.
+    const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+    applyZoom(Math.exp(-clamp(px, -240, 240) * 0.0016), true);
+  }, { passive: false });
+
+  cv.addEventListener('dblclick', () => { view.zoom = 1; if (view.software) view.skyKey = ''; });
   cv.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
