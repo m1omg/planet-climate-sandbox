@@ -58,7 +58,18 @@ export function bakeES100(src) {
   return out;
 }
 
-export async function loadShaders() {
+// Memoised. init() runs again after every lost context, and on a phone that is
+// usually the moment the radio is still asleep: re-fetching there failed, which
+// made the renderer mark itself permanently broken and left the canvas black for
+// the rest of the visit. The sources never change within a page load, so hold
+// them. A failure clears the cache so a later attempt can still succeed.
+let cached = null;
+export function loadShaders() {
+  if (!cached) cached = fetchShaders().catch((e) => { cached = null; throw e; });
+  return cached;
+}
+
+async function fetchShaders() {
   const [vert, frag, bakeVert, bakeFrag, cloudFrag, noise] = await Promise.all([
     load('planet.vert'), load('planet.frag'),
     load('bake.vert'), load('bake.frag'), load('cloudbake.frag'),

@@ -43,7 +43,15 @@ export class SoftwareView {
   async loadTextures() { return false; }
   forgetGpuState() { this.bakedSeed = null; }
   async restore() { }
-  refreshAfterResume() { this.bakedSeed = null; }
+  // The terrain is plain JavaScript arrays and survives; what does not
+  // necessarily survive is the offscreen canvases' backing store, which a
+  // browser may discard while the page is in the background. Forcing a full
+  // repaint costs one frame and avoids coming back to a blank disc.
+  refreshAfterResume() {
+    this.skyKey = '';
+    this.drawn = false;
+    this.accum = Infinity;
+  }
 
   setQuality(name) {
     if (name !== 'high' && name !== 'low') return;

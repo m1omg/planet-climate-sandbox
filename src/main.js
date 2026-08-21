@@ -99,6 +99,7 @@ async function useRenderer(kind) {
   // carry the viewpoint across so the swap is not disorienting
   view.yaw = old.yaw ?? 0; view.pitch = old.pitch ?? 0;
   view.spin = old.spin ?? 0; view.spinPaused = old.spinPaused ?? false;
+  view.spinVel = old.spinVel ?? 0;
   window.__app.view = view;
   const ok = await view.init();
   bindPlanetDrag();
@@ -116,7 +117,53 @@ async function useRenderer(kind) {
   }
   updateRendererButton();
   updateQualityButton();
+  // From here on the view is live, so a later collapse — a driver that gives up
+  // mid-session — has somewhere to report to. During start-up the loop below
+  // handles failure itself, which is why this is wired only after init().
+  view.onFatal = (why) => { recoverRenderer(why); };
   return ok;
+}
+
+// ---------------------------------------------------------------------------
+// Recovery. A WebGL context can be taken away at any moment — switching apps on
+// a tablet is the usual way — and the browser is supposed to hand it back. When
+// it does not, the canvas is simply black for the rest of the visit, which is
+// what people were seeing. A canvas cannot be given a second context, so the
+// only way back is to build a fresh one; failing that, drop to the CPU.
+// ---------------------------------------------------------------------------
+let recovering = false, recoveries = 0;
+async function recoverRenderer(why) {
+  if (recovering) return;
+  recovering = true;
+  try {
+    const wasSoftware = !!view.software;
+    const kind = wasSoftware ? 'software' : (view.api === 'WebGL1' ? 'gl1' : 'gl2');
+    // Rebuild the same renderer twice; if the GPU keeps dropping out, stop
+    // fighting it and use the path that cannot be taken away.
+    const next = (!wasSoftware && recoveries < 2) ? kind : 'software';
+    recoveries++;
+    console.warn(`renderer recovery after ${why} → ${next}`);
+    let ok = await useRenderer(next);
+    if ((!ok || view.failed) && next !== 'software') ok = await useRenderer('software');
+    if (view.software) {
+      toast('The GPU dropped out — drawing on the CPU instead. The simulation is unaffected.', 7000);
+    }
+  } finally {
+    recovering = false;
+  }
+}
+
+// The context has been gone this long, with the page in front of the user, before
+// we stop waiting for the browser to make good on restoring it.
+const LOST_GRACE_MS = 4000;
+
+function checkRendererHealth() {
+  if (recovering || view.software || view.failed) return;
+  if (document.visibilityState !== 'visible') return;
+  const lost = view.contextLost || (view.gl && view.gl.isContextLost());
+  if (!lost) { view.lostSince = null; return; }
+  if (view.lostSince == null) { view.lostSince = performance.now(); return; }
+  if (performance.now() - view.lostSince > LOST_GRACE_MS) recoverRenderer('the context was never restored');
 }
 
 function graphicsFromUrl() {
@@ -579,11 +626,17 @@ function bindControls() {
 
   // Coming back from another app: the GPU context may have been thrown away
   // while we were gone, and the wall clock has run on without us.
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
+  const resumed = () => {
     last = performance.now();       // do not bill the time spent away to the sim
     view.refreshAfterResume();
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resumed();
   });
+  // Android Chromium can freeze a backgrounded page outright and bring it back
+  // from the back/forward cache, where visibilitychange alone is not a reliable
+  // signal that anything survived.
+  addEventListener('pageshow', resumed);
 
   addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
@@ -692,10 +745,17 @@ function tick(dtReal) {
   }
 }
 
+let healthClock = 0;
+
 function frame(now) {
-  const dtReal = Math.min((now - last) / 1000, 0.25);
+  // Clamped at both ends. A rAF timestamp is the start of the frame, which can
+  // predate a performance.now() taken in the visibilitychange handler that just
+  // fired -- and a negative delta would run the render clock backwards.
+  const dtReal = Math.min(Math.max((now - last) / 1000, 0), 0.25);
   last = now;
   tick(dtReal);
+  healthClock += dtReal;
+  if (healthClock > 0.5) { healthClock = 0; try { checkRendererHealth(); } catch { } }
   requestAnimationFrame(frame);
 }
 

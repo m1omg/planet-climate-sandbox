@@ -23,6 +23,25 @@ const FACES = [
   'TEXTURE_CUBE_MAP_POSITIVE_Z', 'TEXTURE_CUBE_MAP_NEGATIVE_Z',
 ];
 
+// Decoded once per page load. loadTextures() runs again after every context
+// restore, and decoding six full-size JPEGs there — on the main thread, at the
+// moment the tab is coming back — cost a visible freeze and a spike of memory
+// pressure that could lose the context all over again.
+const decoded = new Map();
+function decodeOnce(url) {
+  let p = decoded.get(url);
+  if (!p) {
+    p = new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => rej(new Error(`missing texture ${url}`));
+      im.src = url;
+    }).catch((e) => { decoded.delete(url); throw e; });
+    decoded.set(url, p);
+  }
+  return p;
+}
+
 export class PlanetView {
   // `prefer` may ask for WebGL1 even where WebGL2 is available, so the fallback
   // path can be exercised deliberately rather than only by people whose
@@ -69,13 +88,34 @@ export class PlanetView {
     // would ever notice the cube maps had ceased to exist.
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();          // required, or the browser never restores it
+      this.contextLost = true;
+      this.lostSince = performance.now();
       this.forgetGpuState();
       console.warn('WebGL context lost; rebuilding when the browser restores it');
     }, false);
     canvas.addEventListener('webglcontextrestored', () => {
       console.warn('WebGL context restored; rebuilding');
+      this.contextLost = false;
       this.restore();
     }, false);
+  }
+
+  // A transient failure is one caused by the context being gone right now: the
+  // hardware is fine and the browser will hand it back. Latching `failed` on one
+  // of those is what turned a momentary loss into a permanently black canvas,
+  // so failures are only made permanent when the context is actually alive to
+  // have refused us.
+  fail(reason) {
+    if (!this.gl || this.gl.isContextLost()) {
+      this.contextLost = true;
+      this.lostSince = this.lostSince ?? performance.now();
+      console.warn(`deferring "${reason}" — the context is gone; will rebuild`);
+      return false;
+    }
+    this.diagnostic = this.diagnostic || reason;
+    this.failed = true;
+    this.onFatal?.(reason);
+    return true;
   }
 
   // Drop every handle: they are all invalid once the context has gone, and
@@ -98,22 +138,50 @@ export class PlanetView {
   // blank" bugs.
   refreshAfterResume() {
     if (this.failed || !this.gl) return;
-    if (this.gl.isContextLost()) { this.forgetGpuState(); return; }
-    this.bakedSeed = null;      // force a rebake on the next frame
-    this.forceResize = true;    // and a fresh drawing buffer to paint it into
+    if (this.gl.isContextLost()) {
+      this.contextLost = true;
+      this.lostSince = this.lostSince ?? performance.now();
+      this.forgetGpuState();
+      return;
+    }
+    this.forceResize = true;    // a fresh drawing buffer to paint into
+    // Rebake only if the cube maps really did go away. Unconditionally rebaking
+    // meant every single app switch paid for eighteen full-resolution noise
+    // passes at exactly the moment the compositor was busiest — a visible stall,
+    // and enough sustained GPU work to trip Chromium's watchdog on a tablet,
+    // which lost the context and turned a hitch into a black screen.
+    const gone = !this.terrainCube || !this.gl.isTexture(this.terrainCube)
+      || !this.detailCube || !this.gl.isTexture(this.detailCube)
+      || !this.cloudCube || !this.gl.isTexture(this.cloudCube);
+    if (gone) this.bakedSeed = null;
   }
 
   // Rebuild after a restore. init() and loadTextures() are both guarded by the
   // flags cleared above, so they run again from scratch; the bake follows on the
   // next frame because bakedSeed is null.
   async restore() {
-    if (this.failed) return;
+    if (this.failed) return false;
+    if (this.gl?.isContextLost()) return false;
     const ok = await this.init();
-    if (ok) await this.loadTextures();
+    if (!ok) return false;
+    this.contextLost = false;
+    this.lostSince = null;
+    await this.loadTextures();
+    return true;
   }
 
   // Shaders live in real .glsl files now, so start-up is asynchronous.
-  async init() {
+  init() {
+    // Re-entrancy guard. init() awaits a fetch partway through, so a second
+    // caller — a restore racing a resume, say — could sail past the `ready`
+    // check and build a whole second set of programs over the first.
+    if (!this._initing) {
+      this._initing = this._init().finally(() => { this._initing = null; });
+    }
+    return this._initing;
+  }
+
+  async _init() {
     if (this.failed) return false;
     // Idempotent on purpose: re-initialising would reset the camera and the
     // planet's rotation, so calling this twice must be harmless.
@@ -121,7 +189,8 @@ export class PlanetView {
     const gl = this.gl;
     let src;
     try { src = await loadShaders(); }
-    catch (e) { console.error(e); this.failed = true; return false; }
+    catch (e) { console.error(e); this.fail(`shader sources unavailable: ${e.message}`); return false; }
+    if (gl.isContextLost()) { this.fail('context lost during start-up'); return false; }
     const V = this.gl1 ? (x) => toES100(x, 'vert') : (x) => x;
     const defines = this.albedoCapable ? '' : '#define NO_ALBEDO 1\n';
     const withDefines = (x) => (defines
@@ -129,10 +198,10 @@ export class PlanetView {
       : x);
     const F = this.gl1 ? (x) => withDefines(toES100(x, 'frag')) : (x) => withDefines(x);
     this.prog = this.link(V(src.vert), F(src.frag));
-    if (!this.prog) { this.failed = true; return false; }
+    if (!this.prog) { this.fail('the planet program would not build'); return false; }
     this.bakeProg = this.link(V(src.bakeVert), this.gl1 ? bakeES100(src.bakeFrag) : src.bakeFrag);
     this.cloudProg = this.link(V(src.bakeVert), F(src.cloudFrag));
-    if (!this.bakeProg || !this.cloudProg) { this.failed = true; return false; }
+    if (!this.bakeProg || !this.cloudProg) { this.fail('the bake programs would not build'); return false; }
 
     const buf = gl.createBuffer();
     this.quadBuf = buf;
@@ -175,9 +244,10 @@ export class PlanetView {
     this.bakeSurface(1.0);
     if (this.bakeFailed) {
       this.ready = false;
-      this.failed = true;
+      this.fail(this.diagnostic || 'the trial bake did not draw');
       return false;
     }
+    this.bakeFails = 0;
     this.bakedSeed = null;      // force a real bake with the true seed
     return true;
   }
@@ -217,6 +287,17 @@ export class PlanetView {
   bakeSurface(seed) {
     if (this.failed || !this.ready) return;
     const gl = this.gl;
+    if (gl.isContextLost()) { this.contextLost = true; this.forgetGpuState(); return; }
+    // A bake that fails leaves bakedSeed alone, so render() asks for another one
+    // on the very next frame. Unthrottled, that deletes and reallocates three
+    // cube maps sixty times a second — the GPU thrashes, the page stops
+    // responding, and the real fault is never reported. Back off, then give up
+    // and let the app fall back to a renderer that works.
+    if (this.bakeFails) {
+      const now = performance.now();
+      if (now - this.lastBakeTry < Math.min(300 * (1 << this.bakeFails), 1500)) return;
+      this.lastBakeTry = now;
+    }
     const q = QUALITY[this.quality] ?? QUALITY.high;
 
     if (this.terrainCube) { gl.deleteTexture(this.terrainCube); gl.deleteTexture(this.detailCube); }
@@ -276,18 +357,37 @@ export class PlanetView {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     if (status !== gl.FRAMEBUFFER_COMPLETE) {
       this.diagnostic = `${this.api} cannot render to a cube map (framebuffer status 0x${status.toString(16)})`;
-      this.bakeFailed = true;
+      this.noteBakeFailure();
       return;
     }
     const err = gl.getError();
     if (err !== gl.NO_ERROR) {
       this.diagnostic = `${this.api} bake raised GL error 0x${err.toString(16)}`;
-      this.bakeFailed = true;
+      this.noteBakeFailure();
       return;
     }
     this.bakeFailed = false;
+    this.bakeFails = 0;
     this.bakedSeed = seed;
     this.bakedQuality = this.quality;
+  }
+
+  noteBakeFailure() {
+    this.bakeFailed = true;
+    this.lastBakeTry = performance.now();
+    // The context dying mid-bake is not the driver refusing us; that is the
+    // restore path's business and must not count against the retry budget.
+    if (this.gl.isContextLost()) {
+      this.contextLost = true;
+      this.lostSince = this.lostSince ?? performance.now();
+      this.forgetGpuState();
+      return;
+    }
+    this.bakeFails = (this.bakeFails || 0) + 1;
+    if (this.bakeFails >= 4 && this.ready) {   // about four seconds of trying
+      this.ready = false;
+      this.fail(this.diagnostic || 'the surface bake kept failing');
+    }
   }
 
   setQuality(name) {
@@ -303,26 +403,28 @@ export class PlanetView {
     if (!this.albedoCapable) return false;
     if (this.texturesLoaded) return true;
     const gl = this.gl;
-    const base = new URL(dir, location.href);
     try {
-      const imgs = await Promise.all(TEXTURE_SET.map((name) => new Promise((res, rej) => {
-        const im = new Image();
-        im.onload = () => res(im);
-        im.onerror = () => rej(new Error(`missing texture ${name}.jpg`));
-        im.src = new URL(`${name}.jpg`, base).href;
-      })));
+      const base = new URL(dir, location.href);
+      const imgs = await Promise.all(TEXTURE_SET.map((name) => decodeOnce(new URL(`${name}.jpg`, base).href)));
+      if (gl.isContextLost()) { this.contextLost = true; return false; }
+      // Power-of-two only in WebGL1: REPEAT wrapping and mipmaps are both
+      // illegal on an NPOT texture there, and the result is not an error but a
+      // texture that samples pure black. These maps are 1774x887.
+      const pot = (n) => (n & (n - 1)) === 0;
       this.textures = imgs.map((im, i) => {
+        const npot = this.gl1 && !(pot(im.naturalWidth) && pot(im.naturalHeight));
         const t = gl.createTexture();
         gl.activeTexture(gl.TEXTURE0 + i);
         gl.bindTexture(gl.TEXTURE_2D, t);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
         // Repeat horizontally (the maps tile in longitude), clamp vertically.
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, npot ? gl.CLAMP_TO_EDGE : gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER,
+          npot ? gl.LINEAR : gl.LINEAR_MIPMAP_LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.generateMipmap(gl.TEXTURE_2D);
+        if (!npot) gl.generateMipmap(gl.TEXTURE_2D);
         return t;
       });
       gl.useProgram(this.prog);
@@ -401,6 +503,10 @@ export class PlanetView {
     // The terrain is a function of the seed alone, so it is rebaked only when
     // the world itself changes -- never for a climate or slider change.
     if (this.bakedSeed !== state.seed) this.bakeSurface(state.seed);
+    // Binding a null cube map is legal and samples black, so drawing without the
+    // baked fields produces a convincingly rendered black planet rather than an
+    // error. Skip the frame instead; the last good one stays on screen.
+    if (!this.ready || !this.terrainCube || !this.detailCube || !this.cloudCube) return;
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.useProgram(this.prog);

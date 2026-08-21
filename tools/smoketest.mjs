@@ -21,7 +21,19 @@ const stub2d = () => new Proxy({}, {
 
 // Enough of a WebGL2 context for the renderer's constructor, which only stores
 // it and attaches event handlers.
-const stubGl = () => new Proxy({ isContextLost: () => false }, {
+// Enough of a WebGL2 context that init() actually completes -- compiles, links
+// and bakes -- so start() settles on the GPU path and that path gets exercised.
+const stubGl = () => new Proxy({
+  isContextLost: () => false,
+  getShaderParameter: () => !globalThis.__glRefuses, getProgramParameter: () => !globalThis.__glRefuses,
+  getShaderInfoLog: () => '', getProgramInfoLog: () => '',
+  getUniformLocation: () => ({}), getParameter: () => 16, getExtension: () => null,
+  createShader: () => ({}), createProgram: () => ({}), createBuffer: () => ({}),
+  createTexture: () => ({}), createFramebuffer: () => ({}), createVertexArray: () => ({}),
+  isTexture: () => true,
+  checkFramebufferStatus: () => 0x8CD5, FRAMEBUFFER_COMPLETE: 0x8CD5,
+  getError: () => 0, NO_ERROR: 0,
+}, {
   get: (t, k) => (k in t ? t[k] : typeof k === 'string' && k.toUpperCase() === k ? 1 : () => {}),
 });
 
@@ -33,6 +45,9 @@ const mkEl = (tag = 'div') => ({
   listeners: {},
   appendChild(c) { this.children.push(c); return c; },
   insertAdjacentHTML() {}, setAttribute() {}, getAttribute: () => null,
+  // useRenderer swaps the canvas element, because a canvas keeps its context
+  // type for life. Without these the swap threw and start() died silently.
+  cloneNode() { return mkEl(this.tagName); }, replaceWith() {}, remove() {},
   addEventListener(type) { (this.listeners[type] = this.listeners[type] || []).push(1); },
   removeEventListener() {}, select() {}, blur() {}, focus() {},
   setPointerCapture() {},
@@ -45,17 +60,30 @@ const mkEl = (tag = 'div') => ({
 
 globalThis.window = globalThis;
 globalThis.document = {
-  documentElement: mkEl(), body: mkEl(),
+  documentElement: mkEl(), body: mkEl(), visibilityState: 'visible',
   querySelector: () => mkEl(), querySelectorAll: () => [],
   createElement: (t) => mkEl(t), addEventListener() {},
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
 globalThis.localStorage = { getItem: () => null, setItem() {} };
-globalThis.location = { hash: '', search: '', pathname: '/' };
+globalThis.location = { href: 'https://example.test/', hash: '', search: '', pathname: '/' };
 globalThis.history = { replaceState() {} };
 globalThis.requestAnimationFrame = () => 0;
 globalThis.addEventListener = () => {};
 globalThis.devicePixelRatio = 1;
+// Real shader sources off disk, so start() reaches the GPU path rather than
+// falling straight through to software and leaving that path untested.
+{
+  const { readFile } = await import('node:fs/promises');
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop();
+    try {
+      const text = await readFile(new URL(`../src/render/glsl/${name}`, import.meta.url), 'utf8');
+      return { ok: true, text: async () => text };
+    } catch { return { ok: false, status: 404 }; }
+  };
+}
+globalThis.Image = class { set src(v) { queueMicrotask(() => this.onerror && this.onerror()); } };
 
 // count what the app builds, so a UI that silently constructs nothing is a failure
 let created = 0;
@@ -130,6 +158,52 @@ if (app && app.tick && app.view) {
     failed++;
   } else {
     console.log(`\x1b[32mPASS\x1b[0m  frame loop rendered ${v._renders} frames`);
+  }
+}
+
+// A GPU context can be taken away and never handed back — switching apps on an
+// Android tablet is the usual way. The browser is supposed to fire
+// webglcontextrestored; when it does not, the page used to sit on a black canvas
+// for the rest of the visit, because nothing was watching.
+await new Promise((r) => setTimeout(r, 50));   // let start() settle on a renderer
+if (app && app.frame && app.view && !app.view.software) {
+  // The watchdog measures against the wall clock, so the wall clock has to move.
+  const realNow = performance.now.bind(performance);
+  let clock = realNow();
+  let t = 1e6;                                  // monotonic across both phases
+  const spin = async (n) => {
+    performance.now = () => clock;
+    for (let i = 0; i < n; i++) { clock += 1000 / 60; t += 1000 / 60; app.frame(t); }
+    performance.now = realNow;
+    await new Promise((r) => setTimeout(r, 50));
+  };
+  const strand = () => {
+    const v = app.view;
+    v.failed = false; v.ready = true; v.api = 'WebGL2';
+    v.render = () => {};
+    v.contextLost = true; v.lostSince = null;
+  };
+
+  strand();
+  await spin(900);
+  if (app.view.contextLost || !app.view.ready) {
+    console.log('\x1b[31mFAIL\x1b[0m  a context that is never restored leaves the canvas black forever');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  a context that is never restored is recovered by rebuilding');
+  }
+
+  // And when rebuilding does not help either -- a GPU that has stopped
+  // cooperating altogether -- it must end up somewhere that still draws.
+  globalThis.__glRefuses = true;
+  strand();
+  await spin(900);
+  globalThis.__glRefuses = false;
+  if (!app.view.software) {
+    console.log('\x1b[31mFAIL\x1b[0m  a GPU that keeps failing never falls back to software');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  a GPU that keeps failing falls back to software');
   }
 }
 
