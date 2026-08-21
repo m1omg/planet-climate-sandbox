@@ -132,7 +132,10 @@ export function drawProfile(canvas, world) {
 // ---------------------------------------------------------------------------
 export function drawWater(canvas, world) {
   const { ctx, w, h } = setup(canvas);
-  const pad = { l: 38, r: 8, t: 10, b: 18 };
+  // Room above the plot for the legend. It used to sit inside the plot at 55%
+  // opacity in 9px type, over the data, which made it unreadable against the
+  // pale ice bands it was drawn on top of.
+  const pad = { l: 38, r: 8, t: 26, b: 18 };
   const H = world.history;
   axes(ctx, w, h, pad);
   const inv = world.water;
@@ -146,12 +149,17 @@ export function drawWater(canvas, world) {
   const lx = (t) => pad.l + (Math.log10(Math.max(t, 1) + 1) / Math.log10(tMax + 1)) * (w - pad.l - pad.r);
   const ly = (v) => h - pad.b - (v / total) * (h - pad.t - pad.b);
 
+  // Cumulative bands, bottom to top. `sup` is the airborne water that has
+  // crossed the critical point: physically the same fluid as the vapour below
+  // it, but a state worth seeing separately.
   const layers = [
-    ['ocean', '#2f8fd6', (p) => p.ocean],
-    ['seaIce', '#9fd4ec', (p) => p.ocean + (p.seaIce || 0)],
-    ['landIce', '#e6f3fb', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0)],
-    ['vap', '#e8c07a', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + p.vap],
-    ['lost', 'rgba(255,90,60,0.55)', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + p.vap + p.lost],
+    ['ocean',         '#2f8fd6', (p) => p.ocean],
+    ['sea ice',       '#9fd4ec', (p) => p.ocean + (p.seaIce || 0)],
+    ['land ice',      '#e6f3fb', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0)],
+    ['vapour',        '#e8c07a', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + (p.vap || 0)],
+    ['supercritical', '#c98ad0', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + (p.vap || 0) + (p.sup || 0)],
+    ['lost',          'rgba(255,90,60,0.55)',
+      (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + (p.vap || 0) + (p.sup || 0) + p.lost],
   ];
   for (let k = layers.length - 1; k >= 0; k--) {
     const [, c, fn] = layers[k];
@@ -163,14 +171,47 @@ export function drawWater(canvas, world) {
   }
   label(ctx, `${total.toFixed(2)} EO`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, '0', pad.l - 4, h - pad.b, 'right');
-  const lg = [['ocean', '#2f8fd6'], ['sea ice', '#9fd4ec'], ['land ice', '#e6f3fb'],
-              ['vapour', '#e8c07a'], ['lost', '#ff5a3c']];
-  let x = pad.l + 4;
-  for (const [n, c] of lg) {
-    ctx.fillStyle = c; ctx.fillRect(x, pad.t + 2, 7, 7);
-    label(ctx, n, x + 10, pad.t + 9, 'left', 'rgba(233,240,255,0.6)', 9);
-    x += 12 + ctx.measureText(n).width + 10;
+
+  // Legend, with where the water actually is right now. Reading a stacked area
+  // chart to the nearest percent is not possible, and the number is the thing
+  // most worth knowing.
+  const now = H[H.length - 1];
+  const share = [now.ocean, now.seaIce || 0, now.landIce || 0,
+                 now.vap || 0, now.sup || 0, now.lost];
+  const swatch = ['#2f8fd6', '#9fd4ec', '#e6f3fb', '#e8c07a', '#c98ad0', '#ff5a3c'];
+  // Drop reservoirs that are empty and staying empty, so the row does not run
+  // off the end of a narrow panel with five zeroes on it.
+  const shown = layers.map((l, i) => ({ name: l[0], c: swatch[i], v: share[i] }))
+                      .filter((e) => e.v / total >= 5e-4);
+  ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
+  const wOf = (e) => 9 + 4 + ctx.measureText(`${e.name} ${pct(e.v / total)}`).width + 10;
+  let need = shown.reduce((a, e) => a + wOf(e), 0);
+  // If it will not fit, show the largest few rather than truncating mid-word.
+  const room = w - pad.l - pad.r;
+  const list = shown.slice();
+  while (need > room && list.length > 1) {
+    let smallest = 0;
+    for (let i = 1; i < list.length; i++) if (list[i].v < list[smallest].v) smallest = i;
+    need -= wOf(list[smallest]);
+    list.splice(smallest, 1);
   }
+  let x = pad.l + 2;
+  for (const e of list) {
+    ctx.fillStyle = e.c; ctx.fillRect(x, 6, 9, 9);
+    label(ctx, `${e.name} ${pct(e.v / total)}`, x + 13, 14, 'left', 'rgba(233,240,255,0.92)', 10);
+    x += wOf(e);
+  }
+}
+
+// A share as a percentage, with enough precision near zero to show that a
+// reservoir is draining rather than already empty.
+function pct(f) {
+  const p = f * 100;
+  if (p >= 99.95) return '100%';
+  if (p >= 10) return `${p.toFixed(0)}%`;
+  if (p >= 1) return `${p.toFixed(1)}%`;
+  if (p > 0) return `${p.toFixed(2)}%`;
+  return '0%';
 }
 
 // ---------------------------------------------------------------------------

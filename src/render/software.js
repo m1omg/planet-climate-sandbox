@@ -1,6 +1,6 @@
 import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js';
 import { NBANDS } from '../physics/climate.js';
-import { clamp } from '../physics/constants.js';
+import { clamp, steamOpacity } from '../physics/constants.js';
 
 // A software renderer, used when the machine cannot give us WebGL2.
 //
@@ -118,7 +118,7 @@ export class SoftwareView {
 
     // The sky only changes when the camera or the atmosphere does.
     const pH2Oq = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
-    const steamQ = clamp((pH2Oq - 0.05) / 3, 0, 1);
+    const steamQ = steamOpacity(pH2Oq);
     const skyKey = [cw, ch, this.yaw.toFixed(3), this.pitch.toFixed(3),
                     dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp].join('|');
     if (skyKey !== this.skyKey) {
@@ -151,7 +151,7 @@ export class SoftwareView {
       oceanFrac: dg.flooded ?? dg.oceanFrac,
       waterCap: dg.waterCap, glaciated: dg.glaciatedShare ?? 1,
       locked: lam, cloud,
-      steam: clamp((pH2O - 0.05) / 3, 0, 1),
+      steam: steamOpacity(pH2O),
       pTot: dg.pTotMean, co2: clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1),
       nightGlow: clamp((dg.Tmean - 700) / 700, 0, 1),
       time: state.time, relief: cfg.relief, clouds: this.clouds,

@@ -4,7 +4,7 @@ import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify } from './physics/classify.js';
 import { runawayLimit, olr } from './physics/radiation.js';
-import { T_CRIT_H2O, P_CRIT_H2O } from './physics/constants.js';
+import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
@@ -180,6 +180,11 @@ export function run() {
     let n = 0;
     while (wet.world.time < 5e6 && n++ < 3e5) wet.runYears(2e5, 2e5);
     const d = wet.world.diag;
+    check('A full runaway ends as supercritical fluid, not as vapour',
+      (d.superFrac ?? 0) > 0.95 && (wet.world.diag.Tmean > T_CRIT_H2O),
+      `${((d.superFrac ?? 0) * 100).toFixed(0)}% of the airborne water is past the critical point`);
+    check('…and an Earth-like planet has none of it',
+      (settle(EARTH, 1e6).world.diag.superFrac ?? 0) < 1e-6);
     check('A supercritical planet has no ocean, however much water it has',
       d.Tmean < T_CRIT_H2O || (wet.world.water.ocean < 1e-6 && d.flooded < 1e-3),
       `${(d.Tmean - 273.15).toFixed(0)} °C under ${d.pTotMean.toFixed(0)} bar ` +
@@ -274,6 +279,65 @@ export function run() {
     check('Earth-sized inventories are untouched by that floor',
       near(floodedFraction(ref, 0.3, ref), 0.7, 1e-9) && near(floodedFraction(0.5 * ref, 0.3, ref), 0.7 * Math.pow(0.5, 0.25), 1e-9),
       `1 EO floods ${(floodedFraction(ref, 0.3, ref) * 100).toFixed(1)}%`);
+  }
+
+  // ---- 3g. how long an ocean takes to boil ----------------------------------
+  // This is an energy problem, not a rate problem: vaporising an Earth ocean
+  // needs L_vap x 2.75e6 kg/m^2 = 6.6e12 J/m^2, so the time is that divided by
+  // whatever net flux the planet is running. Turbet et al.'s often-quoted ~10^5
+  // yr is a planet sitting a few W/m^2 over the limit; one at 1.4 S⊕ runs about
+  // 57 W/m^2 and boils in a couple of thousand years. The physical content is
+  // the scaling, so that is what is checked.
+  {
+    const NEED = 2.4e6 * 2.75e6 / 3.156e7;      // J/m², expressed in W/m²·years
+    const boil = (S) => {
+      const x = new Simulation({ ...EARTH, insolation: S });
+      const w = x.world;
+      let t0 = null, f0 = null;
+      for (let n = 0; n < 3e5 && w.time < 3e6; n++) {
+        x.stepOnce(Math.min(maxStep(w), 2e4));
+        if (t0 === null && w.diag.Tmean > 320) { t0 = w.time; f0 = w.diag.imbalance; }
+        if (t0 !== null && w.water.ocean < 0.02 * w.diag.totalWater) return { dt: w.time - t0, f0 };
+      }
+      return { dt: null, f0 };
+    };
+    const hard = boil(2.6), mild = boil(1.416);
+    const pred = (f) => NEED / f;
+    const ok = (r) => r.dt !== null && r.dt < pred(r.f0) * 1.6 && r.dt > pred(r.f0) * 0.25;
+    check('Boiling an ocean takes the time energy conservation says it should',
+      ok(hard) && ok(mild),
+      `at 2.6 S⊕ ${hard.dt.toExponential(1)} yr against ${pred(hard.f0).toExponential(1)} predicted; ` +
+      `at 1.416 S⊕ ${mild.dt.toExponential(1)} yr against ${pred(mild.f0).toExponential(1)}`);
+    check('…so a planet barely over the limit boils far more slowly than one well past it',
+      mild.dt > hard.dt * 1.5,
+      `${(mild.dt / hard.dt).toFixed(1)}× longer at 1.416 S⊕ than at 2.6 S⊕`);
+  }
+
+  // ---- 3h. the steam envelope must not hide the thing it is made of ---------
+  // The opacity was linear in vapour pressure and saturated at 3 bar, which is
+  // 134 °C -- and at 134 °C some 95% of an Earth ocean is still liquid. So the
+  // planet turned featureless white at the very start of a runaway and stayed
+  // that way, hiding the sea actually boiling away.
+  {
+    const x = new Simulation({ ...EARTH, insolation: 1.416 });
+    const w = x.world;
+    let worst = 0;
+    for (let n = 0; n < 3e5 && w.time < 3e6; n++) {
+      x.stepOnce(Math.min(maxStep(w), 2e3));
+      const pw = w.diag.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
+      // Early in the boil, while the ocean is essentially intact, the envelope
+      // must still be see-through enough to show it. Not later: once a tenth of
+      // an Earth ocean is airborne that is twenty-seven bar of steam, and a
+      // steam atmosphere that thick genuinely is opaque -- which is what Venus
+      // looks like, and not a rendering choice to argue with.
+      if (w.water.ocean > 0.95 * w.diag.totalWater) worst = Math.max(worst, steamOpacity(pw));
+      if (w.water.ocean < 0.02 * w.diag.totalWater) break;
+    }
+    check('The steam envelope stays see-through while the ocean is still intact',
+      worst < 0.70, `envelope reaches ${(worst * 100).toFixed(0)}% opacity while 95% of the sea remains ` +
+      `(it was 100% by 3 bar, which is 134 °C, with the ocean barely touched)`);
+    check('…and closes over completely once the ocean is airborne',
+      steamOpacity(270) > 0.99, `${(steamOpacity(270) * 100).toFixed(0)}% at 270 bar`);
   }
 
   // ---- 4. snowball, and its hysteresis -------------------------------------

@@ -240,6 +240,12 @@ cannot exist at any temperature: ice sublimates straight to vapour and standing 
 is why Mars, whose surface sits at about 610 Pa, has frost and ice but no lakes, and the model
 enforces it rather than letting a warm thin world keep an ocean it could not physically hold.
 
+A steam envelope is opaque, and it gets that way early: a tenth of an Earth ocean in the air is
+27 bar of vapour, and you can no more see through that than you can see Venus's surface. The
+renderer used to reach full opacity at 3 bar — about 134 °C, with 95% of the ocean still liquid —
+which hid the most interesting part of a runaway, the sea actually boiling away. Opacity now runs
+logarithmically to the ~270 bar an evaporated Earth ocean really weighs.
+
 At the other end there is the **critical point**: 647 K and 220.6 bar. Above it the liquid and the
 vapour stop being distinguishable — one supercritical fluid, no surface, no boiling, and no ocean at
 all. A planet in a full wet runaway is past it, so it shows 100% land under a steam envelope rather
@@ -319,11 +325,22 @@ Stated plainly, because a model that hides these is less useful:
   snowball studies. The semi-grey CO₂ opacity is stronger at intermediate pressure than line-by-line
   models. The *behaviour* — hysteresis, multi-Myr duration, unopposed CO₂ build-up — is right; the
   threshold sits low.
-* **The runaway transient runs 10²–10³ yr**, against ~10⁵ yr in Turbet et al. (2023). This is
-  energy conservation: vaporising an Earth ocean needs ~7×10¹² J/m² of latent heat, so the transient
-  is that divided by the planet's net flux. The model reproduces the *scaling* — slow near the
-  threshold, fast when pushed well past it — and the published figure corresponds to a forcing
-  excess of only a few W/m².
+* **The runaway transient is fast when the planet is pushed hard**, which is not a deviation but is
+  worth stating plainly, because the ~10⁵ yr figure from Turbet et al. (2023) gets quoted as though
+  it were universal. It is not: boiling an ocean is an energy problem. Vaporising an Earth ocean
+  needs L·column = 6.6×10¹² J/m² of latent heat, so the time is that divided by the planet's net
+  flux, and 10⁵ yr corresponds to a planet sitting about 2 W/m² over the limit. Measured against
+  that prediction:
+
+  | insolation | net flux | model | 6.6×10¹² J/m² ÷ flux |
+  |---|---|---|---|
+  | 1.2 S⊕ | 4 W/m² | had not finished | 5.1×10⁴ yr |
+  | 1.416 S⊕ | 57 W/m² | 1.5×10³ yr | 3.7×10³ yr |
+  | 2.6 S⊕ | 350 W/m² | 5.0×10² yr | 6.0×10² yr |
+
+  The model runs a little fast because the net flux *grows* during the transient as the albedo
+  drops, so the flux at onset understates the average. The scaling is the physical content and it
+  holds.
 * **Glacial cooling is −3.5 K at 190 ppm**, where the LGM was −6.1 K (Tierney et al. 2020). The
   difference is what the model is not given: the Laurentide and Fennoscandian ice sheets were a
   *prescribed* forcing set by ice dynamics and sea level, not something a zonal energy balance grows

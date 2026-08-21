@@ -1,6 +1,6 @@
 import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
-import { clamp } from '../physics/constants.js';
+import { clamp, steamOpacity } from '../physics/constants.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
 // fragment shader. No geometry, no dependencies, and complete control over the
@@ -621,7 +621,7 @@ export class PlanetView {
     }
 
     const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
-    const steam = clamp((pH2Omean - 0.05) / 3, 0, 1);
+    const steam = steamOpacity(pH2Omean);
     const co2Frac = clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1);
     const cloudMean = dg.cloud.reduce((a, b) => a + b, 0) / NBANDS;
     const glow = clamp((dg.Tmean - 700) / 700, 0, 1);

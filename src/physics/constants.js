@@ -58,7 +58,22 @@ export function smoothstep(e0, e1, x) {
 // above the critical point (water can no longer condense at all).
 const IAPWS = [-7.85951783, 1.84408259, -11.7866497, 22.6807411, -15.9618719, 1.80122502];
 export const T_CRIT_H2O = 647.096;
-export const P_CRIT_H2O = 22.064e6;
+export const P_CRIT_H2O = 22.064e6;      // Pa, not bar
+
+// How opaque a steam envelope looks, 0 to 1. Both renderers use this, so they
+// cannot drift apart.
+//
+// This was linear and saturated at 3 bar of water vapour, which is about 134 C
+// -- and at 134 C some 95% of an Earth ocean is still liquid. So the planet went
+// featureless white at the very start of a runaway and stayed that way, hiding
+// the whole interesting part: the sea actually boiling away. An Earth ocean is
+// 270 bar of steam once it is all airborne, so that is where the atmosphere
+// really does become an opaque envelope, and the approach to it is spread over
+// two and a half decades of pressure rather than crammed into the first one.
+export function steamOpacity(pH2O) {
+  const over = Math.max(0, pH2O - 0.05);          // Earth's 11 mbar reads as zero
+  return clamp(Math.log10(1 + over / 0.5) / Math.log10(1 + 150 / 0.5), 0, 1);
+}
 
 export function psatH2O(T) {
   if (T >= T_CRIT_H2O) return P_CRIT_H2O * (1 + (T - T_CRIT_H2O) * 0.01); // no condensation

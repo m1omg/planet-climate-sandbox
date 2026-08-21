@@ -1,5 +1,5 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
-         P_TRIPLE_H2O } from './constants.js';
+         P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O } from './constants.js';
 import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED } from './radiation.js';
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
@@ -294,6 +294,17 @@ export function update(w, dt) {
     C[i] = clamp(flooded * cSea + (1 - flooded) * C_LAND + cAtm + cLat + cFus, 1e5, 1e14);
   }
 
+  // Above 647 K and 220.6 bar the liquid and the vapour stop being different
+  // things: what is in the air is one supercritical fluid, with no surface and
+  // no boiling. It behaves as the atmosphere does and the model treats it as
+  // such, which is right -- but calling it "vapour" in the inventory hides the
+  // most dramatic thing that has happened to the planet, so track the share.
+  // P_CRIT_H2O is in pascals and pTotMean is in bar; mixing them silently gave a
+  // threshold ten thousand times too high, so nothing was ever supercritical.
+  const pCritBar = P_CRIT_H2O / 1e5;
+  const superFrac = clamp(smoothstep(T_CRIT_H2O - 25, T_CRIT_H2O + 25, Tmean)
+                        * smoothstep(0.80 * pCritBar, 1.05 * pCritBar, pTotMean), 0, 1);
+
   w.diag = {
     g, d, pN2, pCO2, pCH4, pO2, pH2O, pTot: pTotArr, pTotMean,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
@@ -304,7 +315,7 @@ export function update(w, dt) {
     iceSheetTarget,
     glaciatedShare,
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed - emitted,
-    hasWater, vapourCol: vapCol, lam, slowness, totalWater,
+    hasWater, vapourCol: vapCol, lam, slowness, totalWater, superFrac,
     Tmax: Math.max(...w.T), Tmin: Math.min(...w.T),
   };
   return w.diag;

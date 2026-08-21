@@ -112,7 +112,11 @@ export class Simulation {
       t: w.time, T: dg.Tmean, Tmax: dg.Tmax, Tmin: dg.Tmin,
       ice: dg.iceMean, pCO2: dg.pCO2, pH2O: dg.pTotMean - dg.pN2 - dg.pCO2,
       ocean: w.water.ocean, seaIce: w.water.seaIce, landIce: w.water.landIce,
-      vap: w.water.vapour, lost: w.water.lost,
+      // The airborne water, split where the critical point has been crossed.
+      // One fluid physically; two very different things to look at.
+      vap: w.water.vapour * (1 - (dg.superFrac || 0)),
+      sup: w.water.vapour * (dg.superFrac || 0),
+      lost: w.water.lost,
       flooded: dg.flooded, landFrac: dg.landFrac,
       alb: dg.absorbed / Math.max(1e-6, dg.S.reduce((a, b) => a + b, 0) / dg.S.length),
     });
