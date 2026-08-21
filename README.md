@@ -274,6 +274,13 @@ coverage follows from the water that is really there, through a hypsometric curv
 flooded = (1 − L) · (W_basin / 1 EO)^0.25
 ```
 
+Sea level on the globe is then the matching quantile of the baked height field, worked out on the
+CPU once a frame. It used to be a straight line in the shader, `thr = 0.625 − 0.25·land`, which was
+right only near the middle: **asking for 30% land drew 14.8%, and asking for 70% drew 81%**. The
+height is very nearly Gaussian — N(0.4972, 0.05313) measured over eight seeds, with the quantiles
+varying by only ~0.01 between them — so one curve serves every world, and every requested land
+fraction now draws within about two points.
+
 `W_basin` counts liquid ocean **plus sea ice**, because ice floats and still fills its basin, but
 **not** water vapour. So boiling an ocean uncovers its floor and land climbs to 100%, while freezing
 one does not. The exponent is calibrated against real hypsometry: halving Earth's ocean drops the

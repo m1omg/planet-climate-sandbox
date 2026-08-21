@@ -9,6 +9,8 @@ import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { atmosphereLook, scaleHeight } from './render/atmosphere.js';
+import { seaLevelForLand } from './render/terrain.js';
+import { bakeTerrain } from './render/cpushade.js';
 
 let pass = 0, fail = 0;
 const log = [];
@@ -396,6 +398,37 @@ export function run() {
     check('…and so does a tholin haze',
       atmosphereLook(titanW, 0, true).haze > 0.85,
       `Titan haze opacity ${(atmosphereLook(titanW, 0, true).haze * 100).toFixed(0)}%`);
+  }
+
+  // ---- 3k. the coastline has to be where the model says it is ---------------
+  // Sea level is a threshold on the baked height field. It used to be a straight
+  // line, thr = 0.625 - 0.25*land, which was right only near the middle: asking
+  // for 30% land drew 14.8% and asking for 70% drew 81%. The basin-geometry
+  // control was misreporting the one thing it controls.
+  {
+    const W = 256, H = 128;
+    const wgt = [];
+    for (let y = 0; y < H; y++) {
+      const a = Math.sin(((y + 0.5) / H) * Math.PI);   // an equirectangular row
+      for (let x = 0; x < W; x++) wgt.push(a);         // near the pole is tiny
+    }
+    const tot = wgt.reduce((a, b) => a + b, 0);
+    const drawn = (seed, land) => {
+      const D = bakeTerrain(seed, W, H), thr = seaLevelForLand(land);
+      let a = 0;
+      for (let i = 0; i < W * H; i++) if (D.data[i * 4] > thr) a += wgt[i];
+      return a / tot;
+    };
+    let worst = 0, at = 0;
+    for (const seed of [3, 91]) {
+      for (const land of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+        const e = Math.abs(drawn(seed, land) - land);
+        if (e > worst) { worst = e; at = land; }
+      }
+    }
+    check('The globe draws the land fraction the model asked for',
+      worst < 0.04, `worst error ${(worst * 100).toFixed(1)} points, at ${(at * 100).toFixed(0)}% land ` +
+      `(the old straight-line sea level was out by 15 points at 30%)`);
   }
 
   // ---- 4. snowball, and its hysteresis -------------------------------------

@@ -2,6 +2,7 @@ import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, steamOpacity } from '../physics/constants.js';
 import { atmosphereLook } from './atmosphere.js';
+import { seaLevelForLand } from './terrain.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
 // fragment shader. No geometry, no dependencies, and complete control over the
@@ -234,7 +235,7 @@ export class PlanetView {
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
-      'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt',
+      'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt', 'uSeaLevel',
       'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
       this.u[name] = gl.getUniformLocation(this.prog, name);
     }
@@ -642,7 +643,9 @@ export class PlanetView {
     gl.uniform3f(this.u.uStarColor, sc[0], sc[1], sc[2]);
     gl.uniform1f(this.u.uSeed, state.seed);
     gl.uniform1f(this.u.uLandFrac, p.landFraction);
-    gl.uniform1f(this.u.uOceanFrac, dg.flooded ?? dg.oceanFrac);
+    const flooded = dg.flooded ?? dg.oceanFrac;
+    gl.uniform1f(this.u.uOceanFrac, flooded);
+    gl.uniform1f(this.u.uSeaLevel, seaLevelForLand(1 - flooded));
     gl.uniform1f(this.u.uGlaciated, dg.glaciatedShare ?? 1);
     gl.uniform1f(this.u.uWaterCap, dg.waterCap);
     gl.uniform1f(this.u.uCloud, cloudMean);

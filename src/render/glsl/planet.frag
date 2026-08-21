@@ -12,6 +12,7 @@ uniform vec3  uStarColor;
 uniform float uSeed;
 uniform float uLandFrac;
 uniform float uOceanFrac;
+uniform float uSeaLevel;    // threshold on the baked height that puts the coast in the right place
 uniform float uWaterCap;    // 0 = bone dry, 1 = plenty of water for snow/sea
 uniform float uGlaciated;   // share of frozen land carrying an ice sheet
 
@@ -100,8 +101,9 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   float detail = terr.b;
   float fine   = terr.a;
 
-  float landTarget = clamp(1.0 - uOceanFrac, 0.0, 1.0);
-  float thr = 0.625 - 0.25*landTarget;
+  // Sea level comes from the CPU: it is one number for the whole frame, and
+  // the straight line this used to be drew 14.8% land when 30% was asked for.
+  float thr = uSeaLevel;
   // Sea level is a threshold on the baked height, so the coastline follows the
   // water inventory without ever needing a rebake.
   float h = unpack16(terr.rg) - thr;
@@ -211,8 +213,7 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
   vec4 terr = texture(uTerrain, sp);
   vec4 det  = texture(uDetailMap, sp);
   float detail = terr.b, fine = terr.a;
-  float landTarget = clamp(1.0 - uOceanFrac, 0.0, 1.0);
-  float h = unpack16(terr.rg) - (0.625 - 0.25*landTarget);
+  float h = unpack16(terr.rg) - uSeaLevel;
   float land = smoothstep(-0.010, 0.026, h);
   land = mix(1.0, land, smoothstep(0.0, 0.04, uOceanFrac));
   float mount = det.r * smoothstep(0.0, 0.16, h);

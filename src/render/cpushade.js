@@ -1,3 +1,4 @@
+import { seaLevelForLand } from './terrain.js';
 // A CPU implementation of the planet shading, for machines where WebGL2 is
 // unavailable. This is not a toy stand-in: it is the same terrain, the same
 // biome rules, the same ice and the same lighting as the GPU path, evaluated in
@@ -353,7 +354,7 @@ export function renderPlanet(rgba, W, H, s) {
         sphereUV(sp, UV);
         const f = sampleTerrain(s.terrain, UV, TMP);
         const detail = f[1];
-        const thr = 0.625 - 0.25*clamp(1 - s.oceanFrac, 0, 1);
+        const thr = s.seaLevel ?? seaLevelForLand(clamp(1 - s.oceanFrac, 0, 1));
         const h = f[0] - thr;
         let land = smoothstep(-0.010, 0.026, h);
         land = mix(1, land, smoothstep(0, 0.04, s.oceanFrac));

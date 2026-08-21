@@ -2,6 +2,7 @@ import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js'
 import { NBANDS } from '../physics/climate.js';
 import { clamp, steamOpacity } from '../physics/constants.js';
 import { atmosphereLook } from './atmosphere.js';
+import { seaLevelForLand } from './terrain.js';
 
 // A software renderer, used when the machine cannot give us WebGL2.
 //
@@ -156,6 +157,7 @@ export class SoftwareView {
       sun: [0.62, 0.28, 0.73], starColor: sc,
       terrain: this.terrain, bandT, bandIce,
       oceanFrac: dg.flooded ?? dg.oceanFrac,
+      seaLevel: seaLevelForLand(1 - (dg.flooded ?? dg.oceanFrac)),
       waterCap: dg.waterCap, glaciated: dg.glaciatedShare ?? 1,
       locked: lam, cloud,
       steam: steamOpacity(pH2O),
