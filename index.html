@@ -152,7 +152,13 @@
   </aside>
 </div>
 
-<button id="mobile-toggle" class="icon-btn" title="Show panels">☰</button>
+<button id="panel-left" class="panel-tab" title="Planet controls" aria-pressed="false" aria-label="Show the planet controls">
+      <span aria-hidden="true">☰</span><span class="tab-label">Controls</span>
+    </button>
+    <button id="panel-right" class="panel-tab" title="Readout and scenarios" aria-pressed="false" aria-label="Show the readout and scenarios">
+      <span class="tab-label">Readout</span><span aria-hidden="true">☰</span>
+    </button>
+    <div id="panel-scrim" hidden></div>
 
 <script type="module" src="src/main.js"></script>
 </body>

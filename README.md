@@ -294,6 +294,33 @@ terminator. The deepest basin has a finite area, so as the water goes the floode
 in proportion to the volume rather than to its fourth root; requiring a mean depth of at least 50 m
 imposes exactly that, and it binds only below a couple of thousandths of an ocean.
 
+### Real worlds
+
+Earth, Mars, Venus and Titan carry their **actual surface maps**, loaded when you pick that preset.
+
+Geography is not a function of climate — warming Earth does not move its continents — so the map
+stays put while you drag every slider, and only changes when you load a different world. Nothing has
+to cross-fade as the climate runs, which is the whole reason this works.
+
+Earth also carries its **real topography**, remapped at build time so its height distribution matches
+the procedural terrain's. That means the same sea-level function serves both, and Earth's coastline
+lands where it belongs: asking for 29% land draws 29.0%, with all ten test landmarks — the Sahara,
+Kansas, the Amazon, mid-Pacific, Antarctica and the rest — on the right side of the water. Because
+the map keeps its bathymetry (70% of the globe spread across the sub-sea levels, not clipped flat),
+**sea level really moves**: drain the oceans and the continental shelves appear.
+
+Switching between a real world and an invented one **dissolves region by region** rather than
+blending everywhere, following the terrain's own detail field. That is not a stylistic choice. Two
+worlds disagree about land-versus-sea over about 41% of the globe, so fading the *pictures* is a
+double exposure with two sets of coastlines; and blending two height fields everywhere flattens the
+relief and drains the land (measured: 30% → 18% at the midpoint). A regional dissolve makes every
+point on the globe somebody's real coastline throughout, and holds the land fraction to within a
+point.
+
+Only Earth ships topography: it is the one body with a clean, redistributable grayscale DEM at a
+usable size, and a plausible-looking but wrong Mars would be worse than an honest procedural one.
+Sources and licences are in `assets/bodies/CREDITS.md`; the build is `tools/buildbodies.py`.
+
 ### Looking at it
 
 Drag to orbit the camera — the star, the terminator and the ice caps stay where they belong and you

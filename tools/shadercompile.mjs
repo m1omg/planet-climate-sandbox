@@ -62,9 +62,18 @@ link(vs, fs, 'planet');
 // The reduced build, used where there are too few texture units for the albedo
 // maps. An untested variant is how the WebGL1 path came to be broken in the
 // first place, so it gets compiled too.
-const fsNo = compile(gl.FRAGMENT_SHADER,
-  '#define NO_ALBEDO 1\n' + toES100(splice(read('planet.frag')), 'frag'), 'planet.frag (NO_ALBEDO)');
-link(vs, fsNo, 'planet (NO_ALBEDO)');
+// Every combination of defines the renderer can actually ship, not just the
+// default one. BODY_MAP is the variant most machines run -- anything with
+// twelve texture units gets it -- and it was going out entirely uncompiled.
+for (const [name, def] of [
+  ['NO_ALBEDO', '#define NO_ALBEDO 1\n'],
+  ['BODY_MAP', '#define BODY_MAP 1\n'],
+  ['BODY_MAP + NO_ALBEDO', '#define BODY_MAP 1\n#define NO_ALBEDO 1\n'],
+]) {
+  const f = compile(gl.FRAGMENT_SHADER, def + toES100(splice(read('planet.frag')), 'frag'),
+    `planet.frag (${name})`);
+  link(vs, f, `planet (${name})`);
+}
 const bvs = compile(gl.VERTEX_SHADER, toES100(read('bake.vert'), 'vert'), 'bake.vert');
 const bfs = compile(gl.FRAGMENT_SHADER, bakeES100(splice(read('bake.frag'))), 'bake.frag');
 link(bvs, bfs, 'bake');

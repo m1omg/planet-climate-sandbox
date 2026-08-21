@@ -9,6 +9,18 @@ import { seaLevelForLand } from './terrain.js';
 // atmosphere, the terminator and the steam envelope.
 // The generated albedo maps, in the order the shader expects them.
 export const TEXTURE_SET = ['rock', 'desert', 'vegetation', 'ice', 'ocean', 'lava'];
+
+// Real worlds, and which of them has topography to go with its photograph.
+// Only Earth: it is the one body with a clean public-domain grayscale DEM at a
+// usable size, and a wrong Mars is worse than a procedural one.
+export const BODY_MAPS = {
+  earth: { colour: 'earth.jpg', height: 'earth_height.png' },
+  preindustrial: { colour: 'earth.jpg', height: 'earth_height.png' },
+  futureEarth: { colour: 'earth.jpg', height: 'earth_height.png' },
+  mars: { colour: 'mars.jpg' },
+  venus: { colour: 'venus.jpg' },
+  titan: { colour: 'titan.jpg' },
+};
 const TEX_UNIFORMS = ['uTexRock', 'uTexDesert', 'uTexVeg', 'uTexIce', 'uTexOcean', 'uTexLava'];
 
 // Quality settings. High is the default everywhere; Low is a manual choice for
@@ -95,6 +107,9 @@ export class PlanetView {
     this.maxTexUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) || 8;
     this.maxFragUniforms = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) || 16;
     this.albedoCapable = this.maxTexUnits >= 10;
+    // The real-world maps need two more units on top of the albedo set.
+    this.bodyCapable = this.maxTexUnits >= 12;
+    this.body = null; this.bodyMix = 0; this.bodyTarget = 0; this.bodyHasHeight = 0;
 
     // Mobile browsers throw the GPU context away when the tab goes to the
     // background, and every program, buffer, texture and framebuffer dies with
@@ -145,6 +160,9 @@ export class PlanetView {
     this.bandTex = null;
     this.terrainCube = this.detailCube = this.cloudCube = null;
     this.bakeJob = null;
+    this.bodyColourTex = this.bodyHeightTex = this.blankTex = null;
+    const wasBody = this.body; this.body = null; this.bodyMix = 0;
+    this.pendingBody = wasBody;   // reloaded once the context is back
   }
 
   // Called when the tab comes back to the foreground. Some drivers quietly
@@ -183,6 +201,7 @@ export class PlanetView {
     this.contextLost = false;
     this.lostSince = null;
     await this.loadTextures();
+    if (this.pendingBody) { const b = this.pendingBody; this.pendingBody = null; await this.setBody(b); }
     return true;
   }
 
@@ -208,7 +227,8 @@ export class PlanetView {
     catch (e) { console.error(e); this.fail(`shader sources unavailable: ${e.message}`); return false; }
     if (gl.isContextLost()) { this.fail('context lost during start-up'); return false; }
     const V = this.gl1 ? (x) => toES100(x, 'vert') : (x) => x;
-    const defines = this.albedoCapable ? '' : '#define NO_ALBEDO 1\n';
+    let defines = this.albedoCapable ? '' : '#define NO_ALBEDO 1\n';
+    if (this.bodyCapable) defines += '#define BODY_MAP 1\n';
     const withDefines = (x) => (defines
       ? x.replace(/^(#version[^\n]*\n)?/, (m) => m + defines)
       : x);
@@ -236,6 +256,7 @@ export class PlanetView {
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
       'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt', 'uSeaLevel',
+      'uBodyMap', 'uBodyHeight', 'uBodyMix', 'uBodyHasHeight',
       'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
       this.u[name] = gl.getUniformLocation(this.prog, name);
     }
@@ -251,6 +272,20 @@ export class PlanetView {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    // Something valid must be bound to the body samplers even when no real
+    // world is loaded: the shader still samples them, it just weights the
+    // result to nothing.
+    if (this.bodyCapable) {
+      this.blankTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.blankTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+        new Uint8Array([128, 128, 128, 255]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
 
     this.ready = true;
 
@@ -534,6 +569,49 @@ export class PlanetView {
     }
   }
 
+  // Show a real world. `name` is a preset key, or null to go back to the
+  // procedural terrain. The change is not instant: bodyMix is eased in render()
+  // and the shader dissolves it region by region.
+  async setBody(name) {
+    if (!this.bodyCapable || this.failed) return false;
+    const def = name ? BODY_MAPS[name] : null;
+    if (!def) { this.body = null; this.bodyTarget = 0; return false; }
+    if (this.body === name) { this.bodyTarget = 1; return true; }
+    const gl = this.gl;
+    const base = new URL('assets/bodies/', location.href);
+    try {
+      const [colour, height] = await Promise.all([
+        decodeOnce(new URL(def.colour, base).href),
+        def.height ? decodeOnce(new URL(def.height, base).href) : Promise.resolve(null),
+      ]);
+      if (gl.isContextLost() || !this.ready) return false;
+      const upload = (img, unit, existing) => {
+        const t = existing || gl.createTexture();
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        // Wrap in longitude, clamp at the poles, and no mipmaps: these are
+        // 2048x1024, which is not a power of two in WebGL1's sense of the word.
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        return t;
+      };
+      this.bodyColourTex = upload(colour, 10, this.bodyColourTex);
+      if (height) this.bodyHeightTex = upload(height, 11, this.bodyHeightTex);
+      this.bodyHasHeight = height ? 1 : 0;
+      this.body = name;
+      this.bodyTarget = 1;
+      return true;
+    } catch (e) {
+      console.warn('body map unavailable, staying procedural:', e.message);
+      this.body = null; this.bodyTarget = 0;
+      return false;
+    }
+  }
+
   link(vs, fs) {
     const gl = this.gl;
     const mk = (type, src) => {
@@ -646,6 +724,19 @@ export class PlanetView {
     const flooded = dg.flooded ?? dg.oceanFrac;
     gl.uniform1f(this.u.uOceanFrac, flooded);
     gl.uniform1f(this.u.uSeaLevel, seaLevelForLand(1 - flooded));
+    if (this.bodyCapable) {
+      // Ease across in about a second and a quarter -- long enough to read as a
+      // world changing, short enough not to be a wait.
+      this.bodyMix += clamp(this.bodyTarget - this.bodyMix, -0.8 * dtReal, 0.8 * dtReal);
+      gl.activeTexture(gl.TEXTURE0 + 10);
+      gl.bindTexture(gl.TEXTURE_2D, this.bodyColourTex || this.blankTex);
+      gl.activeTexture(gl.TEXTURE0 + 11);
+      gl.bindTexture(gl.TEXTURE_2D, this.bodyHeightTex || this.blankTex);
+      gl.uniform1i(this.u.uBodyMap, 10);
+      gl.uniform1i(this.u.uBodyHeight, 11);
+      gl.uniform1f(this.u.uBodyMix, this.bodyMix);
+      gl.uniform1f(this.u.uBodyHasHeight, this.bodyHasHeight);
+    }
     gl.uniform1f(this.u.uGlaciated, dg.glaciatedShare ?? 1);
     gl.uniform1f(this.u.uWaterCap, dg.waterCap);
     gl.uniform1f(this.u.uCloud, cloudMean);

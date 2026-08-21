@@ -6,7 +6,7 @@ import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
 import { NBANDS, lockFactor } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
-import { PlanetView, MIN_ZOOM, MAX_ZOOM } from './render/planet.js';
+import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
@@ -125,6 +125,7 @@ async function useRenderer(kind) {
   view.spin = old.spin ?? 0; view.spinPaused = old.spinPaused ?? false;
   view.spinVel = old.spinVel ?? 0;
   view.zoom = old.zoom ?? 1;
+  if (activeBody) view.setBody?.(activeBody);
   window.__app.view = view;
   const ok = await view.init();
   bindPlanetDrag();
@@ -368,14 +369,30 @@ function setPresetActive(id) {
   document.querySelectorAll('[data-preset]').forEach((b) =>
     b.classList.toggle('active', b.dataset.preset === id));
 }
+// Which real world, if any, this preset is. Geography is not a function of
+// climate: warming Earth does not move its continents, so the map stays put
+// while every slider is dragged and only changes when you load a different
+// world. That is why nothing has to cross-fade as the climate runs.
+let activeBody = null;
+function applyBody(id) {
+  const want = id && BODY_MAPS[id] ? id : null;
+  if (want === activeBody) return;
+  activeBody = want;
+  view.setBody?.(want);
+}
+
 function loadPreset(id) {
   Object.assign(params, PRESETS[id].params);
-  renderState.seed = Math.random() * 100;
+  // A real world keeps its own geography; only invented ones get a new seed.
+  if (!BODY_MAPS[id]) renderState.seed = Math.random() * 100;
   sim.reset(params);
+  applyBody(id);
   syncSliders(); setPresetActive(id); writeHash();
   rememberStart();
   closeScenario();
-  toast(`${PRESETS[id].icon} ${PRESETS[id].name}`);
+  toast(BODY_MAPS[id] && view.bodyCapable
+    ? `${PRESETS[id].icon} ${PRESETS[id].name} — real surface map`
+    : `${PRESETS[id].icon} ${PRESETS[id].name}`);
 }
 
 function buildScenarios() {
@@ -653,13 +670,33 @@ function bindControls() {
   });
 
   $('#scenario-banner .sc-close').addEventListener('click', closeScenario);
-  $('#mobile-toggle').addEventListener('click', () => {
-    if (document.body.classList.contains('show-left')) {
-      document.body.classList.remove('show-left'); document.body.classList.add('show-right');
-    } else if (document.body.classList.contains('show-right')) {
-      document.body.classList.remove('show-right');
-    } else document.body.classList.add('show-left');
-  });
+  // One tab at each edge, each opening the panel it points at. This used to be a
+  // single button that cycled left -> right -> closed, which gave no clue what
+  // the next tap would do and needed three taps to put a panel away.
+  const showPanel = (side) => {
+    const b = document.body;
+    const want = side && !b.classList.contains(`show-${side}`);
+    b.classList.remove('show-left', 'show-right');
+    if (want) b.classList.add(`show-${side}`);
+    $('#panel-left').setAttribute('aria-pressed', String(b.classList.contains('show-left')));
+    $('#panel-right').setAttribute('aria-pressed', String(b.classList.contains('show-right')));
+  };
+  $('#panel-left').addEventListener('click', () => showPanel('left'));
+  $('#panel-right').addEventListener('click', () => showPanel('right'));
+  $('#panel-scrim').addEventListener('click', () => showPanel(null));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') showPanel(null); });
+
+  // The timebar wraps to two rows on a narrow screen, so how much room the view
+  // controls have above it is not a constant. Measure it instead of guessing:
+  // guessing is why the renderer button ended up clipped off the bottom.
+  const bar = $('#timebar');
+  if (bar) {
+    const fit = () => document.documentElement.style.setProperty('--bar', `${Math.ceil(bar.getBoundingClientRect().height)}px`);
+    if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(bar);
+    addEventListener('resize', fit);
+    addEventListener('orientationchange', fit);
+    fit();
+  }
 
   // Coming back from another app: the GPU context may have been thrown away
   // while we were gone, and the wall clock has run on without us.
@@ -861,7 +898,10 @@ buildLogUI($('#statelog'), discovered, (id) => {
 });
 $('#found-count').textContent = String(discovered.size);
 $('#total-count').textContent = String(Object.keys(STATES).length);
-if (Object.keys(paramsFromHash()).length === 0) setPresetActive('earth');
+if (Object.keys(paramsFromHash()).length === 0) {
+  setPresetActive('earth');
+  activeBody = 'earth';       // the app opens on Earth, so it opens on Earth's map
+}
 syncPlay();
 
 let started = false;
@@ -882,6 +922,7 @@ async function start() {
   for (const kind of order) {
     const ok = await useRenderer(kind);
     if (ok && !view.failed) {
+      if (activeBody) view.setBody?.(activeBody);
       if (kind !== 'gl2') {
         // Do not claim WebGL2 is missing when it was simply not asked for.
         const forced = wanted === kind;

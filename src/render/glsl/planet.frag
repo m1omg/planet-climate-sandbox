@@ -13,6 +13,12 @@ uniform float uSeed;
 uniform float uLandFrac;
 uniform float uOceanFrac;
 uniform float uSeaLevel;    // threshold on the baked height that puts the coast in the right place
+#ifdef BODY_MAP
+uniform sampler2D uBodyMap;     // a real world's albedo, equirectangular
+uniform sampler2D uBodyHeight;  // its topography, matched to the terrain distribution
+uniform float uBodyMix;         // 0 = procedural, 1 = the real thing
+uniform float uBodyHasHeight;   // not every body has a usable DEM
+#endif
 uniform float uWaterCap;    // 0 = bone dry, 1 = plenty of water for snow/sea
 uniform float uGlaciated;   // share of frozen land carrying an ice sheet
 
@@ -95,6 +101,28 @@ mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1.0,0.0,0.0, 0.0,c,s, 0
 // Unpack the 16-bit height the bake wrote across two channels.
 float unpack16(vec2 c){ return (c.x*255.0*256.0 + c.y*255.0) / 65535.0; }
 
+#ifdef BODY_MAP
+// Equirectangular lookup for a real world's maps. `sp` is planet-fixed, so the
+// map turns with the planet and leans with its obliquity like everything else.
+vec2 bodyUV(vec3 sp){
+  vec3 d = normalize(sp);
+  return vec2(atan(d.z, d.x) * 0.15915494 + 0.5, acos(clamp(d.y, -1.0, 1.0)) * 0.31830989);
+}
+// How much of the real world shows through at this point. Not a flat dissolve:
+// it sweeps across the globe following the terrain's own detail field, so a
+// world changes region by region -- coastlines staying sharp throughout,
+// because every point is always somebody's real coastline -- rather than the
+// whole planet going soft at once. Blending two decorrelated height fields
+// everywhere flattens the relief and drains the land (measured: 30% -> 18%);
+// dissolving them regionally holds it to within a point.
+float bodyBlend(float detail){
+  float t = clamp(uBodyMix, 0.0, 1.0);
+  if(t <= 0.0) return 0.0;
+  if(t >= 1.0) return 1.0;
+  return clamp((t * 1.5 - 0.25 - (detail - 0.5)) * 5.0, 0.0, 1.0);
+}
+#endif
+
 vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float height){
   vec4 terr = texture(uTerrain, sp);
   vec4 det  = texture(uDetailMap, sp);
@@ -106,7 +134,16 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   float thr = uSeaLevel;
   // Sea level is a threshold on the baked height, so the coastline follows the
   // water inventory without ever needing a rebake.
-  float h = unpack16(terr.rg) - thr;
+  float raw = unpack16(terr.rg);
+#ifdef BODY_MAP
+  // The real topography is stored already matched to the procedural field's own
+  // distribution, so the same sea level puts the coast in the right place on
+  // both and a blend of the two keeps the land fraction it started with.
+  float bm = bodyBlend(detail);
+  vec2 buv = bodyUV(sp);
+  raw = mix(raw, mix(raw, 0.30 + 0.40*texture(uBodyHeight, buv).r, uBodyHasHeight), bm);
+#endif
+  float h = raw - thr;
   height = h;
   float land = smoothstep(-0.010, 0.026, h);
   // A world with no ocean has no sea basins: low ground is just low ground.
@@ -140,6 +177,21 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
                  vec3(0.010,0.055,0.17), smoothstep(0.35,1.0,depth));
   // A drying sea goes briny and pale before it disappears altogether.
   sea = mix(mix(sand, rock, 0.35), sea, smoothstep(0.02,0.25,uWaterCap));
+
+#ifdef BODY_MAP
+  // The real map supplies the *ground*, not the water: the sea is drawn by the
+  // model, because the model is what decides where the sea is. A warming or
+  // freezing world then paints over this exactly as it does the procedural one.
+  if(bm > 0.0){
+    vec3 real = texture(uBodyMap, buv).rgb;
+    // Only the land part of the photograph is wanted; its own oceans would
+    // fight the sea below, and its greens have to yield when the climate stops
+    // supporting them.
+    vec3 realDry = mix(vec3(dot(real, vec3(0.35,0.42,0.23))) * vec3(1.06,0.96,0.80), real,
+                       smoothstep(0.08, 0.45, life));
+    ground = mix(ground, realDry, bm);
+  }
+#endif
 
   vec3 col = mix(sea, ground, land);
   shininess = (1.0-land)*0.9;

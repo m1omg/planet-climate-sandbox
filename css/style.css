@@ -256,7 +256,21 @@ body.software-render #planet{image-rendering:auto}
 .about p{font-size:11.5px;line-height:1.6;color:var(--fg-dim);margin:0 0 9px}
 .about a{color:var(--accent)}
 
-#mobile-toggle{display:none;position:fixed;top:12px;right:12px;z-index:30}
+/* Panel tabs, phone only. One at each edge, at thumb height, each opening the
+   panel it points at -- rather than one button cycling through three states,
+   which gave no clue what the next tap would do. */
+.panel-tab{
+  display:none;position:fixed;top:50%;transform:translateY(-50%);z-index:30;
+  align-items:center;gap:6px;padding:14px 8px;
+  background:rgba(18,24,40,.92);border:1px solid var(--line);color:var(--fg-dim);
+  backdrop-filter:blur(8px);cursor:pointer;
+  writing-mode:vertical-rl;font:11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+}
+#panel-left{left:0;border-left:0;border-radius:0 10px 10px 0}
+#panel-right{right:0;border-right:0;border-radius:10px 0 0 10px;rotate:180deg}
+.panel-tab[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+.panel-tab:active{background:rgba(30,40,64,.95)}
+#panel-scrim{display:none}
 
 /* ---------------- responsive ---------------- */
 @media (max-width:1180px){
@@ -272,7 +286,22 @@ body.software-render #planet{image-rendering:auto}
   #controls{left:0}
   #readout{right:0;left:auto;transform:translateX(102%);border-left:1px solid var(--line)}
   body.show-left #controls,body.show-right #readout{transform:translateX(0)}
-  #mobile-toggle{display:block}
+  .panel-tab{display:flex}
+  /* A panel is open: the tab would sit on top of it, and tapping the darkened
+     rest of the screen should put it away again. */
+  body.show-left #panel-left,body.show-right #panel-right{opacity:0;pointer-events:none}
+  #panel-scrim{position:fixed;inset:0;z-index:19;background:rgba(4,7,14,.5)}
+  body.show-left #panel-scrim,body.show-right #panel-scrim{display:block}
+  /* The view controls run along the bottom instead of stacking up the side.
+     Stacked, the column grew past the top of the wrapped timebar and the
+     renderer button was clipped off the screen entirely. --bar is the timebar's
+     measured height, because it wraps to two rows on a narrow screen. */
+  #view-controls{
+    flex-direction:row;flex-wrap:wrap;justify-content:flex-end;
+    left:10px;right:10px;bottom:calc(var(--bar,104px) + 10px);gap:8px;
+  }
+  #view-controls .icon-btn{width:38px;height:34px;font-size:16px}
+  #view-controls .renderer-btn{height:34px}
   #scenario-banner{width:min(280px,72vw);top:56px}
   #timebar{flex-wrap:wrap;gap:8px}
   .rate{order:5;width:100%;flex-basis:100%}
