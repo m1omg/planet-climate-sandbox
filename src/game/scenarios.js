@@ -61,6 +61,18 @@ export const SCENARIOS = [
     fail: null,
   },
   {
+    id: 'oxidation',
+    name: 'The Great Oxidation',
+    icon: '🫧',
+    brief: 'An Archean world, anoxic, kept warm above freezing by a millibar of methane. Your cyanobacteria are about to start making oxygen — and oxygen and methane cannot coexist. Oxygenate this planet without freezing it solid.',
+    hint: 'Oxygen cuts methane’s life from ten thousand years to ten, and a millibar of methane is worth some fifteen watts per square metre. Replace that greenhouse with CO₂ *before* you turn the biosphere up, or you will watch the ice-albedo feedback take the whole planet — and the methane coming back afterwards will not melt it.',
+    params: { ...EARTH, o2Bar: 0, biosphere: 0.2, insolation: 0.77, landFraction: 0.1,
+              co2Bar: 0.08, ch4Bar: 1e-3, startT: 288 },
+    limit: 3e8,
+    check: (w) => w.diag.pO2 > 0.01 && w.diag.Tmean > 273 && w.diag.iceMean < 0.5,
+    fail: (w) => w.diag.iceMean > 0.95,
+  },
+  {
     id: 'venus',
     name: 'Undo Venus',
     icon: '🌋',

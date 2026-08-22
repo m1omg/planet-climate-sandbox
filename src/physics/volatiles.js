@@ -15,6 +15,25 @@ import { NBANDS } from './climate.js';
 // and shuts down evaporation. Land ice is a separate reservoir again: it sits
 // on top of exposed ground and does not fill anything.
 // ---------------------------------------------------------------------------
+// The oxygen cycle, in kg/m^2 of O2 per year.
+//
+// Set from Earth rather than guessed. Its atmosphere holds 2141 kg/m^2 of
+// oxygen and the real net source is about 1e13 mol/yr, which is 6.3e-4
+// kg/m^2/yr and implies a residence time of 3.4 Myr against a literature 2-3.
+// O2_BIO is then fixed by requiring an Earth-like biosphere over Earth-like
+// volcanism to settle at 0.21 bar.
+//
+// O2_REDUCTANT puts the threshold near a fifth of Earth's biosphere: low enough
+// that an Archean world can sit below it, high enough that crossing it is a
+// deliberate act rather than something that happens by itself.
+// Share of Earth's silicate weathering that happens on the seafloor rather
+// than on land: a quarter, at the low end of the published range.
+const SEAFLOOR_SHARE = 0.25;
+
+const O2_TAU_OX = 3.0e6;        // yr, oxidative weathering timescale
+const O2_REDUCTANT = 2.0e-4;    // kg/m^2/yr at Earth's volcanism
+const O2_BIO = 5.2e-4;          // kg/m^2/yr at an Earth-like biosphere
+
 // Area-averaged thickness an ice sheet can reach before it flows and calves
 // faster than it accumulates, and the density of glacier ice.
 const SHEET_MAX_THICKNESS = 2500;   // m
@@ -230,9 +249,14 @@ export function stepVolatiles(w, dtYears) {
     const dg = w.diag, p = w.params;
     const tau = methaneLifetime(dg.pO2, dg.hazeTau ?? 0, p.xuvFraction / 3.4e-6);
     if (w.ch4Source == null) w.ch4Source = w.ch4 / tau;
+    // Nothing on a four-hundred-kelvin surface is making methane, biologically
+    // or geologically. Without this a world could boil its ocean away and keep
+    // a millibar of methane going, because the source had no idea the planet
+    // had died. Titan is well below this and keeps its cryovolcanic supply.
+    const makes = 1 - smoothstep(400, 600, dg.Tmean);
     // Semi-implicit, so an arbitrarily long step still lands on the right
     // answer instead of overshooting past zero.
-    w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * dtYears) / (1 + dtYears / tau));
+    w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * makes * dtYears) / (1 + dtYears / tau));
     w.ch4Tau = tau;
   }
 
@@ -253,21 +277,6 @@ export function stepVolatiles(w, dtYears) {
       w.o2 += lostEO * d.eoColumn * (32 / 18) * 0.15;
     }
   }
-  // Free oxygen does not simply pile up. Reduced volcanic gases and the
-  // weathering of fresh reduced crust consume it, which is why the Archean
-  // stayed anoxic for a billion years with photosynthesis already running: the
-  // reductant flux outran the oxygen supply (Catling & Zahnle 2020).
-  //
-  // Nothing depended on the oxygen until methane did, and then it mattered at
-  // once -- a world that had lost three hundred-thousandths of an ocean had
-  // banked enough to cut its methane's lifetime from ten thousand years to ten
-  // and wipe it out. A real runaway still oxidises a planet: losing an ocean
-  // leaves some 700,000 kg/m2 of oxygen against the few thousand this sink can
-  // take in a billion years.
-  {
-    const reductant = OUTGAS_EARTH * outgassingScale(p.mass) * p.outgassing;
-    w.o2 = Math.max(0, w.o2 - reductant * dtYears);
-  }
   partitionWater(w);
 
   // --- carbonate-silicate cycle -------------------------------------------
@@ -275,10 +284,28 @@ export function stepVolatiles(w, dtYears) {
   const liquid = clamp(1 - dg.iceMean, 0, 1) * smoothstep(0, 0.02, w.water.ocean);
   const landExposed = clamp(p.landFraction * (1 - dg.iceMean), 0, 1);
   const pCO2rel = Math.max(dg.pCO2 / 280e-6, 1e-6);
+  // Two silicate sinks, not one.
+  //
+  // Continental weathering is the familiar one and needs exposed rock. Seafloor
+  // weathering does not: ocean water circulates through fresh basalt at the
+  // ridges and lays CO2 down as carbonate there, and it is worth something like
+  // a quarter of Earth's total silicate sink (Brady & Gislason 1997; Coogan &
+  // Dosso 2015; Krissansen-Totton & Catling 2017). Its temperature dependence
+  // is weaker, being tied to bottom water rather than to the surface, and its
+  // CO2 dependence milder.
+  //
+  // Leaving it out meant a world with no land had no carbon thermostat at all
+  // and its climate simply drifted -- which is both wrong and inconsistent,
+  // since the oxygen sink above already leans on seafloor oxidation for exactly
+  // the same reason. The split is normalised so Earth's total is unchanged.
+  const wLand = (landExposed / 0.3)
+              * Math.pow(pCO2rel, 0.3)
+              * Math.exp(clamp((dg.Tmean - 288) / 13.7, -8, 8));
+  const wSea = (dg.flooded / 0.7)
+             * Math.pow(pCO2rel, 0.23)
+             * Math.exp(clamp((dg.Tmean - 288) / 28.0, -8, 8));
   const Wr = OUTGAS_EARTH * outgassingScale(p.mass)
-           * (landExposed / 0.3)
-           * Math.pow(pCO2rel, 0.3)
-           * Math.exp(clamp((dg.Tmean - 288) / 13.7, -8, 8))
+           * ((1 - SEAFLOOR_SHARE) * wLand + SEAFLOOR_SHARE * wSea)
            * liquid;
   // Ocean + reactive crust buffer the atmosphere, stretching the feedback from
   // millennia to ~1 Myr. In a hard snowball the sink is gone and CO2 simply
@@ -290,6 +317,44 @@ export function stepVolatiles(w, dtYears) {
   // clock to a crawl whenever CO2 was drawn down near zero.
   const dWdC = w.co2 > 1e-12 ? 0.3 * Wr / w.co2 : 0;
   w.co2 = Math.max(0, w.co2 + (V - Wr) * dtYears / kappa / (1 + dtYears * dWdC / kappa));
+
+  // --- the oxygen cycle ----------------------------------------------------
+  // Built to mirror the carbon one above, because it is the same shape: a
+  // reservoir with a source you control and sinks the planet decides.
+  //
+  //   carbon    co2Bar   <- outgassing   -> silicate weathering, cold traps
+  //   oxygen    o2Bar    <- biosphere    -> volcanic reductants, oxidative weathering
+  //
+  // Oxygen used to exist only as a fossil of hydrogen escape, which meant the
+  // only route to an oxygen-rich atmosphere was to boil an ocean. That is the
+  // Venus story, not Earth's.
+  {
+    // Photosynthesis needs liquid water and a temperature something can live
+    // at; a world that has boiled or frozen stops making oxygen.
+    const alive = smoothstep(0, 0.015, w.water.ocean) * (1 - smoothstep(330, 360, dg.Tmean));
+    const source = O2_BIO * Math.max(p.biosphere ?? 0, 0) * alive;
+
+    // Reduced volcanic gases, straight out of the ground and into the air.
+    // This is the term the biosphere has to outrun, and until it does the
+    // atmosphere stays anoxic however long you wait -- which is why the Archean
+    // stayed anoxic for a billion years with photosynthesis already running
+    // (Catling & Zahnle 2020). The Great Oxidation is that threshold being
+    // crossed, and here it falls out of the arithmetic rather than being staged.
+    const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing;
+
+    // Oxidative weathering of the crust: first order in how much oxygen there
+    // is, which is what makes the level settle instead of climbing for ever.
+    // It needs liquid water, so a planet that has boiled dry keeps whatever its
+    // lost ocean left behind -- Venus. The floor is seafloor oxidation: gating
+    // it on exposed land alone would leave a waterworld, which has none, with
+    // no sink at all.
+    const weathering = (0.25 + 0.75 * landExposed) * liquid / O2_TAU_OX;
+
+    // Semi-implicit in the part that depends on w.o2, so a long step cannot
+    // overshoot past zero.
+    w.o2 = Math.max(0, (w.o2 + (source - reductant) * dtYears) / (1 + weathering * dtYears));
+    w.o2Flux = { source, reductant, weathering: w.o2 * weathering };
+  }
 
   // --- CO2 condensation onto polar caps (Mars-like collapse) ---------------
   let coldFrac = 0, Tcold = 1e9;

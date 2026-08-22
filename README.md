@@ -281,6 +281,16 @@ height is very nearly Gaussian — N(0.4972, 0.05313) measured over eight seeds,
 varying by only ~0.01 between them — so one curve serves every world, and every requested land
 fraction now draws within about two points.
 
+A world with no continents still has a thermostat. Seawater circulates through fresh basalt at the
+mid-ocean ridges and lays carbon down there as carbonate, which is around a quarter of Earth's
+silicate sink and the whole of a landless world's (Brady & Gíslason 1997; Coogan & Dosso 2015;
+Krissansen-Totton & Catling 2017). Its temperature dependence is weaker, being tied to bottom water
+rather than to the surface, and its CO₂ dependence milder. Leaving it out meant a waterworld's
+climate simply drifted — and it was inconsistent, since the oxygen sink already leans on seafloor
+oxidation for exactly the same reason. The split is normalised so Earth's total is unchanged; a
+waterworld settles warmer and more carbon-rich than a continental world, and can now climb back out
+of a snowball, which it previously could not.
+
 `W_basin` counts liquid ocean **plus sea ice**, because ice floats and still fills its basin, but
 **not** water vapour. So boiling an ocean uncovers its floor and land climbs to 100%, while freezing
 one does not. The exponent is calibrated against real hypsometry: halving Earth's ocean drops the
@@ -334,6 +344,59 @@ bands, ice caps and surface together — so the terminator cuts across the latit
 instead of running straight down the poles. It used to drive the seasons in the physics and be
 completely invisible on the globe. A tidally locked world is exempt: its bands run from the
 substellar point, not from a pole, so obliquity means nothing there.
+
+### Oxygen, and the Great Oxidation
+
+Oxygen used to be a fossil of hydrogen escape and nothing else — so the only route to an
+oxygen-rich atmosphere was to boil an ocean, which is the Venus story, not Earth's. It is now the
+same shape as the carbon cycle:
+
+| | reservoir | source | sinks |
+|---|---|---|---|
+| carbon | `co2Bar` | volcanic outgassing | silicate weathering, cold traps |
+| **oxygen** | **`o2Bar`** | **the biosphere** | **volcanic reductants, oxidative weathering** |
+
+The numbers are set from Earth, not chosen. Its atmosphere holds 2141 kg/m² of oxygen and the real
+net source is about 1×10¹³ mol/yr, which implies a residence time of **3.4 Myr** against a
+literature 2–3. An Earth-like biosphere over Earth-like volcanism settles at **0.211 bar**.
+
+**The threshold is the point of it.** Reduced volcanic gases consume oxygen as fast as it is made
+until the biosphere outruns them, which is why the Archean stayed anoxic for a billion years with
+photosynthesis already running. Below about 0.35× Earth's biosphere the air stays at nothing however
+long you wait; above it, the atmosphere flips. Turn the volcanoes up and an oxygenated world goes
+back under.
+
+Oxidative weathering is first order in pO₂, which is what makes the level *settle* rather than climb
+for ever — and it needs liquid water, so a planet that has boiled dry keeps whatever its lost ocean
+left behind. On a waterworld with no exposed land at all, seafloor oxidation is the only sink there
+is, and it is enough.
+
+Earth's air is now **N₂ 78 / O₂ 21 / H₂O 1.4 / CO₂ 0.04**, against a real 78.1 / 21.0 / variable /
+0.042. Splitting nitrogen from oxygen also takes the mean molar mass from 28.00 to 28.85 against a
+real dry-air 28.96, which slightly sharpens the realistic atmosphere's scale height.
+
+### The Huronian, played forwards
+
+Raise the biosphere on an Archean world and the model runs the whole chain by itself:
+
+| after | pO₂ | CH₄ lifetime | CH₄ | surface | state |
+|---|---|---|---|---|---|
+| 2 kyr | 1.1×10⁻⁴ | 170 yr | 1000 ppm | +4.6 °C | temperate |
+| 5 kyr | 2.8×10⁻⁴ | **10 yr** | 66 ppm | +4.6 °C | temperate |
+| 10 kyr | 4.5×10⁻⁴ | 10 yr | **0.8 ppm** | **−46 °C** | **hard snowball** |
+| 50 kyr | **0** | 12,000 yr | 700 ppm | −42 °C | snowball, methane returning |
+| 2 Myr | 0 | 12,000 yr | 1000 ppm | −41.6 °C | **still frozen** |
+
+The ocean freezes, so the biosphere stops, so the oxygen is consumed, so the methane comes back —
+**and the planet stays frozen anyway**. The trigger erases itself and the consequence persists,
+because ice-albedo hysteresis does not care what caused the ice. It is survivable: replace the
+methane's ~15 W/m² with CO₂ *before* turning the biosphere up, and 0.25 bar gets you through
+oxygenation at 17 °C. That is the **Great Oxidation** scenario.
+
+Deliberately not modelled, and worth saying: oxygen does not suppress the methane *source*, even
+though methanogens are anaerobes. The lifetime effect alone is a factor of 1200, which is decisive;
+a second mechanism would make the control harder to reason about for no visible gain. Ozone is
+absent too, so there is no UV shielding feedback.
 
 ### Methane, and why it does not last
 
@@ -503,7 +566,7 @@ actually is.
 
 ## References
 
-Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

@@ -57,7 +57,7 @@ export function resetWorld(w, params) {
   w.n2 = params.n2Bar * 1e5 / d.g;
   w.co2 = params.co2Bar * 1e5 / d.g;
   w.ch4 = params.ch4Bar * 1e5 / d.g;
-  w.o2 = 0;
+  w.o2 = (params.o2Bar ?? 0) * 1e5 / d.g;
   w.co2Frozen = 0;
   w.water = { ocean: params.water, seaIce: 0, landIce: 0, vapour: 0, lost: 0 };
   // The inventory the world started with. The `water` control tracks what is
@@ -405,6 +405,18 @@ export function maxStep(w, maxDeltaT = 2.5) {
     const net = Math.abs(w.weathering.V - w.weathering.W) / Math.max(w.weathering.kappa, 1);
     const floor = 0.02 * CO2_EARTH_COL;
     if (net > 0) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
+  }
+
+  // ...and never step so far that the ice sheet jumps straight to where it is
+  // heading. It moves on a fifteen-thousand-year timescale and it is what
+  // decides which of two stable states a locked world falls into -- trapped
+  // desert or twilight world -- so a step long enough to skip that relaxation
+  // makes the outcome depend on the step size instead of on the physics. The
+  // escape and carbon reservoirs are already bounded this way; this one was
+  // not, and a world near the boundary landed in whichever basin the step
+  // sequence happened to steer it to.
+  if (w.iceSheet != null && dg.iceSheetTarget != null) {
+    if (Math.abs(dg.iceSheetTarget - w.iceSheet) > 0.02) dt = Math.min(dt, 3500);
   }
 
   // Smooth the step size. Near a tipping point -- the ice edge, above all --

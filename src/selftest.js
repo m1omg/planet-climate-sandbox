@@ -217,6 +217,10 @@ export function run() {
     // whichever one the integrator's step sequence happens to steer it to.
     const locked = settle({ ...EARTH, tidallyLocked: true, rotationHours: 240,
       water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.3,
+      // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
+      // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
+      // to the night side to stop the trap.
+      o2Bar: 0, biosphere: 0,
       co2Bar: 1e-3, outgassing: 0.3, startT: 280 }, 2e7);
     const w = locked.world, st = classify(w);
     check('A locked world with a modest ocean traps it all on the night side',
@@ -247,7 +251,7 @@ export function run() {
   {
     const locked = (water, land) => settle({ ...EARTH, tidallyLocked: true,
       rotationHours: 400, water, landFraction: land, insolation: 1.0,
-      n2Bar: 0.3, co2Bar: 3e-4, outgassing: 0.3, startT: 300 }, 2e7);
+      n2Bar: 0.3, o2Bar: 0, biosphere: 0, co2Bar: 3e-4, outgassing: 0.3, startT: 300 }, 2e7);
 
     const land = locked(0.08, 0.9), lw = land.world, ls = classify(lw);
     let ring = 0;
@@ -373,7 +377,10 @@ export function run() {
     // The Archean thermostat: methane warms until the haze it makes shades the
     // ground, and then more methane *cools* the planet.
     const arch = (ch4) => {
-      const x = new Simulation({ ...PRESETS.earlyEarth.params, ch4Bar: ch4, outgassing: 0 });
+      // biosphere off: with no volcanic reductants to outrun, even a small one
+      // oxygenates the air and kills the methane, which is correct but is not
+      // what this test is about.
+      const x = new Simulation({ ...PRESETS.earlyEarth.params, ch4Bar: ch4, outgassing: 0, biosphere: 0 });
       const c = x.world.co2;
       let n = 0;
       while (x.world.time < 3e5 && n++ < 3e4) { x.stepOnce(Math.min(maxStep(x.world), 2e3)); x.world.co2 = c; }
@@ -475,16 +482,141 @@ export function run() {
 
     // Oxygen itself must not pile up from a trickle of water loss, or every
     // world silently oxidises and loses its methane for no reason.
-    const quiet = settle({ ...EARTH, insolation: 1.0 }, 3e7).world;
+    const quiet = settle({ ...EARTH, insolation: 1.0, o2Bar: 0, biosphere: 0 }, 3e7).world;
     check('A world that has barely lost any water stays anoxic',
       quiet.diag.pO2 < 1e-5,
       `${quiet.water.lost.toExponential(1)} EO lost, ${quiet.diag.pO2.toExponential(1)} bar O₂`);
     // ...but a real runaway still oxidises one, which is the Venus story.
-    const cooked = settle({ ...EARTH, insolation: 1.6, xuvFraction: 1e-4, ch4Bar: 1e-3 }, 5e8).world;
+    const cooked = settle({ ...EARTH, insolation: 1.6, xuvFraction: 1e-4, ch4Bar: 1e-3,
+      o2Bar: 0, biosphere: 0 }, 5e8).world;
     check('…but a planet that loses its ocean is oxidised, and its methane gone',
       cooked.diag.pO2 > 1 && cooked.diag.pCH4 < 1e-5,
       `${cooked.water.lost.toFixed(2)} EO lost, ${cooked.diag.pO2.toFixed(0)} bar O₂, ` +
       `CH₄ ${cooked.diag.pCH4.toExponential(1)} bar`);
+  }
+
+  // ---- 3m. the oxygen cycle -------------------------------------------------
+  // Oxygen used to be a fossil of hydrogen escape and nothing else, so the only
+  // route to an oxygen-rich atmosphere was to boil an ocean -- the Venus story,
+  // not Earth's. It is now the same shape as the carbon cycle: a reservoir with
+  // a source you control and sinks the planet decides.
+  {
+    const held = (bio, extra = {}, yr = 5e7) => {
+      const x = new Simulation({ ...EARTH, biosphere: bio, ...extra });
+      const w = x.world;
+      let n = 0;
+      while (w.time < yr && n++ < 5e4) x.stepOnce(Math.min(maxStep(w), 2e5));
+      return w;
+    };
+    const earth = held(1);
+    check('An Earth-like biosphere holds 0.21 bar of oxygen',
+      near(earth.diag.pO2, 0.21, 0.04), `${earth.diag.pO2.toFixed(3)} bar`);
+    check('…and that is what gives its methane a ten-year life',
+      near(methaneLifetime(earth.diag.pO2, 0, 1), 10, 2),
+      `${methaneLifetime(earth.diag.pO2, 0, 1).toFixed(1)} yr, against ${methaneLifetime(0, 0, 1).toExponential(1)} with no oxygen`);
+
+    // The threshold, which is the whole point: below the volcanic reductant
+    // flux the air stays anoxic however long you wait.
+    const below = held(0.25, {}, 2e8), above = held(0.8);
+    check('A biosphere the volcanoes outrun leaves the air anoxic for ever',
+      below.diag.pO2 < 1e-6, `${below.diag.pO2.toExponential(1)} bar after 200 Myr at 0.25× Earth`);
+    check('…and one that outruns them oxygenates the planet',
+      above.diag.pO2 > 0.05, `${above.diag.pO2.toFixed(3)} bar at 0.8× Earth`);
+    check('…so more volcanism can put an oxygenated world back under',
+      held(1, { outgassing: 4 }).diag.pO2 < 0.5 * earth.diag.pO2,
+      `${held(1, { outgassing: 4 }).diag.pO2.toFixed(3)} bar at 4× volcanism`);
+
+    // Oxidative weathering is first order in pO2, so the level settles instead
+    // of climbing for ever -- including on a world with no land at all, which
+    // would otherwise have no sink.
+    const rich = held(3, {}, 1e9);
+    check('Oxygen settles at a level rather than climbing without bound',
+      rich.diag.pO2 < 2.0, `${rich.diag.pO2.toFixed(2)} bar at 3× Earth after a billion years`);
+    const sea = settle({ ...PRESETS.waterworld.params, biosphere: 3 }, 1e9).world;
+    check('…even on a waterworld, where seafloor oxidation is the only sink',
+      sea.diag.pO2 < 2.0, `${sea.diag.pO2.toFixed(2)} bar with no exposed land`);
+
+    // The worlds that should have none.
+    for (const [k, name] of [['venus', 'Venus'], ['mars', 'Mars'], ['titan', 'Titan']]) {
+      const w = settle(PRESETS[k].params, 1e5).world;
+      check(`${name} stays anoxic`, w.diag.pO2 < 1e-4, `${w.diag.pO2.toExponential(1)} bar`);
+    }
+  }
+
+  // ---- 3n. the Great Oxidation, played forwards -----------------------------
+  // The whole chain, measured rather than asserted: oxygen crosses the volcanic
+  // reductant flux, methane's lifetime collapses, the methane goes with it, and
+  // the greenhouse it was providing goes too.
+  {
+    const s = new Simulation({ ...PRESETS.earlyEarth.params });
+    const w = s.world;
+    const to = (yr) => { while (w.time < yr) s.stepOnce(Math.min(maxStep(w), yr - w.time, 5e3)); };
+    to(2e6);
+    const before = { T: w.diag.Tmean, ch4: w.diag.pCH4, o2: w.diag.pO2 };
+    check('An Archean world sits anoxic and warm on its methane',
+      before.o2 < 1e-6 && before.T > 273,
+      `${(before.T - 273.15).toFixed(1)} °C, ${(before.ch4 * 1e6).toFixed(0)} ppm CH₄, no oxygen`);
+
+    w.params.biosphere = 1.5;          // photosynthesis takes off
+    to(2e6 + 5e3);
+    check('…oxygen crosses the reductant flux within a few thousand years',
+      w.diag.pO2 > 1e-5, `${w.diag.pO2.toExponential(1)} bar after 5 kyr`);
+
+    // A few thousand more. The methane responds to the oxygen the *previous*
+    // step computed -- ordinary operator splitting -- so a single five-thousand
+    // year stride can step straight over the crossover. It is a one-step lag in
+    // a transient and the end state is untouched, but it means this has to be
+    // sampled at the rate the transition happens rather than in one jump.
+    to(2e6 + 2e4);
+    check('…and takes the methane with it',
+      w.diag.pCH4 < 0.2 * before.ch4,
+      `${(w.diag.pCH4 / before.ch4 * 100).toFixed(2)}% of the methane left after 20 kyr`);
+
+    to(2e6 + 4e4);
+    check('…and losing that greenhouse freezes the planet',
+      w.diag.Tmean < before.T - 30 && w.diag.iceMean > 0.9,
+      `${(before.T - 273.15).toFixed(1)} °C → ${(w.diag.Tmean - 273.15).toFixed(1)} °C, ` +
+      `${(w.diag.iceMean * 100).toFixed(0)}% ice`);
+
+    // The sting: the ocean freezes, so the biosphere stops, so the oxygen is
+    // consumed and the methane comes back -- and the planet stays frozen anyway.
+    to(2e6 + 2e6);
+    check('…after which the trigger removes itself and the ice stays',
+      w.diag.pO2 < 1e-6 && w.diag.pCH4 > 0.5 * before.ch4 && w.diag.iceMean > 0.9,
+      `methane back to ${(w.diag.pCH4 / before.ch4 * 100).toFixed(0)}% and oxygen gone, still ` +
+      `${(w.diag.iceMean * 100).toFixed(0)}% ice at ${(w.diag.Tmean - 273.15).toFixed(1)} °C`);
+
+    // And it is winnable: replace the methane greenhouse with CO2 first.
+    const won = (() => {
+      const x = new Simulation({ ...PRESETS.earlyEarth.params, co2Bar: 0.25 });
+      const v = x.world;
+      let n = 0;
+      while (v.time < 1e6 && n++ < 3e4) x.stepOnce(Math.min(maxStep(v), 5e3));
+      v.params.biosphere = 1.5;
+      while (v.time < 5e6 && n++ < 6e4) x.stepOnce(Math.min(maxStep(v), 5e3));
+      return v;
+    })();
+    check('…but with the CO₂ raised first, the world survives being oxygenated',
+      won.diag.pO2 > 0.01 && won.diag.Tmean > 273 && won.diag.iceMean < 0.5,
+      `${won.diag.pO2.toFixed(3)} bar O₂ at ${(won.diag.Tmean - 273.15).toFixed(1)} °C, ` +
+      `${(won.diag.iceMean * 100).toFixed(0)}% ice`);
+  }
+
+  // ---- 3o. a waterworld has a thermostat too --------------------------------
+  // Ocean water circulates through fresh basalt at the ridges and lays CO2 down
+  // as carbonate, which is about a quarter of Earth's silicate sink and the
+  // whole of a landless world's (Brady & Gislason 1997; Coogan & Dosso 2015;
+  // Krissansen-Totton & Catling 2017). Without it a world with no continents
+  // had no carbon thermostat at all and simply drifted.
+  {
+    const sea = (S) => settle({ ...PRESETS.waterworld.params, insolation: S }, 3e9).world;
+    const dim = sea(0.95), bright = sea(1.05);
+    check('A waterworld regulates its CO₂ despite having no land',
+      dim.diag.pCO2 > bright.diag.pCO2 * 1.4,
+      `${dim.diag.pCO2.toExponential(1)} bar at 0.95 S⊕ against ${bright.diag.pCO2.toExponential(1)} at 1.05`);
+    check('…and stays habitable across that range',
+      dim.diag.Tmean > 273 && bright.diag.Tmean < 350,
+      `${(dim.diag.Tmean - 273.15).toFixed(0)} °C to ${(bright.diag.Tmean - 273.15).toFixed(0)} °C`);
   }
 
   // ---- 4. snowball, and its hysteresis -------------------------------------
@@ -644,11 +776,11 @@ export function run() {
       `${(earthNow.world.diag.pTotMean * 1000).toFixed(0)} mbar`);
 
     // Below the triple point (611.7 Pa) liquid water cannot exist at all.
-    const thin = settle({ ...EARTH, n2Bar: 2e-3, co2Bar: 1e-5, water: 0.3, insolation: 1.0 }, 2e5);
+    const thin = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.0 }, 2e5);
     check('No liquid water below the triple point',
       thin.world.diag.pSurfPa < 611.7 && thin.world.diag.openOcean < 1e-6,
       `${thin.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(thin.world.diag.openOcean * 100).toFixed(2)}%`);
-    const justAbove = settle({ ...EARTH, n2Bar: 5e-4, co2Bar: 1e-6, water: 0.3, insolation: 1.3 }, 2e5);
+    const justAbove = settle({ ...EARTH, n2Bar: 5e-4, o2Bar: 0, biosphere: 0, co2Bar: 1e-6, water: 0.3, insolation: 1.3 }, 2e5);
     check('…but liquid returns once the pressure clears it',
       justAbove.world.diag.pSurfPa > 611.7 && justAbove.world.diag.openOcean > 0.05,
       `${justAbove.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(justAbove.world.diag.openOcean * 100).toFixed(0)}%`);

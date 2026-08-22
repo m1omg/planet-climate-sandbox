@@ -299,6 +299,7 @@ function syncSliders() {
 const LIVE_READERS = {
   co2: (w) => w.co2 * w.diag.g / 1e5,
   n2: (w) => w.n2 * w.diag.g / 1e5,
+  o2: (w) => w.o2 * w.diag.g / 1e5,
   ch4: (w) => w.ch4 * w.diag.g / 1e5,
   water: (w) => w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour,
 };
@@ -324,19 +325,21 @@ function syncLiveControls() {
 
 // Changing a *composition* slider rewrites the reservoir; changing an external
 // forcing just changes the forcing and lets the planet respond.
-const RESERVOIR_KEYS = new Set(['n2Bar', 'co2Bar', 'ch4Bar', 'water', 'mass']);
+const RESERVOIR_KEYS = new Set(['n2Bar', 'o2Bar', 'co2Bar', 'ch4Bar', 'water', 'mass']);
 function applyParams(key) {
   const w = sim.world;
   sim.setParams({ [key]: params[key] });
   if (RESERVOIR_KEYS.has(key)) {
     const d = derive(w.params);
     if (key === 'n2Bar') w.n2 = params.n2Bar * 1e5 / d.g;
+    if (key === 'o2Bar') w.o2 = params.o2Bar * 1e5 / d.g;
     if (key === 'co2Bar') { w.co2 = params.co2Bar * 1e5 / d.g; w.co2Frozen = 0; }
     // Changing the methane means changing the level this world sustains, so
     // whatever keeps it there has to be re-derived from the new value.
     if (key === 'ch4Bar') { w.ch4 = params.ch4Bar * 1e5 / d.g; w.ch4Source = null; }
     if (key === 'mass') {
       w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g;
+      w.o2 = params.o2Bar * 1e5 / d.g;
       w.ch4 = params.ch4Bar * 1e5 / d.g; w.ch4Source = null;
     }
     if (key === 'water') {
@@ -472,11 +475,11 @@ function composition(dg) {
     // The background reservoir is every gas that neither condenses nor absorbs
     // much -- nitrogen, oxygen and argon together -- so it is labelled for what
     // it is rather than pretending Earth's is pure nitrogen.
-    ['N₂+', dg.pN2, '#7f9ccc', 'nitrogen, oxygen and argon: the background gas'],
+    ['N₂', dg.pN2, '#7f9ccc', 'nitrogen and argon: the gas that neither condenses nor absorbs'],
     ['CO₂', dg.pCO2, '#e0894a', 'carbon dioxide'],
     ['H₂O', pH2O * (1 - (dg.superFrac || 0)), '#4fa8d8', 'water vapour'],
     ['H₂O·sc', pH2O * (dg.superFrac || 0), '#c98ad0', 'water past its critical point: neither liquid nor gas'],
-    ['O₂', dg.pO2, '#6fc7a0', 'free oxygen left behind by hydrogen escape'],
+    ['O₂', dg.pO2, '#6fc7a0', 'free oxygen: made by life, or left behind when a lost ocean\u2019s hydrogen escaped'],
     ['CH₄', dg.pCH4, '#c9b04a', 'methane'],
   ];
   const total = parts.reduce((a, p) => a + Math.max(p[1], 0), 0);
