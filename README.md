@@ -24,6 +24,12 @@ node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
 node tools/resumecheck.mjs      # does the tab survive being switched away from?
 ```
 
+Shipping is the default: commit, push, and the site is live. GitHub Pages serves
+`main:/` directly, so `git push origin main` *is* the deploy — no `gh-pages`
+branch, no build step. Verify afterwards by hash-matching a file you touched
+against `https://m1omg.github.io/planet-climate-sandbox/`, because a "built"
+status is not proof the change is out there. See `CLAUDE.md`.
+
 All eleven, before pushing — `calibrate.mjs` above all, because a change that
 fixes one anchor almost always moves three others, and the two `GAP` rows are
 known deviations that report every run rather than failing. `node --check` parses files as CommonJS and will happily
