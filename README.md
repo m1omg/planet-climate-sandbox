@@ -454,11 +454,24 @@ enough that the whole ocean keeps step with the atmosphere. A fossil pulse is fo
 far faster than the ocean turns over, so only the surface layer takes part. Run it through the buffer
 instead and burning all 5000 Gt moves the atmosphere from 427 to 500 ppm, which is not what it does.
 
-**What is missing:** the long thaw. Silicate weathering should take that CO₂ back over ~10⁵–10⁶ years;
-here the e-folding is ~90 Myr, so the spike is drawn as permanent on any timescale you can watch. That
-is a property of the existing carbon cycle rather than of the emissions — `OUTGAS_EARTH` is set well
-below Earth's real volcanic flux and then divided by a buffer of 50 — and correcting it would move the
-snowball calibration, so it is recorded here rather than quietly rescaled.
+And then the **long thaw**. Silicate weathering takes it back:
+
+| after | CO₂ | airborne excess |
+|---|---|---|
+| 1 kyr | 2193 ppm | 100% |
+| 100 kyr | 2019 ppm | 90% |
+| 1 Myr | 927 ppm | 31% |
+| 3 Myr | 370 ppm | 1% |
+
+That is the silicate stage, and it is the right one: ~1 Myr, where the literature puts it. What is
+still missing is the *early* part of the curve — the real staircase is ~50% airborne at 300 years,
+~25% at 1 kyr and ~10% at 10 kyr as the surface ocean, the deep ocean and carbonate compensation take
+their turns, and here the pulse simply sits until weathering gets to it. Fixing that needs an explicit
+ocean carbonate reservoir, and the buffer that stands in for the ocean today (`CARBON_RESERVOIR_FACTOR`,
+50) would have to be taken apart at the same time or the two would double-count.
+
+This used not to work at all: the e-folding was **90 Myr**, so the spike was permanent on any timescale
+you could watch. See below for why, because the reason is more interesting than the fix.
 
 ### Methane, and why it does not last
 
@@ -634,10 +647,38 @@ today — which makes such a planet darker, and easier to escape, than one burie
 
 Stated plainly, because a model that hides these is less useful:
 
-* **Snowball deglaciation happens at 5–10 mbar of CO₂**, against the 0.1–0.3 bar of published
-  snowball studies. The semi-grey CO₂ opacity is stronger at intermediate pressure than line-by-line
-  models. The *behaviour* — hysteresis, multi-Myr duration, unopposed CO₂ build-up — is right; the
-  threshold sits low.
+* **Snowball deglaciation happens at ~10 mbar of CO₂**, against the 0.1–0.3 bar of published snowball
+  studies, and snowballs therefore last **~0.2 Myr** rather than the observed few. Those are the same
+  error twice: duration is threshold ÷ outgassing flux.
+
+  It is worth spelling out how this hid for so long. `OUTGAS_EARTH` used to be set to 4×10⁻⁶ kg/m²/yr,
+  some **130× below Earth's measured degassing rate**, tuned — the comment said so — to put the snowball
+  *duration* back in the literature range. Two errors dividing out, one anchor green, and as a side
+  effect nothing was watching, **the entire carbon cycle ran 100× too slow**: a CO₂ pulse took 90 Myr
+  to clear instead of ~1. The duration anchor could not see it, because duration was the one thing the
+  two errors conspired to get right.
+
+  Outgassing is now on its measured value (5.2×10⁻⁴ kg/m²/yr, ~6×10¹² mol/yr), which costs nothing —
+  the constant appears in both the source and the weathering sink, so it cancels out of every
+  equilibrium and only sets rates. Earth's equilibrium moves by 0.01 °C. What it buys is a carbon
+  thermostat that responds on the right timescale, and the price is that the threshold error is now
+  visible in the duration instead of being cancelled. Both halves are reported every run as `GAP` rows
+  in `tools/calibrate.mjs`.
+
+  The root cause is that a semi-grey scheme has **no atmospheric window**: every watt leaving the
+  ground is funnelled through one optical depth, so piling on CO₂ always works and eventually works
+  arbitrarily well. Real snowballs are hard to leave because the 8–12 µm window keeps radiating no
+  matter how much CO₂ you add.
+
+  Adding that window was tried and reverted, which is worth recording. It works on its own terms — the
+  threshold lands at 0.13–0.22 bar, the LGM improves from −4.5 K to −5.7 K against an observed −6.1,
+  and all 22 anchors can be made to pass by splitting the water continuum into a shallow near-Earth
+  term and a steep steam term. What it also does is make cold, dry, cloudless states far too stable,
+  because *colder → drier → window opens → colder* is a positive feedback with nothing to damp it in a
+  zonal model with no vertical structure. The Archean froze solid in 10 kyr and Titan fell to 71 K. The
+  fix for the Archean (CO₂ closing its own window) did not save Titan, and the fix for Titan would have
+  been a third continuum term. At that point it was a worse model than the one it replaced, so it went
+  back — but the working parameters are in the git history if anyone wants them.
 * **The runaway transient is fast when the planet is pushed hard**, which is not a deviation but is
   worth stating plainly, because the ~10⁵ yr figure from Turbet et al. (2023) gets quoted as though
   it were universal. It is not: boiling an ocean is an energy problem. Vaporising an Earth ocean

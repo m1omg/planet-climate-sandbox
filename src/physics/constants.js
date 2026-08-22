@@ -28,7 +28,7 @@ export const CH4_EARTH_COL = 1.8e-6 * P_EARTH / G_EARTH * 44 / 16; // ~0.0068
 // carbonate-silicate thermostat absorbs it, holding 287.5-287.7 K across a
 // threefold change -- so it can be set from the snowball record without
 // disturbing the modern-Earth anchor.
-export const OUTGAS_EARTH = 4e-6;
+export const OUTGAS_EARTH = 5.2e-4;
 
 // Carbon held in ocean + reactive crust relative to the atmosphere. Makes the
 // carbonate-silicate thermostat relax on ~1 Myr rather than ~5 kyr.

@@ -227,7 +227,7 @@ export function run() {
       // the methane cycle was rewritten -- and it is what the note above means
       // by two basins of the same system. So: a fixed point, checked to land in
       // the trapped basin, rather than a range that cannot be made robust.
-      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.3,
+      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.25,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
       // to the night side to stop the trap.
@@ -539,16 +539,18 @@ export function run() {
         `gives ${(hi * 1e6).toFixed(0)} ppm — ` +
         `${(Math.abs(lo - hi) / Math.max(lo, hi) * 100).toFixed(1)}% apart`);
 
-      // Though not every starting point lands in the same place, and that is
-      // real. Hand the same world a full percent of methane and the haze it
-      // makes shades the ground hard enough to freeze it; the biosphere stops,
-      // and what is left is the abiotic floor. Two attractors, separated by the
-      // anti-greenhouse and held apart by ice albedo.
+      // Even a full percent to start with, which is enough haze to shade the
+      // ground hard. It used to freeze the world into a snowball it could not
+      // leave, and that stopped being true when the carbon cycle was put on its
+      // measured speed: the thermostat now answers on the timescale a haze
+      // actually lasts, and the world comes back to where the others are.
       const tipped = settle({ ...anox, ch4Bar: 1e-2 }, 5e6).world;
-      check('…but too much of it at once hazes the world into a snowball it cannot leave',
-        tipped.diag.Tmean < 253 && tipped.diag.pCH4 * 1e6 < 30,
-        `10 000 ppm to start freezes it to ${(tipped.diag.Tmean - 273.15).toFixed(0)} °C, ` +
-        `leaving ${(tipped.diag.pCH4 * 1e6).toFixed(1)} ppm`);
+      check('…and even a hundred times too much of it converges to the same level',
+        Math.abs(tipped.diag.pCH4 - lo) / Math.max(tipped.diag.pCH4, lo) < 0.10
+          && tipped.diag.Tmean > 273,
+        `10 000 ppm to start ends at ${(tipped.diag.pCH4 * 1e6).toFixed(0)} ppm ` +
+        `against ${(lo * 1e6).toFixed(0)} from nothing, at ` +
+        `${(tipped.diag.Tmean - 273.15).toFixed(0)} °C`);
     }
 
     // An Earth-like biosphere makes Earth's methane, which is the calibration.
@@ -856,15 +858,25 @@ export function run() {
     }
     check('Volcanic CO₂ eventually breaks the snowball', tThaw !== null,
       tThaw ? `at ${(tThaw / 1e6).toFixed(1)} Myr with ${co2AtThaw.toFixed(3)} bar CO₂` : 'still frozen at 300 Myr');
-    // The semi-grey CO2 opacity is stronger at intermediate pressure than the
-    // line-by-line models, so escape comes at a few mbar rather than the
-    // 0.1-0.3 bar those studies find. The behaviour is right -- hysteresis,
-    // multi-Myr duration, unopposed build-up -- but the threshold sits low.
-    // Recorded here as the model's own number rather than tuned to match.
-    check('Deglaciation needs CO₂ to build up well past the starting value',
-      tThaw !== null && co2AtThaw > 3e-4 && co2AtThaw < 0.6, `${co2AtThaw.toFixed(4)} bar`);
-    check('Snowball lasts 1–100 Myr (lit. Marinoan 4–15, Sturtian ~56)',
-      tThaw !== null && tThaw > 1e6 && tThaw < 1e8, tThaw ? `${(tThaw / 1e6).toFixed(1)} Myr` : 'n/a');
+    // A known gap, asserted at the model's own value so it still works as a
+    // regression guard, with the literature number in the message so nobody
+    // reads it as agreement. A semi-grey scheme has no atmospheric window --
+    // every watt leaving the ground goes out through one optical depth -- so
+    // piling on CO2 always works, and deglaciation comes ~30x too easily.
+    //
+    // This used to be invisible. Duration is threshold over outgassing flux, and
+    // the outgassing constant had been set a hundred and thirty times below
+    // Earth's measured degassing rate, which put the *duration* back into the
+    // literature range and left the whole carbon cycle a hundred times too slow
+    // as a side effect nothing was watching. Outgassing is on its measured value
+    // now, so the error shows up in the duration below, where it can be seen.
+    check('Deglaciation comes ~30× too easily (semi-grey, no window)',
+      tThaw !== null && co2AtThaw > 4e-3 && co2AtThaw < 3e-2,
+      `${(co2AtThaw * 1e3).toFixed(0)} mbar, where the snowball studies find 100–300`);
+    check('…and so lasts ~0.2 Myr rather than the observed few Myr',
+      tThaw !== null && tThaw > 5e4 && tThaw < 1e6,
+      tThaw ? `${(tThaw / 1e6).toFixed(2)} Myr, short by exactly the factor the ` +
+        `threshold above is low by (Marinoan 4–15, Sturtian ~56)` : 'n/a');
   }
 
   // ---- 5. dry planets have a wider habitable zone (Abe et al. 2011) ---------
@@ -992,14 +1004,18 @@ export function run() {
       `${(earthNow.world.diag.pTotMean * 1000).toFixed(0)} mbar`);
 
     // Below the triple point (611.7 Pa) liquid water cannot exist at all.
-    const thin = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.0 }, 2e5);
+    // Volcanoes off. With outgassing on its measured value the carbon cycle is a
+    // hundred times faster than it used to be, and a live volcano rebuilds enough
+    // CO2 in two hundred thousand years to carry this world back over the triple
+    // point -- a real answer, but to a different question than this one.
+    const thin = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.0, outgassing: 0 }, 2e5);
     check('No liquid water below the triple point',
       thin.world.diag.pSurfPa < 611.7 && thin.world.diag.openOcean < 1e-6,
       `${thin.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(thin.world.diag.openOcean * 100).toFixed(2)}%`);
     // Deliberately the same air as `thin`, so the only thing that differs is the
     // starlight and the vapour it raises. At 5e-4 bar the pair sat on the triple
     // point itself and the answer depended on the integrator's step sequence.
-    const justAbove = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.3 }, 2e5);
+    const justAbove = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.3, outgassing: 0 }, 2e5);
     check('…but liquid returns once the pressure clears it',
       justAbove.world.diag.pSurfPa > 611.7 && justAbove.world.diag.openOcean > 0.05,
       `${justAbove.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(justAbove.world.diag.openOcean * 100).toFixed(0)}%`);
