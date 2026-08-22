@@ -255,7 +255,7 @@ export class PlanetView {
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
-      'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt', 'uSeaLevel',
+      'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt', 'uSeaLevel', 'uBio',
       'uBodyMap', 'uBodyHeight', 'uBodyMix', 'uBodyHasHeight',
       'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
       this.u[name] = gl.getUniformLocation(this.prog, name);
@@ -724,6 +724,9 @@ export class PlanetView {
     const flooded = dg.flooded ?? dg.oceanFrac;
     gl.uniform1f(this.u.uOceanFrac, flooded);
     gl.uniform1f(this.u.uSeaLevel, seaLevelForLand(1 - flooded));
+    // What the world is actually supporting, not what was asked for. A cooked
+    // planet has none and is drawn with none.
+    gl.uniform1f(this.u.uBio, dg.bio ?? p.biosphere ?? 0);
     if (this.bodyCapable) {
       // Ease across in about a second and a quarter -- long enough to read as a
       // world changing, short enough not to be a wait.

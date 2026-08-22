@@ -446,6 +446,17 @@ export function photosynthesis(w) {
   return water * carbon * share;
 }
 
+// How fast a biosphere dies, and how slowly it comes back.
+//
+// Dying is the quick one: past 73 C the photosystems come apart and a forest is
+// gone in a season, so a couple of centuries is already generous for a whole
+// planet's worth. Coming back is the slow one -- somewhere has to have survived
+// and spread. Neither timescale is visible above about a kiloyear a second, but
+// they are the right way round, and it means a world that dips over the edge and
+// comes back does not simply flicker.
+const BIO_DIE = 200;      // yr
+const BIO_GROW = 5000;    // yr
+
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
 
@@ -547,6 +558,20 @@ export function stepVolatiles(w, dtYears) {
   // the interior; it goes back into it through weathering like any other.
   w.carbonDeep = Math.max(0, w.carbonDeep + (Wr - V) * dtYears);
 
+  // --- what is actually alive ----------------------------------------------
+  // The control is the biosphere you asked for; this is the one the planet can
+  // support. They are the same number on a habitable world and they are very
+  // much not on a cooked one -- which used to be invisible, because nothing
+  // displayed it and the ground stayed green at 800 C.
+  {
+    const target = Math.max(p.biosphere ?? 0, 0) * photosynthesis(w);
+    if (w.bio == null) w.bio = target;
+    else {
+      const tau = target < w.bio ? BIO_DIE : BIO_GROW;
+      w.bio += (target - w.bio) * (1 - Math.exp(-Math.max(dtYears, 0) / tau));
+    }
+  }
+
   // --- the oxygen cycle ----------------------------------------------------
   // Built to mirror the carbon one above, because it is the same shape: a
   // reservoir with a source you control and sinks the planet decides.
@@ -562,8 +587,7 @@ export function stepVolatiles(w, dtYears) {
     // single smoothstep on the global mean temperature between 330 and 360 K,
     // which is neither the right quantity nor the right numbers: it is a local
     // condition, and 57 C is nowhere near where phototrophs actually stop.
-    const alive = photosynthesis(w);
-    const source = O2_BIO * Math.max(p.biosphere ?? 0, 0) * alive;
+    const source = O2_BIO * w.bio;
 
     // Reduced volcanic gases, straight out of the ground and into the air.
     // This is the term the biosphere has to outrun, and until it does the

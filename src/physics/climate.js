@@ -70,6 +70,7 @@ export function resetWorld(w, params) {
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
   w.fossil = null;     // a fresh world has its fossil carbon still in the ground
   w.carbonDeep = null; // rebuilt from the planet's mass on the first step
+  w.bio = null;        // the living biosphere, grown from the conditions
   update(w, 0);
 }
 
@@ -319,6 +320,7 @@ export function update(w, dt) {
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
     flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
     exposedBasin, effLandAlbedo, liquidAllowed, pSurfPa,
+    bio: w.bio ?? 0,
     landFrac: clamp(1 - flooded, 0, 1),
     landIceFrac: clamp((1 - flooded) * glaciatedShare, 0, 1),
     iceSheetTarget,

@@ -366,3 +366,22 @@ body.software-render #planet{image-rendering:auto}
 .reset-paused input { accent-color: #6d8bb0; margin: 0; }
 .reset-paused:hover { color: #fff; }
 @media (max-width: 900px) { .reset-paused { display: none; } }
+
+/* ---- save slots --------------------------------------------------------- */
+.slot-row { display: flex; flex-direction: column; gap: 4px; }
+.slot {
+  display: grid; grid-template-columns: 1.4em 1fr auto; align-items: baseline; gap: 8px;
+  width: 100%; padding: 5px 9px; cursor: pointer; text-align: left;
+  font: inherit; font-size: 12px; color: var(--fg, #e8edf4);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 7px;
+}
+.slot:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(255, 255, 255, 0.22); }
+.slot.empty { color: var(--dim, #9aa4b2); }
+.slot.armed { border-color: #b08a5a; box-shadow: 0 0 0 1px rgba(176, 138, 90, 0.35) inset; }
+.slot-n { color: var(--dim, #9aa4b2); font-variant-numeric: tabular-nums; }
+.slot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-sub { color: var(--dim, #9aa4b2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.slot-hint { margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--dim, #9aa4b2); }
+.slot-hint .supply-btn { margin: 0 2px; }
+.supply-btn.busy { color: #f0d9b8; background: rgba(176, 138, 90, 0.25); border-color: #b08a5a; }

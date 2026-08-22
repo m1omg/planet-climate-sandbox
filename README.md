@@ -441,10 +441,44 @@ Sleep & Zahnle (2001) picture, in one reservoir rather than four.
 The same world at 4 S⊕ with the outgassing control at 20× now stops at **400 bar and 1759 K** — the
 whole budget in the air, a magma ocean, and nowhere further to go.
 
+### Saves
+
+Five slots, in the browser's own storage. A slot holds the whole world rather than just the controls:
+the clock, the band temperatures, where the water is, how far the ice sheet has grown, what is left of
+the fossil reserve and the carbon below. Saving only the sliders would have given back a world that
+looked right and had forgotten everything it had been through, which for a model whose subject is
+history is the wrong thing to keep.
+
+There is also an **Earth-like** world in the preset row: Earth's physics without Earth's biography. No
+industry, no real coastlines, and a fresh set of continents every time you load it — for trying
+something out when the answer should not be about this planet in particular. The industrial control is
+still there, it just starts at nothing.
+
 **Deliberately not modelled:** formation distance and disk C/O, which shift the endowment by a factor
 of a few; core mass fraction, which changes how much silicate there is to hold carbon; and impact
 devolatilisation. Those are real, and they are why the band above is a factor of two wide — but none
 of them is something this model has any way to know about a given world.
+
+### The biosphere you ask for, and the one there is
+
+The control is a request. What the planet supports is a separate number, and until now nothing showed
+the difference — a world at 800 °C kept the control reading 1.00× Earth and **kept its ground green**,
+because the shader's vegetation term was warmth and water and nothing else. The biosphere was not
+wired into the picture at all.
+
+Now `bio` is a state: it relaxes towards what photosynthesis can actually run at, dying over ~200
+years and growing back over ~5000. Both the oxygen source and the ground colour come off it, and a bar
+under the control shows what is alive against what was asked for.
+
+| | asked | alive |
+|---|---|---|
+| Earth | 1.00× | 1.000× |
+| the same world at 827 °C | 1.00× | **0.000×** |
+| control at zero | 0.00× | 0.000× |
+| control at three | 3.00× | 3.000× |
+
+It comes back, which is the half that makes it a biosphere rather than a switch: cook a world to
+0.056× under a CO₂ greenhouse, clear the CO₂, and 300 kyr later it is at 1.000× again.
 
 ### Where photosynthesis can run
 

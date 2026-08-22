@@ -5,7 +5,7 @@ import { SCENARIOS } from './game/scenarios.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
-import { NBANDS, lockFactor } from './physics/climate.js';
+import { NBANDS, lockFactor, update as updateWorld } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
@@ -609,6 +609,7 @@ function updateReadout() {
   }
 
   syncFossil();
+  syncBio();
 
   // scenario progress
   if (activeScenario) {
@@ -637,6 +638,118 @@ function toast(msg, ms = 2600) {
 // Controls
 // The reserve, drawn under the Industrial CO2 slider. Cheap enough to do every
 // frame, and it is the one number that explains why the CO2 stops climbing.
+// ---------------------------------------------------------------------------
+// Save slots.
+//
+// Five of them, in localStorage. A slot holds the whole world rather than just
+// the controls: the clock, the band temperatures, where the water is, how much
+// of the ice sheet has grown, what is left of the fossil reserve and the carbon
+// below. Saving only the sliders would have given you a world that looked right
+// and had forgotten everything it had been through, which for a model whose
+// whole subject is history would be the wrong thing to keep.
+const SLOTS = 5;
+const slotKey = (i) => `planetclimate.slot${i}.v1`;
+let armedToSave = false;
+
+function readSlot(i) {
+  try { return JSON.parse(localStorage.getItem(slotKey(i)) || 'null'); } catch { return null; }
+}
+
+function snapshot() {
+  const w = sim.world;
+  return {
+    v: 1, at: Date.now(),
+    name: PRESETS[activePreset]?.name || 'Custom world',
+    params: { ...params }, seed: renderState.seed,
+    time: w.time, T: Array.from(w.T), water: { ...w.water },
+    iceSheet: w.iceSheet, co2Frozen: w.co2Frozen, waterInitial: w.waterInitial,
+    fossil: w.fossil, carbonDeep: w.carbonDeep, bio: w.bio,
+    co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
+  };
+}
+
+function restore(s) {
+  Object.assign(params, s.params);
+  renderState.seed = s.seed ?? renderState.seed;
+  sim.reset(params);
+  const w = sim.world;
+  w.time = s.time ?? 0;
+  if (Array.isArray(s.T)) for (let i = 0; i < w.T.length && i < s.T.length; i++) w.T[i] = s.T[i];
+  if (s.water) Object.assign(w.water, s.water);
+  w.iceSheet = s.iceSheet ?? null;
+  w.co2Frozen = s.co2Frozen ?? 0;
+  w.waterInitial = s.waterInitial ?? w.waterInitial;
+  w.fossil = s.fossil ?? null;
+  w.carbonDeep = s.carbonDeep ?? null;
+  w.bio = s.bio ?? null;
+  if (s.co2 != null) w.co2 = s.co2;
+  if (s.n2 != null) w.n2 = s.n2;
+  if (s.o2 != null) w.o2 = s.o2;
+  if (s.ch4 != null) w.ch4 = s.ch4;
+  updateWorld(w, 0);
+  applyBody(null);
+  syncSliders(); setPresetActive(null); writeHash(); rememberStart();
+  sim.paused = resetPaused; syncPlay();
+}
+
+function buildSlots() {
+  const host = $('#slots');
+  host.innerHTML = '';
+  for (let i = 1; i <= SLOTS; i++) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'slot'; b.dataset.slot = String(i);
+    host.appendChild(b);
+    b.addEventListener('click', () => {
+      if (armedToSave) {
+        try { localStorage.setItem(slotKey(i), JSON.stringify(snapshot())); }
+        catch { toast('Could not save — storage is full or blocked'); return; }
+        armedToSave = false; syncSlots();
+        toast(`Saved to slot ${i}`);
+        return;
+      }
+      const s = readSlot(i);
+      if (!s) { toast(`Slot ${i} is empty — press Save… first`); return; }
+      restore(s);
+      toast(`Loaded slot ${i} — ${s.name}, ${fmtTime(s.time || 0)} in`);
+    });
+  }
+  syncSlots();
+}
+
+function syncSlots() {
+  for (let i = 1; i <= SLOTS; i++) {
+    const b = $(`.slot[data-slot="${i}"]`);
+    if (!b) continue;
+    const s = readSlot(i);
+    b.classList.toggle('empty', !s);
+    b.classList.toggle('armed', armedToSave);
+    b.innerHTML = s
+      ? `<span class="slot-n">${i}</span><span class="slot-name">${s.name}</span>` +
+        `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
+      : `<span class="slot-n">${i}</span><span class="slot-name">empty</span><span class="slot-sub">—</span>`;
+    b.title = s ? `${s.name} — ${fmtTime(s.time || 0)} elapsed, saved ${new Date(s.at).toLocaleString()}`
+                : `Slot ${i} is empty`;
+  }
+  const btn = $('#btn-slot-save');
+  if (btn) { btn.textContent = armedToSave ? 'pick a slot' : 'Save…'; btn.classList.toggle('busy', armedToSave); }
+}
+
+// The living biosphere, under the control that asks for one.
+function syncBio() {
+  const fill = $('#bio-fill'), left = $('#bio-left');
+  if (!fill) return;
+  const want = Math.max(params.biosphere ?? 0, 0);
+  const alive = sim.world.diag?.bio ?? want;
+  const f = want > 0 ? Math.max(0, Math.min(1, alive / want)) : 0;
+  fill.style.width = `${f * 100}%`;
+  const dead = want > 0 && f < 0.005;
+  fill.classList.toggle('spent', dead);
+  left.classList.toggle('spent', dead);
+  left.textContent = want <= 0 ? 'none'
+    : dead ? 'dead'
+    : `${(alive).toFixed(alive < 0.1 ? 3 : 2)}× alive`;
+}
+
 function syncFossil() {
   const fill = $('#fossil-fill'), left = $('#fossil-left'), inf = $('#chk-fossil-inf');
   if (!fill) return;
@@ -702,6 +815,12 @@ function bindControls() {
     resetPaused = chkReset.checked;
     try { localStorage.setItem(RESET_PAUSED_KEY, resetPaused ? 'pause' : 'run'); } catch { }
   });
+  $('#btn-slot-save').addEventListener('click', () => {
+    armedToSave = !armedToSave;
+    syncSlots();
+    if (armedToSave) toast('Pick a slot to save into');
+  });
+
   // --- the fossil reserve ---------------------------------------------------
   $('#btn-fossil-reset').addEventListener('click', () => {
     sim.world.fossil = FOSSIL_TOTAL;
@@ -1016,6 +1135,7 @@ function frame(now) {
 // ---------------------------------------------------------------------------
 buildSliders();
 buildPresets();
+buildSlots();
 buildScenarios();
 syncSliders();
 bindControls();

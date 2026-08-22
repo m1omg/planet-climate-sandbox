@@ -749,6 +749,13 @@ export function run() {
     // the bare EARTH constant, so this is also what a fresh load starts on.
     const others = Object.entries(PRESETS).filter(([k]) => k !== 'earth')
       .filter(([, v]) => (v.params.emissions ?? 0) > 0);
+    // The plain Earth-like world is for trying something without the answer
+    // being about this planet in particular: no industry, no real coastlines.
+    check('There is an Earth-like world with none of Earth\u2019s specifics',
+      PRESETS.earthlike && PRESETS.earthlike.params.emissions === 0
+        && PRESETS.earthlike.params.fossilUsed === 0,
+      'Earth-like: no industry, procedural continents, emissions still available');
+
     check('…and only Earth has anyone on it',
       others.length === 0 && PRESETS.earth.params.emissions === 1,
       others.length ? others.map(([k]) => k).join(', ')
@@ -874,6 +881,40 @@ export function run() {
     check('…and stays habitable across that range',
       dim.diag.Tmean > 273 && bright.diag.Tmean < 350,
       `${(dim.diag.Tmean - 273.15).toFixed(0)} °C to ${(bright.diag.Tmean - 273.15).toFixed(0)} °C`);
+  }
+
+  // ---- 3o2. the biosphere that is actually there -----------------------------
+  // The control is what you ask for. This is what the planet supports, and the
+  // difference used to be invisible: nothing displayed it and the ground stayed
+  // green at 800 C, which is what prompted this.
+  {
+    const earth = settle({ ...EARTH }, 2e5).world;
+    check('An Earth-like world supports the biosphere it is asked for',
+      near(earth.diag.bio, 1, 0.02), `${earth.diag.bio.toFixed(3)}× alive`);
+
+    const cooked = settle({ ...EARTH, co2Bar: 178, water: 2 }, 2e5).world;
+    check('…and a cooked one supports none of it, whatever the control says',
+      cooked.diag.bio < 1e-3 && cooked.diag.Tmean > 600,
+      `${(cooked.diag.Tmean - 273.15).toFixed(0)} °C, control still at ` +
+      `${cooked.params.biosphere.toFixed(2)}×, actually alive ${cooked.diag.bio.toFixed(3)}×`);
+
+    check('…and asking for none gives none',
+      settle({ ...EARTH, biosphere: 0 }, 1e4).world.diag.bio === 0, 'nothing alive');
+    check('…and asking for three times Earth gives three times Earth',
+      near(settle({ ...EARTH, biosphere: 3 }, 2e5).world.diag.bio, 3, 0.05),
+      'a world can be lusher than this one');
+
+    // It comes back, which is the half that makes it a biosphere rather than a
+    // switch: something survived and spread.
+    const back = new Simulation({ ...EARTH, co2Bar: 0.393 });
+    back.runYears(5e4);
+    const dead = back.world.diag.bio;
+    back.world.co2 = 280e-6 * 1e5 / back.world.diag.g;
+    back.runYears(3e5);
+    check('…and it grows back once the world is habitable again',
+      dead < 0.2 && back.world.diag.bio > 0.9,
+      `${dead.toFixed(3)}× under the greenhouse, ${back.world.diag.bio.toFixed(3)}× ` +
+      `after it cleared`);
   }
 
   // ---- 3p. the carbon budget ------------------------------------------------

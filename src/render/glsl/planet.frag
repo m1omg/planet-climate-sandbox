@@ -12,7 +12,8 @@ uniform vec3  uStarColor;
 uniform float uSeed;
 uniform float uLandFrac;
 uniform float uOceanFrac;
-uniform float uSeaLevel;    // threshold on the baked height that puts the coast in the right place
+uniform float uSeaLevel;
+uniform float uBio;    // threshold on the baked height that puts the coast in the right place
 #ifdef BODY_MAP
 uniform sampler2D uBodyMap;     // a real world's albedo, equirectangular
 uniform sampler2D uBodyHeight;  // its topography, matched to the terrain distribution
@@ -184,7 +185,12 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   // steppe before it gives way to desert.
   float warmth = smoothstep(266.0,284.0,T) * (1.0 - smoothstep(303.0,322.0,T));
   float wet    = smoothstep(0.10,0.55,uWaterCap);
-  float life   = warmth * wet * (1.0 - smoothstep(0.10,0.30,elev));
+  // ...and something has to be alive. This was missing entirely: `life` was
+  // warmth and water and nothing else, so a world with the biosphere set to
+  // zero, or one cooked past 73 C where photosynthesis has stopped, stayed as
+  // green as Earth. uBio is what the planet is actually supporting.
+  float lush   = smoothstep(0.02, 0.55, uBio);
+  float life   = warmth * wet * lush * (1.0 - smoothstep(0.10,0.30,elev));
 
   vec3 arid   = mix(sand, sandHi, smoothstep(0.05,0.22,elev));
   vec3 living = mix(steppe, forest, smoothstep(0.25,0.75,life));
@@ -290,7 +296,12 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
 
   float warmth = smoothstep(266.0,284.0,T) * (1.0 - smoothstep(303.0,322.0,T));
   float wet    = smoothstep(0.10,0.55,uWaterCap);
-  float life   = warmth * wet * (1.0 - smoothstep(0.10,0.30,elev));
+  // ...and something has to be alive. This was missing entirely: `life` was
+  // warmth and water and nothing else, so a world with the biosphere set to
+  // zero, or one cooked past 73 C where photosynthesis has stopped, stayed as
+  // green as Earth. uBio is what the planet is actually supporting.
+  float lush   = smoothstep(0.02, 0.55, uBio);
+  float life   = warmth * wet * lush * (1.0 - smoothstep(0.10,0.30,elev));
 
   vec3 ground = mix(tSand, tVeg, smoothstep(0.12,0.50,life));
   ground = mix(ground, tRock, smoothstep(0.12,0.34,elev));

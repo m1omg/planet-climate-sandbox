@@ -72,7 +72,12 @@ export const SLIDERS = [
   { g: 'surface', key: 'biosphere', label: 'Photosynthetic biosphere', min: 0, max: 4, zero: true,
     fmt: (v) => v <= 0 ? 'none' : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× Earth`,
     units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
-    note: 'How hard photosynthesis runs. It needs liquid water, and it stops when the planet cooks. Makes the oxygen and most of the methane.' },
+    note: 'How hard photosynthesis runs — what you are asking for. What the planet can actually support is below, and past about 73 °C it is nothing: that is where the photosystems come apart and no phototroph on Earth lives above it.',
+    extra: `
+      <div class="supply">
+        <div class="supply-bar"><i id="bio-fill"></i></div>
+        <span id="bio-left" class="supply-left">alive</span>
+      </div>` },
   { g: 'surface', key: 'emissions', label: 'Industrial CO₂', min: 0, max: 10, zero: true,
     fmt: (v) => v <= 0 ? 'none'
       : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× today`,
