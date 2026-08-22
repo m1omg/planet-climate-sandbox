@@ -47,6 +47,29 @@ export const PRESETS = {
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },
   waterworld: { name: 'Waterworld', icon: '💧', params: { ...EARTH, mass: 1.6, water: 6, landFraction: 0.0, insolation: 1.0, startT: 290 } },
   titan:   { name: 'Titan-like', icon: '🟤', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.15, insolation: 0.011, water: 0.5, landFraction: 0.6, n2Bar: 1.5, ch4Bar: 0.05, co2Bar: 1e-6, outgassing: 0.1, startT: 95 } },
-  superEarth: { name: 'Super-Earth', icon: '🪐', params: { ...EARTH, mass: 3.5, water: 2, n2Bar: 3, co2Bar: 1e-3, outgassing: 2, startT: 290 } },
+  // 0.9 S-earth and Earth-like specific volcanism, both of which are
+  // corrections rather than taste.
+  //
+  // `outgassing` is per-Earth *specific* activity: the model already multiplies
+  // it by outgassingScale(mass), which is 2.4 at three and a half Earth masses.
+  // Setting the slider to 2 as well asked for 4.8 times Earth's absolute rate
+  // and counted the mass twice. At 1.0 the world still outgasses 2.4x Earth,
+  // which is the honest way to say "a bigger planet is more active for longer".
+  //
+  // It matters because 2.4x is on the habitable side of a cliff and 4.8x is not.
+  // The reductant flux from volcanism is what oxygen has to outrun, and past
+  // about 1.08 here the biosphere loses: the world stays anoxic, an anoxic
+  // biosphere makes methane faster than sunlight can photolyse it, and with no
+  // ceiling to settle against it runs away. Moving the planet outwards does not
+  // help -- the photon budget falls with the starlight, so the saturation gets
+  // worse, and the world goes from runaway at 0.70 S to hard snowball at 0.68
+  // with nothing in between. Distance only becomes a temperature dial once the
+  // oxygen threshold is on the right side of it, which is why both numbers
+  // moved.
+  //
+  // What it settles at: 14.4 C, ice-free, stable for 5 Gyr, and 0.043 bar of
+  // oxygen -- a thinner oxygen atmosphere than Earth's because its volcanism
+  // eats most of what its biosphere makes.
+  superEarth: { name: 'Super-Earth', icon: '🪐', params: { ...EARTH, mass: 3.5, water: 2, n2Bar: 3, co2Bar: 1e-3, insolation: 0.9, outgassing: 1.0, startT: 290 } },
   futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, insolation: 1.09, startT: 292 } },
 };
