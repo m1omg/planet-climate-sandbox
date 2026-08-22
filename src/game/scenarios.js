@@ -64,10 +64,23 @@ export const SCENARIOS = [
     id: 'oxidation',
     name: 'The Great Oxidation',
     icon: '🫧',
-    brief: 'An Archean world, anoxic, kept warm above freezing by a millibar of methane. Your cyanobacteria are about to start making oxygen — and oxygen and methane cannot coexist. Oxygenate this planet without freezing it solid.',
-    hint: 'Oxygen cuts methane’s life from ten thousand years to ten, and a millibar of methane is worth some fifteen watts per square metre. Replace that greenhouse with CO₂ *before* you turn the biosphere up, or you will watch the ice-albedo feedback take the whole planet — and the methane coming back afterwards will not melt it.',
+    brief: 'An Archean world, anoxic, kept warm above freezing by a millibar of methane. Your cyanobacteria have just worked out oxygenic photosynthesis and are spreading on their own — and oxygen and methane cannot coexist. Keep this planet from freezing solid while it oxygenates.',
+    hint: 'The biosphere is not yours to hold back: it doubles every few million years whatever you do, and it crosses the volcanic reductant flux at about 0.4× Earth. From there oxygen cuts methane’s life from ten thousand years to ten, and a millibar of methane is worth some fifteen watts per square metre. Replace that greenhouse with CO₂ *before* the crossover, or you will watch the ice-albedo feedback take the whole planet — and the methane coming back afterwards will not melt it.',
     params: { ...EARTH, o2Bar: 0, biosphere: 0.2, insolation: 0.77, landFraction: 0.1,
               co2Bar: 0.08, ch4Bar: 1e-3, startT: 288 },
+    // Life takes off by itself, which is the whole point of the scenario and was
+    // missing from it: the biosphere sat at 0.2x for ever, below the 0.385x where
+    // oxygen starts outrunning the volcanoes, so the Great Oxidation simply never
+    // happened unless you reached over and started it. A player who did nothing
+    // was rewarded with a stable world, which is the opposite of the lesson.
+    //
+    // A function of simulated time, not of frames, so it runs the same at one
+    // year a second and at three hundred megayears. Thirty-million-year
+    // e-folding from 0.2x towards Earth's present productivity: it passes the
+    // threshold around 8 Myr in, which is enough warning to act on and not enough
+    // to ignore. It stops at 1.0x -- this is life spreading into a world that had
+    // none, not life becoming something a planet has never supported.
+    evolve: (w) => 0.2 + 0.8 * (1 - Math.exp(-w.time / 3e7)),
     limit: 3e8,
     check: (w) => w.diag.pO2 > 0.01 && w.diag.Tmean > 273 && w.diag.iceMean < 0.5,
     fail: (w) => w.diag.iceMean > 0.95,

@@ -7,6 +7,7 @@ import { runawayLimit, olr, hazeOpacity, hazeShortwave } from './physics/radiati
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
+import { SCENARIOS } from './game/scenarios.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
@@ -915,6 +916,51 @@ export function run() {
       dead < 0.2 && back.world.diag.bio > 0.9,
       `${dead.toFixed(3)}× under the greenhouse, ${back.world.diag.bio.toFixed(3)}× ` +
       `after it cleared`);
+  }
+
+  // ---- 3o3. the Great Oxidation is a scenario you can lose --------------------
+  // It used not to be. The biosphere sat at 0.2x for ever, below the 0.385x
+  // where oxygen starts outrunning the volcanoes, so the event simply never
+  // happened unless the player reached over and started it -- and doing nothing
+  // was rewarded with a stable world, which is the opposite of the lesson.
+  {
+    const S = SCENARIOS.find((x) => x.id === 'oxidation');
+    const play = (co2) => {
+      const sim = new Simulation({ ...S.params, ...(co2 != null ? { co2Bar: co2 } : {}) });
+      const w = sim.world;
+      let n = 0;
+      while (w.time < S.limit && n++ < 4e5) {
+        if (S.evolve) w.params.biosphere = S.evolve(w);
+        sim.stepOnce(Math.min(maxStep(w), 2e3));
+        if (S.fail && S.fail(w)) return { r: 'lose', w };
+        if (S.check(w)) return { r: 'win', w };
+      }
+      return { r: 'timeout', w };
+    };
+
+    check('Life takes off on its own, so the Great Oxidation happens without you',
+      S.evolve && S.evolve({ time: 0 }) < 0.25 && S.evolve({ time: 3e8 }) > 0.95,
+      `${S.evolve({ time: 0 }).toFixed(2)}× at the start, ` +
+      `${S.evolve({ time: 1e7 }).toFixed(2)}× at 10 Myr, ` +
+      `${S.evolve({ time: 3e8 }).toFixed(2)}× by the end — and it stops at Earth's own`);
+
+    const idle = play(null);
+    check('…so doing nothing loses the planet',
+      idle.r === 'lose' && idle.w.diag.Tmean < 260,
+      `frozen solid at ${(idle.w.diag.Tmean - 273.15).toFixed(0)} °C, ` +
+      `${(idle.w.time / 1e6).toFixed(0)} Myr in`);
+
+    const played = play(0.25);
+    check('…and replacing the methane greenhouse with CO₂ first wins it',
+      played.r === 'win' && played.w.diag.Tmean > 273,
+      `oxygenated at ${(played.w.diag.Tmean - 273.15).toFixed(0)} °C with ` +
+      `${played.w.diag.pO2.toExponential(1)} bar of O₂`);
+
+    // The interesting part is that it is close. Too little CO2 and the ice wins
+    // anyway, which is what makes it worth playing rather than a formality.
+    check('…but only just: too little CO₂ and the ice still takes it',
+      play(0.10).r !== 'win',
+      'a hundred millibars is not enough to hold it above freezing');
   }
 
   // ---- 3p. the carbon budget ------------------------------------------------

@@ -613,6 +613,25 @@ function updateReadout() {
 
   // scenario progress
   if (activeScenario) {
+    // Some scenarios move a control on their own. The Great Oxidation is one:
+    // the cyanobacteria are not waiting for permission, and a player who does
+    // nothing has to watch it happen rather than being left with a stable world.
+    // Driven off simulated time so the rate does not depend on the frame rate or
+    // on how fast the clock is running.
+    if (activeScenario.evolve && !scenarioResult) {
+      const e = els.biosphere;
+      if (!e.editing && !e.dragging) {
+        const v = activeScenario.evolve(w);
+        if (Math.abs(v - params.biosphere) > 1e-4) {
+          params.biosphere = v;
+          applyParams('biosphere');
+          const pos = clamp(toSlider(e.def, v), 0, 1000);
+          e.input.value = String(pos);
+          e.input.style.setProperty('--fill', `${pos / 10}%`);
+          e.out.value = e.def.fmt(v);
+        }
+      }
+    }
     const el = $('#scenario-banner .sc-status');
     if (!scenarioResult) {
       if (activeScenario.fail && activeScenario.fail(w)) scenarioResult = 'lose';

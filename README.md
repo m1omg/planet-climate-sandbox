@@ -398,8 +398,23 @@ methane does not come back either, because the same dead biosphere that stopped 
 stopped making methane. What returns is 8.9 ppm, the abiotic floor from serpentinisation alone,
 against the 1000 ppm the world had before. Ice-albedo hysteresis does not care what caused the ice.
 
-It is survivable: replace the methane's ~15 W/m² with CO₂ *before* turning the biosphere up, and
-0.25 bar gets you through oxygenation at 17 °C. That is the **Great Oxidation** scenario.
+It is survivable: replace the methane's ~15 W/m² with CO₂ *before* the crossover. That is the **Great
+Oxidation** scenario — and in it, life takes off whether you help or not.
+
+That last part was missing, and without it the scenario was a formality. The biosphere sat at 0.2×
+for ever, below the 0.385× where oxygen starts outrunning the volcanic reductant flux, so the event
+never happened unless the player reached over and started it: **doing nothing was rewarded with a
+stable world**, which is the opposite of the lesson. The cyanobacteria now spread on their own, on a
+30 Myr e-folding from 0.2× towards Earth's present productivity — crossing the threshold around 8 Myr
+in, which is enough warning to act on and not enough to ignore. It stops at 1.0×; this is life
+spreading into a world that had none, not life becoming something no planet has supported.
+
+| what you do | outcome |
+|---|---|
+| nothing | **lose** — frozen solid at −30 °C, 21 Myr in |
+| CO₂ to 100 mbar first | lose — not enough to hold it above freezing |
+| CO₂ to 150 mbar first | win, barely — oxygenated at −0.1 °C |
+| CO₂ to 250 mbar first | win — oxygenated at 12 °C |
 
 Ozone is not modelled, so there is no UV shielding feedback.
 
