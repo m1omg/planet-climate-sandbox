@@ -272,6 +272,46 @@ if (app && app.graphicsFromUrl) {
   }
 }
 
+// The play button has to be the truth about whether time is moving. Settling
+// used to run the world straight past a paused clock, so the button read
+// "Play" while the simulation raced; and stopping a settle returned early,
+// leaving the settle button stuck reading "Stop" for the rest of the session.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  if (!/if \(settling && !sim\.paused\) advanceSettle\(\)/.test(src)) {
+    console.log('\x1b[31mFAIL\x1b[0m  settling runs even while the clock is paused');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  a paused clock stops the settle too');
+  }
+  const end = src.slice(src.indexOf('function endSettle'), src.indexOf('function endSettle') + 260);
+  const restores = /classList\.remove\('busy'\)/.test(end) && /textContent = 'Settle'/.test(end);
+  if (!restores || /\{ settling = false; return; \}/.test(src)) {
+    console.log('\x1b[31mFAIL\x1b[0m  stopping a settle leaves the button reading "Stop"');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  every exit from a settle puts the button back');
+  }
+}
+
+// Winning a scenario stops the clock once, on the frame it is won. When that
+// lived in the banner branch -- which runs ten times a second for as long as
+// the win stands -- pressing play un-paused the world for a single frame and
+// then it snapped back, so the button could never be used again.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const banner = src.slice(src.indexOf("=== 'win') { el.textContent"));
+  const line = banner.slice(0, banner.indexOf('\n'));
+  if (/sim\.paused/.test(line)) {
+    console.log('\x1b[31mFAIL\x1b[0m  a won scenario re-pauses every frame, so play cannot resume it');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  a won scenario pauses once, and play resumes it');
+  }
+}
+
 // main.js should have wired up an app handle and built its controls
 if (!globalThis.window.__app || !globalThis.window.__app.sim) {
   console.log('\x1b[31mFAIL\x1b[0m  main.js did not expose a running app');

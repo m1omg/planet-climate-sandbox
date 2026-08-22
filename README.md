@@ -11,17 +11,22 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 37 physics, coverage, determinism and control checks
+node src/selftest.js            # 144 physics, coverage, determinism and control checks
+node tools/calibrate.mjs        # 21 observational anchors + 2 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
-node tools/shadercompile.mjs    # optional: compiles them on a real GL driver
+node tools/shadercompile.mjs    # compiles them on a real GL driver
+node tools/gl1check.mjs [--png] # runs the WebGL1 path on a real headless driver
 node tools/rendercheck.mjs      # CPU port of the shader; renders a PPM to look at
 node tools/bakecheck.mjs [512]  # does the baked cube map reproduce the terrain?
+node tools/bodycheck.mjs        # do the real surface maps reach both surface styles?
 node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
-node tools/gl1check.mjs [--png] # runs the WebGL1 path on a real headless driver
+node tools/resumecheck.mjs      # does the tab survive being switched away from?
 ```
 
-Run these before pushing. `node --check` parses files as CommonJS and will happily
+All eleven, before pushing — `calibrate.mjs` above all, because a change that
+fixes one anchor almost always moves three others, and the two `GAP` rows are
+known deviations that report every run rather than failing. `node --check` parses files as CommonJS and will happily
 miss ESM-only errors, which is exactly how a duplicate declaration once shipped a
 blank page; the smoke test loads the real module graph and fails on it. The shader
 lives in `src/render/glsl/` as real GLSL rather than a JavaScript template literal
@@ -52,7 +57,8 @@ A single power law fitted Venus and got Earth badly wrong: it made **every doubl
 the last** (7.9, 9.6, 11.4 W/m²…), which tipped the planet into a runaway at 1.8% CO₂ — an outcome
 the literature places a hundred times further out.
 
-`tools/calibrate.mjs` checks twenty anchors against published values in one run:
+`tools/calibrate.mjs` checks twenty-one anchors against published values in one run, and reports
+two known gaps that are deliberately not fixed:
 
 | Anchor | Literature | Model |
 |---|---|---|

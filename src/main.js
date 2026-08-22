@@ -637,9 +637,15 @@ function updateReadout() {
       if (activeScenario.fail && activeScenario.fail(w)) scenarioResult = 'lose';
       else if (activeScenario.check(w)) scenarioResult = 'win';
       else if (w.time > activeScenario.limit) scenarioResult = 'lose';
+      // Winning stops the clock, but only on the frame it is won. This used to
+      // live in the banner branch below, which runs ten times a second for as
+      // long as the win stands -- so pressing play un-paused the world for a
+      // tenth of a second and then it snapped back, and the button looked
+      // broken. Once you have won you are allowed to keep playing.
+      if (scenarioResult === 'win') { sim.paused = true; endSettle(); syncPlay(); }
     }
     el.className = 'sc-status' + (scenarioResult ? ' ' + scenarioResult : '');
-    if (scenarioResult === 'win') { el.textContent = `✓ Complete — ${fmtTime(w.time)} elapsed`; sim.paused = true; syncPlay(); }
+    if (scenarioResult === 'win') { el.textContent = `✓ Complete — ${fmtTime(w.time)} elapsed`; }
     else if (scenarioResult === 'lose') { el.textContent = `✕ Failed — ${fmtTime(w.time)} elapsed. Reset to try again.`; }
     else el.textContent = `${fmtTime(w.time)} / ${fmtTime(activeScenario.limit)} — in progress`;
   }
@@ -822,8 +828,7 @@ function bindControls() {
     renderState.seed = initialSeed;
     sim.reset(params);
     syncSliders();
-    scenarioResult = null; settling = false; sim.paused = resetPaused; syncPlay();
-    $('#btn-settle').classList.remove('busy'); $('#btn-settle').textContent = 'Settle';
+    scenarioResult = null; endSettle(); sim.paused = resetPaused; syncPlay();
     writeHash();
     toast(resetPaused ? 'Reset to the starting world — paused'
                       : 'Reset to the starting world');
@@ -854,9 +859,14 @@ function bindControls() {
   });
 
   $('#btn-settle').addEventListener('click', () => {
-    if (settling) { settling = false; return; }   // click again to stop
+    if (settling) { endSettle(); return; }        // click again to stop
     settling = true;
     settleRounds = 0;
+    // Settling *is* running the world, so it cannot happen behind a paused
+    // clock: without this the play button would read "Play" while the
+    // simulation raced ahead, which is the one state the button must never be
+    // able to show.
+    if (sim.paused) { sim.paused = false; syncPlay(); }
     $('#btn-settle').classList.add('busy');
     $('#btn-settle').textContent = 'Stop';
   });
@@ -1099,11 +1109,18 @@ function advanceSettle() {
   settleRounds++;
   const quiet = Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05;
   if (quiet || settleRounds > 4000) {
-    settling = false;
-    $('#btn-settle').classList.remove('busy');
-    $('#btn-settle').textContent = 'Settle';
+    endSettle();
     toast(`Settled at ${fmtTime(w.time)}`);
   }
+}
+
+// Leaving the settle -- by arriving, by giving up, or because the player hit
+// the button again -- has to put the button back the way it was. Stopping used
+// to return early and leave it reading "Stop" for the rest of the session.
+function endSettle() {
+  settling = false;
+  $('#btn-settle').classList.remove('busy');
+  $('#btn-settle').textContent = 'Settle';
 }
 
 let last = performance.now(), chartClock = 0, reportedError = false;
@@ -1119,7 +1136,7 @@ function tick(dtReal) {
       view.spinVel *= Math.pow(0.06, dtReal);
       if (Math.abs(view.spinVel) < 0.02) view.spinVel = 0;
     }
-    if (settling) advanceSettle();
+    if (settling && !sim.paused) advanceSettle();
     else sim.advance(dtReal);
     view.render(sim.world, renderState, dtReal);
 
