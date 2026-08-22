@@ -403,6 +403,49 @@ It is survivable: replace the methane's ~15 W/m² with CO₂ *before* turning th
 
 Ozone is not modelled, so there is no UV shielding feedback.
 
+### How much carbon a planet has
+
+Volcanoes cannot outgas carbon the planet does not have, and until now they could: `outgassing` was an
+infinite tap. Left running it produced **24,000 bar of CO₂** — thirty to a hundred times the entire
+carbon inventory of an Earth-mass world — and drove the surface into the integrator's 4000 K clamp.
+
+Carbon in the bulk silicate Earth — mantle plus crust, which is everything that can ever reach the
+air — is a mass fraction of **1.4 ± 0.4 × 10⁻⁴**. Rather more is dissolved in the core and none of
+that is coming back. Over Earth's surface that is 4.1×10⁶ kg/m², or **about 400 bar** of CO₂. Two
+independent routes agree: Earth's carbon inventory is put at 2.5×10²² mol and possibly as high as
+1×10²³, which is 210–850 bar, and the mass fraction lands in the middle of that.
+
+The scaling with planet mass is the honest part. Carbon is a roughly constant fraction of the
+silicates for worlds that accreted from similar material, so the inventory follows the mantle mass —
+and what matters to an atmosphere is the *column*, inventory over area:
+
+| | mass | budget | actual atmosphere |
+|---|---|---|---|
+| Mars | 0.107 M⊕ | **51 bar** | 0.006 bar |
+| Titan-mass | 0.15 M⊕ | 70 bar | ~0 |
+| Venus | 0.815 M⊕ | 331 bar | **92 bar (28%)** |
+| Earth | 1.0 M⊕ | 400 bar | 0.0004 bar |
+| Super-Earth | 3.5 M⊕ | 1265 bar | — |
+
+Venus having outgassed a quarter of its budget and Mars a ten-thousandth of its is the right shape:
+Venus lost its water and with it the sink, Mars lost its volcanism and then its atmosphere. **Neither
+needed a different carbon endowment to end up where it is**, which is the useful thing this says. The
+model reaches 27% for Venus without being told to.
+
+And it is a **cycle, not a drain**. Weathering does not destroy carbon, it buries it as carbonate, and
+subduction carries it back down to be outgassed again — which is why Earth has run this for four
+billion years on an inventory it would otherwise have exhausted in eight hundred million. Run Earth
+for 5 Gyr and 100.0% of its carbon is still below, with CO₂ steady at 361 ppm. This is the
+Sleep & Zahnle (2001) picture, in one reservoir rather than four.
+
+The same world at 4 S⊕ with the outgassing control at 20× now stops at **400 bar and 1759 K** — the
+whole budget in the air, a magma ocean, and nowhere further to go.
+
+**Deliberately not modelled:** formation distance and disk C/O, which shift the endowment by a factor
+of a few; core mass fraction, which changes how much silicate there is to hold carbon; and impact
+devolatilisation. Those are real, and they are why the band above is a factor of two wide — but none
+of them is something this model has any way to know about a given world.
+
 ### Where photosynthesis can run
 
 The oxygen source used to be gated on one smoothstep of the global mean temperature between 330 and
@@ -739,7 +782,7 @@ actually is.
 
 ## References
 
-Archer 2005, Lenton & Cannell 2002 (the fate of fossil carbon, recoverable reserves) · Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Saunois et al. 2020 (the global methane budget) · Yung, Allen & Pinto 1984, Nixon et al. 2018 (Titan's methane and its ~10–100 Myr photochemical lifetime) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+Archer 2005, Lenton & Cannell 2002 (the fate of fossil carbon, recoverable reserves) · Sleep & Zahnle 2001 (carbon cycling through the mantle), Dasgupta & Hirschmann 2010 (the deep carbon cycle), Rushby et al. 2018 (carbonate-silicate cycling on other planet sizes) · Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Saunois et al. 2020 (the global methane budget) · Yung, Allen & Pinto 1984, Nixon et al. 2018 (Titan's methane and its ~10–100 Myr photochemical lifetime) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

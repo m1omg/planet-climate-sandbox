@@ -1,4 +1,5 @@
 import { Simulation } from './sim/clock.js';
+import { carbonBudget } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
@@ -537,6 +538,13 @@ function updateReadout() {
     stat('Surface pressure', `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +
     stat('CO₂', dg.pCO2 >= 0.01 ? `${dg.pCO2.toFixed(2)}<small> bar</small>` : `${(dg.pCO2 * 1e6).toFixed(0)}<small> ppm</small>`) +
     stat('Composition', composition(dg), 'wide') +
+    // What is left in the mantle and crust. Worth showing once a world has
+    // started seriously outgassing -- it is what stops the CO2.
+    (w.carbonDeep != null && w.carbonDeep < 0.97 * carbonBudget(w.params.mass)
+      ? stat('Carbon left below',
+          `${(w.carbonDeep / carbonBudget(w.params.mass) * 100).toFixed(0)}<small> %</small>`,
+          w.carbonDeep < 0.02 * carbonBudget(w.params.mass) ? 'warn' : '')
+      : '') +
     // Only worth the line while there is anyone burning anything.
     ((w.params.emissions ?? 0) > 0 || (w.fossil ?? 36) < 35.999
       ? stat('Fossil carbon left',

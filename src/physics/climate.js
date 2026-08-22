@@ -69,6 +69,7 @@ export function resetWorld(w, params) {
   w.dtPrev = 0;
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
   w.fossil = null;     // a fresh world has its fossil carbon still in the ground
+  w.carbonDeep = null; // rebuilt from the planet's mass on the first step
   update(w, 0);
 }
 

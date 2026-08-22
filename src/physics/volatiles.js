@@ -1,6 +1,6 @@
 import {
   clamp, smoothstep, psatH2O, psatCO2, frostPointCO2, YEAR,
-  OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH,
+  OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH, M_EARTH,
 } from './constants.js';
 import { iceFraction } from './radiation.js';
 import { outgassingScale, radiusFromMass } from './planet.js';
@@ -105,6 +105,52 @@ const FOSSIL_TOTAL = 36.0;      // kg/m^2 of CO2, ~5000 GtC of recoverable carbo
 // Run it through kappa instead and burning all five thousand gigatonnes of
 // carbon moves the atmosphere from 427 to 500 ppm, which is not what it does.
 const AIRBORNE = 0.5;
+
+// ---------------------------------------------------------------------------
+// How much carbon a planet has at all.
+//
+// Carbon in the bulk silicate Earth -- mantle plus crust, which is everything
+// that can ever reach the air -- is a mass fraction of 1.4 +/- 0.4 x 10^-4
+// (metal-silicate partitioning studies; Dasgupta & Hirschmann 2010 for the deep
+// cycle). Rather more is dissolved in the core, and none of that is coming back.
+//
+// As CO2 over Earth's surface that is 4.1e6 kg/m^2, or about 400 bar. Two
+// independent routes agree: Earth's carbon inventory is put at 2.5e22 mol and
+// possibly as high as 1e23, which is 210 to 850 bar, and the mass fraction lands
+// in the middle of that. The uncertainty is real and it is roughly a factor of
+// two either way; this is a floor-to-ceiling number, not a precise one.
+//
+// The scaling with planet mass is the honest part. Carbon is a roughly constant
+// fraction of the silicates for worlds that accreted from similar material, so
+// the inventory follows the mantle mass, and what matters to an atmosphere is
+// the column -- inventory over area. That is why the number below divides by
+// r^2: a bigger planet has more carbon and less surface to spread it over.
+//
+//     Mars       0.107 M(+)      51 bar        actual atmosphere 0.006 bar
+//     Venus      0.815 M(+)     331 bar        actual atmosphere 92 bar (28%)
+//     Earth      1.000 M(+)     400 bar        actual atmosphere 0.0004 bar
+//     super-E    3.500 M(+)    1265 bar
+//
+// Venus having outgassed a quarter of its budget and Mars a ten-thousandth of
+// its is the right shape: Venus lost its water and with it the sink, Mars lost
+// its volcanism and then its atmosphere. Neither needed a different carbon
+// endowment to end up where it is, which is the useful thing this says.
+//
+// What is deliberately *not* modelled: formation distance and disk C/O, which
+// shift the endowment by a factor of a few; core mass fraction, which changes
+// how much silicate there is to hold carbon; and impact devolatilisation. Those
+// are real and they are why the band is a factor of two wide, but none of them
+// is something this model has any way to know about a given world.
+const BSE_CARBON = 1.4e-4;      // carbon mass fraction of mantle + crust
+const SILICATE_FRACTION = 0.677; // mantle + crust as a share of planet mass
+const CO2_PER_C = 44 / 12;
+
+export function carbonBudget(massEarths) {
+  const m = Math.max(massEarths, 1e-6);
+  const r = radiusFromMass(m);
+  return BSE_CARBON * CO2_PER_C * SILICATE_FRACTION * m * M_EARTH
+    / (4 * Math.PI * r * r);
+}
 
 // Area-averaged thickness an ice sheet can reach before it flows and calves
 // faster than it accumulates, and the density of glacier ice.
@@ -416,7 +462,13 @@ export function stepVolatiles(w, dtYears) {
   partitionWater(w);
 
   // --- carbonate-silicate cycle -------------------------------------------
-  const V = OUTGAS_EARTH * outgassingScale(p.mass) * p.outgassing;
+  // Volcanoes cannot outgas carbon the planet does not have. `outgassing` used
+  // to be an infinite tap, and left running it produced 24 000 bar of CO2 --
+  // thirty to a hundred times the entire carbon inventory of an Earth-mass
+  // world. See carbonBudget().
+  const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0);
+  const V = (dtYears > 0 && w.carbonDeep != null)
+    ? Math.min(want, Math.max(w.carbonDeep, 0) / dtYears) : want;
 
   // ...and us, on top of the volcanoes, until the fossil carbon runs out.
   if (w.fossil == null) w.fossil = FOSSIL_TOTAL;
@@ -456,6 +508,16 @@ export function stepVolatiles(w, dtYears) {
   // millennia to ~1 Myr. In a hard snowball the sink is gone and CO2 simply
   // piles up until it can break the ice: 0.1-0.3 bar over 5-30 Myr.
   const kappa = 1 + (CARBON_RESERVOIR_FACTOR - 1) * liquid;
+
+  // The interior reservoir, set up on the first step now that kappa is known.
+  // Everything not already at the surface is still in the mantle and crust; the
+  // surface system holds kappa times the atmospheric column, because that is
+  // what kappa means -- Earth's ocean carries some forty-four times the carbon
+  // its air does, which is where the 50 came from.
+  if (w.carbonDeep == null) {
+    w.carbonDeep = Math.max(0, carbonBudget(p.mass)
+      - kappa * w.co2 - (w.co2Frozen ?? 0));
+  }
   // Semi-implicit, so an arbitrarily long step still lands on the right answer
   // instead of overshooting past zero. Weathering goes as C^0.3, so dW/dC =
   // 0.3 W / C. Without this the step-size chooser had to throttle the whole
@@ -463,6 +525,14 @@ export function stepVolatiles(w, dtYears) {
   const dWdC = w.co2 > 1e-12 ? 0.3 * Wr / w.co2 : 0;
   w.co2 = Math.max(0, w.co2 + emit * AIRBORNE * dtYears
     + (V - Wr) * dtYears / kappa / (1 + dtYears * dWdC / kappa));
+
+  // Close the loop. Weathering does not destroy carbon, it buries it as
+  // carbonate, and subduction carries it back down to be outgassed again --
+  // which is why Earth has run this cycle for four billion years on an
+  // inventory it would otherwise have exhausted in eight hundred million.
+  // Fossil carbon we burn is already at the surface, so it does not come out of
+  // the interior; it goes back into it through weathering like any other.
+  w.carbonDeep = Math.max(0, w.carbonDeep + (Wr - V) * dtYears);
 
   // --- the oxygen cycle ----------------------------------------------------
   // Built to mirror the carbon one above, because it is the same shape: a
@@ -595,7 +665,15 @@ export function stepVolatiles(w, dtYears) {
   }
 
   // --- a molten surface degasses hard -------------------------------------
-  if (dg.Tmean > 1400) w.co2 += V * 30 * dtYears / 1;
+  // A magma ocean has no crust to hold anything down, so it gives up its carbon
+  // thirty times faster. Out of the same finite reservoir as everything else:
+  // this term had no budget either, and between them the two accounted for the
+  // 24 000 bar.
+  if (dg.Tmean > 1400 && w.carbonDeep > 0) {
+    const molten = Math.min(V * 30, dtYears > 0 ? w.carbonDeep / dtYears : 0);
+    w.co2 += molten * dtYears;
+    w.carbonDeep = Math.max(0, w.carbonDeep - molten * dtYears);
+  }
 
   w.escape = esc;
   // V carries the emissions so maxStep's carbon bound sees them: forty times

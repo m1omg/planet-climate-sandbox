@@ -8,7 +8,8 @@ import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
-import { methaneLifetime, photosynthesis } from './physics/volatiles.js';
+import { surfaceGravity } from './physics/planet.js';
+import { methaneLifetime, photosynthesis, carbonBudget } from './physics/volatiles.js';
 import { atmosphereLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
@@ -835,6 +836,52 @@ export function run() {
     check('…and stays habitable across that range',
       dim.diag.Tmean > 273 && bright.diag.Tmean < 350,
       `${(dim.diag.Tmean - 273.15).toFixed(0)} °C to ${(bright.diag.Tmean - 273.15).toFixed(0)} °C`);
+  }
+
+  // ---- 3p. the carbon budget ------------------------------------------------
+  // Volcanoes cannot outgas carbon the planet does not have.
+  {
+    const bar = (m) => carbonBudget(m) * surfaceGravity(m) / 1e5;
+    check('An Earth-mass world has ~400 bar of CO₂ worth of carbon in it',
+      near(bar(1), 400, 60),
+      `${bar(1).toFixed(0)} bar, against 210–850 from the two published routes ` +
+      `(2.5e22–1e23 mol C, and a bulk-silicate mass fraction of 1.4e-4)`);
+
+    // Scales with the mantle it is dissolved in, over the surface it has to
+    // spread across. Mars really does have less carbon, and by about this much.
+    check('…and a small world proportionally less, a large one more',
+      bar(0.107) < 60 && bar(0.107) > 40 && bar(3.5) > 1000,
+      `Mars-mass ${bar(0.107).toFixed(0)} bar · Venus-mass ${bar(0.815).toFixed(0)} · ` +
+      `Earth ${bar(1).toFixed(0)} · 3.5 M⊕ ${bar(3.5).toFixed(0)}`);
+
+    // The regression test for what prompted this. Left running, the outgassing
+    // control used to be an infinite tap.
+    const cooked = settle({ ...EARTH, insolation: 4, outgassing: 20 }, 5e9).world;
+    check('Runaway outgassing stops at the budget instead of running away',
+      cooked.diag.pCO2 < 1.05 * bar(1) && cooked.diag.pCO2 > 0.5 * bar(1)
+        && cooked.diag.Tmean < 2500,
+      `${cooked.diag.pCO2.toFixed(0)} bar and ${cooked.diag.Tmean.toFixed(0)} K, ` +
+      `where it used to reach 24 000 bar and hit the 4000 K integrator clamp`);
+    check('…having actually emptied the planet, not stopped for another reason',
+      cooked.carbonDeep / carbonBudget(1) < 0.02,
+      `${(cooked.carbonDeep / carbonBudget(1) * 100).toFixed(1)}% of the carbon left below`);
+
+    // But it is a cycle, not a drain: weathering buries carbon that subduction
+    // returns. Without that, Earth would exhaust its inventory in 800 Myr at
+    // its own outgassing rate and the thermostat would simply stop.
+    const old = settle({ ...EARTH }, 5e9).world;
+    check('A working carbon cycle does not consume the planet',
+      old.carbonDeep / carbonBudget(1) > 0.98 && old.diag.pCO2 * 1e6 > 100,
+      `${(old.carbonDeep / carbonBudget(1) * 100).toFixed(1)}% still below after 5 Gyr, ` +
+      `CO₂ steady at ${(old.diag.pCO2 * 1e6).toFixed(0)} ppm`);
+
+    // Venus is the check that costs nothing: it is not tuned, and it lands on
+    // the fraction its 92 bar implies.
+    const venus = settle(PRESETS.venus.params, 2e7).world;
+    const outgassed = 1 - venus.carbonDeep / carbonBudget(0.815);
+    check('…and Venus has outgassed about the quarter of its carbon it should have',
+      outgassed > 0.15 && outgassed < 0.45,
+      `${(outgassed * 100).toFixed(0)}% of a ${bar(0.815).toFixed(0)} bar budget is in the air`);
   }
 
   // ---- 4. snowball, and its hysteresis -------------------------------------
