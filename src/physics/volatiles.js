@@ -192,8 +192,50 @@ function advanceIceSheet(w, dtYears) {
   w.iceSheet += (target - w.iceSheet) * (1 - Math.exp(-Math.max(dtYears, 0) / tau));
 }
 
+// How long a methane molecule lasts, in years.
+//
+// Methane is not stable, and what destroys it depends entirely on the redox
+// state of the air. In today's oxidising atmosphere OH radicals -- made
+// downstream of oxygen -- take it out in about a decade. With no free oxygen
+// there is no OH, and the only sink is ultraviolet photolysis high up: the
+// lifetime stretches to something like ten thousand years, which is why the
+// Archean could hold percent-level methane at all. The haze it makes then
+// shields the methane underneath it and stretches that further still.
+//
+// Zahnle 1986; Pavlov et al. 2001; Catling & Zahnle 2020.
+export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1) {
+  // It does not take much. OH chemistry is running long before an atmosphere
+  // looks oxygenated to us: a thousandth of today's oxygen already shortens
+  // methane's life by three orders of magnitude, which is why methane and free
+  // oxygen essentially cannot coexist, and why the Great Oxidation ended the
+  // Archean's methane greenhouse rather than merely denting it.
+  const oxidising = smoothstep(3e-7, 2e-4, pO2);
+  const years = Math.exp(Math.log(1.2e4) * (1 - oxidising) + Math.log(10) * oxidising);
+  return years * (1 + 1.5 * Math.max(hazeTau, 0)) / Math.pow(clamp(xuvRel, 0.02, 300), 0.4);
+}
+
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
+
+  // --- methane -------------------------------------------------------------
+  // It used to sit wherever the slider put it, for ever, which is why a world
+  // could be handed a millibar of the stuff and keep it through anything.
+  //
+  // The source is whatever sustains the level you asked for -- methanogens on
+  // the Archean, the interior on Titan -- and is deliberately not modelled: the
+  // control sets the amount this world can hold up, and the chemistry then
+  // decides whether it can. Oxygenate the air and the methane collapses,
+  // whatever the source; that is the real story of the Great Oxidation.
+  {
+    const dg = w.diag, p = w.params;
+    const tau = methaneLifetime(dg.pO2, dg.hazeTau ?? 0, p.xuvFraction / 3.4e-6);
+    if (w.ch4Source == null) w.ch4Source = w.ch4 / tau;
+    // Semi-implicit, so an arbitrarily long step still lands on the right
+    // answer instead of overshooting past zero.
+    w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * dtYears) / (1 + dtYears / tau));
+    w.ch4Tau = tau;
+  }
+
   const p = w.params, dg = w.diag, d = dg.d;
   const esc = escapeRates(w);
 
@@ -210,6 +252,21 @@ export function stepVolatiles(w, dtYears) {
       // oxygen left behind when the hydrogen goes; some is taken up by the crust
       w.o2 += lostEO * d.eoColumn * (32 / 18) * 0.15;
     }
+  }
+  // Free oxygen does not simply pile up. Reduced volcanic gases and the
+  // weathering of fresh reduced crust consume it, which is why the Archean
+  // stayed anoxic for a billion years with photosynthesis already running: the
+  // reductant flux outran the oxygen supply (Catling & Zahnle 2020).
+  //
+  // Nothing depended on the oxygen until methane did, and then it mattered at
+  // once -- a world that had lost three hundred-thousandths of an ocean had
+  // banked enough to cut its methane's lifetime from ten thousand years to ten
+  // and wipe it out. A real runaway still oxidises a planet: losing an ocean
+  // leaves some 700,000 kg/m2 of oxygen against the few thousand this sink can
+  // take in a billion years.
+  {
+    const reductant = OUTGAS_EARTH * outgassingScale(p.mass) * p.outgassing;
+    w.o2 = Math.max(0, w.o2 - reductant * dtYears);
   }
   partitionWater(w);
 

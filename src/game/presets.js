@@ -32,7 +32,11 @@ export const PRESETS = {
   preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL } },
   venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
   mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
-  earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, insolation: 0.77, landFraction: 0.1, co2Bar: 0.02, ch4Bar: 1e-3, startT: 290 } },
+  // 0.08 bar of CO2, not 0.02. The old value only worked because methane's
+  // opacity was some five times too strong; with it fitted to the measured
+  // forcings the faint young Sun needs the CO2 the literature actually asks
+  // for, which is 0.01-0.1 bar alongside a few hundred ppm of methane.
+  earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, insolation: 0.77, landFraction: 0.1, co2Bar: 0.08, ch4Bar: 1e-3, startT: 290 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },

@@ -332,9 +332,12 @@ function applyParams(key) {
     const d = derive(w.params);
     if (key === 'n2Bar') w.n2 = params.n2Bar * 1e5 / d.g;
     if (key === 'co2Bar') { w.co2 = params.co2Bar * 1e5 / d.g; w.co2Frozen = 0; }
-    if (key === 'ch4Bar') w.ch4 = params.ch4Bar * 1e5 / d.g;
+    // Changing the methane means changing the level this world sustains, so
+    // whatever keeps it there has to be re-derived from the new value.
+    if (key === 'ch4Bar') { w.ch4 = params.ch4Bar * 1e5 / d.g; w.ch4Source = null; }
     if (key === 'mass') {
-      w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g; w.ch4 = params.ch4Bar * 1e5 / d.g;
+      w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g;
+      w.ch4 = params.ch4Bar * 1e5 / d.g; w.ch4Source = null;
     }
     if (key === 'water') {
       // The control shows the water still present, so set that directly and
@@ -458,6 +461,48 @@ function fmtTime(y) {
   if (y < 1e9) return `${(y / 1e6).toFixed(y < 1e8 ? 1 : 0)} Myr`;
   return `${(y / 1e9).toFixed(2)} Gyr`;
 }
+// What the air is made of, by volume -- which for an ideal gas is just the
+// partial pressures over the total. Water vapour is in it, because on a warm
+// world it stops being a trace gas and becomes most of the atmosphere, and a
+// composition readout that hid that would be misleading exactly where it
+// matters most.
+function composition(dg) {
+  const pH2O = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length;
+  const parts = [
+    // The background reservoir is every gas that neither condenses nor absorbs
+    // much -- nitrogen, oxygen and argon together -- so it is labelled for what
+    // it is rather than pretending Earth's is pure nitrogen.
+    ['N₂+', dg.pN2, '#7f9ccc', 'nitrogen, oxygen and argon: the background gas'],
+    ['CO₂', dg.pCO2, '#e0894a', 'carbon dioxide'],
+    ['H₂O', pH2O * (1 - (dg.superFrac || 0)), '#4fa8d8', 'water vapour'],
+    ['H₂O·sc', pH2O * (dg.superFrac || 0), '#c98ad0', 'water past its critical point: neither liquid nor gas'],
+    ['O₂', dg.pO2, '#6fc7a0', 'free oxygen left behind by hydrogen escape'],
+    ['CH₄', dg.pCH4, '#c9b04a', 'methane'],
+  ];
+  const total = parts.reduce((a, p) => a + Math.max(p[1], 0), 0);
+  if (!(total > 0)) return '<span class="comp-none">no atmosphere</span>';
+
+  // A share as a percentage, kept honest at the small end: 0.04% CO₂ is the
+  // whole of the modern greenhouse and rounding it to 0% would be absurd.
+  const pct = (f) => {
+    const v = f * 100;
+    if (v >= 99.95) return '100';
+    if (v >= 10) return v.toFixed(0);
+    if (v >= 1) return v.toFixed(1);
+    if (v >= 0.01) return v.toFixed(2);
+    if (v > 0) return v.toExponential(0).replace('e-', '\u00d710⁻');
+    return '0';
+  };
+  const shown = parts.map(([n, p, c, t]) => ({ n, c, t, f: Math.max(p, 0) / total }))
+                     .filter((e) => e.f >= 1e-6)
+                     .sort((a, b) => b.f - a.f);
+  const bar = shown.filter((e) => e.f > 0.004)
+    .map((e) => `<i style="width:${(e.f * 100).toFixed(2)}%;background:${e.c}"></i>`).join('');
+  const text = shown.map((e) =>
+    `<span title="${e.t}"><b style="color:${e.c}">${e.n}</b> ${pct(e.f)}%</span>`).join('');
+  return `<div class="comp-bar">${bar}</div><div class="comp-list">${text}</div>`;
+}
+
 function stat(k, v, cls = '') { return `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
 
 function updateReadout() {
@@ -490,6 +535,7 @@ function updateReadout() {
     stat('Cloud cover', `${(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS * 100).toFixed(0)}<small> %</small>`) +
     stat('Surface pressure', `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +
     stat('CO₂', dg.pCO2 >= 0.01 ? `${dg.pCO2.toFixed(2)}<small> bar</small>` : `${(dg.pCO2 * 1e6).toFixed(0)}<small> ppm</small>`) +
+    stat('Composition', composition(dg), 'wide') +
     stat('Absorbed', `${dg.absorbed.toFixed(1)}<small> W/m²</small>`) +
     stat('Emitted', `${dg.emitted.toFixed(1)}<small> W/m²</small>`) +
     stat('Runaway margin', `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,

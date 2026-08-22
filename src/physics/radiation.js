@@ -31,8 +31,49 @@ import { SIGMA, psatH2O, clamp, smoothstep } from './constants.js';
 // pressure-induced continuum: utterly negligible below a few percent of a bar,
 // and what carries Venus's 92 bar to an optical depth of 35.
 const A_CO2 = 0.0514, P_CO2 = 5.46e-6, C_CO2 = 0.6735, D_CO2 = 0.87;
-const K_H2O = 2.959,  M_H2O = 0.36;
-const K_CH4 = 12.0,   M_CH4 = 0.40;
+// Refitted when methane's opacity was corrected. The old value was propping up
+// Earth's greenhouse alongside a methane term that was contributing 6.7 W/m^2
+// where it should have been 0.7 -- take that away and Earth settled at 4 C. The
+// water term is the only one that can absorb the difference without disturbing
+// Venus (no methane) or the runaway limit (a saturated ocean, no methane), and
+// as it happens the fit is better on both counts than it was: the
+// Simpson-Nakajima limit lands at 282 W/m^2, which is the literature value
+// exactly, where before it was 287.
+//
+// The exponent had to move too, and it is the exponent that made the refit
+// possible at all. Earth sits at 0.011 bar of water vapour and the runaway peak
+// at 0.43, so the coefficient alone could only trade one against the other --
+// warming Earth pushed the runaway limit down to 263. Lowering the exponent
+// puts relatively more opacity at Earth's end of that range than at the
+// runaway's, which is what let both land at once.
+const K_H2O = 2.989,  M_H2O = 0.34;
+
+// Methane's bands are narrow and saturate early, so like CO2 its forcing goes
+// as the logarithm of the amount, not as a power of it. The power law here was
+// never anchored to anything and was four to ten times too strong: it gave the
+// 1.8 ppm in modern air 6.7 W/m^2 where the accepted figure is about 0.7, and it
+// made one millibar of methane a bigger greenhouse than twenty millibars of
+// CO2. That is why an Archean world tipped into a runaway the moment the Sun
+// brightened. Fitted to Myhre et al. 1998 at present-day amounts and to Byrne &
+// Goldblatt 2014 at Archean ones.
+const A_CH4 = 0.0293, P_CH4 = 6.9e-6;
+// Collision-induced absorption: pairs of molecules absorbing during a collision,
+// which needs no dipole and so has no bands to saturate. It is what actually
+// keeps Titan warm, and being a two-body process it goes as the square of the
+// density -- which is why it is nothing at a few parts per million and dominant
+// under a bar and a half of cold nitrogen.
+//
+// Standing in for the CH4-N2 and N2-N2 continuum together, and fitted to Titan.
+// A semi-grey scheme cannot represent the reason the same continuum is
+// irrelevant on Earth -- water vapour has already closed the window it absorbs
+// in -- so the quadratic dependence carries that job instead, keeping it out of
+// the way at any methane fraction a wet planet would have.
+const CIA_CH4 = 867.0;
+
+export function tauCH4(pCH4, pTot) {
+  if (!(pCH4 > 0)) return 0;
+  return A_CH4 * Math.log(1 + pCH4 / P_CH4) + CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0);
+}
 const N_BROADEN = 0.30;
 
 // Optical depth of CO2 alone, before pressure broadening.
@@ -45,7 +86,7 @@ export function opticalDepth(pCO2, pH2O, pCH4, pTot) {
   const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
   let t = tauCO2(pCO2);
   if (pH2O > 0) t += K_H2O * Math.pow(pH2O, M_H2O);
-  if (pCH4 > 0) t += K_CH4 * Math.pow(pCH4, M_CH4);
+  if (pCH4 > 0) t += tauCH4(pCH4, pTot);
   return t * br;
 }
 

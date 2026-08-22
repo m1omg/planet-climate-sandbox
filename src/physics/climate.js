@@ -68,6 +68,7 @@ export function resetWorld(w, params) {
   w.history = [];
   w.dtPrev = 0;
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
+  w.ch4Source = null;  // the methane the slider asks for becomes the level it holds
   update(w, 0);
 }
 

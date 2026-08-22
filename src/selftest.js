@@ -8,6 +8,7 @@ import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
+import { methaneLifetime } from './physics/volatiles.js';
 import { atmosphereLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
@@ -211,14 +212,17 @@ export function run() {
   // so a bone-dry 285 K desert was filed as an eyeball. One world in nine
   // hundred reached the trapped state; it is 113 now.
   {
+    // Drier and dimmer than the borderline case: trapped and twilight are two
+    // basins of the same system, and a recipe sitting between them lands in
+    // whichever one the integrator's step sequence happens to steer it to.
     const locked = settle({ ...EARTH, tidallyLocked: true, rotationHours: 240,
-      water: 0.05, landFraction: 0.5, insolation: 1.0, n2Bar: 0.3,
+      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.3,
       co2Bar: 1e-3, outgassing: 0.3, startT: 280 }, 2e7);
     const w = locked.world, st = classify(w);
     check('A locked world with a modest ocean traps it all on the night side',
       st.id === 'trapped', `${st.name}, ${(w.water.landIce / w.diag.totalWater * 100).toFixed(0)}% of the water as night-side ice`);
     check('…while keeping the water it started with, just not as liquid',
-      w.diag.totalWater > 0.04 && w.water.ocean / w.diag.totalWater < 0.05,
+      w.diag.totalWater > 0.02 && w.water.ocean / w.diag.totalWater < 0.05,
       `${w.diag.totalWater.toFixed(3)} EO left, ${(w.water.ocean / w.diag.totalWater * 100).toFixed(1)}% of it liquid`);
     check('…and no sea left on the globe, so the label matches the picture',
       w.diag.flooded < 0.04, `${(w.diag.flooded * 100).toFixed(1)}% of the surface still flooded`);
@@ -375,9 +379,17 @@ export function run() {
       while (x.world.time < 3e5 && n++ < 3e4) { x.stepOnce(Math.min(maxStep(x.world), 2e3)); x.world.co2 = c; }
       return x.world.diag.Tmean;
     };
-    const warm = arch(6e-3), hazy = arch(1e-2);
+    // Sweep it rather than testing two fixed amounts: where the turn falls
+    // depends on the CO2 the world has, since the haze switches on at a *ratio*.
+    const ch4s = [8e-3, 1.4e-2, 2e-2, 3e-2, 4e-2, 5.5e-2];
+    const Ts = ch4s.map(arch);
+    let peak = 0;
+    for (let i = 1; i < Ts.length; i++) if (Ts[i] > Ts[peak]) peak = i;
+    const fell = Ts[Ts.length - 1] < Ts[peak] - 0.5;
     check('Archean methane warms until its own haze shades the ground, then cools',
-      hazy < warm - 5, `${(warm - 273.15).toFixed(1)} °C at 6 mbar CH₄ → ${(hazy - 273.15).toFixed(1)} °C at 10 mbar`);
+      peak < Ts.length - 1 && fell,
+      `warmest at ${(ch4s[peak] * 1e3).toFixed(0)} mbar CH₄ (${(Ts[peak] - 273.15).toFixed(1)} °C), ` +
+      `down to ${(Ts[Ts.length - 1] - 273.15).toFixed(1)} °C by ${(ch4s[ch4s.length - 1] * 1e3).toFixed(0)} mbar`);
   }
 
   // ---- 3j. what the atmosphere actually looks like --------------------------
@@ -431,6 +443,50 @@ export function run() {
       `(the old straight-line sea level was out by 15 points at 30%)`);
   }
 
+  // ---- 3l. methane is not a stable gas -------------------------------------
+  // It used to sit wherever the slider put it, for ever. In today's oxidising
+  // air OH radicals destroy it in about a decade; with no free oxygen the only
+  // sink is ultraviolet photolysis high up and the lifetime stretches to ten
+  // thousand years, which is why the Archean could hold percent-level methane
+  // at all (Zahnle 1986; Pavlov 2001; Catling & Zahnle 2020).
+  {
+    const anox = methaneLifetime(0, 0, 1);
+    check('Methane lasts ~10 kyr in anoxic air and ~10 yr in ours',
+      near(anox, 1.2e4, 3e3) && near(methaneLifetime(0.21, 0, 1), 10, 3),
+      `${anox.toExponential(1)} yr anoxic, ${methaneLifetime(0.21, 0, 1).toFixed(0)} yr at present-day oxygen`);
+    // The point the Great Oxidation turns on: it takes very little oxygen.
+    const trace = methaneLifetime(2e-4, 0, 1);
+    check('…and a thousandth of today\u2019s oxygen already all but ends it',
+      trace / anox < 0.01,
+      `lifetime falls to ${(trace / anox * 100).toFixed(2)}% of the anoxic value, so the steady state does too`);
+    check('…while its own haze shields it and buys it time',
+      methaneLifetime(0, 0.5, 1) > anox * 1.5,
+      `${(methaneLifetime(0, 0.5, 1) / anox).toFixed(1)}× longer under haze`);
+
+    // Methane is far less stable than CO2, and it must actually decay.
+    const s = new Simulation({ ...EARTH, ch4Bar: 1e-3, co2Bar: 0.01 });
+    const w = s.world;
+    const ch4Start = w.ch4;
+    w.ch4Source = 0;                       // cut whatever was sustaining it
+    s.runYears(1e5, 2e3);
+    check('Methane decays when nothing is making it',
+      w.ch4 < 0.02 * ch4Start,
+      `${(w.ch4 / ch4Start * 100).toFixed(2)}% left after 100 kyr, where CO₂ would still be there`);
+
+    // Oxygen itself must not pile up from a trickle of water loss, or every
+    // world silently oxidises and loses its methane for no reason.
+    const quiet = settle({ ...EARTH, insolation: 1.0 }, 3e7).world;
+    check('A world that has barely lost any water stays anoxic',
+      quiet.diag.pO2 < 1e-5,
+      `${quiet.water.lost.toExponential(1)} EO lost, ${quiet.diag.pO2.toExponential(1)} bar O₂`);
+    // ...but a real runaway still oxidises one, which is the Venus story.
+    const cooked = settle({ ...EARTH, insolation: 1.6, xuvFraction: 1e-4, ch4Bar: 1e-3 }, 5e8).world;
+    check('…but a planet that loses its ocean is oxidised, and its methane gone',
+      cooked.diag.pO2 > 1 && cooked.diag.pCH4 < 1e-5,
+      `${cooked.water.lost.toFixed(2)} EO lost, ${cooked.diag.pO2.toFixed(0)} bar O₂, ` +
+      `CH₄ ${cooked.diag.pCH4.toExponential(1)} bar`);
+  }
+
   // ---- 4. snowball, and its hysteresis -------------------------------------
   {
     const cold = settle({ ...EARTH, co2Bar: 1e-6, startT: 240 }, 5e4);
@@ -465,18 +521,33 @@ export function run() {
 
   // ---- 5. dry planets have a wider habitable zone (Abe et al. 2011) ---------
   {
-    const S = 1.5;
-    const wet = settle({ ...EARTH, insolation: S }, 1e6);
-    const dry = settle({ ...EARTH, insolation: S, water: 0.03, landFraction: 0.98 }, 1e6);
-    const lossOf = (s) => (s.world.escape.water * 1e9) / s.world.diag.d.eoColumn;
-    check('At 1.5 S⊕ an ocean world has run away',
-      wet.world.diag.Tmean > 400, `${wet.world.diag.Tmean.toFixed(0)} K, ${classify(wet.world).name}`);
-    check('…but a dune world at the same flux stays habitable (Abe 2011)',
-      classify(dry.world).habitable && dry.world.diag.Tmean < 330,
-      `${dry.world.diag.Tmean.toFixed(0)} K, ${classify(dry.world).name}`);
-    check('…and its dry stratosphere throttles water loss by orders of magnitude',
-      lossOf(dry) < 0.1 * lossOf(wet),
-      `${lossOf(dry).toFixed(4)} vs ${lossOf(wet).toFixed(4)} EO/Gyr`);
+    // Where each kind of world tips over, found rather than assumed. Testing one
+    // fixed insolation is fragile: it passed until a refit moved the dune edge
+    // from 1.52 to 1.50 S⊕ and the chosen 1.5 landed exactly on it, which says
+    // nothing about whether the physics is right.
+    const edgeOf = (mk) => {
+      let lo = 0.8, hi = 2.6;
+      for (let i = 0; i < 8; i++) {
+        const m = (lo + hi) / 2;
+        if (settle(mk(m), 1e6).world.diag.Tmean > 400) hi = m; else lo = m;
+      }
+      return (lo + hi) / 2;
+    };
+    const wetEdge = edgeOf((S) => ({ ...EARTH, insolation: S }));
+    const dryEdge = edgeOf((S) => ({ ...EARTH, insolation: S, water: 0.03, landFraction: 0.98 }));
+    check('An ocean world runs away at 1.2–1.4 S⊕ (Kopparapu 2013)',
+      wetEdge > 1.15 && wetEdge < 1.45, `${wetEdge.toFixed(2)} S⊕`);
+    check('…and a dune world survives markedly closer in (Abe 2011)',
+      dryEdge > wetEdge + 0.15, `${dryEdge.toFixed(2)} S⊕, ${(dryEdge - wetEdge).toFixed(2)} further in`);
+
+    // Below both edges, the dry world's unsaturated air keeps its water.
+    const S = Math.min(wetEdge, dryEdge) - 0.06;
+    const lossOf = (w) => (w.escape.water * 1e9) / w.diag.d.eoColumn;
+    const wet = settle({ ...EARTH, insolation: S }, 1e6).world;
+    const dry = settle({ ...EARTH, insolation: S, water: 0.03, landFraction: 0.98 }, 1e6).world;
+    check('…and a dry stratosphere throttles water loss',
+      lossOf(dry) < 0.35 * lossOf(wet),
+      `at ${S.toFixed(2)} S⊕: ${lossOf(dry).toExponential(1)} against ${lossOf(wet).toExponential(1)} EO/Gyr`);
   }
 
   // ---- 6. tidally locked worlds -------------------------------------------

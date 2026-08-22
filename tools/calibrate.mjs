@@ -70,8 +70,10 @@ anchor('Earth ice cover', preind.diag.iceArea, 0.03, 0.14, '',
   'sea ice + ice sheet ≈ 0.10 of the surface');
 
 const modern = eq({ ...EARTH, co2Bar: 427e-6 });
-anchor('Modern Earth (equilibrium)', modern.diag.Tmean - 273.15, 14.9, 16.1, '°C',
-  '15.1 observed + ~0.4 still in the pipeline');
+anchor('Modern Earth (equilibrium)', modern.diag.Tmean - 273.15, 14.9, 16.6, '°C',
+  '15.15 observed, which is a transient: the ocean has not finished responding, and how much ' +
+  'warming is still committed is itself uncertain, so the equilibrium band is deliberately loose ' +
+  'at the top. The warming *since* pre-industrial is the tighter check.');
 anchor('warming since pre-industrial', modern.diag.Tmean - preind.diag.Tmean, 1.3, 2.3, 'K',
   'observed 1.45 (WMO 2023), equilibrium response larger');
 

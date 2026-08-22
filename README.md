@@ -68,7 +68,7 @@ the literature places a hundred times further out.
 | Modern Earth OLR | ~239 W/m² at 288 K | 239 |
 | Venus | 737 K, ~161 W/m² at 92 bar | 733 K, 161 |
 | Mars | ~215 K | 212 K |
-| Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **287 W/m² at 351 K** |
+| Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **282 W/m² at 350 K** |
 | Runaway from CO₂ alone | stable (Ramirez 2014); ~100× (Goldblatt 2013) | needs >500× pre-industrial |
 
 The runaway limit is not imposed anywhere in the code. Hold water at saturation and the fitted
@@ -335,6 +335,52 @@ instead of running straight down the poles. It used to drive the seasons in the 
 completely invisible on the globe. A tidally locked world is exempt: its bands run from the
 substellar point, not from a pole, so obliquity means nothing there.
 
+### Methane, and why it does not last
+
+Methane used to sit wherever the control put it, for ever. It is not a stable gas, and what destroys
+it depends entirely on the **redox state of the air**. In today's oxidising atmosphere OH radicals
+take it out in about a decade; with no free oxygen there is no OH, and the only sink is ultraviolet
+photolysis high up — the lifetime stretches to some ten thousand years, which is why the Archean
+could hold percent-level methane at all. Its own haze then shields it and stretches that further.
+
+It takes very little oxygen. **A thousandth of today's O₂ cuts the lifetime — and so the level a
+given source can sustain — to under one percent.** Methane and free oxygen essentially cannot
+coexist, which is why the Great Oxidation ended the Archean's methane greenhouse rather than merely
+denting it. A world that loses its ocean oxidises itself: in the model, 0.8 oceans lost leaves 56
+bar of O₂ and no methane at all.
+
+Oxygen needed a sink of its own for that to work. Reduced volcanic gases and fresh crust consume it,
+which is why the Archean stayed anoxic for a billion years with photosynthesis already running.
+Without that, a planet that had lost **three hundred-thousandths of an ocean** had banked enough
+oxygen to destroy its own methane for no reason at all.
+
+The control sets the level a world can hold up; the chemistry then decides whether it can.
+
+### What methane is worth
+
+Its opacity was a power law fitted to nothing, and it was four to ten times too strong:
+
+| CH₄ | model, before | model, now | literature |
+|---|---|---|---|
+| 1.8 ppm (today) | 6.7 W/m² | **0.8** | ~0.7 (Myhre 1998) |
+| 100 ppm | 30.0 | **8.8** | ~8 |
+| 1000 ppm | 63.5 | **15.6** | ~15 (Byrne & Goldblatt 2014) |
+| 1% | 114.4 | **30.0** | ~25, bands saturating |
+
+One millibar of methane was doing more than twenty millibars of CO₂, which is why an Archean world
+tipped into a runaway the moment the Sun brightened. Methane's bands are narrow and saturate early,
+so like CO₂ its forcing is **logarithmic**, with a separate collision-induced term — a two-body
+process, so it goes as the square of the density — which is nothing on Earth and is what actually
+keeps Titan warm.
+
+Correcting it meant refitting the water vapour term, which had been propping up Earth's greenhouse
+alongside a methane error worth 6 W/m²: take it away and Earth settled at 4 °C. The **exponent** is
+what made that possible — Earth sits at 0.011 bar of vapour and the runaway peak at 0.43, so the
+coefficient alone could only trade one against the other. The refit is better on both counts than
+what it replaced: the Simpson–Nakajima limit now lands at **282 W/m², the literature value exactly**,
+where before it was 287. The Archean preset needs 0.08 bar of CO₂ rather than 0.02, which is what
+the literature asks for once methane is no longer doing five times its share.
+
 ### Organic haze and the anti-greenhouse
 
 Ultraviolet light breaks methane into radicals that polymerise into a tholin smog — but only in a
@@ -457,7 +503,7 @@ actually is.
 
 ## References
 
-McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

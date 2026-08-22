@@ -309,3 +309,15 @@ body.software-render #planet{image-rendering:auto}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* Atmospheric composition: a proportion bar with the numbers under it. The bar
+   alone cannot show a trace gas, and 0.04% CO2 is the whole modern greenhouse,
+   so the numbers carry what the bar physically cannot. */
+.stat.wide{grid-column:1/-1}
+.comp-bar{display:flex;height:9px;border-radius:3px;overflow:hidden;
+  background:rgba(255,255,255,.07);margin:3px 0 5px}
+.comp-bar i{display:block;height:100%}
+.comp-list{font:10px/1.55 var(--mono);color:var(--fg-dim);
+  display:flex;flex-wrap:wrap;gap:2px 10px}
+.comp-list b{font-weight:600}
+.comp-none{font:11px/1 var(--mono);color:var(--fg-dim)}
