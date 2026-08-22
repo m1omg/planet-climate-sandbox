@@ -1,7 +1,7 @@
 import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, steamOpacity } from '../physics/constants.js';
-import { atmosphereLook } from './atmosphere.js';
+import { atmosphereLook, cloudLook } from './atmosphere.js';
 import { seaLevelForLand } from './terrain.js';
 
 // A software renderer, used when the machine cannot give us WebGL2.
@@ -146,7 +146,7 @@ export class SoftwareView {
       bandIce[i] = dg.hasWater ? clamp(1 - (world.T[i] - 253) / 25, 0, 1) : 0;
     }
     const pH2O = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
-    const cloud = dg.cloud.reduce((a, b) => a + b, 0) / NBANDS;
+    const cloud = cloudLook(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS, pH2O);
     const sc = SoftwareView.starColor(p.starTemp);
 
     const atmo = atmosphereLook(world, clamp(steamOpacity(pH2O), 0, 1), this.realistic);

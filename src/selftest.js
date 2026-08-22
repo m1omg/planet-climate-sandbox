@@ -11,7 +11,7 @@ import { SCENARIOS } from './game/scenarios.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
-import { atmosphereLook, scaleHeight } from './render/atmosphere.js';
+import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
 
@@ -435,6 +435,42 @@ export function run() {
     check('…and so does a tholin haze',
       atmosphereLook(titanW, 0, true).haze > 0.85,
       `Titan haze opacity ${(atmosphereLook(titanW, 0, true).haze * 100).toFixed(0)}%`);
+  }
+
+  // ---- 3j-2. cover is not opacity -------------------------------------------
+  // The renderer drew dg.cloud straight, so every temperate world wore a solid
+  // overcast: Earth's real two-thirds cover is mostly thin and broken, and you
+  // can see the ocean through it. What makes a deck opaque is water in the air.
+  {
+    const meanOf = (w) => {
+      const dg = w.diag, n = dg.cloud.length;
+      return [dg.cloud.reduce((a, b) => a + b, 0) / n, dg.pH2O.reduce((a, b) => a + b, 0) / n];
+    };
+    const [ec, eh] = meanOf(settle(EARTH, 2e6).world);
+    const drawn = cloudLook(ec, eh);
+    check('A temperate world is not drawn under a solid overcast',
+      drawn < ec * 0.8 && drawn > 0.35,
+      `Earth: ${(ec * 100).toFixed(0)}% cover, drawn as ${(drawn * 100).toFixed(0)}% at ${(eh * 1e3).toFixed(0)} mbar of vapour`);
+
+    // …but a genuinely steamy one is. 0.4 bar of CO2 puts this world at ~339 K
+    // and 0.17 bar of vapour, which is the tropical-storm look.
+    const hot = settle({ ...EARTH, co2Bar: 0.4, outgassing: 0 }, 2e5).world;
+    const [hc, hh] = meanOf(hot);
+    const hotDrawn = cloudLook(hc, hh);
+    check('…while a hot, humid one keeps its dense deck',
+      hotDrawn > hc * 0.95,
+      `${hot.diag.Tmean.toFixed(0)} K, ${(hh * 1e3).toFixed(0)} mbar of vapour: ` +
+      `${(hc * 100).toFixed(0)}% cover drawn as ${(hotDrawn * 100).toFixed(0)}%`);
+
+    check('…and thinning never runs backwards with humidity',
+      [0, 0.005, 0.02, 0.05, 0.1, 0.2, 5, 300].every((h, i, a) =>
+        i === 0 || cloudLook(0.67, h) >= cloudLook(0.67, a[i - 1]) - 1e-12),
+      'monotonic in vapour pressure');
+
+    const dry = meanOf(settle(PRESETS.mars.params, 1e5).world);
+    check('…and a dry world had no deck to thin in the first place',
+      cloudLook(dry[0], dry[1]) < 0.02,
+      `Mars drawn at ${(cloudLook(dry[0], dry[1]) * 100).toFixed(1)}%`);
   }
 
   // ---- 3k. the coastline has to be where the model says it is ---------------

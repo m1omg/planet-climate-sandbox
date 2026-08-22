@@ -1,7 +1,7 @@
 import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, steamOpacity } from '../physics/constants.js';
-import { atmosphereLook } from './atmosphere.js';
+import { atmosphereLook, cloudLook } from './atmosphere.js';
 import { seaLevelForLand } from './terrain.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
@@ -709,7 +709,8 @@ export class PlanetView {
     const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
     const steam = steamOpacity(pH2Omean);
     const co2Frac = clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1);
-    const cloudMean = dg.cloud.reduce((a, b) => a + b, 0) / NBANDS;
+    // What the deck hides, not what it covers -- see cloudLook().
+    const cloudMean = cloudLook(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS, pH2Omean);
     const glow = clamp((dg.Tmean - 700) / 700, 0, 1);
     const sc = PlanetView.starColor(p.starTemp);
     const atmo = atmosphereLook(world, steam, this.realistic);

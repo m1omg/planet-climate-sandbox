@@ -29,6 +29,34 @@ export function scaleHeight(dg) {
   return R_GAS * clamp(dg.Tmean, 30, 4000) / (molarMass(dg) * Math.max(dg.g, 0.5));
 }
 
+// How much of the sky the deck should actually *hide*.
+//
+// Cover is not opacity, and the renderer was treating it as though it were.
+// Earth's sky is about two-thirds covered and you can still see the Pacific
+// through it, because most of that cover is thin and broken: shallow cumulus
+// over warm ocean, cirrus you can read a coastline through. Drawing 0.67 as
+// 0.67 of solid white gave every temperate world a permanent overcast.
+//
+// What makes a deck genuinely opaque is water in the air, and that is a steep
+// function of temperature. Measured from the model: temperate Earth carries
+// about 0.011 bar of vapour, 300 K carries 0.027, a humid 315 K carries 0.055,
+// and by 339 K it is 0.17 -- towelling-thick, the tropical-storm look, and by
+// then the surface really should be hard to see. Beyond that the runaway takes
+// over and `steam` covers the planet outright.
+//
+// So: about seven-tenths weight at temperate humidity, full weight by 0.15 bar.
+// The number was picked by looking, because the shader's threshold makes this
+// far from linear -- Earth's 0.67 drawn straight is a near-total white-out with
+// the continents lost under it, 0.48 is scattered weather with the ocean
+// showing through, and 0.33 is a bald planet with almost no cloud at all. The
+// physics is untouched: `dg.cloud` still sets the albedo the energy balance
+// uses, and this only changes what is drawn.
+export function cloudLook(coverMean, pH2Obar) {
+  const humid = clamp((pH2Obar - 0.015) / (0.15 - 0.015), 0, 1);
+  const thickness = humid * humid * (3 - 2 * humid);      // smoothstep
+  return clamp(coverMean, 0, 1) * (0.72 + 0.28 * thickness);
+}
+
 export function atmosphereLook(world, steam, realistic) {
   const dg = world.diag;
   const pTot = dg.pTotMean;
