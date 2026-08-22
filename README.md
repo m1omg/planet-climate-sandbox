@@ -479,6 +479,12 @@ every volcano on the planet put together**. Only the Earth preset has it switche
 the shared Earth constant so the dozen presets that spread it do not quietly inherit an industrial
 civilisation along with the nitrogen.
 
+The app boots on this world — the `earth` preset, not the bare Earth constant they otherwise share.
+Those differ in exactly one field, and booting from the constant meant a fresh load gave a planet that
+looked identical to the Earth chip and quietly behaved like a pre-industrial one: 427 ppm sitting
+still instead of climbing. The warming is real, and hiding it in the default is worse than showing it.
+The clock starts at **1 yr/s**, which is slow enough that the first century is legible as it happens.
+
 It runs on a **finite reserve**, and that is the part that matters. Recoverable coal, oil and gas
 come to something like 5000 Gt of carbon, which is 36 kg/m² of CO₂ or about thirteen times the
 pre-industrial atmospheric column. At today's rate that is four and a half centuries and then it
@@ -490,6 +496,12 @@ stops, whatever the control says — so no world with it switched on can be run 
 | 150 | 1001 ppm | 18.9 °C | 68% |
 | 300 | 1576 ppm | 20.5 °C | 35% |
 | 462 | **2195 ppm** | 21.6 °C | **empty** |
+
+Under the control is a bar showing what is left of it, a **Refill** button that puts the carbon back in
+the ground, and an **unlimited** checkbox that ignores the reserve entirely. That last one switches off
+the only thing keeping the control honest — with it ticked the same world passes 11,900 ppm in three
+thousand years and keeps going. It is there because *what if we simply never stopped* is a fair thing
+to want to ask, and the answer is worth seeing. It is not there because a planet works that way.
 
 Half of what is burnt stays in the air, and it does **not** go through the ocean-and-crust buffer the
 volcanoes go through. That buffer is an *equilibrium* partition, right for a volcanic flux slow

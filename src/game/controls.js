@@ -69,7 +69,7 @@ export const SLIDERS = [
 
   { g: 'surface', key: 'landAlbedo', label: 'Ground brightness', min: 0.05, max: 0.6,
     fmt: (v) => v.toFixed(2), note: 'Dark basalt 0.10 · rock 0.25 · bright sand 0.40' },
-  { g: 'surface', key: 'biosphere', label: 'Biosphere', min: 0, max: 4, zero: true,
+  { g: 'surface', key: 'biosphere', label: 'Photosynthetic biosphere', min: 0, max: 4, zero: true,
     fmt: (v) => v <= 0 ? 'none' : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× Earth`,
     units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
     note: 'How hard photosynthesis runs. It needs liquid water, and it stops when the planet cooks. Makes the oxygen and most of the methane.' },
@@ -78,7 +78,20 @@ export const SLIDERS = [
       : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× today`,
     units: { x: 1, '×': 1, today: 1, gt: 1 / 40, gtco2: 1 / 40, 'gtc': 1 / 10.9 },
     unitFor: () => '× today',
-    note: 'Burning fossil carbon: 40 Gt of CO₂ a year at 1×, some forty times every volcano on the planet. It runs on a finite reserve — about 5000 Gt of carbon, four and a half centuries at today’s rate — and then stops on its own.' },
+    note: 'Burning fossil carbon: 40 Gt of CO₂ a year at 1×, some forty times every volcano on the planet. It runs on a finite reserve — about 5000 Gt of carbon, four and a half centuries at today’s rate — and then stops on its own.',
+    // Rendered under the slider. The reserve is the thing that makes this
+    // control unable to run a world away, so it is worth being able to see it
+    // go down, put it back, and ask what happens if it never runs out.
+    extra: `
+      <div class="supply">
+        <div class="supply-bar"><i id="fossil-fill"></i></div>
+        <span id="fossil-left" class="supply-left">100 %</span>
+        <button type="button" id="btn-fossil-reset" class="supply-btn"
+                title="Put the fossil carbon back in the ground">Refill</button>
+        <label class="supply-inf" title="Ignore the reserve and keep burning for ever. Not how a planet works — but a fair thing to ask.">
+          <input type="checkbox" id="chk-fossil-inf"> unlimited
+        </label>
+      </div>` },
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
     // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",
     // which reads as dead when it is not.

@@ -89,7 +89,7 @@ const CH4_PHOTO = 1.6e-3;       // kg/m^2/yr at 1 S-earth
 // and then hand it to the carbonate-silicate thermostat, which takes it back
 // over a hundred thousand years or so -- the long thaw.
 const EMIT_TODAY = 7.8e-2;      // kg/m^2/yr of CO2 at the present-day rate
-const FOSSIL_TOTAL = 36.0;      // kg/m^2 of CO2, ~5000 GtC of recoverable carbon
+export const FOSSIL_TOTAL = 36.0;      // kg/m^2 of CO2, ~5000 GtC of recoverable carbon
 
 // How much of what is burnt is still in the air on the timescale that matters.
 //
@@ -473,9 +473,15 @@ export function stepVolatiles(w, dtYears) {
   // ...and us, on top of the volcanoes, until the fossil carbon runs out.
   if (w.fossil == null) w.fossil = FOSSIL_TOTAL;
   let emit = 0;
-  if ((p.emissions ?? 0) > 0 && w.fossil > 0 && dtYears > 0) {
-    emit = Math.min(EMIT_TODAY * p.emissions, w.fossil / dtYears);
-    w.fossil = Math.max(0, w.fossil - emit * dtYears);
+  if ((p.emissions ?? 0) > 0 && dtYears > 0 && (p.fossilInfinite || w.fossil > 0)) {
+    // The reserve is what makes this control unable to run a world away, so
+    // switching it off is switching off the one thing keeping it honest. It is
+    // there because "what if we simply never stopped" is a fair question to want
+    // to ask, and the answer is worth seeing; it is not there because a planet
+    // works that way.
+    emit = p.fossilInfinite ? EMIT_TODAY * p.emissions
+                            : Math.min(EMIT_TODAY * p.emissions, w.fossil / dtYears);
+    if (!p.fossilInfinite) w.fossil = Math.max(0, w.fossil - emit * dtYears);
   }
   w.emitting = emit;
   const liquid = clamp(1 - dg.iceMean, 0, 1) * smoothstep(0, 0.02, w.water.ocean);

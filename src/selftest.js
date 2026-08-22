@@ -745,12 +745,22 @@ export function run() {
       `still ${(w.diag.pCO2 * 1e6).toFixed(0)} ppm and ` +
       `${(w.diag.Tmean - 273.15).toFixed(1)} °C two million years later`);
 
-    // And nothing else inherits it.
+    // And nothing else inherits it. The app boots from this preset rather than
+    // the bare EARTH constant, so this is also what a fresh load starts on.
     const others = Object.entries(PRESETS).filter(([k]) => k !== 'earth')
       .filter(([, v]) => (v.params.emissions ?? 0) > 0);
     check('…and only Earth has anyone on it',
-      others.length === 0,
-      others.length ? others.map(([k]) => k).join(', ') : 'every other preset is at zero');
+      others.length === 0 && PRESETS.earth.params.emissions === 1,
+      others.length ? others.map(([k]) => k).join(', ')
+        : 'the Earth preset burns, every other preset is at zero');
+
+    // The reserve can be switched off, which is the one thing that puts the
+    // infinite tap back. Worth a test precisely because it removes a guard.
+    const forever = settle({ ...PRESETS.earth.params, fossilInfinite: true }, 3000).world;
+    check('…unless the reserve is switched off, and then it never stops',
+      forever.fossil > 35.9 && forever.diag.pCO2 > 4 * 427e-6,
+      `${(forever.diag.pCO2 * 1e6).toFixed(0)} ppm after 3 kyr with the reserve untouched ` +
+      `at ${(forever.fossil / 36 * 100).toFixed(0)}%`);
   }
 
   // ---- 3n. the Great Oxidation, played forwards -----------------------------

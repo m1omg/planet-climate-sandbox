@@ -17,7 +17,10 @@ export class Simulation {
   constructor(params) {
     this.world = createWorld(params);
     this.credit = 0;
-    this.rate = 1e3;          // simulated years per real second
+    // A year a second. Fast enough to watch weather-scale change, slow enough
+    // that the industrial CO2 the default world is emitting is legible as it
+    // happens rather than being over before the first frame.
+    this.rate = 1;            // simulated years per real second
     this.paused = false;
     this.maxStepsPerFrame = 4000;
     this.budgetMs = 12;       // hard wall-clock ceiling on physics per frame

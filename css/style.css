@@ -321,3 +321,38 @@ body.software-render #planet{image-rendering:auto}
   display:flex;flex-wrap:wrap;gap:2px 10px}
 .comp-list b{font-weight:600}
 .comp-none{font:11px/1 var(--mono);color:var(--fg-dim)}
+
+/* ---- the fossil reserve, under the Industrial CO2 slider ---------------- */
+.supply {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 7px; font-size: 11px;
+}
+.supply-bar {
+  flex: 1 1 auto; height: 5px; min-width: 40px;
+  border-radius: 3px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.10);
+}
+.supply-bar > i {
+  display: block; height: 100%; width: 100%;
+  background: linear-gradient(90deg, #6d8bb0, #b08a5a);
+  transition: width 0.25s linear;
+}
+.supply-bar > i.spent { background: #7c4a3a; }
+.supply-left {
+  flex: 0 0 auto; min-width: 3.6em; text-align: right;
+  color: var(--dim, #9aa4b2); font-variant-numeric: tabular-nums;
+}
+.supply-left.spent { color: #d08a6a; }
+.supply-btn {
+  flex: 0 0 auto; cursor: pointer;
+  padding: 2px 7px; font: inherit; font-size: 11px;
+  color: var(--dim, #9aa4b2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 5px;
+}
+.supply-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.13); }
+.supply-inf {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+  cursor: pointer; color: var(--dim, #9aa4b2); white-space: nowrap;
+}
+.supply-inf input { accent-color: #b08a5a; margin: 0; }

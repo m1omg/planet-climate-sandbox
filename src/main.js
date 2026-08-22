@@ -1,5 +1,5 @@
 import { Simulation } from './sim/clock.js';
-import { carbonBudget } from './physics/volatiles.js';
+import { carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
@@ -22,7 +22,12 @@ const $ = (s) => document.querySelector(s);
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
-const params = { ...EARTH, ...paramsFromHash() };
+// The `earth` preset, not the bare EARTH constant. They differ in one field:
+// the preset has us on it. Booting from the constant meant a fresh load gave a
+// planet that looked exactly like the Earth chip and quietly behaved like a
+// pre-industrial one -- 427 ppm sitting still instead of climbing. The warming
+// is real; hiding it in the default is worse than showing it.
+const params = { ...PRESETS.earth.params, ...paramsFromHash() };
 const sim = new Simulation(params);
 // A do-nothing renderer until start() picks a real one. Creating a WebGL context
 // here only to throw it away wasted one of the handful a browser will grant, and
@@ -227,7 +232,8 @@ function buildSliders() {
       </div>
       <input id="s-${d.key}" type="range" min="0" max="1000" step="1"
              aria-label="${d.label}">
-      ${d.note ? `<div class="ctl-note">${d.note}</div>` : ''}`;
+      ${d.note ? `<div class="ctl-note">${d.note}</div>` : ''}
+      ${d.extra || ''}`;
     host.appendChild(wrap);
     const input = wrap.querySelector('input[type=range]'), out = wrap.querySelector('input.val');
     els[d.key] = { input, out, def: d, editing: false, dragging: false };
@@ -587,6 +593,8 @@ function updateReadout() {
     rateOut.title = '';
   }
 
+  syncFossil();
+
   // scenario progress
   if (activeScenario) {
     const el = $('#scenario-banner .sc-status');
@@ -612,6 +620,27 @@ function toast(msg, ms = 2600) {
 
 // ---------------------------------------------------------------------------
 // Controls
+// The reserve, drawn under the Industrial CO2 slider. Cheap enough to do every
+// frame, and it is the one number that explains why the CO2 stops climbing.
+function syncFossil() {
+  const fill = $('#fossil-fill'), left = $('#fossil-left'), inf = $('#chk-fossil-inf');
+  if (!fill) return;
+  if (inf) inf.checked = !!params.fossilInfinite;
+  if (params.fossilInfinite) {
+    fill.style.width = '100%';
+    fill.classList.remove('spent');
+    left.textContent = '∞';
+    left.classList.remove('spent');
+    return;
+  }
+  const f = Math.max(0, Math.min(1, (sim.world.fossil ?? FOSSIL_TOTAL) / FOSSIL_TOTAL));
+  fill.style.width = `${f * 100}%`;
+  const spent = f <= 1e-6;
+  fill.classList.toggle('spent', spent);
+  left.textContent = spent ? 'exhausted' : `${(f * 100).toFixed(f > 0.1 ? 0 : 1)} %`;
+  left.classList.toggle('spent', spent);
+}
+
 function syncPlay() {
   const b = $('#btn-play');
   b.textContent = sim.paused ? '▶  Play' : '❚❚  Pause';
@@ -650,6 +679,19 @@ function bindControls() {
     writeHash();
     toast('Reset to the starting world');
   });
+  // --- the fossil reserve ---------------------------------------------------
+  $('#btn-fossil-reset').addEventListener('click', () => {
+    sim.world.fossil = FOSSIL_TOTAL;
+    syncFossil();
+    toast('Fossil carbon put back in the ground');
+  });
+  $('#chk-fossil-inf').addEventListener('change', (e) => {
+    params.fossilInfinite = e.target.checked;
+    sim.setParams({ fossilInfinite: params.fossilInfinite });
+    writeHash();
+    syncFossil();
+  });
+
   $('#btn-settle').addEventListener('click', () => {
     if (settling) { settling = false; return; }   // click again to stop
     settling = true;

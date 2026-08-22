@@ -26,6 +26,7 @@ export const EARTH = {
   co2Bar: 427e-6,
   ch4Bar: 1.9e-6,
   emissions: 0,     // see the `earth` preset; only that world has us on it
+  fossilInfinite: false,  // ignore the reserve and burn for ever
   outgassing: 1.0,
   landAlbedo: 0.25,
   startT: 288.3,
