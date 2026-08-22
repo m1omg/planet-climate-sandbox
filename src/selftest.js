@@ -9,7 +9,7 @@ import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
-import { methaneLifetime, photosynthesis, carbonBudget } from './physics/volatiles.js';
+import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { atmosphereLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
@@ -754,13 +754,41 @@ export function run() {
       others.length ? others.map(([k]) => k).join(', ')
         : 'the Earth preset burns, every other preset is at zero');
 
+    // Pre-industrial Earth has more of it left, because nobody had touched it.
+    const modern = new Simulation({ ...PRESETS.earth.params });
+    const preind = new Simulation({ ...PRESETS.preindustrial.params });
+    modern.stepOnce(1); preind.stepOnce(1);
+    check('Pre-industrial Earth still has all its fossil carbon, modern Earth does not',
+      preind.world.fossil > 0.999 * FOSSIL_TOTAL
+        && Math.abs(modern.world.fossil / FOSSIL_TOTAL - 0.902) < 0.02,
+      `${(preind.world.fossil / FOSSIL_TOTAL * 100).toFixed(0)}% against ` +
+      `${(modern.world.fossil / FOSSIL_TOTAL * 100).toFixed(0)}% — the ~1800 Gt of CO₂ ` +
+      `we have already burnt is a tenth of what is down there`);
+
+    // …and the amount already gone is the same carbon that raised the CO2, which
+    // is the only forcing experiment anyone has run on a whole planet.
+    {
+      const h = new Simulation({ ...PREINDUSTRIAL, emissions: 1 });
+      let n = 0;
+      while ((h.world.fossil == null || h.world.fossil > FOSSIL_TOTAL - 3.53) && n++ < 2e5) {
+        h.stepOnce(Math.min(maxStep(h.world), 5));
+      }
+      check('…and burning that much really does take 280 ppm to about 427',
+        near(h.world.diag.pCO2 * 1e6, 427, 35),
+        `${(h.world.diag.pCO2 * 1e6).toFixed(0)} ppm, against the 427 observed ` +
+        `(the cumulative airborne fraction is 42%, not the half a single year gives)`);
+    }
+
     // The reserve can be switched off, which is the one thing that puts the
     // infinite tap back. Worth a test precisely because it removes a guard.
+    // Untouched means untouched at whatever it started with -- modern Earth
+    // starts at 90%, not 100% -- so the check is that it did not move at all.
+    const start = (1 - 0.098) * FOSSIL_TOTAL;
     const forever = settle({ ...PRESETS.earth.params, fossilInfinite: true }, 3000).world;
     check('…unless the reserve is switched off, and then it never stops',
-      forever.fossil > 35.9 && forever.diag.pCO2 > 4 * 427e-6,
-      `${(forever.diag.pCO2 * 1e6).toFixed(0)} ppm after 3 kyr with the reserve untouched ` +
-      `at ${(forever.fossil / 36 * 100).toFixed(0)}%`);
+      Math.abs(forever.fossil - start) < 1e-6 && forever.diag.pCO2 > 4 * 427e-6,
+      `${(forever.diag.pCO2 * 1e6).toFixed(0)} ppm after 3 kyr with the reserve still ` +
+      `exactly where it started, at ${(forever.fossil / FOSSIL_TOTAL * 100).toFixed(0)}%`);
   }
 
   // ---- 3n. the Great Oxidation, played forwards -----------------------------

@@ -503,8 +503,21 @@ the only thing keeping the control honest — with it ticked the same world pass
 thousand years and keeps going. It is there because *what if we simply never stopped* is a fair thing
 to want to ask, and the answer is worth seeing. It is not there because a planet works that way.
 
-Half of what is burnt stays in the air, and it does **not** go through the ocean-and-crust buffer the
-volcanoes go through. That buffer is an *equilibrium* partition, right for a volcanic flux slow
+**Modern Earth starts with a tenth of its reserve already gone** — the ~1800 Gt of CO₂ we have put into
+the air since 1750, which is 3.53 of the 36 kg/m². Pre-Industrial Earth has the lot, because nobody had
+touched it. That is the same carbon that separates the two presets' 427 ppm and 280 ppm, so the two
+numbers are now one fact rather than two settings.
+
+Which makes this checkable against the only forcing experiment anyone has run on a whole planet. Burn
+that 3.53 kg/m² starting from pre-industrial and the model takes 280 ppm to **441**, against the 427
+observed. It is a calibration anchor now.
+
+**44% of what is burnt stays in the air**, and that number is measured rather than chosen: 3.53 kg/m²
+burnt against a rise of 1.50 gives a cumulative airborne fraction of 42%. The familiar "about half" is
+the fraction of a *single recent year's* emissions, not of the whole; at a half this model took the
+historical burn to 463 ppm instead of 427.
+
+It does **not** go through the ocean-and-crust buffer the volcanoes go through. That buffer is an *equilibrium* partition, right for a volcanic flux slow
 enough that the whole ocean keeps step with the atmosphere. A fossil pulse is four centuries long,
 far faster than the ocean turns over, so only the surface layer takes part. Run it through the buffer
 instead and burning all 5000 Gt moves the atmosphere from 427 to 500 ppm, which is not what it does.

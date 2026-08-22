@@ -5,7 +5,8 @@
 // Sources for the targets are listed against each line. Where the literature
 // gives a range, the range is the target and the check is a range check.
 import { Simulation } from '../src/sim/clock.js';
-import { EARTH, PRESETS } from '../src/game/presets.js';
+import { EARTH, PREINDUSTRIAL, PRESETS } from '../src/game/presets.js';
+import { maxStep } from '../src/physics/climate.js';
 import { olr, runawayLimit, planetaryAlbedo, cloudCover } from '../src/physics/radiation.js';
 
 const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -124,6 +125,22 @@ const venus = eq(PRESETS.venus.params, { years: 1e5 });
 anchor('Venus', venus.diag.Tmean, 697, 777, 'K', 'observed 737');
 const mars = eq(PRESETS.mars.params, { years: 1e5 });
 anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
+
+// ---- the one bit of this we have actually run the experiment on -------------
+// We have put about 1800 Gt of fossil CO2 into the air since 1750 and watched
+// the atmosphere go from 280 ppm to 427. That is 3.53 kg/m^2 burnt and a rise of
+// 1.50, so 42% of it stayed up -- and it is the only forcing experiment anyone
+// has done on a whole planet. Worth anchoring on.
+{
+  const s = new Simulation({ ...PREINDUSTRIAL, emissions: 1 });
+  const w = s.world;
+  let n = 0;
+  while ((w.fossil == null || w.fossil > 36 - 3.53) && n++ < 2e5) {
+    s.stepOnce(Math.min(maxStep(w), 5));
+  }
+  anchor('CO2 after the historical burn', w.diag.pCO2 * 1e6, 395, 460, 'ppm',
+    'observed 427 in 2025, from 280 pre-industrial, for ~1800 Gt CO2 of fossil carbon');
+}
 
 // ---- snowball: the threshold, not just the duration ------------------------
 // This anchor was missing, and its absence is why the carbon cycle sat a

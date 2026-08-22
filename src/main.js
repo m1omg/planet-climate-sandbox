@@ -66,6 +66,16 @@ function atmosphereFromUrl() {
   try { return localStorage.getItem(ATMO_KEY) === 'realistic'; } catch { return false; }
 }
 
+// Whether Reset leaves the clock stopped. On by default: a reset is usually the
+// start of setting something up, and at a year a second the first decades of a
+// world you have not finished building are wasted ones. Remembered, because it
+// is a working habit rather than a property of any particular planet.
+const RESET_PAUSED_KEY = 'planetclimate.resetPaused.v1';
+function resetPausedPref() {
+  try { return localStorage.getItem(RESET_PAUSED_KEY) !== 'run'; } catch { return true; }
+}
+let resetPaused = resetPausedPref();
+
 function updateAtmoButton() {
   const b = $('#btn-atmo');
   if (!b) return;
@@ -552,13 +562,18 @@ function updateReadout() {
           w.carbonDeep < 0.02 * carbonBudget(w.params.mass) ? 'warn' : '')
       : '') +
     // Only worth the line while there is anyone burning anything.
-    ((w.params.emissions ?? 0) > 0 || (w.fossil ?? 36) < 35.999
-      ? stat('Fossil carbon left',
-          w.fossil > 1e-6
-            ? `${(w.fossil / 36 * 100).toFixed(0)}<small> %</small>`
-            : 'exhausted',
-          w.fossil <= 1e-6 ? 'warn' : '')
-      : '') +
+    // `w.fossil` is null until the first step has run, and reading it raw showed
+    // a brand-new world as "exhausted" -- null fails every > comparison. The
+    // reserve it is about to be given is what should be shown.
+    (() => {
+      const start = FOSSIL_TOTAL * (1 - (w.params.fossilUsed ?? 0));
+      const left = w.fossil ?? start;
+      if (w.params.fossilInfinite) return stat('Fossil carbon left', 'unlimited', 'warn');
+      if (!((w.params.emissions ?? 0) > 0 || left < FOSSIL_TOTAL - 1e-6)) return '';
+      return stat('Fossil carbon left',
+        left > 1e-6 ? `${(left / FOSSIL_TOTAL * 100).toFixed(0)}<small> %</small>` : 'exhausted',
+        left <= 1e-6 ? 'warn' : '');
+    })() +
     stat('Absorbed', `${dg.absorbed.toFixed(1)}<small> W/m²</small>`) +
     stat('Emitted', `${dg.emitted.toFixed(1)}<small> W/m²</small>`) +
     stat('Runaway margin', `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
@@ -633,7 +648,8 @@ function syncFossil() {
     left.classList.remove('spent');
     return;
   }
-  const f = Math.max(0, Math.min(1, (sim.world.fossil ?? FOSSIL_TOTAL) / FOSSIL_TOTAL));
+  const start = FOSSIL_TOTAL * (1 - (params.fossilUsed ?? 0));
+  const f = Math.max(0, Math.min(1, (sim.world.fossil ?? start) / FOSSIL_TOTAL));
   fill.style.width = `${f * 100}%`;
   const spent = f <= 1e-6;
   fill.classList.toggle('spent', spent);
@@ -674,10 +690,17 @@ function bindControls() {
     renderState.seed = initialSeed;
     sim.reset(params);
     syncSliders();
-    scenarioResult = null; settling = false; sim.paused = false; syncPlay();
+    scenarioResult = null; settling = false; sim.paused = resetPaused; syncPlay();
     $('#btn-settle').classList.remove('busy'); $('#btn-settle').textContent = 'Settle';
     writeHash();
-    toast('Reset to the starting world');
+    toast(resetPaused ? 'Reset to the starting world — paused'
+                      : 'Reset to the starting world');
+  });
+  const chkReset = $('#chk-reset-paused');
+  chkReset.checked = resetPaused;
+  chkReset.addEventListener('change', () => {
+    resetPaused = chkReset.checked;
+    try { localStorage.setItem(RESET_PAUSED_KEY, resetPaused ? 'pause' : 'run'); } catch { }
   });
   // --- the fossil reserve ---------------------------------------------------
   $('#btn-fossil-reset').addEventListener('click', () => {

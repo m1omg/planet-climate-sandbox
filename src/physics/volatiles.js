@@ -104,7 +104,14 @@ export const FOSSIL_TOTAL = 36.0;      // kg/m^2 of CO2, ~5000 GtC of recoverabl
 //
 // Run it through kappa instead and burning all five thousand gigatonnes of
 // carbon moves the atmosphere from 427 to 500 ppm, which is not what it does.
-const AIRBORNE = 0.5;
+//
+// 0.44 rather than a half, and it is checkable rather than chosen: we have put
+// about 1800 Gt of fossil CO2 into the air since 1750, which is 3.53 kg/m^2,
+// and the atmosphere went from 280 to 427 ppm. That rise is 1.50 kg/m^2. The
+// cumulative airborne fraction is therefore 42%, and the familiar "about half"
+// is the fraction of a *recent year's* emissions, not of the whole. At a half
+// this model took the historical burn to 463 ppm instead of 427.
+const AIRBORNE = 0.44;
 
 // ---------------------------------------------------------------------------
 // How much carbon a planet has at all.
@@ -471,7 +478,7 @@ export function stepVolatiles(w, dtYears) {
     ? Math.min(want, Math.max(w.carbonDeep, 0) / dtYears) : want;
 
   // ...and us, on top of the volcanoes, until the fossil carbon runs out.
-  if (w.fossil == null) w.fossil = FOSSIL_TOTAL;
+  if (w.fossil == null) w.fossil = FOSSIL_TOTAL * (1 - clamp(p.fossilUsed ?? 0, 0, 1));
   let emit = 0;
   if ((p.emissions ?? 0) > 0 && dtYears > 0 && (p.fossilInfinite || w.fossil > 0)) {
     // The reserve is what makes this control unable to run a world away, so

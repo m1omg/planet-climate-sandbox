@@ -356,3 +356,13 @@ body.software-render #planet{image-rendering:auto}
   cursor: pointer; color: var(--dim, #9aa4b2); white-space: nowrap;
 }
 .supply-inf input { accent-color: #b08a5a; margin: 0; }
+
+/* ---- pause-on-reset, beside the Reset button ---------------------------- */
+.reset-paused {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: -2px; font-size: 11px; white-space: nowrap;
+  color: var(--dim, #9aa4b2); cursor: pointer; user-select: none;
+}
+.reset-paused input { accent-color: #6d8bb0; margin: 0; }
+.reset-paused:hover { color: #fff; }
+@media (max-width: 900px) { .reset-paused { display: none; } }

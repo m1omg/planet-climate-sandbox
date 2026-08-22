@@ -26,6 +26,7 @@ export const EARTH = {
   co2Bar: 427e-6,
   ch4Bar: 1.9e-6,
   emissions: 0,     // see the `earth` preset; only that world has us on it
+  fossilUsed: 0,    // share of the fossil reserve already burnt
   fossilInfinite: false,  // ignore the reserve and burn for ever
   outgassing: 1.0,
   landAlbedo: 0.25,
@@ -38,7 +39,12 @@ export const PRESETS = {
   // The only world with anyone on it. Kept off the EARTH constant itself so
   // that the dozen presets which spread it do not quietly inherit an industrial
   // civilisation along with the nitrogen.
-  earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH, emissions: 1 } },
+  // Modern Earth starts with a tenth of its fossil carbon already gone. That is
+  // the ~1800 Gt of CO2 we have put into the air since 1750, which is 3.53 of
+  // the 36 kg/m^2 in the ground -- and it is the same carbon that has taken this
+  // preset from Pre-Industrial Earth's 280 ppm to 427. Pre-Industrial Earth has
+  // the lot, because nobody had touched it yet.
+  earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH, emissions: 1, fossilUsed: 0.098 } },
   preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL } },
   venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
   mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
