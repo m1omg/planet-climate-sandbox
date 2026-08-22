@@ -537,6 +537,14 @@ function updateReadout() {
     stat('Surface pressure', `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +
     stat('CO₂', dg.pCO2 >= 0.01 ? `${dg.pCO2.toFixed(2)}<small> bar</small>` : `${(dg.pCO2 * 1e6).toFixed(0)}<small> ppm</small>`) +
     stat('Composition', composition(dg), 'wide') +
+    // Only worth the line while there is anyone burning anything.
+    ((w.params.emissions ?? 0) > 0 || (w.fossil ?? 36) < 35.999
+      ? stat('Fossil carbon left',
+          w.fossil > 1e-6
+            ? `${(w.fossil / 36 * 100).toFixed(0)}<small> %</small>`
+            : 'exhausted',
+          w.fossil <= 1e-6 ? 'warn' : '')
+      : '') +
     stat('Absorbed', `${dg.absorbed.toFixed(1)}<small> W/m²</small>`) +
     stat('Emitted', `${dg.emitted.toFixed(1)}<small> W/m²</small>`) +
     stat('Runaway margin', `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,

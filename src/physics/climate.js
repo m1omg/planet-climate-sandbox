@@ -68,6 +68,7 @@ export function resetWorld(w, params) {
   w.history = [];
   w.dtPrev = 0;
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
+  w.fossil = null;     // a fresh world has its fossil carbon still in the ground
   update(w, 0);
 }
 

@@ -403,6 +403,63 @@ It is survivable: replace the methane's ~15 W/m² with CO₂ *before* turning th
 
 Ozone is not modelled, so there is no UV shielding feedback.
 
+### Where photosynthesis can run
+
+The oxygen source used to be gated on one smoothstep of the global mean temperature between 330 and
+360 K, which is the wrong quantity and the wrong numbers. It is now four conditions, taken **band by
+band**, with the bounds set optimistically — the question is where photosynthesis is *possible*, not
+where it is comfortable:
+
+| | bound | why |
+|---|---|---|
+| temperature | −20 to **+73 °C** | the top is hard and measured: oxygenic photosynthesis stops where *Synechococcus lividus* gives out in the Yellowstone springs, and nothing on Earth passes 75 °C. The bottom is liquid water in brine films — Antarctic cryptoendoliths and snow algae fix carbon at −10 to −20 °C |
+| light | a fraction of a W/m² | the compensation point is astonishingly low: green sulphur bacteria have been recovered photosynthesising in the Black Sea on ~10⁻⁴ of full sunlight |
+| carbon | a few ppm CO₂ | cyanobacteria run carbon-concentrating mechanisms; C3 plants give up nearer 50 ppm |
+| water | liquid, and enough to be a habitat | |
+
+Band by band matters. A world averaging −30 °C can still run its whole biosphere off a warm
+equatorial belt, and — the case a global mean cannot express at all — **a tidally locked world has a
+night side where the light term is zero however warm the air is**. The Locked Eyeball comes out at
+33% of its surface fit for photosynthesis, and its oxygen follows.
+
+Earth comes out at 100.00%, so none of the oxygen calibration moved.
+
+One honest note on the upper bound: it never binds on a *settled* world. The hottest stable climate
+this model supports with an ocean is 59 °C and the next state up is a runaway at 594 °C, so the
+73 °C limit only ever bites in transit — on the way into a runaway, where it stops the biosphere
+before the ocean is gone rather than after.
+
+### Us
+
+`Industrial CO₂` is a rate, in multiples of today's: 40 Gt of CO₂ a year at 1×, some **forty times
+every volcano on the planet put together**. Only the Earth preset has it switched on — it is kept off
+the shared Earth constant so the dozen presets that spread it do not quietly inherit an industrial
+civilisation along with the nitrogen.
+
+It runs on a **finite reserve**, and that is the part that matters. Recoverable coal, oil and gas
+come to something like 5000 Gt of carbon, which is 36 kg/m² of CO₂ or about thirteen times the
+pre-industrial atmospheric column. At today's rate that is four and a half centuries and then it
+stops, whatever the control says — so no world with it switched on can be run away by it.
+
+| year | CO₂ | surface | reserve |
+|---|---|---|---|
+| 0 | 427 ppm | 15.15 °C | 100% |
+| 150 | 1001 ppm | 18.9 °C | 68% |
+| 300 | 1576 ppm | 20.5 °C | 35% |
+| 462 | **2195 ppm** | 21.6 °C | **empty** |
+
+Half of what is burnt stays in the air, and it does **not** go through the ocean-and-crust buffer the
+volcanoes go through. That buffer is an *equilibrium* partition, right for a volcanic flux slow
+enough that the whole ocean keeps step with the atmosphere. A fossil pulse is four centuries long,
+far faster than the ocean turns over, so only the surface layer takes part. Run it through the buffer
+instead and burning all 5000 Gt moves the atmosphere from 427 to 500 ppm, which is not what it does.
+
+**What is missing:** the long thaw. Silicate weathering should take that CO₂ back over ~10⁵–10⁶ years;
+here the e-folding is ~90 Myr, so the spike is drawn as permanent on any timescale you can watch. That
+is a property of the existing carbon cycle rather than of the emissions — `OUTGAS_EARTH` is set well
+below Earth's real volcanic flux and then divided by a buffer of 50 — and correcting it would move the
+snowball calibration, so it is recorded here rather than quietly rescaled.
+
 ### Methane, and why it does not last
 
 Methane used to sit wherever the control put it, for ever. It is not a stable gas, and what destroys
@@ -641,7 +698,7 @@ actually is.
 
 ## References
 
-Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Saunois et al. 2020 (the global methane budget) · Yung, Allen & Pinto 1984, Nixon et al. 2018 (Titan's methane and its ~10–100 Myr photochemical lifetime) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+Archer 2005, Lenton & Cannell 2002 (the fate of fossil carbon, recoverable reserves) · Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Saunois et al. 2020 (the global methane budget) · Yung, Allen & Pinto 1984, Nixon et al. 2018 (Titan's methane and its ~10–100 Myr photochemical lifetime) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

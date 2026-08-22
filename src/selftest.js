@@ -8,7 +8,7 @@ import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity } from './physics/constants.js';
 import { NBANDS, maxStep } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
-import { methaneLifetime } from './physics/volatiles.js';
+import { methaneLifetime, photosynthesis } from './physics/volatiles.js';
 import { atmosphereLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
@@ -657,6 +657,97 @@ export function run() {
       const w = settle(PRESETS[k].params, 1e5).world;
       check(`${name} stays anoxic`, w.diag.pO2 < 1e-4, `${w.diag.pO2.toExponential(1)} bar`);
     }
+  }
+
+  // ---- 3m2. where photosynthesis can run ------------------------------------
+  // Optimistic bounds, and taken band by band rather than from the global mean,
+  // because it is a local condition.
+  {
+    const earth = settle(EARTH, 2e5).world;
+    check('All of Earth is fit for photosynthesis',
+      Math.abs(photosynthesis(earth) - 1) < 1e-6,
+      `${(photosynthesis(earth) * 100).toFixed(2)}% of the surface`);
+
+    // The upper limit is a real and well-measured one: oxygenic photosynthesis
+    // stops around 73 C, where Synechococcus lividus gives out, and nothing on
+    // Earth passes 75.
+    //
+    // Driven directly rather than by settling a world at that temperature,
+    // because no such world exists: the hottest stable climate the model
+    // supports with an ocean is 59 C, and the next step up is a runaway at 594.
+    // The bound is therefore one that only ever bites in transit -- on the way
+    // into a runaway, where it should stop the biosphere before the ocean is
+    // gone rather than after.
+    {
+      const t = new Simulation({ ...EARTH }); t.runYears(2e5);
+      const at = (K) => { for (let i = 0; i < NBANDS; i++) t.world.T[i] = K;
+        return photosynthesis(t.world); };
+      check('…and stops between 68 and 78 °C, where phototrophs actually stop',
+        at(273 + 60) > 0.99 && at(273 + 73) > 0.2 && at(273 + 73) < 0.8
+          && at(273 + 85) < 1e-6,
+        `100% at 60 °C, ${(at(273 + 73) * 100).toFixed(0)}% at 73 °C, ` +
+        `${(at(273 + 85) * 100).toFixed(2)}% at 85 °C`);
+      check('…and at the cold end where the brine films go, not where water freezes',
+        at(273 - 10) > 0.99 && at(273 - 30) < 1e-6,
+        `100% at -10 °C, ${(at(273 - 30) * 100).toFixed(2)}% at -30 °C`);
+    }
+
+    // A tidally locked world has a night side, and no amount of warmth makes up
+    // for having no light. This is the check the old global-mean test could not
+    // express at all.
+    const locked = settle({ ...PRESETS.eyeball.params }, 2e7).world;
+    check('…and only the lit side of a world that never turns',
+      photosynthesis(locked) > 0.15 && photosynthesis(locked) < 0.55,
+      `${(photosynthesis(locked) * 100).toFixed(0)}% of the surface, the rest in permanent night`);
+
+    // Carbon starvation: cyanobacteria draw CO2 down to a few ppm, but not to
+    // nothing.
+    const starved = settle({ ...EARTH, co2Bar: 1e-7, outgassing: 0 }, 1e4).world;
+    check('…and none of a world with no carbon left to fix',
+      photosynthesis(starved) < 0.01,
+      `${(starved.diag.pCO2 * 1e6).toFixed(3)} ppm CO₂, ` +
+      `${(photosynthesis(starved) * 100).toFixed(2)}% of the surface`);
+  }
+
+  // ---- 3m3. burning the fossil carbon ---------------------------------------
+  // A finite reserve, not an infinite tap. That is the part that matters: the
+  // control cannot run a world away, because the carbon runs out first.
+  {
+    const s = new Simulation({ ...PRESETS.earth.params });
+    const w = s.world;
+    const to = (yr) => { while (w.time < yr) s.stepOnce(Math.min(maxStep(w), yr - w.time)); };
+    to(150);
+    const mid = { co2: w.diag.pCO2, T: w.diag.Tmean };
+    check('Industrial CO₂ rises about as fast as ours has',
+      mid.co2 * 1e6 > 700 && mid.co2 * 1e6 < 1300,
+      `${(mid.co2 * 1e6).toFixed(0)} ppm after 150 years, from 427`);
+
+    to(600);
+    check('…until the fossil carbon runs out, which it does in a few centuries',
+      w.fossil < 1e-6 && w.emitting < 1e-6,
+      `reserve empty after ~${(36 / 7.8e-2).toFixed(0)} years at today's rate`);
+    check('…having roughly tripled the CO₂ and stopped there',
+      w.diag.pCO2 * 1e6 > 1600 && w.diag.pCO2 * 1e6 < 3000,
+      `peaks at ${(w.diag.pCO2 * 1e6).toFixed(0)} ppm, ` +
+      `${(w.diag.Tmean - 273.15).toFixed(1)} °C`);
+
+    // Half of a pulse this fast stays in the air. Running it through the
+    // ocean-and-crust buffer the volcanoes use -- an equilibrium partition, and
+    // the ocean cannot turn over in four centuries -- gives 500 ppm instead of
+    // 2200, which is not what burning five thousand gigatonnes does.
+    const peak = w.diag.pCO2;
+    to(2e6);
+    check('…and no world with it switched on can run away, because it is finite',
+      w.diag.pCO2 <= peak * 1.01 && w.diag.Tmean < 320,
+      `still ${(w.diag.pCO2 * 1e6).toFixed(0)} ppm and ` +
+      `${(w.diag.Tmean - 273.15).toFixed(1)} °C two million years later`);
+
+    // And nothing else inherits it.
+    const others = Object.entries(PRESETS).filter(([k]) => k !== 'earth')
+      .filter(([, v]) => (v.params.emissions ?? 0) > 0);
+    check('…and only Earth has anyone on it',
+      others.length === 0,
+      others.length ? others.map(([k]) => k).join(', ') : 'every other preset is at zero');
   }
 
   // ---- 3n. the Great Oxidation, played forwards -----------------------------

@@ -73,6 +73,12 @@ export const SLIDERS = [
     fmt: (v) => v <= 0 ? 'none' : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× Earth`,
     units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
     note: 'How hard photosynthesis runs. It needs liquid water, and it stops when the planet cooks. Makes the oxygen and most of the methane.' },
+  { g: 'surface', key: 'emissions', label: 'Industrial CO₂', min: 0, max: 10, zero: true,
+    fmt: (v) => v <= 0 ? 'none'
+      : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× today`,
+    units: { x: 1, '×': 1, today: 1, gt: 1 / 40, gtco2: 1 / 40, 'gtc': 1 / 10.9 },
+    unitFor: () => '× today',
+    note: 'Burning fossil carbon: 40 Gt of CO₂ a year at 1×, some forty times every volcano on the planet. It runs on a finite reserve — about 5000 Gt of carbon, four and a half centuries at today’s rate — and then stops on its own.' },
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
     // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",
     // which reads as dead when it is not.

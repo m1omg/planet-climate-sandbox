@@ -69,6 +69,43 @@ const CH4_ANOX_BOOST = 2.7;
 // caps an anoxic methane atmosphere. See methaneLifetime.
 const CH4_PHOTO = 1.6e-3;       // kg/m^2/yr at 1 S-earth
 
+// ---------------------------------------------------------------------------
+// Us.
+//
+// Present-day anthropogenic CO2 is about 40 Gt of CO2 a year, which over
+// Earth's surface is 7.8e-2 kg/m^2/yr -- some forty times what all the world's
+// volcanoes manage, which is the whole point.
+//
+// It is drawn from a finite reservoir, and that matters more than the rate.
+// Fossil carbon is not a tap: recoverable coal, oil and gas together come to
+// something like 5000 Gt of carbon (Lenton & Cannell 2002; Archer 2005 uses the
+// same figure as the upper bound), which is 36 kg/m^2 of CO2, or about
+// thirteen times the pre-industrial atmospheric column. At today's rate that is
+// four and a half centuries and then it stops, whatever the slider says.
+//
+// Without the reservoir the control would be an infinite source and every world
+// with it switched on would simply run away given long enough, which is not
+// what burning the Earth's fossil carbon does. What it does is spike the CO2
+// and then hand it to the carbonate-silicate thermostat, which takes it back
+// over a hundred thousand years or so -- the long thaw.
+const EMIT_TODAY = 7.8e-2;      // kg/m^2/yr of CO2 at the present-day rate
+const FOSSIL_TOTAL = 36.0;      // kg/m^2 of CO2, ~5000 GtC of recoverable carbon
+
+// How much of what is burnt is still in the air on the timescale that matters.
+//
+// This does not go through the ocean-and-crust buffer the volcanoes go through,
+// and the difference is a factor of twenty-five. That buffer -- kappa, 50 -- is
+// an *equilibrium* partition: it is right for a volcanic flux, which is slow
+// enough that the whole ocean stays in step with the atmosphere the entire
+// time. A fossil pulse is four centuries long, far faster than the ocean turns
+// over, so only the surface layer takes part. Roughly half of a pulse this size
+// is still airborne after a few hundred years, and the deep ocean and carbonate
+// compensation take most of the rest over the following ten thousand.
+//
+// Run it through kappa instead and burning all five thousand gigatonnes of
+// carbon moves the atmosphere from 427 to 500 ppm, which is not what it does.
+const AIRBORNE = 0.5;
+
 // Area-averaged thickness an ice sheet can reach before it flows and calves
 // faster than it accumulates, and the density of glacier ice.
 const SHEET_MAX_THICKNESS = 2500;   // m
@@ -315,6 +352,47 @@ export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1, col = 0, insol = 1
   return Math.exp(Math.log(tauUv) * (1 - oxidising) + Math.log(tauOx) * oxidising);
 }
 
+// Where oxygenic photosynthesis can actually run, as a fraction of the surface.
+//
+// The bounds are deliberately optimistic: the question is where it is
+// *possible*, not where it is comfortable, so each one is the record rather
+// than the median.
+//
+//   temperature  -20 to +73 C. The top is a hard and well-measured limit --
+//     oxygenic photosynthesis stops around 73 C, where Synechococcus lividus
+//     gives out in the Yellowstone springs, and no phototroph on Earth passes
+//     75. The bottom is set by liquid water in brine films rather than by the
+//     chemistry: Antarctic cryptoendoliths and snow algae fix carbon at -10 to
+//     -20 C.
+//   light        the compensation point is astonishingly low. Green sulphur
+//     bacteria have been recovered photosynthesising in the Black Sea on about
+//     a ten-thousandth of full sunlight, so a fraction of a watt is generous
+//     even by the standards of this function.
+//   carbon       cyanobacteria run carbon-concentrating mechanisms and draw CO2
+//     down to a few ppm. C3 plants give up nearer 50.
+//   water        liquid, and enough of it to be a habitat.
+//
+// Taken band by band rather than from the global mean, because that is how the
+// condition actually works. A world whose average is -30 C can still have a
+// warm equatorial belt doing the whole planet's photosynthesis, and a tidally
+// locked world has a night side where the light term is zero however warm the
+// air is.
+export function photosynthesis(w) {
+  const dg = w.diag;
+  const water = smoothstep(0, 0.015, w.water.ocean);
+  if (water <= 0) return 0;
+  const carbon = smoothstep(1e-6, 8e-6, dg.pCO2 ?? 0);
+  if (carbon <= 0) return 0;
+  let share = 0;
+  for (let i = 0; i < NBANDS; i++) {
+    const warm = smoothstep(248, 258, w.T[i]);          // -25 to -15 C
+    const cool = 1 - smoothstep(341, 351, w.T[i]);      // +68 to +78 C
+    const lit = smoothstep(0.05, 0.5, dg.S ? dg.S[i] : 1361);
+    share += (warm * cool * lit) / NBANDS;
+  }
+  return water * carbon * share;
+}
+
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
 
@@ -339,6 +417,15 @@ export function stepVolatiles(w, dtYears) {
 
   // --- carbonate-silicate cycle -------------------------------------------
   const V = OUTGAS_EARTH * outgassingScale(p.mass) * p.outgassing;
+
+  // ...and us, on top of the volcanoes, until the fossil carbon runs out.
+  if (w.fossil == null) w.fossil = FOSSIL_TOTAL;
+  let emit = 0;
+  if ((p.emissions ?? 0) > 0 && w.fossil > 0 && dtYears > 0) {
+    emit = Math.min(EMIT_TODAY * p.emissions, w.fossil / dtYears);
+    w.fossil = Math.max(0, w.fossil - emit * dtYears);
+  }
+  w.emitting = emit;
   const liquid = clamp(1 - dg.iceMean, 0, 1) * smoothstep(0, 0.02, w.water.ocean);
   const landExposed = clamp(p.landFraction * (1 - dg.iceMean), 0, 1);
   const pCO2rel = Math.max(dg.pCO2 / 280e-6, 1e-6);
@@ -374,7 +461,8 @@ export function stepVolatiles(w, dtYears) {
   // 0.3 W / C. Without this the step-size chooser had to throttle the whole
   // clock to a crawl whenever CO2 was drawn down near zero.
   const dWdC = w.co2 > 1e-12 ? 0.3 * Wr / w.co2 : 0;
-  w.co2 = Math.max(0, w.co2 + (V - Wr) * dtYears / kappa / (1 + dtYears * dWdC / kappa));
+  w.co2 = Math.max(0, w.co2 + emit * AIRBORNE * dtYears
+    + (V - Wr) * dtYears / kappa / (1 + dtYears * dWdC / kappa));
 
   // --- the oxygen cycle ----------------------------------------------------
   // Built to mirror the carbon one above, because it is the same shape: a
@@ -387,9 +475,11 @@ export function stepVolatiles(w, dtYears) {
   // only route to an oxygen-rich atmosphere was to boil an ocean. That is the
   // Venus story, not Earth's.
   {
-    // Photosynthesis needs liquid water and a temperature something can live
-    // at; a world that has boiled or frozen stops making oxygen.
-    const alive = smoothstep(0, 0.015, w.water.ocean) * (1 - smoothstep(330, 360, dg.Tmean));
+    // How much of the surface photosynthesis can run on. This used to be a
+    // single smoothstep on the global mean temperature between 330 and 360 K,
+    // which is neither the right quantity nor the right numbers: it is a local
+    // condition, and 57 C is nowhere near where phototrophs actually stop.
+    const alive = photosynthesis(w);
     const source = O2_BIO * Math.max(p.biosphere ?? 0, 0) * alive;
 
     // Reduced volcanic gases, straight out of the ground and into the air.
@@ -508,5 +598,13 @@ export function stepVolatiles(w, dtYears) {
   if (dg.Tmean > 1400) w.co2 += V * 30 * dtYears / 1;
 
   w.escape = esc;
-  w.weathering = { V, W: Wr, kappa, liquid };
+  // V carries the emissions so maxStep's carbon bound sees them: forty times
+  // the volcanic flux doubles the atmospheric reservoir in a few decades, and a
+  // step chosen against volcanism alone would stride straight over it.
+  // The emissions are folded in at their airborne share and multiplied back up
+  // by kappa, so that maxStep's carbon bound -- which divides by kappa -- sees
+  // the flux the atmosphere actually gets. Forty times the volcanic rate
+  // doubles the reservoir in a few decades, and a step chosen against volcanism
+  // alone would stride straight over the whole industrial era.
+  w.weathering = { V: V + emit * AIRBORNE * kappa, W: Wr, kappa, liquid };
 }

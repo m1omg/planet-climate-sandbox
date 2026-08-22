@@ -25,6 +25,7 @@ export const EARTH = {
   biosphere: 1.0,   // oxygenic photosynthesis, relative to Earth's
   co2Bar: 427e-6,
   ch4Bar: 1.9e-6,
+  emissions: 0,     // see the `earth` preset; only that world has us on it
   outgassing: 1.0,
   landAlbedo: 0.25,
   startT: 288.3,
@@ -33,7 +34,10 @@ export const EARTH = {
 export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
 
 export const PRESETS = {
-  earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH } },
+  // The only world with anyone on it. Kept off the EARTH constant itself so
+  // that the dozen presets which spread it do not quietly inherit an industrial
+  // civilisation along with the nitrogen.
+  earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH, emissions: 1 } },
   preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL } },
   venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
   mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
