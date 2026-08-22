@@ -121,6 +121,26 @@ float bodyBlend(float detail){
   if(t >= 1.0) return 1.0;
   return clamp((t * 1.5 - 0.25 - (detail - 0.5)) * 5.0, 0.0, 1.0);
 }
+// Both surface paths -- procedural and generated-texture -- go through these,
+// because the coastline must not move when you toggle between them, and
+// because a real world showing on only one of them is what happened when the
+// textured path had its own copy of this and never got the map.
+float bodyHeight(float raw, vec2 buv, float bm){
+  return mix(raw, mix(raw, 0.30 + 0.40*texture(uBodyHeight, buv).r, uBodyHasHeight), bm);
+}
+vec3 bodyGround(vec3 ground, vec2 buv, float bm, float life){
+  if(bm <= 0.0) return ground;
+  vec3 real = texture(uBodyMap, buv).rgb;
+  // Only the *vegetation* in a photograph is climate-dependent, and only the
+  // green in it says vegetation. Muting the whole map wherever life was scarce
+  // turned Mars and Venus grey -- their colour is rock, and rock does not care
+  // whether anything is growing on it. Earth's forests still brown off when the
+  // climate stops supporting them, which is the point.
+  float green  = clamp((real.g - max(real.r, real.b) * 0.94) * 4.0, 0.0, 1.0);
+  float wither = green * (1.0 - smoothstep(0.08, 0.45, life));
+  vec3 dead = mix(real, vec3(dot(real, vec3(0.38,0.44,0.18))) * vec3(1.12,0.98,0.76), 0.85);
+  return mix(ground, mix(real, dead, wither), bm);
+}
 #endif
 
 vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float height){
@@ -141,7 +161,7 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   // both and a blend of the two keeps the land fraction it started with.
   float bm = bodyBlend(detail);
   vec2 buv = bodyUV(sp);
-  raw = mix(raw, mix(raw, 0.30 + 0.40*texture(uBodyHeight, buv).r, uBodyHasHeight), bm);
+  raw = bodyHeight(raw, buv, bm);
 #endif
   float h = raw - thr;
   height = h;
@@ -180,17 +200,8 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
 
 #ifdef BODY_MAP
   // The real map supplies the *ground*, not the water: the sea is drawn by the
-  // model, because the model is what decides where the sea is. A warming or
-  // freezing world then paints over this exactly as it does the procedural one.
-  if(bm > 0.0){
-    vec3 real = texture(uBodyMap, buv).rgb;
-    // Only the land part of the photograph is wanted; its own oceans would
-    // fight the sea below, and its greens have to yield when the climate stops
-    // supporting them.
-    vec3 realDry = mix(vec3(dot(real, vec3(0.35,0.42,0.23))) * vec3(1.06,0.96,0.80), real,
-                       smoothstep(0.08, 0.45, life));
-    ground = mix(ground, realDry, bm);
-  }
+  // model, because the model is what decides where the sea is.
+  ground = bodyGround(ground, buv, bm, life);
 #endif
 
   vec3 col = mix(sea, ground, land);
@@ -265,7 +276,13 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
   vec4 terr = texture(uTerrain, sp);
   vec4 det  = texture(uDetailMap, sp);
   float detail = terr.b, fine = terr.a;
-  float h = unpack16(terr.rg) - uSeaLevel;
+  float raw = unpack16(terr.rg);
+#ifdef BODY_MAP
+  float bm = bodyBlend(detail);
+  vec2 buv = bodyUV(sp);
+  raw = bodyHeight(raw, buv, bm);
+#endif
+  float h = raw - uSeaLevel;
   float land = smoothstep(-0.010, 0.026, h);
   land = mix(1.0, land, smoothstep(0.0, 0.04, uOceanFrac));
   float mount = det.r * smoothstep(0.0, 0.16, h);
@@ -277,6 +294,11 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
 
   vec3 ground = mix(tSand, tVeg, smoothstep(0.12,0.50,life));
   ground = mix(ground, tRock, smoothstep(0.12,0.34,elev));
+#ifdef BODY_MAP
+  // This is the default surface style, so leaving the real map out here meant a
+  // real world only appeared if you switched to the procedural one.
+  ground = bodyGround(ground, buv, bm, life);
+#endif
 
   float depth = smoothstep(0.0,-0.26,h);
   vec3 sea = tSea * mix(1.15, 0.35, smoothstep(0.0,1.0,depth));
