@@ -68,7 +68,6 @@ export function resetWorld(w, params) {
   w.history = [];
   w.dtPrev = 0;
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
-  w.ch4Source = null;  // the methane the slider asks for becomes the level it holds
   update(w, 0);
 }
 
@@ -405,6 +404,55 @@ export function maxStep(w, maxDeltaT = 2.5) {
     const net = Math.abs(w.weathering.V - w.weathering.W) / Math.max(w.weathering.kappa, 1);
     const floor = 0.02 * CO2_EARTH_COL;
     if (net > 0) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
+  }
+
+  // Oxygen, and this is the important one. Methane's lifetime pivots on pO2 from
+  // twelve thousand years to ten across the four decades between 3e-7 and 2e-4
+  // bar, and the methane step is integrated against the oxygen the *previous*
+  // step computed. A single stride across that crossover integrates methane for
+  // fifty thousand years at a lifetime that stopped being true early in it, and
+  // the world arrives with thousands of ppm it should never have accumulated.
+  // That put a super-Earth at 74 C on fine steps and 579 C on coarse ones.
+  //
+  // The floor is the column at the bottom of the sensitive band, so the bound
+  // tightens only while the crossing is actually happening: it costs about
+  // twenty steps per decade of pO2 and nothing at all on a world that is firmly
+  // oxic or firmly anoxic.
+  // The one exemption is a world whose oxygen is pinned at zero with a negative
+  // tendency -- the volcanoes permanently outrunning the biosphere, which is
+  // every anoxic world in the game. Nothing is happening there, and bounding on
+  // that rate held the clock at three-year steps for ever: the Archean went from
+  // 19 000 Myr/s to a standstill.
+  //
+  // Everywhere else the bound is unconditional, and it has to be. It is
+  // tempting to apply it only near the crossover, but the step that does the
+  // damage is taken while pO2 is still comfortably oxidising: a single stride of
+  // 123 000 years starting at 6.5 mbar emptied the whole reservoir and landed
+  // anoxic. Ten percent of the reservoir per step costs about 135 steps to take
+  // a world from Earth's oxygen to none, which is nothing.
+  if (w.o2Rate) {
+    const pinned = w.o2 <= 0 && w.o2Rate < 0;
+    if (!pinned) {
+      const floor = 3e-7 * 1e5 / dg.d.g;
+      dt = Math.min(dt, Math.max(0.1 * (w.o2 + floor) / Math.abs(w.o2Rate), 1.0));
+    }
+  }
+
+  // The methane reservoir needs the same bound, and for the same reason the ice
+  // sheet does. It is semi-implicit, so it is stable at any step -- but its
+  // source and its lifetime both depend on state that is moving underneath it
+  // (oxygen, haze, temperature), and a hazy world sits at the meeting point of
+  // two stable climates: a cool methane-shaded one and a CO2 runaway. Stride
+  // over the transition and the answer becomes a property of the step sequence.
+  // Unbounded, a super-Earth here settled at 74 C on fine steps and 579 C on
+  // coarse ones.
+  //
+  // The floor is about ten ppm of methane at Earth gravity: below that the
+  // reservoir cannot decide anything radiatively, and bounding on it would drag
+  // the clock down on every world that has almost none.
+  if (w.ch4Tau != null) {
+    const net = Math.abs((w.ch4Source ?? 0) - w.ch4 / Math.max(w.ch4Tau, 1e-6));
+    if (net > 0) dt = Math.min(dt, Math.max(0.1 * (w.ch4 + 0.1) / net, 1.0));
   }
 
   // ...and never step so far that the ice sheet jumps straight to where it is

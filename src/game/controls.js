@@ -64,21 +64,22 @@ export const SLIDERS = [
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'Evolves on its own: volcanoes add it, weathering removes it, cold traps freeze it out.' },
   { g: 'atmo', key: 'ch4Bar', label: 'Methane', min: 0, max: 1, log: true, zero: true, live: 'ch4',
-    fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor },
+    fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
+    note: 'What is in the air now, not what stays. Life makes most of it and the interior a little; oxygen cuts its life from twelve thousand years to ten, so an oxygenated world holds almost none.' },
 
   { g: 'surface', key: 'landAlbedo', label: 'Ground brightness', min: 0.05, max: 0.6,
     fmt: (v) => v.toFixed(2), note: 'Dark basalt 0.10 · rock 0.25 · bright sand 0.40' },
   { g: 'surface', key: 'biosphere', label: 'Biosphere', min: 0, max: 4, zero: true,
     fmt: (v) => v <= 0 ? 'none' : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× Earth`,
     units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
-    note: 'How hard photosynthesis runs. It needs liquid water, and it stops when the planet cooks.' },
+    note: 'How hard photosynthesis runs. It needs liquid water, and it stops when the planet cooks. Makes the oxygen and most of the methane.' },
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
     // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",
     // which reads as dead when it is not.
     fmt: (v) => v <= 0 ? 'dead'
       : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× Earth`,
     units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
-    note: 'The only CO₂ source. Your one lever inside a snowball.' },
+    note: 'The CO₂ source, and a trickle of abiotic methane. Your one lever inside a snowball — and enough of it holds a world anoxic against its own biosphere.' },
 ];
 
 // Parse a typed value like "0.3 bar", "420ppm", "2 days", "18 %". A bare number

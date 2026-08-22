@@ -207,9 +207,9 @@ Drag the planet with a mouse or a finger to orbit the camera; flick it to spin a
 stop. `⟳` pauses the planet's own rotation, `⌖` recentres the view.
 
 Every control is live. Change one mid-run and the planet keeps its current temperature, ice cover
-and history — you are intervening on a running world, not restarting it. Four of them (CO₂, N₂,
-methane and the water inventory) are outputs as well as inputs, because volcanoes, weathering, cold
-traps and escape to space all move them; those controls follow the simulation, except while you are
+and history — you are intervening on a running world, not restarting it. Five of them (CO₂, N₂,
+oxygen, methane and the water inventory) are outputs as well as inputs, because volcanoes,
+weathering, photosynthesis, photochemistry, cold traps and escape to space all move them; those controls follow the simulation, except while you are
 touching them. Click any value to type it exactly, with units — `420ppm`, `0.5 bar`, `1 atm`,
 `2 days`, `30%`, `100x`.
 
@@ -381,22 +381,27 @@ Raise the biosphere on an Archean world and the model runs the whole chain by it
 
 | after | pO₂ | CH₄ lifetime | CH₄ | surface | state |
 |---|---|---|---|---|---|
-| 2 kyr | 1.1×10⁻⁴ | 170 yr | 1000 ppm | +4.6 °C | temperate |
-| 5 kyr | 2.8×10⁻⁴ | **10 yr** | 66 ppm | +4.6 °C | temperate |
-| 10 kyr | 4.5×10⁻⁴ | 10 yr | **0.8 ppm** | **−46 °C** | **hard snowball** |
-| 50 kyr | **0** | 12,000 yr | 700 ppm | −42 °C | snowball, methane returning |
-| 2 Myr | 0 | 12,000 yr | 1000 ppm | −41.6 °C | **still frozen** |
+| 2 kyr | 1.1×10⁻⁴ | 19,000 yr | **1319 ppm** | +4.0 °C | temperate, methane still rising |
+| 5 kyr | 2.8×10⁻⁴ | **10 yr** | 1.2 ppm | −17.3 °C | 60% ice |
+| 10 kyr | 2.9×10⁻⁴ | 10 yr | **0.0 ppm** | **−46 °C** | **hard snowball** |
+| 50 kyr | **0** | 12,000 yr | 7.8 ppm | −45.5 °C | snowball, oxygen gone |
+| 2 Myr | 0 | 12,000 yr | 8.9 ppm | −45.4 °C | **still frozen** |
 
-The ocean freezes, so the biosphere stops, so the oxygen is consumed, so the methane comes back —
-**and the planet stays frozen anyway**. The trigger erases itself and the consequence persists,
-because ice-albedo hysteresis does not care what caused the ice. It is survivable: replace the
-methane's ~15 W/m² with CO₂ *before* turning the biosphere up, and 0.25 bar gets you through
-oxygenation at 17 °C. That is the **Great Oxidation** scenario.
+Methane *rises* first: the biosphere is turned up while the air is still anoxic, and an anoxic
+biosphere routes far more of its carbon out as methane. Then the oxygen crosses the reductant flux,
+the lifetime falls from nineteen thousand years to ten, and three thousand years later there is none
+left.
 
-Deliberately not modelled, and worth saying: oxygen does not suppress the methane *source*, even
-though methanogens are anaerobes. The lifetime effect alone is a factor of 1200, which is decisive;
-a second mechanism would make the control harder to reason about for no visible gain. Ozone is
-absent too, so there is no UV shielding feedback.
+The ocean freezes, so the biosphere stops, so the oxygen that caused all this is consumed — **and
+the planet stays frozen anyway**. The trap shuts twice over: the trigger erases itself, and the
+methane does not come back either, because the same dead biosphere that stopped making oxygen
+stopped making methane. What returns is 8.9 ppm, the abiotic floor from serpentinisation alone,
+against the 1000 ppm the world had before. Ice-albedo hysteresis does not care what caused the ice.
+
+It is survivable: replace the methane's ~15 W/m² with CO₂ *before* turning the biosphere up, and
+0.25 bar gets you through oxygenation at 17 °C. That is the **Great Oxidation** scenario.
+
+Ozone is not modelled, so there is no UV shielding feedback.
 
 ### Methane, and why it does not last
 
@@ -417,7 +422,63 @@ which is why the Archean stayed anoxic for a billion years with photosynthesis a
 Without that, a planet that had lost **three hundred-thousandths of an ocean** had banked enough
 oxygen to destroy its own methane for no reason at all.
 
-The control sets the level a world can hold up; the chemistry then decides whether it can.
+#### The control is a reservoir
+
+The methane slider says what is in the air now, and nothing about what keeps it there — the same
+contract CO₂ and oxygen have. It did not always. The source used to be inferred once, from the level
+asked for and the lifetime at that instant, and then frozen for the life of the world. That looked
+convenient and was quietly broken:
+
+| built as | lifetime when read | implied flux | take the oxygen away |
+|---|---|---|---|
+| oxic, 1.9 ppm | 10 yr | large | climbs to **2281 ppm** |
+| anoxic, 1.9 ppm | 12,000 yr | 1200× smaller | stays at **2 ppm** |
+
+Identical settings, two different planets, and which one you got depended on the order you had
+touched the sliders in. Now the flux comes from controls you can see and the level is whatever they
+sustain: the two routes agree to 0.02%, which is a test.
+
+| source | at Earth | notes |
+|---|---|---|
+| biosphere | 8.07×10⁻⁴ kg/m²/yr | needs liquid water; stops when the planet cooks |
+| ×2.7 if anoxic | | an anoxic biosphere routes far more carbon out as methane |
+| interior | 7.5×10⁻⁶ kg/m²/yr | serpentinisation and mantle carbon, ~2 Tg/yr |
+
+Oxygen does **not** switch the biological source off, even though methanogens are strict anaerobes.
+Earth runs 21% oxygen and still emits ~150 Tg/yr out of waterlogged soil, sediment and guts, because
+anoxic microhabitats survive inside an oxic world. What oxygen changes is how much of the biosphere's
+carbon goes down that route — nearly all of it on an anoxic world, a sideline on ours. Hence a
+factor, not a cutoff.
+
+The split between the two sources matters more than it looks. Earth's ~38 Tg/yr of "geological"
+seeps are **thermogenic** — buried organic carbon cooked back out of sedimentary rock — so they are
+biological methane on a delay, not something an interior makes on its own. A world that never had
+life has no source rock. File them under the interior instead and every sterile volcanic world in
+the game grows an Archean methane greenhouse out of nothing, which is how this was caught: the model
+started handing 1700 ppm to bare rock.
+
+Earth's own budget is anchored on the **natural** ~218 Tg/yr, which gives the pre-industrial 0.72
+ppm. Most of today's 1.9 ppm is ours, and with a ten-year lifetime that difference is a standing
+emission rather than a legacy — so a modern-Earth world here relaxes to 0.80 ppm within a century.
+That is the same treatment modern CO₂ already gets: a transient, not a fixed point.
+
+#### Photolysis needs photons
+
+A first-order lifetime says a fixed *fraction* of the methane goes each year, which quietly assumes
+the ultraviolet can reach all of it. It cannot — methane is opaque to the very wavelengths that
+destroy it — so past a certain column the sink stops being a fraction and becomes a **flux**, set by
+how many photons arrive at all.
+
+Without this Titan is a paradox. It is anoxic, so the thin rate gives it twelve thousand years, and
+its 5% of methane should have been gone a hundred times over. What it actually gets here is **118
+Myr**, against the 10–100 Myr of the literature, because it sits under 1% of Earth's sunlight with
+120× Earth's methane column — photons per molecule some ten thousand times scarcer.
+
+Which also means Titan's atmosphere is **not in steady state and cannot be**: nothing on that moon
+is making 5% of an atmosphere. The model reproduces that too. Left alone it holds 5% for ten million
+years, is down to 0.46% at a hundred, and is bare by three hundred — which is why Titan's methane
+needs a resupply nobody has identified, and why the preset is best read as a snapshot of a world
+caught mid-decline rather than a stable state.
 
 ### What methane is worth
 
@@ -540,6 +601,20 @@ Stated plainly, because a model that hides these is less useful:
   difference is what the model is not given: the Laurentide and Fennoscandian ice sheets were a
   *prescribed* forcing set by ice dynamics and sea level, not something a zonal energy balance grows
   on its own, and glacial dust is absent too.
+* **A biosphere can outrun the photon budget, and then methane has no equilibrium.**
+  The photolytic ceiling is a flux, so a world whose methane source exceeds it accumulates without
+  bound — there is no restoring force, and what stops it is the climate rather than the chemistry.
+  The Super-Earth preset does exactly this: 2× Earth's volcanism on 3.5 Earth masses keeps it anoxic
+  against its own biosphere, an anoxic biosphere makes 2.2×10⁻³ kg/m²/yr of methane against a
+  1.6×10⁻³ ceiling, and it runs away. That is the model being self-consistent rather than
+  misbehaving, but the ceiling constant is extrapolated from Titan across a hundredfold in
+  insolation, so the *threshold* deserves less trust than the behaviour. It sits at outgassing ≈ 1.08
+  for that world; below it the same planet is temperate at 22–24 °C.
+* **Equilibrium warming for present-day CO₂ is 2.36 K**, which is inside AR6's likely range but near
+  the top of it: an effective 3.9 K per doubling over 280→427 ppm, against the model's own 3.55
+  measured at 280→560. The difference is ice-albedo nonlinearity — the pre-industrial base state has
+  more ice to melt than the doubling test's average. It moved when pre-industrial Earth was given its
+  real 0.72 ppm of methane instead of today's 1.9, which cooled both endpoints about half a kelvin.
 * **The cloud feedback is +0.06 W/m²/K**, against AR6's +0.42 (+0.12 to +0.72). Cloud *amount* is now
   nearly flat where Earth sits, which is right; what is missing is the shift in cloud altitude and
   optical depth that supplies most of the observed positive feedback.
@@ -566,7 +641,7 @@ actually is.
 
 ## References
 
-Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Saunois et al. 2020 (the global methane budget) · Yung, Allen & Pinto 1984, Nixon et al. 2018 (Titan's methane and its ~10–100 Myr photochemical lifetime) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

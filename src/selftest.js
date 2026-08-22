@@ -122,7 +122,10 @@ export function run() {
     check('Pre-industrial Earth settles at 13.7 °C (1850–1900 observed)',
       near(pre.diag.Tmean - 273.15, 13.7, 0.6), `${(pre.diag.Tmean - 273.15).toFixed(2)} °C`);
     check('Modern Earth is warmer by roughly the observed 1.45 K',
-      now.diag.Tmean - pre.diag.Tmean > 1.3 && now.diag.Tmean - pre.diag.Tmean < 2.3,
+      // 2.5, not 2.3. See the note in tools/calibrate.mjs: pre-industrial Earth
+      // now gets its real 0.72 ppm of methane rather than today's 1.9, which
+      // cooled both endpoints and let the ice-albedo feedback widen the gap.
+      now.diag.Tmean - pre.diag.Tmean > 1.3 && now.diag.Tmean - pre.diag.Tmean < 2.5,
       `${(now.diag.Tmean - pre.diag.Tmean).toFixed(2)} K at 427 ppm (equilibrium, so above the transient 1.45)`);
     check('Climate sensitivity 2.5–4 K per doubling (IPCC AR6: 3.0)',
       two.diag.Tmean - pre.diag.Tmean > 2.5 && two.diag.Tmean - pre.diag.Tmean < 4.0,
@@ -216,6 +219,14 @@ export function run() {
     // basins of the same system, and a recipe sitting between them lands in
     // whichever one the integrator's step sequence happens to steer it to.
     const locked = settle({ ...EARTH, tidallyLocked: true, rotationHours: 240,
+      // The pressure is pinned deliberately, and not because 0.3 is special.
+      // At this water inventory the two basins interleave rather than dividing
+      // at a threshold: sweeping the pressure gives trapped, trapped, twilight,
+      // trapped, twilight... with no plateau to sit in the middle of. That is
+      // pre-existing -- the same sweep does the same thing on the version before
+      // the methane cycle was rewritten -- and it is what the note above means
+      // by two basins of the same system. So: a fixed point, checked to land in
+      // the trapped basin, rather than a range that cannot be made robust.
       water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.3,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
@@ -359,7 +370,12 @@ export function run() {
   // ground without trapping anything -- the anti-greenhouse (McKay, Pollack &
   // Courtin 1991).
   {
-    const titan = settle(PRESETS.titan.params, 2e7);
+    // A hundred thousand years, not twenty million. Titan's methane is not in
+    // steady state and cannot be: there is nothing on that moon making five
+    // percent of an atmosphere, and the photolysis works through it in ten to a
+    // hundred million years (Yung, Allen & Pinto 1984; Nixon et al. 2018). The
+    // model reproduces that, so it has to be asked about Titan as observed.
+    const titan = settle(PRESETS.titan.params, 1e5);
     check('Titan settles at its observed 94 K',
       near(titan.world.diag.Tmean, 94, 4), `${titan.world.diag.Tmean.toFixed(1)} K`);
     check('…and it is the haze that puts it there',
@@ -471,14 +487,114 @@ export function run() {
       `${(methaneLifetime(0, 0.5, 1) / anox).toFixed(1)}× longer under haze`);
 
     // Methane is far less stable than CO2, and it must actually decay.
-    const s = new Simulation({ ...EARTH, ch4Bar: 1e-3, co2Bar: 0.01 });
+    // Nothing making it: no biosphere, no volcanism.
+    const s = new Simulation({ ...EARTH, ch4Bar: 1e-3, co2Bar: 0.01,
+      biosphere: 0, outgassing: 0 });
     const w = s.world;
     const ch4Start = w.ch4;
-    w.ch4Source = 0;                       // cut whatever was sustaining it
     s.runYears(1e5, 2e3);
     check('Methane decays when nothing is making it',
       w.ch4 < 0.02 * ch4Start,
       `${(w.ch4 / ch4Start * 100).toFixed(2)}% left after 100 kyr, where CO₂ would still be there`);
+
+    // ---- methane is a reservoir, not a target level -----------------------
+    // This is the regression test for the bug that prompted the change. The
+    // methane source used to be inferred once, from the level asked for and the
+    // lifetime at that instant, and then frozen. A world built oxic had a
+    // ten-year lifetime, so sustaining 1.9 ppm implied a large flux; the same
+    // world built anoxic had a twelve-thousand-year lifetime and implied a flux
+    // twelve hundred times smaller. Take the oxygen away afterwards and the
+    // first world grew thousands of ppm of methane while the second sat at 1.9
+    // for ever -- identical settings, two different planets, and which one you
+    // got depended on the order you had touched the sliders in.
+    {
+      // The contract, stated as directly as it can be: what the slider is set to
+      // must not survive in the answer. Four worlds identical but for their
+      // starting methane, from none at all to ten thousand ppm, all have to end
+      // at the level this biosphere sustains. Under the old contract each one
+      // held its own number for ever.
+      const ends = [0, 1.9e-6, 1e-4, 1e-2].map((ch4Bar) =>
+        settle({ ...EARTH, ch4Bar }, 1e5).world.diag.pCH4 * 1e6);
+      const spread = (Math.max(...ends) - Math.min(...ends)) / Math.max(...ends);
+      check('Methane forgets what the slider was set to',
+        spread < 0.01 && Math.abs(ends[0] - 0.80) < 0.1,
+        `0, 1.9, 100 and 10 000 ppm all settle at ` +
+        `${ends.map((e) => e.toFixed(2)).join(' / ')} ppm`);
+
+      // And on an anoxic world, where the level it settles at is a thousand
+      // times higher and the lifetime a thousand times longer.
+      const anox = { ...EARTH, biosphere: 0.2, outgassing: 1, co2Bar: 0.02,
+        insolation: 0.9, o2Bar: 0 };
+      const lo = settle({ ...anox, ch4Bar: 0 }, 5e6).world.diag.pCH4;
+      const hi = settle({ ...anox, ch4Bar: 1e-4 }, 5e6).world.diag.pCH4;
+      // Not exact, and the reason is physics rather than slop: hydrogen escape
+      // leaves each world a slightly different trace of oxygen, and methane's
+      // lifetime is a steep function of trace oxygen -- fifteen parts per
+      // billion of it is worth a few percent of the lifetime. That sensitivity
+      // is the whole point of the Great Oxidation, so it is not something to
+      // tune away.
+      check('…on an anoxic world too, where it settles a thousand times higher',
+        Math.abs(lo - hi) / Math.max(lo, hi) < 0.05 && lo * 1e6 > 100,
+        `starting from nothing gives ${(lo * 1e6).toFixed(0)} ppm, from 100 ppm ` +
+        `gives ${(hi * 1e6).toFixed(0)} ppm — ` +
+        `${(Math.abs(lo - hi) / Math.max(lo, hi) * 100).toFixed(1)}% apart`);
+
+      // Though not every starting point lands in the same place, and that is
+      // real. Hand the same world a full percent of methane and the haze it
+      // makes shades the ground hard enough to freeze it; the biosphere stops,
+      // and what is left is the abiotic floor. Two attractors, separated by the
+      // anti-greenhouse and held apart by ice albedo.
+      const tipped = settle({ ...anox, ch4Bar: 1e-2 }, 5e6).world;
+      check('…but too much of it at once hazes the world into a snowball it cannot leave',
+        tipped.diag.Tmean < 253 && tipped.diag.pCH4 * 1e6 < 30,
+        `10 000 ppm to start freezes it to ${(tipped.diag.Tmean - 273.15).toFixed(0)} °C, ` +
+        `leaving ${(tipped.diag.pCH4 * 1e6).toFixed(1)} ppm`);
+    }
+
+    // An Earth-like biosphere makes Earth's methane, which is the calibration.
+    // 0.72 ppm, the pre-industrial value: the rest of today's 1.9 is ours, and
+    // with a ten-year lifetime that part is a standing emission, not a legacy.
+    {
+      const w = settle({ ...EARTH }, 1e4).world;
+      check('An Earth-like biosphere sustains pre-industrial methane',
+        near(w.diag.pCH4 * 1e6, 0.72, 0.2),
+        `${(w.diag.pCH4 * 1e6).toFixed(2)} ppm, against 0.72 observed before we started`);
+    }
+
+    // A dead but volcanically active world gets the abiotic flux and no more.
+    // Getting this wrong is not subtle: file Earth's ~38 Tg/yr of thermogenic
+    // seeps under "geological" rather than under the biosphere that originally
+    // buried the carbon, and every sterile volcanic world grows an Archean
+    // methane greenhouse from nothing.
+    {
+      const dead = settle({ ...EARTH, o2Bar: 0, biosphere: 0, outgassing: 1,
+        co2Bar: 3e-3, insolation: 0.9 }, 5e6).world;
+      check('A sterile volcanic world gets abiotic methane only, not a greenhouse',
+        dead.diag.pCH4 * 1e6 < 30 && dead.diag.pCH4 * 1e6 > 1,
+        `${(dead.diag.pCH4 * 1e6).toFixed(1)} ppm with nothing alive on it`);
+    }
+
+    // ---- the photon ceiling -------------------------------------------------
+    // Photolysis needs photons, so past the column where methane goes opaque to
+    // its own destroying wavelengths the sink stops being a fixed fraction per
+    // year and becomes a fixed flux. Without this Titan is a paradox: anoxic, so
+    // twelve thousand years, so its five percent of methane should have been
+    // gone a hundred times over.
+    {
+      const thin = methaneLifetime(0, 0, 1, 0.01, 1);
+      check('A thin methane atmosphere is destroyed at the thin rate',
+        near(thin, 1.2e4, 1e3), `${thin.toExponential(2)} yr at 10 g/m²`);
+      const titan = settle(PRESETS.titan.params, 1e5).world;
+      check('…but Titan\u2019s is opaque and starved of light, so it lasts 10-100 Myr',
+        titan.ch4Tau > 1e7 && titan.ch4Tau < 1e9,
+        `${(titan.ch4Tau / 1e6).toFixed(0)} Myr, against ~12 kyr from the thin rate alone`);
+      // Which also means it is not in steady state, and cannot be: nothing on
+      // that moon is making five percent of an atmosphere.
+      const later = settle(PRESETS.titan.params, 3e8).world;
+      check('…and is therefore a transient, gone in a few hundred Myr',
+        later.diag.pCH4 < 0.05 * titan.diag.pCH4,
+        `5.0% now, ${(later.diag.pCH4 * 100).toFixed(2)}% after 300 Myr`);
+    }
 
     // Oxygen itself must not pile up from a trickle of water loss, or every
     // world silently oxidises and loses its methane for no reason.
@@ -578,12 +694,21 @@ export function run() {
       `${(before.T - 273.15).toFixed(1)} °C → ${(w.diag.Tmean - 273.15).toFixed(1)} °C, ` +
       `${(w.diag.iceMean * 100).toFixed(0)}% ice`);
 
-    // The sting: the ocean freezes, so the biosphere stops, so the oxygen is
-    // consumed and the methane comes back -- and the planet stays frozen anyway.
+    // The sting: the ocean freezes, so the biosphere stops, so the oxygen that
+    // caused all this is consumed -- and the planet stays frozen anyway, because
+    // the same dead biosphere is not making methane either.
+    //
+    // This used to say the methane came back, and it did, which was wrong: the
+    // methane source was a frozen number inferred once at the start and it had
+    // no idea whether anything was alive to sustain it. With the source coming
+    // from the biosphere the trap shuts twice over. Removing the trigger does
+    // not undo the damage, because whatever the world had before the oxygen is
+    // not coming back on its own.
     to(2e6 + 2e6);
-    check('…after which the trigger removes itself and the ice stays',
-      w.diag.pO2 < 1e-6 && w.diag.pCH4 > 0.5 * before.ch4 && w.diag.iceMean > 0.9,
-      `methane back to ${(w.diag.pCH4 / before.ch4 * 100).toFixed(0)}% and oxygen gone, still ` +
+    check('…after which the trigger removes itself and the world stays frozen anyway',
+      w.diag.pO2 < 1e-6 && w.diag.pCH4 < 0.1 * before.ch4 && w.diag.iceMean > 0.9,
+      `oxygen gone, but only ${(w.diag.pCH4 / before.ch4 * 100).toFixed(1)}% of the methane ` +
+      `back with nothing alive to make it, still ` +
       `${(w.diag.iceMean * 100).toFixed(0)}% ice at ${(w.diag.Tmean - 273.15).toFixed(1)} °C`);
 
     // And it is winnable: replace the methane greenhouse with CO2 first.
@@ -780,7 +905,10 @@ export function run() {
     check('No liquid water below the triple point',
       thin.world.diag.pSurfPa < 611.7 && thin.world.diag.openOcean < 1e-6,
       `${thin.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(thin.world.diag.openOcean * 100).toFixed(2)}%`);
-    const justAbove = settle({ ...EARTH, n2Bar: 5e-4, o2Bar: 0, biosphere: 0, co2Bar: 1e-6, water: 0.3, insolation: 1.3 }, 2e5);
+    // Deliberately the same air as `thin`, so the only thing that differs is the
+    // starlight and the vapour it raises. At 5e-4 bar the pair sat on the triple
+    // point itself and the answer depended on the integrator's step sequence.
+    const justAbove = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.3 }, 2e5);
     check('…but liquid returns once the pressure clears it',
       justAbove.world.diag.pSurfPa > 611.7 && justAbove.world.diag.openOcean > 0.05,
       `${justAbove.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(justAbove.world.diag.openOcean * 100).toFixed(0)}%`);

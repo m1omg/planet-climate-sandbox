@@ -334,13 +334,11 @@ function applyParams(key) {
     if (key === 'n2Bar') w.n2 = params.n2Bar * 1e5 / d.g;
     if (key === 'o2Bar') w.o2 = params.o2Bar * 1e5 / d.g;
     if (key === 'co2Bar') { w.co2 = params.co2Bar * 1e5 / d.g; w.co2Frozen = 0; }
-    // Changing the methane means changing the level this world sustains, so
-    // whatever keeps it there has to be re-derived from the new value.
-    if (key === 'ch4Bar') { w.ch4 = params.ch4Bar * 1e5 / d.g; w.ch4Source = null; }
+    if (key === 'ch4Bar') w.ch4 = params.ch4Bar * 1e5 / d.g;
     if (key === 'mass') {
       w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g;
       w.o2 = params.o2Bar * 1e5 / d.g;
-      w.ch4 = params.ch4Bar * 1e5 / d.g; w.ch4Source = null;
+      w.ch4 = params.ch4Bar * 1e5 / d.g;
     }
     if (key === 'water') {
       // The control shows the water still present, so set that directly and

@@ -34,6 +34,41 @@ const O2_TAU_OX = 3.0e6;        // yr, oxidative weathering timescale
 const O2_REDUCTANT = 2.0e-4;    // kg/m^2/yr at Earth's volcanism
 const O2_BIO = 5.2e-4;          // kg/m^2/yr at an Earth-like biosphere
 
+// ---------------------------------------------------------------------------
+// The methane cycle, in kg/m^2 of CH4 per year.
+//
+// Anchored on Earth's *natural* budget rather than today's, because most of
+// today's methane is ours: 1.9 ppm now against 0.72 ppm before we started, and
+// with a ten-year lifetime the difference is not a legacy but a standing
+// anthropogenic flux. A modern-Earth world in this model therefore relaxes to
+// pre-industrial methane within a century, which is what would actually happen,
+// and is the same treatment modern CO2 already gets -- a transient, not a
+// fixed point.
+//
+// Natural budget, Saunois et al. 2020: ~218 Tg/yr, which lands 0.72 ppm at a
+// ten-year lifetime.
+//
+// Nearly all of it goes on the biosphere, including the ~38 Tg/yr usually
+// filed under "geological". Those seeps are thermogenic -- buried organic
+// carbon cooked back out of sedimentary rock -- so they are biological methane
+// on a delay, not something the interior would make on its own. A world that
+// never had life has no source rock and gets none of it. What is left for the
+// interior is the genuinely abiotic part, serpentinisation and mantle carbon at
+// a couple of teragrams a year, some twenty times smaller.
+//
+// The distinction is not academic: put the seeps on the interior and every
+// sterile volcanic world in the game grows an Archean methane greenhouse out of
+// nothing, which is how this was caught.
+const CH4_BIO = 8.07e-4;        // kg/m^2/yr at an Earth-like biosphere, oxic
+const CH4_GEO = 7.5e-6;         // kg/m^2/yr at Earth's volcanism, abiotic only
+// How much more of a biosphere's carbon goes out as methane when there is no
+// oxygen to route it anywhere else. Fitted to leave the Archean at the few
+// hundred to one thousand ppm the literature asks for.
+const CH4_ANOX_BOOST = 2.7;
+// Net photolytic destruction at Earth's distance from the Sun, which is what
+// caps an anoxic methane atmosphere. See methaneLifetime.
+const CH4_PHOTO = 1.6e-3;       // kg/m^2/yr at 1 S-earth
+
 // Area-averaged thickness an ice sheet can reach before it flows and calves
 // faster than it accumulates, and the density of glacier ice.
 const SHEET_MAX_THICKNESS = 2500;   // m
@@ -222,43 +257,66 @@ function advanceIceSheet(w, dtYears) {
 // shields the methane underneath it and stretches that further still.
 //
 // Zahnle 1986; Pavlov et al. 2001; Catling & Zahnle 2020.
-export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1) {
+//
+// `col` and `insol` are optional, and giving them switches on the second thing
+// that decides an anoxic methane lifetime: photolysis needs photons, and there
+// are only so many. Left out, the answer is the optically thin one.
+export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1, col = 0, insol = 1,
+                                pO2End = null) {
   // It does not take much. OH chemistry is running long before an atmosphere
   // looks oxygenated to us: a thousandth of today's oxygen already shortens
   // methane's life by three orders of magnitude, which is why methane and free
   // oxygen essentially cannot coexist, and why the Great Oxidation ended the
   // Archean's methane greenhouse rather than merely denting it.
-  const oxidising = smoothstep(3e-7, 2e-4, pO2);
-  const years = Math.exp(Math.log(1.2e4) * (1 - oxidising) + Math.log(10) * oxidising);
-  return years * (1 + 1.5 * Math.max(hazeTau, 0)) / Math.pow(clamp(xuvRel, 0.02, 300), 0.4);
+  // Averaged across the step when the caller knows where the oxygen ended up:
+  // the crossover is four decades wide and a single step can span all of it, so
+  // taking the lifetime from the oxygen at the start alone is what let methane
+  // accumulate at an anoxic lifetime while the air was still oxidising. The
+  // average is taken in the oxidising fraction rather than in pO2, because that
+  // is the quantity the physics uses and it is bounded in [0,1].
+  const oxidising = pO2End == null ? smoothstep(3e-7, 2e-4, pO2)
+    : 0.5 * (smoothstep(3e-7, 2e-4, pO2) + smoothstep(3e-7, 2e-4, pO2End));
+  // Haze absorbs the ultraviolet that would break methane up, and a more active
+  // star supplies more of it. Both act on the photolytic sink, so both scale the
+  // photon ceiling below by the same factor they scale the thin lifetime.
+  const shield = (1 + 1.5 * Math.max(hazeTau, 0)) / Math.pow(clamp(xuvRel, 0.02, 300), 0.4);
+  const tauOx = 10 * shield;
+  let tauUv = 1.2e4 * shield;
+
+  // The photon ceiling. A first-order lifetime says a fixed *fraction* of the
+  // methane goes each year, which quietly assumes the ultraviolet can always
+  // reach all of it. It cannot: methane is opaque to the very wavelengths that
+  // destroy it, so past a certain column the sink stops being a fraction and
+  // becomes a flux, set by how many photons arrive at all.
+  //
+  // This is the whole reason Titan still has an atmosphere. It is anoxic, so
+  // the thin lifetime would give it ten thousand years, and its five percent of
+  // methane would have been gone before the dinosaurs. What it actually gets is
+  // ten to a hundred million years, because it sits under one percent of
+  // Earth's sunlight with a hundred and twenty times Earth's methane column:
+  // photons per molecule some ten thousand times scarcer.
+  //
+  // CH4_PHOTO is the net destruction flux at Earth's distance -- net, so the
+  // large fraction of photolysis products that simply recombine into methane is
+  // already taken out. Anchored on Titan's measured haze and ethane production,
+  // which is the observable that pins the number.
+  if (col > 0 && insol > 0) {
+    // The haze shield divides the ceiling as well as multiplying the thin
+    // lifetime, so exactly one factor of it ends up in each of the two terms.
+    // That is the self-shielding the Archean literature describes and it is what
+    // gives the model its haze thermostat: methane warms the world until the
+    // smog it makes starts shading the ground, after which more of it cools.
+    const ceiling = CH4_PHOTO * insol / shield;      // kg/m^2/yr
+    // A soft saturation rather than a hard min(): the sink approaches the
+    // ceiling instead of hitting it, so nothing goes discontinuous at the
+    // crossover and a world just short of it is not a world about to break.
+    tauUv *= 1 + (col / tauUv) / ceiling;
+  }
+  return Math.exp(Math.log(tauUv) * (1 - oxidising) + Math.log(tauOx) * oxidising);
 }
 
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
-
-  // --- methane -------------------------------------------------------------
-  // It used to sit wherever the slider put it, for ever, which is why a world
-  // could be handed a millibar of the stuff and keep it through anything.
-  //
-  // The source is whatever sustains the level you asked for -- methanogens on
-  // the Archean, the interior on Titan -- and is deliberately not modelled: the
-  // control sets the amount this world can hold up, and the chemistry then
-  // decides whether it can. Oxygenate the air and the methane collapses,
-  // whatever the source; that is the real story of the Great Oxidation.
-  {
-    const dg = w.diag, p = w.params;
-    const tau = methaneLifetime(dg.pO2, dg.hazeTau ?? 0, p.xuvFraction / 3.4e-6);
-    if (w.ch4Source == null) w.ch4Source = w.ch4 / tau;
-    // Nothing on a four-hundred-kelvin surface is making methane, biologically
-    // or geologically. Without this a world could boil its ocean away and keep
-    // a millibar of methane going, because the source had no idea the planet
-    // had died. Titan is well below this and keeps its cryovolcanic supply.
-    const makes = 1 - smoothstep(400, 600, dg.Tmean);
-    // Semi-implicit, so an arbitrarily long step still lands on the right
-    // answer instead of overshooting past zero.
-    w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * makes * dtYears) / (1 + dtYears / tau));
-    w.ch4Tau = tau;
-  }
 
   const p = w.params, dg = w.diag, d = dg.d;
   const esc = escapeRates(w);
@@ -350,10 +408,74 @@ export function stepVolatiles(w, dtYears) {
     // no sink at all.
     const weathering = (0.25 + 0.75 * landExposed) * liquid / O2_TAU_OX;
 
+    // Kept for maxStep: how fast the reservoir is moving right now.
+    w.o2Rate = (source - reductant) - w.o2 * weathering;
     // Semi-implicit in the part that depends on w.o2, so a long step cannot
     // overshoot past zero.
+    const o2Before = w.o2;
     w.o2 = Math.max(0, (w.o2 + (source - reductant) * dtYears) / (1 + weathering * dtYears));
     w.o2Flux = { source, reductant, weathering: w.o2 * weathering };
+
+    // --- methane -----------------------------------------------------------
+    // Deliberately *after* the oxygen, and this ordering is load-bearing.
+    //
+    // Methane's lifetime pivots on pO2 by three orders of magnitude across four
+    // decades of it. Run methane first and it is integrated for the whole step
+    // against the oxygen the previous step left behind -- so a step that spans
+    // the Great Oxidation crossover accumulates thousands of ppm at a lifetime
+    // that stopped being true early in it. That is not a small error: it put a
+    // super-Earth at 74 C on fine steps and 579 C on coarse ones, and no bound
+    // computed from the state at the start of the step can see it coming,
+    // because at the start methane is sitting quietly in equilibrium.
+    //
+    // So the lifetime is taken from the oxygen *across* the step, averaged in
+    // the quantity that actually enters the physics -- the oxidising fraction,
+    // which is bounded in [0,1] and well behaved however far pO2 moves.
+    {
+      const g = d.g;
+      const tau = methaneLifetime(o2Before * g / 1e5, dg.hazeTau ?? 0,
+        p.xuvFraction / XUV_FRACTION_SUN, w.ch4, p.insolation, w.o2 * g / 1e5);
+
+      // Life makes most of it. Oxygen does *not* switch this off, even though
+      // methanogens are strict anaerobes: Earth runs twenty-one percent oxygen
+      // and still emits a hundred and fifty teragrams a year, out of waterlogged
+      // soil and sediment and guts, because anoxic microhabitats survive inside
+      // an oxic world. What oxygen changes is how much of the biosphere's carbon
+      // goes down that route -- on an anoxic world it is nearly all of it, and
+      // on ours it is a sideline. Hence the boost rather than a cutoff.
+      const oxidising = smoothstep(3e-7, 2e-4, 0.5 * (o2Before + w.o2) * g / 1e5);
+      // Note this uses its own thermal limit rather than the oxygen cycle's
+      // `alive`. Oxygen comes from photosynthesis, which gives up somewhere
+      // around 330-360 K; methane comes from archaea, and they are famously
+      // thermophilic -- Methanopyrus kandleri grows at 122 C. Handing
+      // methanogens the photosynthesis ceiling is not a small conservatism, it
+      // is a feedback loop with no brake: hotter kills the biosphere, which
+      // removes the methane, which removes the haze, which lets in the sunlight
+      // that made it hotter. A super-Earth sitting at 70 C -- the middle of that
+      // band -- oscillated between 7 C and 75 C on it, and how far a step
+      // reached decided whether it escaped the cycle into a runaway. That was
+      // the whole of the step-size dependence; the haze self-shielding, which
+      // was the other suspect, turned out to be innocent. What limits
+      // methanogens here is the same thing that limits everything, `makes`, at
+      // the point the surface stops being habitable at all.
+      const wet = smoothstep(0, 0.015, w.water.ocean);
+      const bio = CH4_BIO * Math.max(p.biosphere ?? 0, 0) * wet
+        * (1 + (CH4_ANOX_BOOST - 1) * (1 - oxidising));
+
+      // And the interior makes the rest: serpentinisation and the seeps.
+      const geo = CH4_GEO * outgassingScale(p.mass) * Math.max(p.outgassing ?? 0, 0);
+
+      // Nothing on a four-hundred-kelvin surface is making methane, biologically
+      // or geologically. Without this a world could boil its ocean away and keep
+      // a millibar of methane going, because the source had no idea the planet
+      // had died. Titan is well below this and keeps its cryovolcanic supply.
+      const makes = 1 - smoothstep(400, 600, dg.Tmean);
+      // Semi-implicit, so an arbitrarily long step still lands on the right
+      // answer instead of overshooting past zero.
+      w.ch4Source = (bio + geo) * makes;
+      w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * dtYears) / (1 + dtYears / tau));
+      w.ch4Tau = tau;
+    }
   }
 
   // --- CO2 condensation onto polar caps (Mars-like collapse) ---------------
