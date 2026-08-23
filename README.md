@@ -379,6 +379,87 @@ which is what the GCM literature gets for it too (Turbet et al. 2018 model exact
 Those GCMs manage it on far less CO₂, because a locked world grows a thick cloud deck over the
 substellar point that this model only approximates. A bar is at the thick end of plausible.
 
+### The mean is not a temperature a locked world has
+
+TRAPPIST-1b settles at a global mean of **−1.5 °C**, which reads as temperate and describes nowhere
+on it. The day side never sets and sits at **237 °C**; the night side never sees the star and sits at
+**−186 °C**. So a tidally locked world reports **Day side** and **Night side** instead of Range —
+both the four-band averages `classify()` already uses to tell eyeball from lobster from twilight, so
+the readout and the label cannot disagree about which side is which.
+
+That planet also reads "534 bar CO₂ frozen out", which sounds like a frozen planet and is not: it is
+frozen onto the half that never sees daylight, while the other half is hot enough to melt lead. It
+says *frozen onto the night side* now.
+
+The physics behind it is real and named. If the night side falls below a gas's condensation
+temperature it becomes a **cold trap**: the gas freezes out, the greenhouse weakens, the planet
+cools, and the collapse accelerates itself. Proposed by Kasting 1993 and Joshi 1997, worked out in
+detail by Wordsworth 2015 and Koll & Abbot 2016, and the reason atmospheric collapse is a standing
+question for every close-in M-dwarf planet.
+
+The model has the **threshold** as well as the behaviour, which is the part worth checking:
+
+| starting CO₂ | after 1 Myr | night side |
+|---|---|---|
+| 0.1 bar | **collapsed**, nothing left | 85 K |
+| 2 bar | 1.78 bar still airborne | 265 K |
+
+Above about a bar, transport keeps the night side warm enough to hold the gas. The published figure
+for TRAPPIST-1 planets is collapse below roughly **100 mbar**, so this model is somewhat more eager
+to collapse than the GCMs — a one-dimensional scheme moves heat to the night side less effectively
+than a real circulation does, which is the same limitation that shows up in the habitable-zone
+rotation row above.
+
+### What a hot surface looks like, and what it does not
+
+The night side used to be painted with a glow taken from the planet's **mean** temperature. A mean
+is not a temperature any ground has: GJ 1132 b runs a 1271 K day side against a 693 K night side for
+a 920 K mean, and that mean washed the dark half in orange **four times brighter than the terrain
+underneath it**, carrying no surface detail because it varied only with the smooth day-to-night
+ramp. It read as a blur, which is how it was reported.
+
+The brightness comes from the **local** band temperature now, and the curve is steep because the
+physics is. The *visible* share of a blackbody is a Wien tail — integrate Planck over 400–700 nm:
+
+| | 692 K | 798 K | 1000 K | 1300 K | 1500 K |
+|---|---|---|---|---|---|
+| visible fraction | 5.7×10⁻¹⁰ | 1.9×10⁻⁸ | 1.9×10⁻⁶ | 1.0×10⁻⁴ | 5.6×10⁻⁴ |
+
+**Ten orders of magnitude** across a range the old linear ramp treated as gently rising. 798 K is the
+**Draper point**, where solids first glow dull red. `exp(11.68 − 17520/T)` is that tail's own shape
+and fits the integral to within 13% from 900 K to 1500 K; the self-test checks it against the
+integral rather than against the constants, so the fit cannot drift from the physics unnoticed.
+
+Venus is the check that costs nothing. Its surface is 737 K and does **not** glow visibly — which is
+why photographs of it are lit by daylight through the cloud rather than by the ground. Under the old
+formula it did.
+
+Measured on the software renderer, GJ 1132 b's night side went from **14.4% to 22.7% detail
+contrast**: the wash is gone and the terrain is visible through it. Genuinely molten ground still
+glows — the lava crust was never part of this bug, because it always read the local temperature and
+always had its own cracked-crust detail.
+
+The GLSL cannot import the JS, so the curve is written twice and `tools/glslcheck.mjs` pins the two
+to the same constants. A machine on the software fallback must not see a different planet from one
+with WebGL.
+
+### Where the surface comes from
+
+There are no photographs of the invented worlds, and none of TRAPPIST-1b, TRAPPIST-1e or GJ 1132 b —
+nobody has imaged their surfaces. What you are looking at is **procedural**: gradient noise with
+domain warping for the continents, so coastlines have bays and peninsulas rather than round islands;
+ridged multifractal mountain belts in the continental interiors; slope-based relief shading from a
+sampled height field; and biomes that answer to both altitude and climate.
+
+That shape is then coloured by six **material** albedo maps — rock, desert, vegetation, ice, ocean,
+lava — which were generated with an image model and downscaled to 1024×512 JPEG (24 MB of PNG became
+832 KB with no visible loss). They are tiled material detail, not maps of anywhere. A world with no
+albedo maps available stays fully procedural and says so, and on a device with only eight texture
+units the albedo path is compiled out entirely.
+
+Only **Earth, Mars, Venus and Titan** carry real photography, and only Earth carries real
+topography. Sources and licences are in `assets/bodies/CREDITS.md`.
+
 ### Looking at it
 
 Drag to orbit the camera — the star, the terminator and the ice caps stay where they belong and you
@@ -1364,7 +1445,9 @@ tectonic–climate coupling; kinetically- versus supply-limited weathering) · A
 (the minimum inner edge for hot desert worlds) · Armstrong et al. 2014, Colose et al. 2019 (high
 obliquity resists glaciation) · Turbet et al. 2018 (TRAPPIST-1 climates and volatile fates) · Agol
 et al. 2021 (TRAPPIST-1 masses, radii and insolations) · Bonfils et al. 2018 (GJ 1132 b) · Greene et
-al. 2023 (TRAPPIST-1b's 503 K dayside, and no atmosphere).
+al. 2023 (TRAPPIST-1b's 503 K dayside, and no atmosphere) · Joshi, Haberle & Reynolds 1997,
+Wordsworth 2015, Koll & Abbot 2016 (night-side cold traps and atmospheric collapse on tidally locked
+planets) · Draper 1847 (the temperature at which solids begin to glow visibly).
 
 ## Licence
 

@@ -56,3 +56,37 @@ export function seaLevelForLand(landFraction) {
   const p = Math.min(Math.max(1 - land, 0.0015), 0.9985);
   return TERRAIN_MEAN + TERRAIN_SD * probit(p);
 }
+
+// ---------------------------------------------------------------------------
+// How brightly a surface at temperature T glows in visible light, normalised
+// so that 1500 K is 1.0.
+//
+// This exists because the night side used to be painted with a glow taken from
+// the planet's *global mean* temperature, which is not a thing any patch of
+// ground has. GJ 1132 b runs a 1270 K day side against a 692 K night side and
+// a 920 K mean, so its night side -- which emits essentially nothing -- was
+// being washed with an orange gradient four times brighter than the terrain
+// underneath it. That wash carried no surface detail, because it varied only
+// with the smooth day-to-night temperature ramp, and it read as a blur.
+//
+// The curve is steep and it has to be. The *visible* share of a blackbody is a
+// Wien tail, and integrating Planck over 400-700 nm gives:
+//
+//     692 K   5.7e-10        (GJ 1132 b's night side)
+//     798 K   1.9e-8         the Draper point: solids first glow dull red
+//    1000 K   1.9e-6
+//    1300 K   1.0e-4
+//    1500 K   5.6e-4
+//
+// Ten orders of magnitude across the range the old linear ramp treated as
+// gently rising. exp(A - B/T) is the Wien tail's own shape and fits that
+// integral to within about ten percent from 900 K to 1500 K.
+//
+// Venus is the check that costs nothing: its surface is 737 K and does not
+// glow visibly, which is why photographs of it are lit by daylight through the
+// clouds rather than by the ground. Under the old formula it did.
+export const GLOW_A = 11.68, GLOW_B = 17520;   // shared with planet.frag
+export function thermalGlow(T) {
+  if (!(T > 1)) return 0;
+  return Math.min(Math.exp(GLOW_A - GLOW_B / T), 1.4);
+}

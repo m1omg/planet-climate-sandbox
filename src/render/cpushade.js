@@ -1,4 +1,4 @@
-import { seaLevelForLand } from './terrain.js';
+import { seaLevelForLand, thermalGlow } from './terrain.js';
 // A CPU implementation of the planet shading, for machines where WebGL2 is
 // unavailable. This is not a toy stand-in: it is the same terrain, the same
 // biome rules, the same ice and the same lighting as the GPU path, evaluated in
@@ -432,8 +432,13 @@ export function renderPlanet(rgba, W, H, s) {
           }
         }
 
+        // Thermal emission, from the LOCAL band temperature. This path used to
+        // ignore temperature altogether -- it applied the whole of nightGlow,
+        // which was itself taken from the planet's mean -- so it was the worse
+        // of the two renderers on exactly the case that shows it up.
+        // thermalGlow() is shared with the GL shader.
         if (s.nightGlow > 0) {
-          const gl = s.nightGlow * (1 - lam) * 0.35;
+          const gl = s.nightGlow * thermalGlow(T) * (1 - lam);
           r += gl; g += 0.30*gl; bl += 0.08*gl;
         }
 

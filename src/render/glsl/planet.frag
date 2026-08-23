@@ -429,9 +429,18 @@ void main(){
     vec3 lit = base * (0.06 + 0.94*lam) * uStarColor;
     lit += uStarColor * spec * 0.30;
 
-    // thermal emission from a hot or molten surface: visible on the night side
-    float glow = uNightGlow * (1.0 - lam);
-    lit += vec3(1.0,0.30,0.08) * glow * (0.35 + 0.65*smoothstep(1100.0,1500.0,T));
+    // Thermal emission from a hot or molten surface, visible on the night side.
+    //
+    // Driven by the LOCAL band temperature, not by the planet's mean. That was
+    // the bug: a world with a 1270 K day side and a 692 K night side has a
+    // 920 K mean, and the mean was painting a glow across ground that emits
+    // essentially nothing. See thermalGlow() in terrain.js -- the constants
+    // below are that same curve and the self-test pins the two together.
+    //
+    // uNightGlow is only a gate now: 1 where some band on the planet is hot
+    // enough to glow at all, 0 where none is, so a cold world skips the term.
+    float glow = uNightGlow * min(exp(11.68 - 17520.0/max(T, 1.0)), 1.4);
+    lit += vec3(1.0,0.30,0.08) * glow * (1.0 - lam);
 
     // ---- clouds ----
     // Two layers drifting at different speeds, warped by their own noise, so

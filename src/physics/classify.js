@@ -138,6 +138,17 @@ export function reasonText(w, st) {
     const perGyr = (w.escape.water * 1e9) / dg.d.eoColumn;
     if (perGyr > 1e-3) bits.push(`losing ${perGyr.toFixed(2)} oceans/Gyr`);
   }
-  if (w.co2Frozen > 1e-3) bits.push(`${((w.co2Frozen * dg.g) / 1e5).toFixed(3)} bar CO₂ frozen out`);
+  if (w.co2Frozen > 1e-3) {
+    // Where it froze matters, and on a locked world the answer is not "here".
+    // TRAPPIST-1b runs a 237 °C day side against a −186 °C night side: the CO2
+    // is frozen on ground that never sees the star, while the sunlit half is
+    // hot enough to melt lead. "Frozen out" on its own reads as a frozen
+    // planet, which is the opposite of what half of this one is.
+    const bar = (w.co2Frozen * dg.g) / 1e5;
+    const amount = bar >= 100 ? bar.toFixed(0) : bar >= 1 ? bar.toFixed(1) : bar.toFixed(3);
+    bits.push(dg.lam > 0.5
+      ? `${amount} bar CO₂ frozen onto the night side`
+      : `${amount} bar CO₂ frozen out`);
+  }
   return bits.join(' · ');
 }

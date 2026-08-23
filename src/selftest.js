@@ -2,7 +2,7 @@
 // go to the console), or headlessly with `node src/selftest.js`.
 import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
-import { classify } from './physics/classify.js';
+import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2 } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
@@ -12,7 +12,7 @@ import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
-import { seaLevelForLand } from './render/terrain.js';
+import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
 
 let pass = 0, fail = 0;
@@ -465,6 +465,102 @@ export function run() {
       `by ${(ch4s[last] * 1e3).toFixed(0)} mbar the haze stops ` +
       `${((1 - ds[last].hazeSW) * 100).toFixed(0)}% of the sunlight and the surface is ` +
       `${(Ts[last] - 273.15).toFixed(1)} \u00b0C`);
+  }
+
+  // ---- 3i2. what a hot surface actually looks like --------------------------
+  // The night side used to be painted with a glow taken from the planet's mean
+  // temperature. A mean is not a temperature any ground has: GJ 1132 b runs a
+  // 1270 K day side against a 692 K night side for a 920 K mean, and that mean
+  // washed the dark half in orange four times brighter than the terrain under
+  // it -- carrying no surface detail, because it varied only with the smooth
+  // day-to-night ramp. It read as a blur, which is how it was reported.
+  {
+    // The anchor is Planck itself, integrated over 400-700 nm, rather than the
+    // fitted constants handed back to me. If the fit drifts from the physics
+    // this fails whatever the constants say.
+    const h = 6.62607015e-34, c = 2.99792458e8, kB = 1.380649e-23;
+    const B = (l, T) => 2 * h * c * c / Math.pow(l, 5) / (Math.exp(h * c / (l * kB * T)) - 1);
+    const visFrac = (T) => {
+      let vis = 0, tot = 0;
+      for (let l = 1e-8; l < 2e-4; l *= 1.002) {
+        const b = B(l, T) * l * 0.002;
+        tot += b;
+        if (l >= 4e-7 && l <= 7e-7) vis += b;
+      }
+      return vis / tot;
+    };
+    const ref = visFrac(1500);
+    const worst = [900, 1000, 1100, 1200, 1300, 1400, 1500].reduce((m, T) => {
+      const want = visFrac(T) / ref, got = thermalGlow(T);
+      return Math.max(m, Math.abs(got - want) / want);
+    }, 0);
+    check('The visible glow of hot rock follows Planck, not a straight line',
+      worst < 0.2,
+      `worst error ${(worst * 100).toFixed(0)}% against the integrated 400-700 nm ` +
+      `fraction, 900-1500 K`);
+
+    // The Draper point, ~798 K, is where solids first glow dull red. Venus's
+    // surface sits at 737 K and does not -- which is why pictures of it are lit
+    // by daylight through the cloud, not by the ground. Under the old formula
+    // it glowed, and so did every night side of every hot world.
+    check('\u2026so nothing below the Draper point glows, Venus\u2019s 737 K ground included',
+      thermalGlow(737) < 1e-4 && thermalGlow(692) < 1e-4 && thermalGlow(500) < 1e-8,
+      `692 K ${thermalGlow(692).toExponential(1)} \u00b7 737 K ${thermalGlow(737).toExponential(1)} ` +
+      `\u00b7 798 K ${thermalGlow(798).toExponential(1)}, against 1.0 at 1500 K`);
+    check('\u2026while genuinely molten ground still does',
+      thermalGlow(1400) > 0.2 && thermalGlow(1800) > 1,
+      `1400 K ${thermalGlow(1400).toFixed(2)} \u00b7 1800 K ${thermalGlow(1800).toFixed(2)}`);
+
+    // GJ 1132 b is the world it was reported on. Its night side must be dark
+    // and its day side must not be.
+    {
+      const w = settle({ ...PRESETS.gj1132b.params }, 5e6).world;
+      const night = Math.min(...w.T), day = Math.max(...w.T);
+      check('GJ 1132 b\u2019s night side is dark, and its day side is not',
+        thermalGlow(night) < 1e-3 && thermalGlow(day) > 0.05,
+        `night ${night.toFixed(0)} K glows ${thermalGlow(night).toExponential(1)}, ` +
+        `day ${day.toFixed(0)} K glows ${thermalGlow(day).toFixed(2)}`);
+    }
+
+    // The matching GLSL check -- that the shader carries the same curve -- lives
+    // in tools/glslcheck.mjs. It cannot live here: this file also runs in the
+    // browser, through ?selftest, where there is no filesystem to read from.
+  }
+
+  // ---- 3i3. the mean is not a temperature a locked world has ----------------
+  // TRAPPIST-1b settles at a global mean of -1.5 C, which reads as temperate
+  // and describes nowhere on it: the day side never sets and sits at 237 C, the
+  // night side never sees the star and sits at -186 C. Reporting the mean alone
+  // was actively misleading, and "534 bar CO2 frozen out" alongside it read as
+  // a frozen planet rather than as a cold trap on the dark half.
+  {
+    const w = settle({ ...PRESETS.trappist1b.params }, 1.7e9).world;
+    const st = classify(w);
+    check('A locked world reports its two sides, because its mean describes neither',
+      w.diag.lam > 0.5 && st.Tsub - st.Tanti > 300
+        && st.Tanti < w.diag.Tmean && w.diag.Tmean < st.Tsub,
+      `TRAPPIST-1b: day ${(st.Tsub - 273.15).toFixed(0)} \u00b0C, ` +
+      `night ${(st.Tanti - 273.15).toFixed(0)} \u00b0C, mean ` +
+      `${(w.diag.Tmean - 273.15).toFixed(1)} \u00b0C`);
+    check('\u2026and says where its CO\u2082 went, since half of it is hot enough to melt lead',
+      reasonText(w, st).includes('night side'),
+      reasonText(w, st));
+
+    // The physics behind it, which is a real and named prediction rather than
+    // an artefact: below a certain pressure the night side is a cold trap and
+    // the atmosphere collapses onto it (Joshi 1997; Wordsworth 2015; Koll &
+    // Abbot 2016). Above it, transport keeps the night side warm enough to hold
+    // the gas. The model has the threshold as well as the behaviour, and it
+    // must not collapse a thick atmosphere.
+    const end = (co2Bar) => {
+      const x = settle({ ...PRESETS.trappist1b.params, co2Bar, outgassing: 0 }, 1e6).world;
+      return { air: x.diag.pCO2, night: Math.min(...x.T) };
+    };
+    const thin = end(0.1), thick = end(2);
+    check('A thin atmosphere collapses onto the night side; a thick one does not',
+      thin.air < 1e-6 && thick.air > 1,
+      `0.1 bar \u2192 ${thin.air.toExponential(1)} bar left (night ${thin.night.toFixed(0)} K), ` +
+      `2 bar \u2192 ${thick.air.toFixed(2)} bar left (night ${thick.night.toFixed(0)} K)`);
   }
 
   // ---- 3j. what the atmosphere actually looks like --------------------------

@@ -1,6 +1,6 @@
 import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js';
 import { NBANDS } from '../physics/climate.js';
-import { clamp, steamOpacity } from '../physics/constants.js';
+import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
 import { atmosphereLook, cloudLook } from './atmosphere.js';
 import { seaLevelForLand } from './terrain.js';
 
@@ -162,7 +162,9 @@ export class SoftwareView {
       locked: lam, cloud,
       steam: steamOpacity(pH2O),
       pTot: dg.pTotMean, co2: clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1),
-      nightGlow: clamp((dg.Tmean - 700) / 700, 0, 1),
+      // A gate, not a magnitude -- cpushade takes the brightness from the
+      // local band temperature, as the GL path does. See thermalGlow().
+      nightGlow: smoothstep(650, 750, dg.Tmax),
       time: state.time, relief: cfg.relief, clouds: this.clouds,
     });
     this.bctx.putImageData(this.image, 0, 0);

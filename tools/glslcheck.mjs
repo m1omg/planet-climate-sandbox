@@ -250,5 +250,39 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
   }
 }
 
+// ---------------------------------------------------------------------------
+// The two renderers have to agree about what a hot surface looks like.
+//
+// The GLSL cannot import the JS, so the thermal-glow curve is written twice --
+// once in terrain.js for the software renderer and the self-test, once in
+// planet.frag for WebGL. Nothing but this check keeps them the same number, and
+// a machine on the software fallback must not see a different planet from one
+// with WebGL.
+//
+// It also pins the thing that was actually wrong: the glow used to be a
+// magnitude computed from the planet's MEAN temperature and applied flat across
+// the night side. A mean is not a temperature any ground has -- GJ 1132 b has a
+// 1270 K day side, a 692 K night side and a 920 K mean -- so it lit up ground
+// that emits nothing, with a wash that carried no surface detail.
+{
+  const { GLOW_A, GLOW_B } = await import('../src/render/terrain.js');
+  const frag = readFileSync(new URL('../src/render/glsl/planet.frag', import.meta.url), 'utf8');
+  const want = `exp(${GLOW_A} - ${GLOW_B}.0/max(T, 1.0))`;
+  if (!frag.includes(want)) {
+    failed++;
+    console.log(`\x1b[31mFAIL\x1b[0m  planet.frag does not carry terrain.js's glow curve: expected ${want}`);
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  both renderers use the same thermal-glow curve, exp(${GLOW_A} - ${GLOW_B}/T)`);
+  }
+  // uNightGlow is a gate now; the brightness must come from the local band T.
+  const local = /uNightGlow \* min\(exp\(/.test(frag);
+  if (!local) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  the night glow is not driven by the local band temperature');
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  night glow reads the local band temperature, not the planet mean');
+  }
+}
+
 console.log(failed ? `\n${failed} shader problem(s)` : '\nshaders parse cleanly');
 process.exit(failed ? 1 : 0);

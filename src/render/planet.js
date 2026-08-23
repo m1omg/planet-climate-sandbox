@@ -1,6 +1,6 @@
 import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
-import { clamp, steamOpacity } from '../physics/constants.js';
+import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
 import { atmosphereLook, cloudLook } from './atmosphere.js';
 import { seaLevelForLand } from './terrain.js';
 
@@ -719,7 +719,13 @@ export class PlanetView {
     const co2Frac = clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1);
     // What the deck hides, not what it covers -- see cloudLook().
     const cloudMean = cloudLook(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS, pH2Omean);
-    const glow = clamp((dg.Tmean - 700) / 700, 0, 1);
+    // Whether ANY band is hot enough to glow, not how hot the planet is on
+    // average. The mean is not a temperature the ground ever has: on a locked
+    // world it sits between a molten day side and a frozen night side, and
+    // using it lit up ground at 692 K that emits nothing. Below 700 K nothing
+    // anywhere can glow, and the curve is already 1e-6 there, so the gate's
+    // edge is invisible.
+    const glow = smoothstep(650, 750, dg.Tmax);
     const sc = PlanetView.starColor(p.starTemp);
     const atmo = atmosphereLook(world, steam, this.realistic);
 
@@ -760,6 +766,8 @@ export class PlanetView {
     gl.uniform1f(this.u.uCO2, co2Frac);
     gl.uniform1f(this.u.uMagma, clamp((dg.Tmean - 1200) / 400, 0, 1));
     gl.uniform1f(this.u.uLocked, lam);
+    // A gate, not a magnitude: the shader takes the brightness from the local
+    // band temperature. See thermalGlow() in terrain.js.
     gl.uniform1f(this.u.uNightGlow, glow);
     // Cross-fade rather than snap, so toggling the surface style is a dissolve.
     const target = (this.wantTextures && this.texturesLoaded) ? 1 : 0;

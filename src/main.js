@@ -609,7 +609,21 @@ function updateReadout() {
 
   $('#stats').innerHTML =
     stat('Mean surface', `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`) +
-    stat('Range', `${(dg.Tmin - 273.15).toFixed(0)} → ${(dg.Tmax - 273.15).toFixed(0)}<small> °C</small>`) +
+    // On a locked world the mean is a number no part of the planet has. It sits
+    // between a day side that never sets and a night side that never sees the
+    // star, and on TRAPPIST-1b those are 237 °C and −186 °C -- so a mean of
+    // −1.5 °C reads as temperate and describes nowhere. Day and night side get
+    // their own readouts there, and Range keeps its place on a rotating world
+    // where it means the pole-to-equator spread instead.
+    //
+    // Both are the four-band averages classify() already uses to decide between
+    // eyeball, lobster and twilight states, so the readout and the label cannot
+    // disagree about which side is which.
+    (dg.lam > 0.5
+      ? stat('Day side', `${(st.Tsub - 273.15).toFixed(0)}<small> °C</small>`) +
+        stat('Night side', `${(st.Tanti - 273.15).toFixed(0)}<small> °C</small>`,
+          st.Tanti < 195 && dg.pCO2 > 0 ? 'warn' : '')
+      : stat('Range', `${(dg.Tmin - 273.15).toFixed(0)} → ${(dg.Tmax - 273.15).toFixed(0)}<small> °C</small>`)) +
     stat('Land / ocean', `${(dg.landFrac * 100).toFixed(0)}<small> %</small> / ${(dg.flooded * 100).toFixed(0)}<small> %</small>`,
       dg.landFrac > 0.98 && w.water.lost > 0.02 ? 'warn' : '') +
     stat('Sea ice / land ice', `${(dg.seaIceFrac * 100).toFixed(0)}<small> %</small> / ${(dg.landIceFrac * 100).toFixed(0)}<small> %</small>`) +
