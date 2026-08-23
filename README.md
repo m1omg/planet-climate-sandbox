@@ -353,6 +353,32 @@ Only Earth ships topography: it is the one body with a clean, redistributable gr
 usable size, and a plausible-looking but wrong Mars would be worse than an honest procedural one.
 Sources and licences are in `assets/bodies/CREDITS.md`; the build is `tools/buildbodies.py`.
 
+#### Three that are not in this solar system
+
+**TRAPPIST-1b**, **TRAPPIST-1e** and **GJ 1132 b** are presets too, on their published numbers.
+Masses, radii, periods and insolations from Agol et al. 2021 and Bonfils et al. 2018; interior heat
+from Barr, Dobos & Kiss 2018 Table 3 and Swain et al. 2021. They get procedural terrain, because
+nobody has a map of any of them.
+
+| | S⊕ | interior heat | what it is |
+|---|---|---|---|
+| TRAPPIST-1b | 4.15 | **2.68 W/m²** — twice Io's | partially molten inside; JWST found no atmosphere |
+| TRAPPIST-1e | 0.646 | 0.18 W/m² | the one in the habitable zone |
+| GJ 1132 b | 18.8 | **80 W/m²** — a thousand times Earth's | magma ocean a few tens of metres down |
+
+These are the worlds the internal-heat slider was built for. GJ 1132 b's 80 W/m² comes from an
+eccentricity of only 0.01, held by resonance, and it settles here as a **dry runaway at 919 °C** —
+not habitable, and not close. TRAPPIST-1b's substellar band lands at **539 K** against the **503 K**
+dayside brightness temperature JWST measured (Greene et al. 2023), which is what a bare rock with
+nothing to move its heat around looks like.
+
+TRAPPIST-1e is the one that can hold water, and its preset is a *plausible* configuration rather
+than a measured one — nothing is known about its atmosphere. A bar of CO₂ puts it at **19 °C** with
+a quarter of the globe iced and most of its ocean liquid: an eyeball with a wide habitable ring,
+which is what the GCM literature gets for it too (Turbet et al. 2018 model exactly this 1 bar case).
+Those GCMs manage it on far less CO₂, because a locked world grows a thick cloud deck over the
+substellar point that this model only approximates. A bar is at the thick end of plausible.
+
 ### Looking at it
 
 Drag to orbit the camera — the star, the terminator and the ice caps stay where they belong and you
@@ -771,7 +797,86 @@ what made that possible — Earth sits at 0.011 bar of vapour and the runaway pe
 coefficient alone could only trade one against the other. The refit is better on both counts than
 what it replaced: the Simpson–Nakajima limit now lands at **282 W/m², the literature value exactly**,
 where before it was 287. The Archean preset needs 0.08 bar of CO₂ rather than 0.02, which is what
-the literature asks for once methane is no longer doing five times its share.
+the literature asks for once methane is no longer doing five times its share. (It has since gone to
+0.10 — see below.)
+
+That was the longwave. It was still only half the gas.
+
+#### The ceiling, which had been missing entirely
+
+Methane absorbs **sunlight** too — the near-infrared bands at 1.7, 2.3 and 3.3 µm — and deposits it
+high in the atmosphere, where it radiates back out instead of reaching the ground. That is the same
+anti-greenhouse geometry as the haze, from the bare gas, and it is what puts a **ceiling on the
+methane greenhouse**:
+
+> "the shortwave absorption becomes significant for pCH₄ > 10 Pa, with the total (longwave plus
+> shortwave) methane radiative forcing … having a maximum of approximately 8.5 W/m², compared to
+> 9 W/m² in Byrne and Goldblatt (2014)" — Eager-Nash et al. 2023
+
+Past that peak more methane makes a planet **colder**. Eager-Nash put the maximum warming at
+3.5–7 K, between pCH₄ of 30 and 300 Pa, and the fall past it at up to 8 K by 3500 Pa; below
+pCO₂ = 1000 Pa some of their runs end up cooler than with no methane at all.
+
+None of it was here. Methane was longwave-only, so its forcing simply grew:
+
+| pCH₄ | model, before | model, now | literature |
+|---|---|---|---|
+| 10 Pa | 7.2 W/m² | **6.6** | rising |
+| 60 Pa | 11.5 | **8.5** | peak ~8.5–9 |
+| 300 Pa | 15.4 | **4.9** | past the peak, falling |
+| 3500 Pa | 81.1 | **5.7** | well past it |
+| 0.1 bar | 177.9 | — | ceiling is nine |
+
+**178 W/m² against a measured maximum of nine.** Two things were wrong. The shortwave was absent,
+and the Titan-fitted collision-induced term — a far-infrared continuum, beyond about 16 µm, which
+is where a 94 K surface radiates and a 288 K one barely does — was being applied in front of the
+whole Planck function on warm wet worlds. On any planet with water vapour that region is already
+closed by the H₂O rotation band, which the code comment had claimed the quadratic in pCH₄ was
+standing in for. It was not: fifteen millibars of methane over a temperate ocean is a perfectly
+reachable state, and there it was worth a quarter of an optical depth. It is now masked by the
+vapour column explicitly, so Titan (10⁻¹⁴ bar of vapour) and cold dry worlds keep it and Earth-like
+ones do not.
+
+Modern Earth's 1.8 ppm loses **12 mW/m²** of sunlight to this, so nothing in the present-day
+calibration moved.
+
+#### What it was breaking
+
+Three times Earth's volcanism puts out more reductant than an Earth-like biosphere can outrun. The
+air goes anoxic, and methane's sink — oxygen — goes with it. With no ceiling on the greenhouse, the
+world then flashed into a **seven-hundred-degree wet runaway** and stayed there. The trace gives it
+away: CO₂ was *falling* the whole time the temperature exploded.
+
+It had been found before, pinned as a self-test, and diagnosed as a carbon-cycle problem needing the
+atmospheric window this scheme does not have. That diagnosis was wrong; it was never the carbon
+cycle. With the shortwave in, the same ladder is habitable end to end:
+
+| outgassing | 1× | 2× | 2.6× | 2.8× | 3.5× | 5× | 8× |
+|---|---|---|---|---|---|---|---|
+| before | 15 °C | 19 | 20 | **521** | — | — | — |
+| now | 15 °C | 19 | 20 | 13 | 16 | 20 | 26 |
+
+The transition at 2.7× is still there and is still real — the air genuinely goes anoxic between 2.6×
+and 2.8× — but it is now a **seven-kelvin cooling**, which is the direction the literature gives,
+rather than a five-hundred-degree cliff.
+
+#### And an abundance that had no equilibrium
+
+Separately, the anoxic methane source was 2.2×10⁻³ kg/m²/yr against a photolytic ceiling of
+1.6×10⁻³. Below **1.36 S⊕** the source beat every sink the planet had, so methane did not settle
+anywhere — it accumulated for ever. Kharecha et al. 2005 put Archean biogenic fluxes at a third to
+two and a half times modern; the model's anoxic boost was 2.7×, just outside that, and is now 1.5×,
+which leaves an equilibrium anywhere above 0.76 S⊕.
+
+The haze made it worse. Its shield divided the photon ceiling *as well as* multiplying the thin
+lifetime, so haze cut methane's own sink, which grew more methane, which grew more haze, with
+nothing anywhere to bring it back — a world at 3× volcanism climbed past **two bar** of methane with
+80% of its sunlight stopped overhead and was still climbing at 60 Myr. The shield belongs on the
+lifetime and not on the ceiling: haze does not reduce how much methane a planet loses, because the
+haze **is made of the methane**. The photons it intercepts have already broken methane up higher in
+the column, and the carbon leaves as tholin instead of as ethane. Titan is the anchor for that
+ceiling precisely because its haze production is the observable, so dividing by the shield counted
+the same haze twice.
 
 ### Organic haze and the anti-greenhouse
 
@@ -785,10 +890,17 @@ instead of reaching the ground: it cools the surface without trapping anything i
 the calibration point and the only world with a measured value — the model lands at **93.9 K against
 an observed 94 K**, having been 105.8 K with no haze at all.
 
-It also reproduces the Archean thermostat without being told to. Raising methane warms the planet
-until the haze it creates starts shading the ground, after which **more methane cools it**: 49.7 °C
-at 6 mbar CH₄, 36.4 °C at 10 mbar. That negative feedback is why the Archean could not run away on
-methane alone.
+It also reproduces the Archean thermostat without being told to — but it is not the only thing doing
+it, and for a long time it got all the credit. The turn happens **twice**, for two different reasons.
+
+The first is the gas on its own: methane's near-infrared bands shade the ground with no smog involved
+at all, and that peak sits at **60 Pa**, inside Eager-Nash's 30–300 Pa. By 300 Pa the world is 5.9 K
+below its peak with 5% of the sunlight taken by methane and **none by haze**. Only well past that,
+once CH₄/CO₂ clears 0.1, does the tholin haze switch on — and it is a much bigger hammer: by 55 mbar
+it stops 38% of the sunlight and the surface is at −29.9 °C.
+
+The self-test used to sweep 8–55 mbar, which is entirely past *both* turns, and so it only ever saw
+the haze.
 
 ### What the atmosphere looks like
 
@@ -840,6 +952,70 @@ climate sensitivity of 5–7 K. Sea ice seals the ocean off and shuts down evapo
 needs snowfall to exist at all. In a hard snowball the water cycle collapses, so the continents end
 up frosted but largely unglaciated — as on the real Snowball Earth, and in the Antarctic Dry Valleys
 today — which makes such a planet darker, and easier to escape, than one buried in ice.
+
+### What moves the habitable zone, and what does not
+
+The edges are not properties of the star alone. Measured on this model, holding CO₂ fixed and asking
+where the world stops keeping liquid water:
+
+**Inner edge** (runaway), in S⊕:
+
+| | S⊕ | literature |
+|---|---|---|
+| Earth, 24 h day, 1 ocean | 1.25 | ~1.2 (Wolf & Toon 2015) |
+| slow rotator, 2000 h | 1.28 | up to ~2 (Yang, Cowan & Abbot 2014) |
+| tidally locked | 1.23 | as above |
+| 6 oceans, no land | 1.17 | wetter is worse |
+| 0.1 ocean, land planet | **1.50** | ~1.5 (Abbot, Cowan & Ciesla 2012) |
+| 0.02 ocean, desert | 1.48 | as low as 0.38 AU in the extreme (Zsom et al. 2013) |
+
+**Outer edge** (global glaciation), in S⊕:
+
+| obliquity | 0° | 23.5° | 70° |
+|---|---|---|---|
+| glaciates below | 0.90 | 0.95 | **0.78** |
+
+So: **water inventory moves the inner edge properly** — a land planet holds out to 1.50 S⊕ against
+Earth's 1.25, and the literature's ratio is 1.52/1.25. This is driven by the water a world actually
+has, not by how much basin it has: `landFraction` is basin geometry and the coverage is worked out
+from the inventory, which is why draining a world uncovers its sea floor. Abbot, Cowan & Ciesla 2012
+found weathering and the habitable zone largely **insensitive to land fraction**, which is the same
+statement from the other side.
+
+**High obliquity resists glaciation**, 0.95 → 0.78 S⊕ at 70°, matching Armstrong et al. 2014 and
+Colose et al. 2019. The 0°-versus-23.5° pair is the other way round (0.90 against 0.95), and that is
+not a bug: at zero obliquity the poles are dark but the *equator* is brighter, and global glaciation
+needs the ice line to reach the equator.
+
+**Rotation rate barely moves anything**, and that is a real weakness. Yang, Cowan & Abbot 2014 find
+the inner edge for slow rotators at nearly twice the flux, because strong substellar convection
+builds a thick cloud deck. This model gets the direction (1.25 → 1.28) and about a twentieth of the
+magnitude. A one-dimensional zonal scheme cannot grow that cloud deck; it approximates it through a
+slowness term in the albedo.
+
+There is no single "1.2 S⊕" here to hold to — 1.2 is Earth's number, for Earth's water, Earth's
+rotation and Earth's obliquity.
+
+### Volcanism is not industry
+
+Worth stating because the difference is easy to lose. The fossil-carbon control is a **pulse** —
+forty times the volcanic flux, out of a finite reserve, over four centuries, of which 44% stays
+airborne because the ocean cannot turn over that fast. Volcanism is a **flux**, slow enough that the
+whole ocean stays in step, so it goes through the ocean-and-crust buffer (κ = 50) and the silicate
+thermostat has time to answer it.
+
+That thermostat does answer. Raising outgassing from 1× to 8× moves equilibrium CO₂ by 93× and the
+surface by **11 K**, not by hundreds — because weathering is kinetically limited here, going as
+C^0.3 · exp(ΔT/13.7), so it rises to meet whatever the volcanoes produce. That is Foley 2015's
+result: kinetically-limited weathering keeps a planet habitable across a wide range of degassing
+rates, and it is only in the **supply-limited** regime — too little exposed land, too much carbon —
+that the stabilising feedback fails.
+
+Which is why weathering is deliberately *not* scaled by volcanic activity here. On a kinetically
+limited planet the weathering rate is set by temperature and CO₂, not by how fast fresh rock
+arrives; scaling the sink with the source would hold equilibrium CO₂ exactly where it was and make
+the coupling a no-op. Fresh-basalt weatherability matters at the supply-limited end, which this
+model does not enter.
 
 ## Known deviations from the literature
 
@@ -1082,7 +1258,20 @@ revision) · Goldblatt et al. 2013, Wolf & Toon 2014/2015 (whether CO₂ alone c
 Barnes et al. 2013 (tidal Venuses, the tidal greenhouse) · Barr, Dobos & Kiss 2018 (TRAPPIST-1
 interiors, tidal heat fluxes and runaway thresholds) · Swain et al. 2021 (GJ 1132 b's atmosphere,
 tidal dissipation and ultrareduced outgassing) · Davies & Davies 2010 (Earth's surface heat flux,
-47 ± 2 TW) · Hirschmann 2018, Marty et al. 2020, Sun & Dasgupta 2023 (bulk silicate Earth carbon).
+47 ± 2 TW) · Hirschmann 2018, Marty et al. 2020, Sun & Dasgupta 2023 (bulk silicate Earth carbon) ·
+Byrne & Goldblatt 2015, *Diminished greenhouse warming from Archean methane due to solar absorption
+lines*, Clim. Past 11:559, and Eager-Nash et al. 2023, JGR Atmospheres 2022JD037544 (methane's
+shortwave absorption, the 8.5 W/m² ceiling on its forcing, and the cooling past it) · Kharecha,
+Kasting & Siefert 2005 (an ecosystem model of the Archean methane flux, and the 100–35 000 ppmv it
+can sustain) · Catling, Zahnle & McKay 2001 (biogenic methane, hydrogen escape and the irreversible
+oxidation of the early Earth) · Haqq-Misra et al. 2016, *Limit cycles can reduce the width of the
+habitable zone* (limit cycling at outgassing rates **below** modern Earth's) · Foley 2015 (plate
+tectonic–climate coupling; kinetically- versus supply-limited weathering) · Abbot, Cowan & Ciesla
+2012 (weathering and the habitable zone are largely insensitive to land fraction) · Zsom et al. 2013
+(the minimum inner edge for hot desert worlds) · Armstrong et al. 2014, Colose et al. 2019 (high
+obliquity resists glaciation) · Turbet et al. 2018 (TRAPPIST-1 climates and volatile fates) · Agol
+et al. 2021 (TRAPPIST-1 masses, radii and insolations) · Bonfils et al. 2018 (GJ 1132 b) · Greene et
+al. 2023 (TRAPPIST-1b's 503 K dayside, and no atmosphere).
 
 ## Licence
 

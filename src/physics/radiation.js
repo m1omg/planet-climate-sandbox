@@ -64,15 +64,66 @@ const A_CH4 = 0.0293, P_CH4 = 6.9e-6;
 // under a bar and a half of cold nitrogen.
 //
 // Standing in for the CH4-N2 and N2-N2 continuum together, and fitted to Titan.
-// A semi-grey scheme cannot represent the reason the same continuum is
-// irrelevant on Earth -- water vapour has already closed the window it absorbs
-// in -- so the quadratic dependence carries that job instead, keeping it out of
-// the way at any methane fraction a wet planet would have.
-const CIA_CH4 = 867.0;
+//
+// The continuum lives in the far infrared, beyond about 16 um, which is where a
+// 94 K surface does nearly all of its radiating and where a 288 K one does very
+// little -- and on any wet planet that region is closed by the water vapour
+// rotation band before methane gets a look in. The quadratic in pCH4 used to
+// carry that job on its own, on the argument that no wet world holds enough
+// methane for it to matter. It does not hold: fifteen millibars of methane over
+// a temperate ocean is a perfectly reachable state, and there the Titan-fitted
+// continuum was worth a quarter of an optical depth in front of the *whole*
+// Planck function. That is what turned an anoxic world into a runaway.
+//
+// So the masking is now written down as what it actually is. Water vapour
+// closes the far infrared at a few kilograms a square metre -- millimetres of
+// precipitable water, a hundredth of what Earth carries -- and Titan, at 1e-14
+// bar of vapour, keeps its continuum untouched. A cold dry world keeps it too,
+// which is right: that is exactly where the far infrared is both open and where
+// the surface is radiating.
+const CIA_CH4 = 867.0, CIA_H2O_MASK = 1.0e-3;   // bar of vapour
 
-export function tauCH4(pCH4, pTot) {
+export function tauCH4(pCH4, pTot, pH2O = 0) {
   if (!(pCH4 > 0)) return 0;
-  return A_CH4 * Math.log(1 + pCH4 / P_CH4) + CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0);
+  const open = pH2O > 0 ? Math.exp(-pH2O / CIA_H2O_MASK) : 1;
+  return A_CH4 * Math.log(1 + pCH4 / P_CH4)
+       + CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0) * open;
+}
+
+// ---------------------------------------------------------------------------
+// Methane absorbs sunlight as well, and that is what caps its greenhouse.
+//
+// The near-infrared bands at 1.7, 2.3 and 3.3 um take solar energy and deposit
+// it high in the atmosphere, where it is radiated back out rather than reaching
+// the ground -- the same anti-greenhouse geometry as the haze, from the gas
+// itself. Below about 10 Pa it is nothing. Above that it grows until it is
+// comparable with the longwave warming, and the *total* forcing turns over:
+//
+//   "the shortwave absorption becomes significant for pCH4 > 10 Pa, with the
+//    total (longwave plus shortwave) methane radiative forcing ... having a
+//    maximum of approximately 8.5 W/m^2, compared to 9 W/m^2 in Byrne and
+//    Goldblatt (2014)"        -- Eager-Nash et al. 2023, JGR 2022JD037544
+//
+// Past the peak more methane makes a planet *colder*, and at pCO2 below 1000 Pa
+// a hazy-enough Archean can end up cooler than it would be with no methane at
+// all. Eager-Nash put the peak warming at 3.5-7 K, between pCH4 of 30 and 300
+// Pa, and the fall past it at up to 8 K by 3500 Pa. None of that existed here:
+// methane was longwave-only, so its forcing simply grew, reaching 178 W/m^2 at
+// 0.1 bar where the literature ceiling is nine. That is a twentyfold error and
+// it is what let a world that lost its oxygen flash into a wet runaway.
+//
+// Weak-line absorption is linear in the column and saturates once the bands
+// fill, so a plain exponential approach to a ceiling is the right shape. The
+// ceiling is the share of the solar spectrum those bands can reach at all.
+// SW_MAX and P_SW are fitted below to put the peak of the *net* forcing on
+// Eager-Nash's 8.5 W/m^2 at their pCO2 = 1000 Pa; at modern Earth's 1.8 ppm the
+// term is worth 4 mW/m^2, so nothing in the present-day calibration moves.
+const SW_CH4_MAX = 0.081, P_SW_CH4 = 2.9e-3;   // bar
+
+// The share of incoming sunlight methane absorbs before it reaches the ground.
+export function ch4Shortwave(pCH4) {
+  if (!(pCH4 > 0)) return 0;
+  return SW_CH4_MAX * (1 - Math.exp(-pCH4 / P_SW_CH4));
 }
 const N_BROADEN = 0.30;
 
@@ -86,7 +137,7 @@ export function opticalDepth(pCO2, pH2O, pCH4, pTot) {
   const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
   let t = tauCO2(pCO2);
   if (pH2O > 0) t += K_H2O * Math.pow(pH2O, M_H2O);
-  if (pCH4 > 0) t += tauCH4(pCH4, pTot);
+  if (pCH4 > 0) t += tauCH4(pCH4, pTot, pH2O);
   return t * br;
 }
 

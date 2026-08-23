@@ -3,7 +3,7 @@
 import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify } from './physics/classify.js';
-import { runawayLimit, olr, hazeOpacity, hazeShortwave } from './physics/radiation.js';
+import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2 } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
@@ -238,7 +238,21 @@ export function run() {
       // night side and deepens the trap: it now holds at 0, 0.03, 0.092, 0.13
       // and 0.18 W/m2 -- still with one interleaved miss at 0.06, because the
       // interleaving is a property of the system and not of the recipe.
-      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.05,
+      //
+      // Re-pinned again, from 0.05 bar to 0.03, when methane's shortwave
+      // absorption went in. That term is worth 7e-5 of the sunlight on this
+      // world -- two hundredths of a watt -- and it was enough to move it from
+      // trapped to twilight, which is the point of the note above and worth
+      // restating: do not read a flip here as a physics regression without
+      // measuring the size of the perturbation first.
+      //
+      // Sweeping water and pressure against internal heat again found no point
+      // that is trapped at 0, 0.092 and 0.2 W/m^2 together -- 0.025/0.03 gives
+      // trapped, trapped, twilight and 0.03/0.03 gives twilight, trapped,
+      // twilight. So this is still one fixed point in the trapped basin and not
+      // a robust region, exactly as before; the interleaving has not gone away
+      // and is not expected to.
+      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.03,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
       // to the night side to stop the trap.
@@ -401,29 +415,56 @@ export function run() {
       `CH₄/CO₂ 0.05 → clear, 0.5 → τ ${hazeOpacity(1e-2, 0.02, 0, 1).toFixed(2)}`);
     check('Modern Earth is far from hazy', hazeOpacity(1.9e-6, 427e-6, 0.21, 1) === 0);
 
-    // The Archean thermostat: methane warms until the haze it makes shades the
-    // ground, and then more methane *cools* the planet.
+    // The Archean thermostat, which turns over TWICE and for two different
+    // reasons. It used to be attributed entirely to the haze; most of it is not.
+    //
+    // Methane's own near-infrared bands take sunlight and put it high in the
+    // atmosphere, so past a certain amount more methane cools the ground with
+    // no smog involved at all. Eager-Nash et al. 2023 put that first peak
+    // between 30 and 300 Pa and the model lands it at 60. Only well past that,
+    // once CH4/CO2 clears about 0.1, does the tholin haze switch on and take
+    // the surface down hard. So the sweep has to span three decades, not the
+    // half-decade it used to: at the old 8-55 mbar range every point was
+    // already past both turns and on the floor.
     const arch = (ch4) => {
       // biosphere off: with no volcanic reductants to outrun, even a small one
       // oxygenates the air and kills the methane, which is correct but is not
       // what this test is about.
       const x = new Simulation({ ...PRESETS.earlyEarth.params, ch4Bar: ch4, outgassing: 0, biosphere: 0 });
-      const c = x.world.co2;
+      // Methane is pinned as well as CO2 now. Without it this measures how much
+      // survives three hundred thousand years, not what it is worth while it is
+      // there -- and since the photolytic ceiling makes the lifetime depend on
+      // the column, the low end of the sweep decayed to nothing and returned
+      // the same bare-CO2 temperature for every point.
+      const c = x.world.co2, m = x.world.ch4;
       let n = 0;
-      while (x.world.time < 3e5 && n++ < 3e4) { x.stepOnce(Math.min(maxStep(x.world), 2e3)); x.world.co2 = c; }
-      return x.world.diag.Tmean;
+      while (x.world.time < 3e5 && n++ < 3e4) {
+        x.stepOnce(Math.min(maxStep(x.world), 2e3)); x.world.co2 = c; x.world.ch4 = m;
+      }
+      return x.world.diag;
     };
-    // Sweep it rather than testing two fixed amounts: where the turn falls
-    // depends on the CO2 the world has, since the haze switches on at a *ratio*.
-    const ch4s = [8e-3, 1.4e-2, 2e-2, 3e-2, 4e-2, 5.5e-2];
-    const Ts = ch4s.map(arch);
+    const ch4s = [1e-5, 3e-5, 1e-4, 3e-4, 6e-4, 1e-3, 3e-3, 8e-3, 2e-2, 5.5e-2];
+    const ds = ch4s.map(arch);
+    const Ts = ds.map((d) => d.Tmean);
     let peak = 0;
     for (let i = 1; i < Ts.length; i++) if (Ts[i] > Ts[peak]) peak = i;
-    const fell = Ts[Ts.length - 1] < Ts[peak] - 0.5;
-    check('Archean methane warms until its own haze shades the ground, then cools',
-      peak < Ts.length - 1 && fell,
-      `warmest at ${(ch4s[peak] * 1e3).toFixed(0)} mbar CH₄ (${(Ts[peak] - 273.15).toFixed(1)} °C), ` +
-      `down to ${(Ts[Ts.length - 1] - 273.15).toFixed(1)} °C by ${(ch4s[ch4s.length - 1] * 1e3).toFixed(0)} mbar`);
+    check('Archean methane warms only up to a point, and that point is where the literature puts it',
+      ch4s[peak] * 1e5 >= 30 && ch4s[peak] * 1e5 <= 300,
+      `warmest at ${(ch4s[peak] * 1e5).toFixed(0)} Pa CH\u2084 (${(Ts[peak] - 273.15).toFixed(1)} \u00b0C); ` +
+      `Eager-Nash 2023 peak at 30-300 Pa`);
+    // The first turn is the gas on its own: still no haze at all where it falls.
+    const after = ds.findIndex((d, i) => i > peak && Ts[i] < Ts[peak] - 2);
+    check('\u2026and the first turn is methane shading the ground itself, with no haze yet',
+      after > 0 && ds[after].hazeSW > 0.999 && ds[after].ch4SW < 0.99,
+      `${(ch4s[after] * 1e5).toFixed(0)} Pa is ${(Ts[peak] - Ts[after]).toFixed(1)} K below the peak with ` +
+      `${((1 - ds[after].ch4SW) * 100).toFixed(1)}% of the sunlight taken by methane and none by haze`);
+    // And the second is the smog, which is a much bigger hammer.
+    const last = ds.length - 1;
+    check('\u2026and the second is the haze, which takes the planet down much harder',
+      ds[last].hazeSW < 0.8 && Ts[last] < Ts[after] - 15,
+      `by ${(ch4s[last] * 1e3).toFixed(0)} mbar the haze stops ` +
+      `${((1 - ds[last].hazeSW) * 100).toFixed(0)}% of the sunlight and the surface is ` +
+      `${(Ts[last] - 273.15).toFixed(1)} \u00b0C`);
   }
 
   // ---- 3j. what the atmosphere actually looks like --------------------------
@@ -616,46 +657,46 @@ export function run() {
       `${(plain.diag.pCO2 * 1e6).toFixed(0)} ppm → ${(volcanic.diag.pCO2 * 1e6).toFixed(0)} ppm ` +
       `(${ratio.toFixed(1)}×) at 1.95× the melt`);
 
-    // The carbon cliff, pinned so that it cannot move without being noticed.
-    // PRE-EXISTING and not caused by internal heat: it reproduces on the
-    // untouched code from before any of this.
+    // The carbon cliff, which turned out not to be a carbon cliff.
     //
-    // An Earth-like world at 2.8x outgassing sits at 3400 ppm and 20 C for
-    // fourteen million years while CO2 creeps up 50 ppm/Myr. Then the last of
-    // the ice goes, the albedo feedback releases about 7 K, and the world
-    // staggers -- partially re-glaciating to 61% ice at -17 C, recovering,
-    // overshooting to 1147 C -- before settling into a 521 C steam greenhouse
-    // it cannot leave, because kappa (the ocean-and-crust buffer) has collapsed
-    // from 50 to 1 and put fifty times the airborne carbon into the air.
+    // It was real and it is in the log: an Earth-like world at 2.8x outgassing
+    // used to sit at 3400 ppm and 20 C for fourteen million years and then
+    // stagger into a 521 C steam greenhouse it could not leave, by way of a
+    // 1147 C overshoot. It was diagnosed here as a thermostat problem needing
+    // the atmospheric window this scheme does not have, and it was reported and
+    // left alone on that basis.
     //
-    // Two things about it are worth stating carefully, because the first
-    // version of this comment got them wrong:
+    // That diagnosis was wrong, and the giveaway was in the trace all along:
+    // CO2 was *falling* while the temperature exploded. What actually happened
+    // is that three times Earth's volcanism puts out more reductant than an
+    // Earth-like biosphere can outrun, the air goes anoxic, and the methane
+    // sink -- which is oxygen -- disappears with it. Methane then had no
+    // ceiling at all, because it was longwave-only: 178 W/m^2 of forcing at
+    // 0.1 bar where the literature maximum is nine. Give methane the shortwave
+    // absorption it really has and the runaway is gone.
     //
-    // The ENDPOINT is step-independent -- 530.7 C at a 2-Myr cap, 532.5 C at a
-    // 5000-year one -- so the hot attractor is real and not an integrator
-    // artifact. The PATH is not: different step sequences swing through
-    // different intermediate states, and a 1147 C overshoot on the way to 521 C
-    // is not physics. Endpoint robustness is not evidence the transition is
-    // well posed, and the earlier claim that this was "a genuine bifurcation,
-    // not an integrator artifact" rested on the endpoint alone.
-    //
-    // And the threshold is not merely arguable, it is on the wrong side of the
-    // literature. It tips at ~21000 ppm, about 48x present. Goldblatt et al.
-    // 2013 put a *conceivable* CO2-driven runaway at ~100x present, and Wolf &
-    // Toon 2015 have Earth stable against runaway to 1.21x solar with a moist
-    // greenhouse arriving first -- a stable state that loses its water over
-    // 10^8 years, not a hard jump to 521 C. This model has no moist-greenhouse
-    // landing at all here; it goes straight to steam.
-    //
-    // Still a thermostat problem rather than a heat one, and fixing it means
-    // the atmospheric window this scheme does not have. Reported, not fixed.
-    const below = settle({ ...EARTH, outgassing: 2.6 }, 3e7).world;
-    const above = settle({ ...EARTH, outgassing: 2.8 }, 3e7).world;
-    check('The carbon cycle has a cliff at about 2.7× Earth\'s outgassing (known, unfixed)',
-      below.diag.Tmean < 300 && above.diag.Tmean > 700,
-      `2.6× → ${(below.diag.Tmean - 273.15).toFixed(1)} °C, ` +
-      `2.8× → ${(above.diag.Tmean - 273.15).toFixed(0)} °C; melt boost reaches it at ` +
-      `${(0.092 * 2.7 ** 2).toFixed(2)} W/m² of internal heat`);
+    // What is left in its place is a real transition and a modest one. The air
+    // still goes anoxic between 2.6x and 2.8x, methane still climbs to a few
+    // thousand ppm, and the world gets *colder* by about seven kelvin, because
+    // past a hundred pascals more methane cools a planet rather than warming it
+    // (Byrne & Goldblatt 2015; Eager-Nash et al. 2023). That is the direction
+    // the literature gives, and it is a step rather than a cliff.
+    const ladder = [1, 2, 2.6, 2.8, 3.5, 5, 8].map(
+      (og) => ({ og, w: settle({ ...EARTH, outgassing: og }, 3e7).world }));
+    const hottest = Math.max(...ladder.map((r) => r.w.diag.Tmean));
+    check('No amount of volcanism up to 8× Earth\u2019s runs the planet away',
+      hottest < 373,
+      ladder.map((r) => `${r.og}× ${(r.w.diag.Tmean - 273.15).toFixed(0)}°`).join('  '));
+
+    const below = ladder.find((r) => r.og === 2.6).w;
+    const above = ladder.find((r) => r.og === 2.8).w;
+    check('\u2026and losing the oxygen cools it by a few kelvin, not by hundreds',
+      below.diag.pO2 > 1e-4 && above.diag.pO2 < 1e-6
+        && below.diag.Tmean - above.diag.Tmean > 2
+        && below.diag.Tmean - above.diag.Tmean < 25,
+      `2.6× → ${(below.diag.Tmean - 273.15).toFixed(1)} °C oxic, ` +
+      `2.8× → ${(above.diag.Tmean - 273.15).toFixed(1)} °C anoxic on ` +
+      `${(above.diag.pCH4 * 1e6).toFixed(0)} ppm CH\u2084`);
 
     // The mantle is not a bottomless tap. A boosted world drains it.
     const drained = settle({ ...EARTH, internalHeat: 40, water: 0, landFraction: 1 }, 2e9).world;
@@ -706,6 +747,51 @@ export function run() {
     check('The globe draws the land fraction the model asked for',
       worst < 0.04, `worst error ${(worst * 100).toFixed(1)} points, at ${(at * 100).toFixed(0)}% land ` +
       `(the old straight-line sea level was out by 15 points at 30%)`);
+  }
+
+  // ---- 3k2. the methane greenhouse has a ceiling ---------------------------
+  // Methane was longwave-only, which gave it a forcing that simply grew: 178
+  // W/m^2 at 0.1 bar. The measured maximum is nine. Byrne & Goldblatt 2014 get
+  // 9 W/m^2 and Eager-Nash et al. 2023 get 8.5, because the near-infrared bands
+  // absorb sunlight aloft and the total turns over once that catches up with
+  // the longwave -- "the shortwave absorption becomes significant for
+  // pCH4 > 10 Pa". Past the peak, more methane cools.
+  //
+  // This is the check that would have caught the seven-hundred-degree flash an
+  // anoxic world used to fall into, and it is cheap: no simulation, just the
+  // forcing curve against the number in the paper.
+  {
+    const T = 288.15, pCO2 = 0.01, pH2O = 0.011, pN2 = 1.0;   // their pCO2 = 1000 Pa
+    const ABS = 200;                                          // Archean absorbed sunlight
+    const base = olr(T, pCO2, pH2O, 0, pN2 + pCO2 + pH2O);
+    const Pas = [1, 3, 10, 30, 60, 100, 200, 300, 600, 1000, 2000, 3500];
+    const F = Pas.map((Pa) => base - olr(T, pCO2, pH2O, Pa / 1e5, pN2 + pCO2 + pH2O + Pa / 1e5)
+                            - ABS * ch4Shortwave(Pa / 1e5));
+    const max = Math.max(...F), at = Pas[F.indexOf(max)];
+    check('Methane\u2019s total forcing peaks at the measured 8.5-9 W/m\u00b2 and turns over',
+      max <= 9.5 && at >= 30 && at <= 300 && F[F.length - 1] < max - 0.5,
+      `peak ${max.toFixed(1)} W/m\u00b2 at ${at} Pa, down to ${F[F.length - 1].toFixed(1)} at 3500 Pa`);
+    check('\u2026and modern Earth\u2019s 1.8 ppm is untouched by it',
+      240 * ch4Shortwave(1.8e-6) < 0.05,
+      `${(240 * ch4Shortwave(1.8e-6) * 1e3).toFixed(0)} mW/m\u00b2 of sunlight taken`);
+
+    // The other half: an anoxic world with a full biosphere must have a methane
+    // steady state at all. The anoxic source used to be 2.2e-3 kg/m^2/yr
+    // against a photolytic ceiling of 1.6e-3, so below 1.36 S(+) the source
+    // beat every sink the planet had and the column simply grew without bound.
+    // Kharecha et al. 2005 put Archean biogenic fluxes at a third to two and a
+    // half times modern, which is what it is held inside now.
+    const source = 8.07e-4 * 1.5;            // CH4_BIO * CH4_ANOX_BOOST
+    let col = 1e-3, bounded = true;
+    for (let k = 0; k < 4000; k++) {
+      col += (source - col / methaneLifetime(0, 0, 1, col, 0.8, 0)) * 1e3;
+      if (!(col < 1e6)) { bounded = false; break; }
+    }
+    const pbar = col * 9.81 / 1e5;
+    check('An anoxic biosphere reaches a methane steady state instead of growing without bound',
+      bounded && pbar < 0.05,
+      bounded ? `settles at ${(pbar * 1e6).toFixed(0)} ppm-bar at 0.8 S\u2295 (Kharecha 2005: 100-35 000 ppmv)`
+              : 'unbounded');
   }
 
   // ---- 3l. methane is not a stable gas -------------------------------------

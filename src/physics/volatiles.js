@@ -64,7 +64,22 @@ const CH4_GEO = 7.5e-6;         // kg/m^2/yr at Earth's volcanism, abiotic only
 // How much more of a biosphere's carbon goes out as methane when there is no
 // oxygen to route it anywhere else. Fitted to leave the Archean at the few
 // hundred to one thousand ppm the literature asks for.
-const CH4_ANOX_BOOST = 2.7;
+//
+// It has to stay inside the range that has actually been measured, and 2.7 was
+// outside it. Kharecha et al. 2005 put Archean biogenic methane fluxes at a
+// third to two and a half times modern, and modern here is CH4_BIO -- which
+// lands pre-industrial Earth at 0.8 ppm, the right number, since the 1.9 ppm in
+// today's air is mostly ours.
+//
+// Being outside that range was not a cosmetic overshoot. At 2.7 the anoxic
+// source is 2.2e-3 kg/m^2/yr against a photolytic ceiling of 1.6e-3, so on any
+// world receiving less than 1.36 S(+) the source exceeded every sink the planet
+// had and methane had no steady state at all -- it simply accumulated, for
+// ever. A full biosphere that lost its oxygen to volcanic reductants would
+// climb past a bar of methane and go on climbing. At 1.5 the source is
+// 1.2e-3 and there is an equilibrium anywhere above 0.76 S(+), which is the
+// whole habitable zone.
+const CH4_ANOX_BOOST = 1.5;
 // Net photolytic destruction at Earth's distance from the Sun, which is what
 // caps an anoxic methane atmosphere. See methaneLifetime.
 const CH4_PHOTO = 1.6e-3;       // kg/m^2/yr at 1 S-earth
@@ -419,12 +434,25 @@ export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1, col = 0, insol = 1
   // already taken out. Anchored on Titan's measured haze and ethane production,
   // which is the observable that pins the number.
   if (col > 0 && insol > 0) {
-    // The haze shield divides the ceiling as well as multiplying the thin
-    // lifetime, so exactly one factor of it ends up in each of the two terms.
-    // That is the self-shielding the Archean literature describes and it is what
-    // gives the model its haze thermostat: methane warms the world until the
-    // smog it makes starts shading the ground, after which more of it cools.
-    const ceiling = CH4_PHOTO * insol / shield;      // kg/m^2/yr
+    // The haze shield belongs on the thin lifetime and NOT on this ceiling, and
+    // that is not a bookkeeping preference -- putting it on both is a feedback
+    // that cannot terminate. Haze lengthens the life of any one molecule by
+    // taking the ultraviolet before it gets down there, which is the
+    // self-shielding the Archean literature describes, and that is the `shield`
+    // factor on tauUv above. But it does not reduce how much methane the planet
+    // loses in total, because the haze is *made of* the methane: the photons it
+    // intercepts have already broken methane up, higher in the column, and the
+    // carbon leaves as tholin instead of leaving as ethane. Titan is the anchor
+    // for CH4_PHOTO precisely because its haze production is the observable, so
+    // dividing by the shield here counted the same haze twice.
+    //
+    // What it cost: an anoxic world grew haze, the haze cut its own methane
+    // sink, the smaller sink grew more methane, and nothing anywhere brought it
+    // back. A world at three times Earth's volcanism climbed past two bar of
+    // methane with eighty per cent of its sunlight stopped overhead, and was
+    // still climbing at sixty million years. The ceiling is the photon supply,
+    // and the photon supply does not care where in the column it is spent.
+    const ceiling = CH4_PHOTO * insol;               // kg/m^2/yr
     // A soft saturation rather than a hard min(): the sink approaches the
     // ceiling instead of hitting it, so nothing goes discontinuous at the
     // crossover and a world just short of it is not a world about to break.
