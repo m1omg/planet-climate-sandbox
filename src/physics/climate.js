@@ -75,7 +75,27 @@ export function resetWorld(w, params) {
 }
 
 // How synchronised the world is: 0 = fast rotator, 1 = tidally locked.
+// Whether the world has a permanent day side and a permanent night side.
+//
+// This used to be inferred from the rotation period -- anything slower than a
+// few hundred days was treated as synchronous. Rotation period cannot tell you
+// that, and this model's own worlds prove it: the Locked Eyeball is synchronous
+// at 264 h while Venus turns far slower, once every 5832 h, and is not locked
+// at all. Every point on Venus sees the sun; its solar day is 117 Earth days.
+//
+// The cost of getting this wrong was invisible under a thick atmosphere, which
+// smears the contrast away, and brutal without one: a stripped Venus was handed
+// a hemisphere that is never illuminated, it fell to 82 K, and it swallowed
+// every molecule of CO2 the volcanoes produced from then on. Rotating, the same
+// world's coldest band sits at 332 K.
 export function lockFactor(p) {
+  return p.tidallyLocked ? 1 : 0;
+}
+
+// How sluggish the circulation is, which *is* a question about rotation rate:
+// slow rotators have wide Hadley cells, move heat freely and grow a thick cloud
+// deck, synchronous or not. Kept separate from the geometry above.
+export function slowRotation(p) {
   if (p.tidallyLocked) return 1;
   return smoothstep(240, 4000, p.rotationHours);
 }
@@ -235,7 +255,7 @@ export function update(w, dt) {
 
   const S = insolationProfile(p);
   const lam = lockFactor(p);
-  const slowness = clamp(smoothstep(24, 1500, p.rotationHours), 0, 1) * 0.5 + lam * 0.5;
+  const slowness = clamp(smoothstep(24, 1500, p.rotationHours), 0, 1) * 0.5 + slowRotation(p) * 0.5;
 
   const alb = new Float64Array(NBANDS), out = new Float64Array(NBANDS);
   const cloud = new Float64Array(NBANDS), pTotArr = new Float64Array(NBANDS);

@@ -50,7 +50,9 @@ export const SLIDERS = [
     fmt: (v) => v < 47.95 ? `${v.toFixed(1)} h` : `${(v / 24).toFixed(0)} d`,
     units: { h: 1, hr: 1, hrs: 1, hour: 1, hours: 1, d: 24, day: 24, days: 24, yr: 8766, year: 8766 },
     unitFor: (v) => (v < 47.95 ? 'h' : 'd'),
-    note: 'Slow rotators grow a thick reflective cloud deck and move heat much more freely.' },
+    // Rotation rate and synchronisation are different questions; the toggle
+    // below the sliders asks the second one.
+    note: 'Slow rotators grow a thick reflective cloud deck and move heat much more freely. Rotation alone does not make a world synchronous — Venus turns once every 243 days and still sees the sun everywhere. Use the tidal-lock switch for that.' },
   { g: 'star', key: 'obliquity', label: 'Axial tilt', min: 0, max: 90, step: 0.5,
     fmt: (v) => `${v.toFixed(1)}°`, units: { '°': 1, deg: 1, degrees: 1 } },
 

@@ -87,14 +87,37 @@ export function psatH2O(T) {
   return P_CRIT_H2O * Math.exp(s * T_CRIT_H2O / T);
 }
 
-// --- CO2 vapour pressure over dry ice (Pa) ----------------------------------
-// Below the 216.6 K triple point. Gives a 148 K frost point at 6 mbar: Mars.
+// --- CO2 saturation vapour pressure (Pa) ------------------------------------
+// Two branches, meeting at the triple point (216.58 K, 5.185 bar).
+//
+// Below it, over dry ice: 148 K at 6 mbar (Mars) and 194.7 K at one bar, the
+// two anchors worth having.
+//
+// Above it, over liquid, up to the critical point (304.13 K, 73.77 bar). This
+// branch was missing -- the function returned 10 kbar for anything warmer than
+// the triple point, which says a twenty-bar CO2 atmosphere cannot condense at
+// any temperature. It can: at 240 K it condenses down to 12.8 bar. A two-point
+// Clausius-Clapeyron fit through the triple and critical points reproduces the
+// measured curve to better than 1% across the whole range (12.8 vs 12.83 bar at
+// 240 K, 24.2 vs 24.19 at 260, 41.9 vs 41.60 at 280, 67.4 vs 67.10 at 300).
+//
+// Above the critical temperature there is no liquid to condense into, so
+// nothing comes out of the air however hard it is squeezed.
+const CO2_TRIPLE_T = 216.58, CO2_TRIPLE_P = 5.185e5;
+const CO2_CRIT_T = 304.13, CO2_CRIT_P = 73.77e5;
+const CO2_LIQ_B = Math.log(CO2_CRIT_P / CO2_TRIPLE_P) / (1 / CO2_TRIPLE_T - 1 / CO2_CRIT_T);
+const CO2_LIQ_A = Math.log(CO2_TRIPLE_P) + CO2_LIQ_B / CO2_TRIPLE_T;
+
 export function psatCO2(T) {
-  if (T >= 216.58) return 1e9; // liquid/gas, never condenses out in a game sense
+  if (T >= CO2_CRIT_T) return 1e9;              // supercritical: never condenses
+  if (T >= CO2_TRIPLE_T) return Math.exp(CO2_LIQ_A - CO2_LIQ_B / T);
   return 1.2264e12 * Math.exp(-3167.8 / T);
 }
+
+// The temperature at which CO2 starts coming out of the air at this pressure.
 export function frostPointCO2(pPa) {
   if (pPa <= 0) return 0;
-  const t = 3167.8 / Math.log(1.2264e12 / pPa);
-  return Math.min(t, 216.58);
+  if (pPa >= CO2_CRIT_P) return CO2_CRIT_T;     // no colder threshold to find
+  if (pPa >= CO2_TRIPLE_P) return CO2_LIQ_B / (CO2_LIQ_A - Math.log(pPa));
+  return 3167.8 / Math.log(1.2264e12 / pPa);
 }

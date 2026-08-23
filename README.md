@@ -47,6 +47,16 @@ A **zonal energy-balance model** over 18 equal-area latitude bands. For a fast r
 coordinate is `sin(latitude)`; for a tidally locked world it becomes `cos(angle from substellar
 point)`, so the same solver produces eyeball and lobster states.
 
+Which of the two applies is asked, not inferred. It used to be read off the rotation period —
+anything slower than a few hundred days was treated as synchronous — and a period cannot tell you
+that: the Locked Eyeball here is synchronous at 264 h while Venus turns once every 5832 h and is
+not locked at all, so every point on Venus sees the sun. Under a thick atmosphere the mistake is
+invisible, because the circulation erases the day–night contrast. Strip the air off and it decides
+the planet's fate: the world is handed a hemisphere that is never lit, it falls to 82 K, and it
+swallows every molecule of CO₂ its volcanoes produce from then on. Rotating, the same world's
+coldest band sits at 332 K. Rotation *rate* still matters for circulation — slow rotators have wide
+Hadley cells and move heat freely — which is a separate factor.
+
 Longwave radiation uses a semi-grey two-stream form, `OLR = σT⁴ / (1 + ¾τ)`, broadened by the
 background air as `p_total^0.3`. Water and methane contribute power-law optical depths; **CO₂ is
 logarithmic**:

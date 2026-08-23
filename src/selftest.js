@@ -4,8 +4,8 @@ import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave } from './physics/radiation.js';
-import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity } from './physics/constants.js';
-import { NBANDS, maxStep } from './physics/climate.js';
+import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2 } from './physics/constants.js';
+import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
@@ -471,6 +471,69 @@ export function run() {
     check('…and a dry world had no deck to thin in the first place',
       cloudLook(dry[0], dry[1]) < 0.02,
       `Mars drawn at ${(cloudLook(dry[0], dry[1]) * 100).toFixed(1)}%`);
+  }
+
+  // ---- 3j-3. a slow rotator is not a locked world ---------------------------
+  // Lock used to be inferred from the rotation period, which cannot tell you:
+  // this model's own Locked Eyeball is synchronous at 264 h while Venus turns
+  // once every 5832 h and is not locked at all. Under a thick atmosphere the
+  // mistake is invisible, because circulation erases the contrast. Strip the
+  // air off and it is fatal -- the world is handed a hemisphere that is never
+  // lit, which is a cold trap that eats the atmosphere for ever.
+  {
+    const venusRot = { ...PRESETS.venus.params };
+    check('Turning slowly does not make a world tidally locked',
+      lockFactor(venusRot) === 0 && lockFactor({ ...venusRot, tidallyLocked: true }) === 1,
+      `Venus at ${venusRot.rotationHours} h is not locked; the Eyeball at ` +
+      `${PRESETS.eyeball.params.rotationHours} h is, because it says so`);
+
+    check('…but it still moves heat like one',
+      slowRotation(venusRot) > 0.99,
+      `slow-rotation factor ${slowRotation(venusRot).toFixed(2)} at 243 days`);
+
+    const S = insolationProfile(venusRot);
+    check('…and every point on it sees the star',
+      Math.min(...S) > 0,
+      `dimmest band gets ${Math.min(...S).toFixed(0)} W/m², not zero`);
+    check('…while a genuinely locked world keeps its permanent night',
+      Math.min(...insolationProfile({ ...venusRot, tidallyLocked: true })) === 0);
+
+    // The case that started this: strip a slow rotator's atmosphere with hard
+    // XUV and it used to freeze every molecule the volcanoes made afterwards,
+    // for ever, at any outgassing rate.
+    const bare = { ...PRESETS.venus.params, mass: 0.81, insolation: 4, xuvFraction: 2941,
+                   landAlbedo: 0.15, water: 0, landFraction: 1, outgassing: 1.2 };
+    const w = settle(bare, 5e7).world;
+    check('…so a stripped slow rotator does not freeze its air onto a dark side it has not got',
+      (w.co2Frozen ?? 0) < 1e-6 && Math.min(...w.T) > 273,
+      `coldest band ${Math.min(...w.T).toFixed(0)} K, ` +
+      `${((w.co2Frozen ?? 0) * w.diag.g / 1e5).toExponential(1)} bar frozen out`);
+  }
+
+  // ---- 3j-4. CO2 condenses above its triple point too ------------------------
+  // psatCO2 returned 10 kbar for anything warmer than 216.58 K, which says a
+  // twenty-bar CO2 atmosphere cannot condense at any temperature. It can.
+  {
+    const lit = [[216.58, 5.185], [240, 12.83], [260, 24.19], [280, 41.60], [300, 67.10]];
+    let worst = 0, at = 0;
+    for (const [T, bar] of lit) {
+      const err = Math.abs(psatCO2(T) / 1e5 - bar) / bar;
+      if (err > worst) { worst = err; at = T; }
+    }
+    check('The liquid branch of the CO₂ vapour curve matches the measured one',
+      worst < 0.01, `worst ${(worst * 100).toFixed(1)}% at ${at} K`);
+
+    check('…so twenty bar of CO₂ has a condensation point well above the triple point',
+      frostPointCO2(20e5) > 250 && frostPointCO2(20e5) < 258,
+      `${frostPointCO2(20e5).toFixed(1)} K at 20 bar, against 216.6 K before`);
+
+    check('…and above the critical point nothing condenses at all',
+      psatCO2(310) > 1e8 && frostPointCO2(200e5) <= 304.14,
+      `critical point 304.13 K / 73.77 bar`);
+
+    check('…while Mars\'s own frost point is untouched',
+      Math.abs(frostPointCO2(600) - 147.8) < 1.0,
+      `${frostPointCO2(600).toFixed(1)} K at 6 mbar`);
   }
 
   // ---- 3k. the coastline has to be where the model says it is ---------------
