@@ -845,18 +845,44 @@ today — which makes such a planet darker, and easier to escape, than one burie
 
 Stated plainly, because a model that hides these is less useful:
 
-* **The carbon cycle has a cliff at about 2.7× Earth's outgassing.** An Earth-like world at 2.6×
-  sits at 3100 ppm and 19.8 °C indefinitely; at 2.8× it holds 3400 ppm and 20 °C for *fourteen
-  million years* and then jumps to 531 °C in under four. The trigger is a tropical band crossing its
-  local runaway limit; the amplifier is κ, the ocean-and-crust buffer, which collapses from 50 to 1
-  the moment the liquid goes and dumps fifty times the airborne carbon into the air at once.
+* **The carbon cycle has a cliff at about 2.7× Earth's outgassing, and it is not defensible.** An
+  Earth-like world at 2.6× sits at 3100 ppm and 19.8 °C indefinitely. At 2.8× it holds 3400 ppm and
+  20 °C for *fourteen million years* while CO₂ creeps up 50 ppm/Myr — then the last ice melts, the
+  albedo feedback releases ~7 K, and the world staggers: partially re-glaciating to 61 % ice at
+  −17 °C, recovering, overshooting to **1147 °C**, and finally settling at 521 °C in a steam
+  greenhouse it cannot leave, because κ — the ocean-and-crust carbon buffer — has collapsed from 50
+  to 1 and put fifty times the airborne carbon into the air at once.
 
-  It is a genuine bifurcation and not an integrator artifact — the same answer at a 1000-year step
-  cap as at a 2-million-year one. Whether 2.7× is too low is a fair question that the Phanerozoic's
-  own 2–3× swings make pointed. It is a thermostat problem rather than a heat one, fixing it would
-  move several anchors, and it long predates internal heat — but internal heat is how you now meet
-  it, since a melt boost of 2.7× arrives at **0.67 W/m²**, a seventh of Io's. A test pins it so it
-  cannot move unnoticed.
+  The **endpoint** is step-independent: 530.7 °C at a 2-Myr step cap, 532.5 °C at a 5000-year one.
+  So the hot attractor is real. The **path** is not — different step sequences swing through
+  different intermediate states, and a 1147 °C overshoot on the way to 521 °C is not physics.
+  Endpoint robustness is not evidence that the transition is well posed.
+
+  Nor is the threshold merely arguable. It tips at ~21,000 ppm, about 48× present. Goldblatt et al.
+  (2013) put a *conceivable* CO₂-driven runaway at ~100× present; Wolf & Toon (2015) have Earth
+  stable against runaway to 1.21× solar forcing, with a moist greenhouse arriving first — a stable
+  state that loses its water over 10⁸ years, not a jump to 521 °C. This model offers no
+  moist-greenhouse landing here at all; it goes straight to steam. Real Earth ran the Cretaceous and
+  the Eocene at elevated outgassing and did not do this.
+
+  It is a thermostat problem rather than a heat one, and fixing it means the atmospheric window this
+  scheme does not have. It long predates internal heat — but internal heat is how you now meet it,
+  since a melt boost of 2.7× arrives at **0.67 W/m²**, a seventh of Io's. A test pins it.
+
+* **There is no outer edge to the habitable zone.** Kasting et al. (1993) put it at 1.67 AU — 0.36
+  S⊕ — and it is set by a *maximum greenhouse*: CO₂ Rayleigh-scatters about 2.5× better than air, so
+  past a few bar the scattering overtakes the greenhouse and adding more CO₂ **cools** the planet.
+  Beyond that limit no amount of CO₂ lifts a world above freezing.
+
+  This model has Rayleigh scattering but nowhere near enough of it, so the greenhouse never turns
+  over: a world at 0.35 S⊕ reaches **+323 °C** under 30 bar of CO₂, where it should not reach 0 °C
+  at any pressure. Nor are **CO₂ clouds modelled at all** — neither the scattering greenhouse of CO₂
+  ice (Forget & Pierrehumbert 1997, which pushed the outer edge to 2.4 AU, and which Kitzmann 2016
+  revised sharply downward once anisotropic scattering was done properly) nor their albedo. CO₂
+  *surface* condensation is modelled, and drives the Mars-like collapse; condensation aloft is not.
+
+  Same root cause as the snowball rows below: a semi-grey scheme with no atmospheric window, in
+  which optical depth grows without limit. Reported by `calibrate.mjs` on every run.
 
 * **Snowball deglaciation happens at ~10 mbar of CO₂**, against the 0.1–0.3 bar of published snowball
   studies, and snowballs therefore last **~0.2 Myr** rather than the observed few. Those are the same
@@ -955,6 +981,9 @@ loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) 
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·
 Turbet et al. 2017 (CO₂ condensation limits deglaciation) ·
+Kasting, Whitmire & Reynolds 1993 (the maximum greenhouse and the outer edge) · Forget &
+Pierrehumbert 1997, Kitzmann 2016 (the scattering greenhouse of CO₂ ice clouds, and its downward
+revision) · Goldblatt et al. 2013, Wolf & Toon 2014/2015 (whether CO₂ alone can force a runaway) ·
 Barnes et al. 2013 (tidal Venuses, the tidal greenhouse) · Barr, Dobos & Kiss 2018 (TRAPPIST-1
 interiors, tidal heat fluxes and runaway thresholds) · Swain et al. 2021 (GJ 1132 b's atmosphere,
 tidal dissipation and ultrareduced outgassing) · Davies & Davies 2010 (Earth's surface heat flux,

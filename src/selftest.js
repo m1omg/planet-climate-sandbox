@@ -616,20 +616,39 @@ export function run() {
       `${(plain.diag.pCO2 * 1e6).toFixed(0)} ppm → ${(volcanic.diag.pCO2 * 1e6).toFixed(0)} ppm ` +
       `(${ratio.toFixed(1)}×) at 1.95× the melt`);
 
-    // The carbon cliff itself, pinned so that it cannot move without being
-    // noticed. This is PRE-EXISTING and not caused by internal heat: on the
-    // untouched code before any of this, an Earth-like world at 2.8x outgassing
-    // sits happily at 3400 ppm and 20 C for fourteen million years, then jumps
-    // to 520 C in under four. The trigger is a tropical band crossing its local
-    // runaway limit; the amplifier is kappa, the ocean-plus-crust buffer, which
-    // collapses from 50 to 1 when the liquid goes and dumps fifty times the
-    // airborne carbon into the air at once. It is step-size independent -- the
-    // same answer at a 1000-year cap as at a 2-million-year one -- so it is a
-    // real bifurcation in the model and not an integrator artifact.
+    // The carbon cliff, pinned so that it cannot move without being noticed.
+    // PRE-EXISTING and not caused by internal heat: it reproduces on the
+    // untouched code from before any of this.
     //
-    // Whether 2.7x is too low is a fair question the Phanerozoic's own 2-3x
-    // swings make pointed, but it is a thermostat problem, not a heat problem,
-    // and fixing it would move several anchors. Reported, not fixed.
+    // An Earth-like world at 2.8x outgassing sits at 3400 ppm and 20 C for
+    // fourteen million years while CO2 creeps up 50 ppm/Myr. Then the last of
+    // the ice goes, the albedo feedback releases about 7 K, and the world
+    // staggers -- partially re-glaciating to 61% ice at -17 C, recovering,
+    // overshooting to 1147 C -- before settling into a 521 C steam greenhouse
+    // it cannot leave, because kappa (the ocean-and-crust buffer) has collapsed
+    // from 50 to 1 and put fifty times the airborne carbon into the air.
+    //
+    // Two things about it are worth stating carefully, because the first
+    // version of this comment got them wrong:
+    //
+    // The ENDPOINT is step-independent -- 530.7 C at a 2-Myr cap, 532.5 C at a
+    // 5000-year one -- so the hot attractor is real and not an integrator
+    // artifact. The PATH is not: different step sequences swing through
+    // different intermediate states, and a 1147 C overshoot on the way to 521 C
+    // is not physics. Endpoint robustness is not evidence the transition is
+    // well posed, and the earlier claim that this was "a genuine bifurcation,
+    // not an integrator artifact" rested on the endpoint alone.
+    //
+    // And the threshold is not merely arguable, it is on the wrong side of the
+    // literature. It tips at ~21000 ppm, about 48x present. Goldblatt et al.
+    // 2013 put a *conceivable* CO2-driven runaway at ~100x present, and Wolf &
+    // Toon 2015 have Earth stable against runaway to 1.21x solar with a moist
+    // greenhouse arriving first -- a stable state that loses its water over
+    // 10^8 years, not a hard jump to 521 C. This model has no moist-greenhouse
+    // landing at all here; it goes straight to steam.
+    //
+    // Still a thermostat problem rather than a heat one, and fixing it means
+    // the atmospheric window this scheme does not have. Reported, not fixed.
     const below = settle({ ...EARTH, outgassing: 2.6 }, 3e7).world;
     const above = settle({ ...EARTH, outgassing: 2.8 }, 3e7).world;
     check('The carbon cycle has a cliff at about 2.7× Earth\'s outgassing (known, unfixed)',

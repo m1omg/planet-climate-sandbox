@@ -167,6 +167,40 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     'tuned to cancel.');
 }
 
+// ---- the outer edge of the habitable zone ---------------------------------
+// Kasting et al. 1993 put it at 1.67 AU -- 0.36 S(earth) -- and it is set by a
+// *maximum greenhouse*: CO2 Rayleigh-scatters 2.5x better than air, so past a
+// few bar the scattering wins and adding more CO2 cools the planet instead of
+// warming it. Beyond that limit no amount of CO2 gets a world above freezing.
+//
+// This model has Rayleigh scattering but nothing like enough of it, and no CO2
+// clouds at all -- neither the scattering greenhouse of CO2 ice (Forget &
+// Pierrehumbert 1997, revised sharply downward by Kitzmann 2016) nor their
+// albedo. So the greenhouse never turns over and the outer edge does not exist.
+// Same root cause as the snowball rows above: a semi-grey scheme with no
+// atmospheric window, where optical depth grows without limit.
+{
+  const outer = (co2) => {
+    const s = new Simulation({ ...EARTH, insolation: 0.35, co2Bar: co2,
+      outgassing: 0, startT: 260 });
+    s.runYears(1.2e6, 2e4);
+    return s.world.diag.Tmean - 273.15;
+  };
+  // Warmest this world can be made with any CO2 the model will take. Past the
+  // maximum greenhouse it should be impossible to lift it above 0 C at all.
+  let warmest = -999;
+  for (const c of [1, 4, 8, 15, 30]) warmest = Math.max(warmest, outer(c));
+  deviation('warmest a 0.35 S(+) world can be forced', warmest, -100, 0, 'C',
+    'Kasting 1993: 0.36 S(+) IS the outer edge, set by the maximum greenhouse -- ' +
+    'CO2 Rayleigh scattering (2.5x air) overtaking the greenhouse past a few bar. ' +
+    'No amount of CO2 should get this world above freezing, and here it is forced ' +
+    'well past it -- so the outer edge of the habitable zone effectively does not ' +
+    'exist. Hold the CO2 fixed instead of letting the cycle move it and 30 bar ' +
+    'reaches +323 C. No CO2 clouds are modelled either, neither the scattering ' +
+    'greenhouse of CO2 ice (Forget & Pierrehumbert 1997, revised down by ' +
+    'Kitzmann 2016) nor their albedo.');
+}
+
 // ---- how hard is it to force a runaway with CO2 alone? ---------------------
 {
   let last = null, ran = null;
