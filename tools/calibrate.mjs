@@ -161,9 +161,11 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     'The semi-grey scheme has no atmospheric window, so piling on CO2 always works ' +
     'and works too well; deglaciation comes thirty times too easily. Building the ' +
     'window has been tried twice; the second attempt hit every anchor and still ' +
-    'only reached 0.013 bar. Forcing it further drags the 280->560 ppm forcing to ' +
-    '3.00 W/m2, under its floor: one optical depth sets how well CO2 works at 230 K ' +
-    'and at 288 K at once. Not fixable without spectral resolution -- see the README.');
+    'only reached 0.013 bar, because one optical depth sets how well CO2 works at ' +
+    '230 K and at 288 K at once. A third attempt with four spectral bands DOES ' +
+    'break that -- 0.022 bar, and it closes the outer-edge row below outright -- ' +
+    'but it moves the habitable zone inner edge from 1.25 to 1.4 S(+) and puts the ' +
+    'LGM 4% outside its anchor, so it has not shipped. See the README.');
   deviation('snowball duration', (tThaw ?? 3e8) / 1e6, 3, 60, 'Myr',
     'Marinoan 4-15 (Bao 2008), Sturtian ~56 (Rooney 2015). Short by exactly the ' +
     'factor the threshold above is low by, because duration is threshold over ' +

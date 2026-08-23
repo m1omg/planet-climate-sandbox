@@ -945,6 +945,72 @@ Stated plainly, because a model that hides these is less useful:
   greenhouse starting to work, though still not an edge. Against that, six downstream tests broke,
   including the methane-haze turnover, and the LGM moved *away* from observation (−4.45 → −3.42 K
   against −6.1). Not enough, so it went back again.
+
+  **The third attempt did what the second said was needed: four spectral bands.** It is recorded in
+  full because it *works*, and because it is where a fourth attempt should start.
+
+  Bands at 0–8, 8–12 (the window), 12–18 (CO₂'s 15 µm band) and >18 µm (water's rotation band), each
+  with its own optical depth, weighted by the true Planck share — one tabulated cumulative Planck
+  function, so a band fraction is a difference of two lookups. The shares are the whole point:
+
+  | | 0–8 | 8–12 | 12–18 | >18 |
+  |---|---|---|---|---|
+  | Titan 95 K | 0.0 | 0.1 | 2.8 | **97.0** |
+  | snowball 230 K | 4.4 | 17.5 | 28.7 | **49.4** |
+  | Earth 288 K | 12.1 | 25.3 | 28.2 | 34.4 |
+  | Venus 737 K | **72.9** | 15.7 | 7.2 | 4.3 |
+
+  On a snowball two thirds of the emission is in the window and the far infrared, where there is no
+  water vapour and CO₂ has almost no grip; on Earth water closes the far infrared so CO₂'s own band
+  carries proportionally more. **The structural limit breaks:** CO₂'s snowball leverage fell from
+  39 K to 12 K per ten millibars *while* the 280→560 ppm forcing held at 3.71 W/m². The grey scheme
+  provably could not do both.
+
+  It costs **1.57×** the single-band scheme, not 4×, because the exponents are shared — one `pow` of
+  the water amount and one of the CO₂ amount serve all four bands (band 2's water goes as `w³`,
+  band 4's CO₂ as `u²`). Before that trick it was 2.9×, and `Math.pow` was all of it.
+
+  Results: **the outer-edge gap closes outright** — a 0.35 S⊕ world goes from +67 °C to **−89 °C**,
+  inside Kasting's maximum greenhouse, which no previous attempt approached. Snowball deglaciation
+  0.010 → 0.022 bar and duration 0.20 → 0.46 Myr. Earth pre-industrial 13.96 °C, modern 16.2, ECS
+  3.24 K, albedo 0.294 against CERES 0.293; Venus 705 K, Mars 210 K, Titan −181 °C, the Archean
+  liquid, the runaway terminating properly.
+
+  Two things sent it back:
+
+  * **LGM −5.17 K against the anchor's −5 bound.** Not a tuning failure — *every* fit with
+    pre-industrial inside 13.2–14.2 °C gives ≈ −5.2, because the LGM here is ice-albedo amplified
+    rather than forcing-limited. It is 4% outside the anchor and closer to the observed −6.1 than the
+    −4.45 that ships, which is worth knowing but is not the same as passing.
+  * **The habitable zone's inner edge moved from ~1.25 to ~1.4 S⊕**, against a literature ~1.2
+    (Wolf & Toon 2015). A steam atmosphere radiates too well through band 1 at 300–400 K, so the
+    runaway starts too late, and the runaway-transient test fails on it. That is the one thing left
+    to solve, and it is a band-1 water-opacity problem, not a structural one.
+
+  The working fit, so a fourth attempt starts here rather than from scratch. Bands as above; each
+  band's optical depth is multiplied by `pTot^0.30` except the window, which is pure continuum. With
+  `w = pH2O^0.482077`, `u = pCO2^1.44915`, `L = ln(1 + pCO2/5.46e-6)`, `g = ln(1 + pCH4/6.9e-6)` and
+  `cia = 1329.45·pCH4²·pTot`:
+
+  ```
+  tau1 = (0.531307·L + 0.689546·u + 0.479466·w + 0.00510601·g) · br
+  tau2 =  5.2073·w³ + 0.00258412·pCO2² + cia
+  tau3 = (0.104864·L + 200·u + 3.96754·w) · br
+  tau4 = (13.85·w + 0.000054481·u²) · br + cia
+  OLR  = Σ f_i(T)·σT⁴·[ (1−C)/(1+0.75·tau_i) + C/(1+0.75·(tau_i+0.1)) ]
+  ```
+
+  `C` is cloud fraction and 0.1 is the extra optical depth under cloud. `f_i(T)` are the Planck band
+  shares. Every olr() call site must pass the cloud fraction, or the window is left spuriously wide
+  open — `climate.js` has it as `a.cloud`, and the anchors in `calibrate.mjs` and `selftest.js` have
+  to ask under Earth's actual two-thirds cover rather than clear sky.
+
+  A degeneracy worth recording, because it cost an afternoon: **Venus cannot tell "opaque" from
+  "absurdly opaque".** The fit happily left band 1's CO₂ continuum coefficient at 5059 where 0.7 was
+  right — identical at 92 bar, both radiating nothing. On a hot world carrying 1.1 bar of CO₂ that
+  blacked out the band holding 99% of the emission, dropped OLR by a factor of 590, and drove the
+  runaway into the integrator's 4000 K clamp where it thrashed. Any fit against a saturated anchor
+  needs an explicit bound on how opaque it is allowed to get.
 * **The runaway transient is fast when the planet is pushed hard**, which is not a deviation but is
   worth stating plainly, because the ~10⁵ yr figure from Turbet et al. (2023) gets quoted as though
   it were universal. It is not: boiling an ocean is an energy problem. Vaporising an Earth ocean
