@@ -239,7 +239,10 @@ export function drawPhase(canvas, world) {
       oceanFrac: dg.oceanFrac, landAlbedo: p.landAlbedo, hasWater: dg.hasWater,
       waterCap: dg.waterCap, pH2O: pw, pTot, slowness: dg.slowness, subStellar: 0.4,
     });
-    const A = Sglobal * (1 - a.albedo);
+    // Interior heat counts here too. The caption under this chart promises that
+    // where the curves cross is where the climate rests, and on a tidally
+    // heated world a sunlight-only curve crosses somewhere the planet is not.
+    const A = Sglobal * (1 - a.albedo) + (dg.Fint ?? 0);
     pts.push([T, O, A]);
     fmax = Math.max(fmax, O, A);
   }

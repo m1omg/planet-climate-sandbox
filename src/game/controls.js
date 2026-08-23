@@ -99,13 +99,44 @@ export const SLIDERS = [
           <input type="checkbox" id="chk-fossil-inf"> unlimited
         </label>
       </div>` },
+  // Earth's own interior is worth 0.092 W/m2 -- 47 TW over the whole globe
+  // (Davies & Davies 2010) -- which is a twenty-six-hundredth of the sunlight
+  // it absorbs. That is why this can be left out of a climate model of Earth
+  // and why it cannot be left out of a model of anything tidally heated: the
+  // range spans four orders of magnitude and the top of it boils oceans.
+  { g: 'surface', key: 'internalHeat', label: 'Internal heat', min: 0, max: 1000,
+    log: true, zero: true,
+    // Every threshold sits just below its round number, for the reason spelled
+    // out on the rotation control: a boundary at exactly 1 would let the mW
+    // branch print "1000 mW/m²" for 0.9999, and typing that back gives 1.0.
+    // Same at 10 mW and at 10 W. The round-trip test catches all three.
+    fmt: (v) => v <= 0 ? 'none'
+      : v < 0.9995 ? `${(v * 1e3).toFixed(v * 1e3 < 9.95 ? 1 : 0)} mW/m²`
+      : `${v.toFixed(v < 9.995 ? 2 : 0)} W/m²`,
+    units: { 'w/m2': 1, 'w/m²': 1, w: 1, 'mw/m2': 1e-3, 'mw/m²': 1e-3, mw: 1e-3,
+             earth: 0.092, earths: 0.092, x: 0.092, '×': 0.092, tw: 1 / 5.1e2 },
+    unitFor: (v) => (v > 0 && v < 0.9995 ? 'mW/m²' : 'W/m²'),
+    note: 'Radiogenic, primordial and — the one that can dominate — tidal. Moon 11 · Mars ~20 · Venus 31 · Europa ~40 · Earth 92 mW/m², then Enceladus 0.1–0.25 · Io 1–2 · TRAPPIST-1b 2.7 · GJ 1132 b 80 W/m². Past about 282 it boils an ocean on its own, with no help from the star.' },
+
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
     // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",
     // which reads as dead when it is not.
     fmt: (v) => v <= 0 ? 'dead'
       : `${v < 0.0995 ? Number(v.toPrecision(2)) : v.toFixed(2)}× Earth`,
     units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
-    note: 'The CO₂ source, and a trickle of abiotic methane. Your one lever inside a snowball — and enough of it holds a world anoxic against its own biosphere.' },
+    note: 'The CO₂ source, and a trickle of abiotic methane. Your one lever inside a snowball — and enough of it holds a world anoxic against its own biosphere. Scaled by internal heat: melt production is what carries dissolved CO₂ up, so a hot interior erupts more.',
+    // The mantle is a reservoir, not a tap. Earth's is about 400 bar of CO₂
+    // equivalent and the readout above shows what is left of it; a tidally
+    // heated world drains it in a few hundred million years instead of eight
+    // billion. The switch is here for the same reason the fossil one is: "what
+    // if it never ran out" is a fair question with an instructive answer, and
+    // it is not how a planet works.
+    extra: `
+      <div class="supply">
+        <label class="supply-inf" title="Never run out of mantle carbon. Not how a planet works — but a fair thing to ask.">
+          <input type="checkbox" id="chk-mantle-inf"> bottomless mantle
+        </label>
+      </div>` },
 ];
 
 // Parse a typed value like "0.3 bar", "420ppm", "2 days", "18 %". A bare number

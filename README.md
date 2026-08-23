@@ -440,6 +440,57 @@ spreading into a world that had none, not life becoming something no planet has 
 
 Ozone is not modelled, so there is no UV shielding feedback.
 
+### The heat a planet makes for itself
+
+Every world here used to be heated by starlight alone. That is defensible for Earth, whose interior
+supplies **0.092 W/m²** — 47 ± 2 TW over the globe (Davies & Davies 2010), a twenty-six-hundredth of
+the sunlight it absorbs. It is not defensible for anything tidally heated. GJ 1132 b is modelled at
+**80 W/m²**, about a thousand times Earth's, which leaves a magma ocean under a few tens of metres of
+crust and Io-like volcanism above it (Swain et al. 2021). Barnes et al. (2013) show tidal flux
+reaching the runaway-greenhouse limit *on its own* and desiccating a planet the star would have left
+habitable — a **Tidal Venus**.
+
+The flux enters exactly where absorbed sunlight does, which is not a modelling choice so much as
+energy conservation, and both papers do it independently: Barnes writes that energy supplied "by the
+Sun, impacts, or tidal heating" exceeding `F_crit` ends radiation balance, and Barr et al. (2018)
+compare stellar irradiation *plus* tidal heat against the same threshold. So the greenhouse amplifies
+interior heat identically to sunlight, and at equilibrium the planet radiates exactly what its
+interior gives it — measured here to better than 0.35 W/m² over a 0–60 W/m² range. Twenty watts is
+worth **11 K** on an Earth-like world.
+
+It costs eighteen additions per step and no extra radiative transfer.
+
+| | W/m² | |
+|---|---|---|
+| Moon | 0.011 | global gamma-ray; Apollo 15 and 17 measured 0.021 and 0.015 |
+| Mars | ~0.02 | modelled 0.006–0.025; **never measured** — InSight's mole never reached depth |
+| Venus | 0.031 | a third of Earth's, consistent with a stagnant lid |
+| Europa | ~0.04 | 0.006–0.046; ~0.039 at the sea floor with radiogenic heat |
+| **Earth** | **0.092** | 47 ± 2 TW |
+| Enceladus | 0.1–0.25 | localised, south polar |
+| Io | 1–2 | and permanently molten for it |
+| TRAPPIST-1b | 2.68 | Barr et al. 2018, Table 3 |
+| GJ 1132 b | 80 | at e = 0.01, held by a resonance with GJ 1132 c |
+| — | **>282** | past this the interior boils an ocean with no help from the star |
+
+Barr's runaway thresholds for the TRAPPIST-1 planets — 258, 262, 277, 283, 308 W/m² — bracket this
+model's own emergent Simpson–Nakajima limit of **282**, which is a pleasing independent check on a
+number nothing here was tuned to produce.
+
+**Heat drives volcanism too.** Outgassing is melt production times the CO₂ dissolved in the melt —
+ocean-island primary melts run about 4 wt% CO₂ — and melt production is driven by the heat leaving
+the interior. That is why Io resurfaces itself and the Moon has not erupted in a billion years. The
+model scales outgassing by `√(F/0.092)`, anchored so Earth is exactly 1×: Io ≈ 4×, GJ 1132 b ≈ 30×.
+
+The exponent is the honest weak point and is a **choice, not a measurement**. The direction is not in
+doubt, but the rate also depends on the mantle's volatile content, its oxygen fugacity and its
+tectonic regime, none of which this model knows. A half power is deliberately conservative; linear
+would give GJ 1132 b 870× Earth's volcanism and empty its entire carbon budget in nine million years.
+
+Weathering is deliberately *not* scaled with it. It shares the same mass normalisation, and boosting
+both would move source and sink together — an error that leaves the equilibrium looking untouched. A
+test pins it.
+
 ### How much carbon a planet has
 
 Volcanoes cannot outgas carbon the planet does not have, and until now they could: `outgassing` was an
@@ -451,6 +502,14 @@ air — is a mass fraction of **1.4 ± 0.4 × 10⁻⁴**. Rather more is dissolv
 that is coming back. Over Earth's surface that is 4.1×10⁶ kg/m², or **about 400 bar** of CO₂. Two
 independent routes agree: Earth's carbon inventory is put at 2.5×10²² mol and possibly as high as
 1×10²³, which is 210–850 bar, and the mass fraction lands in the middle of that.
+
+Worth recording plainly: 1.4×10⁻⁴ is 140 ppm C, which is Hirschmann (2018) — the **bottom** of the
+current range. Marty et al. (2020) and Sun & Dasgupta (2023) put the bulk silicate Earth at 330–400
+ppm, which would make the budget 950–1150 bar rather than 400. Raising it would move Venus's emergent
+28%-outgassed result and several anchors with it, so it stays where it is and the disagreement is
+reported instead. The reservoir can be switched off entirely with **bottomless mantle**, for the same
+reason the fossil reserve can: "what if it never ran out" is a fair question with an instructive
+answer, and it is not how a planet works.
 
 The scaling with planet mass is the honest part. Carbon is a roughly constant fraction of the
 silicates for worlds that accreted from similar material, so the inventory follows the mantle mass —
@@ -786,6 +845,19 @@ today — which makes such a planet darker, and easier to escape, than one burie
 
 Stated plainly, because a model that hides these is less useful:
 
+* **The carbon cycle has a cliff at about 2.7× Earth's outgassing.** An Earth-like world at 2.6×
+  sits at 3100 ppm and 19.8 °C indefinitely; at 2.8× it holds 3400 ppm and 20 °C for *fourteen
+  million years* and then jumps to 531 °C in under four. The trigger is a tropical band crossing its
+  local runaway limit; the amplifier is κ, the ocean-and-crust buffer, which collapses from 50 to 1
+  the moment the liquid goes and dumps fifty times the airborne carbon into the air at once.
+
+  It is a genuine bifurcation and not an integrator artifact — the same answer at a 1000-year step
+  cap as at a 2-million-year one. Whether 2.7× is too low is a fair question that the Phanerozoic's
+  own 2–3× swings make pointed. It is a thermostat problem rather than a heat one, fixing it would
+  move several anchors, and it long predates internal heat — but internal heat is how you now meet
+  it, since a melt boost of 2.7× arrives at **0.67 W/m²**, a seventh of Io's. A test pins it so it
+  cannot move unnoticed.
+
 * **Snowball deglaciation happens at ~10 mbar of CO₂**, against the 0.1–0.3 bar of published snowball
   studies, and snowballs therefore last **~0.2 Myr** rather than the observed few. Those are the same
   error twice: duration is threshold ÷ outgassing flux.
@@ -882,7 +954,11 @@ Archer 2005, Lenton & Cannell 2002 (the fate of fossil carbon, recoverable reser
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·
-Turbet et al. 2017 (CO₂ condensation limits deglaciation).
+Turbet et al. 2017 (CO₂ condensation limits deglaciation) ·
+Barnes et al. 2013 (tidal Venuses, the tidal greenhouse) · Barr, Dobos & Kiss 2018 (TRAPPIST-1
+interiors, tidal heat fluxes and runaway thresholds) · Swain et al. 2021 (GJ 1132 b's atmosphere,
+tidal dissipation and ultrareduced outgassing) · Davies & Davies 2010 (Earth's surface heat flux,
+47 ± 2 TW) · Hirschmann 2018, Marty et al. 2020, Sun & Dasgupta 2023 (bulk silicate Earth carbon).
 
 ## Licence
 

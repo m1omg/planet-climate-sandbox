@@ -10,7 +10,7 @@ import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game
 import { SCENARIOS } from './game/scenarios.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
-import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
+import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
@@ -229,7 +229,16 @@ export function run() {
       // the methane cycle was rewritten -- and it is what the note above means
       // by two basins of the same system. So: a fixed point, checked to land in
       // the trapped basin, rather than a range that cannot be made robust.
-      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.25,
+      //
+      // Internal heat turned out to be another axis the basins interleave
+      // along: at the old 0.25 bar this world was trapped with a dead interior
+      // and twilight with Earth's 0.092 W/m2, because a little night-side heat
+      // is enough to hold a sliver of liquid at the terminator. That is real,
+      // not a regression. Thinning the air to 0.05 bar moves less heat to the
+      // night side and deepens the trap: it now holds at 0, 0.03, 0.092, 0.13
+      // and 0.18 W/m2 -- still with one interleaved miss at 0.06, because the
+      // interleaving is a property of the system and not of the recipe.
+      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.05,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
       // to the night side to stop the trap.
@@ -534,6 +543,119 @@ export function run() {
     check('…while Mars\'s own frost point is untouched',
       Math.abs(frostPointCO2(600) - 147.8) < 1.0,
       `${frostPointCO2(600).toFixed(1)} K at 6 mbar`);
+  }
+
+  // ---- 3j-5. internal heat ---------------------------------------------------
+  // The model used to be heated by starlight alone. GJ 1132 b is modelled at
+  // 80 W/m2 of tidal flux, ~1000x Earth's, which puts a magma ocean under a few
+  // tens of metres of crust (Swain et al. 2021); Barnes et al. 2013 show tidal
+  // flux crossing the runaway limit on its own and desiccating a planet that
+  // looks perfectly habitable by insolation. None of that was reachable.
+  //
+  // Both papers add the interior flux straight to absorbed sunlight, so that is
+  // what this does, and the consequences follow from energy conservation rather
+  // than from anything new being invented.
+  {
+    // Energy conservation: at equilibrium the planet must radiate what it takes
+    // in from both directions. This is the whole claim, so it is measured over
+    // a range rather than asserted at one point.
+    let worst = 0, worstAt = 0;
+    for (const F of [0, 1, 10, 60]) {
+      const w = settle({ ...EARTH, internalHeat: F, outgassing: 0 }, 3e6).world;
+      const gained = w.diag.emitted - w.diag.absorbed;
+      const err = Math.abs(gained - F);
+      if (err > worst) { worst = err; worstAt = F; }
+    }
+    check('A planet radiates its own internal heat as well as its sunlight',
+      worst < 0.35, `worst ${worst.toFixed(3)} W/m² out at ${worstAt} W/m² in`);
+
+    // ...and the greenhouse amplifies it exactly as it amplifies sunlight, so a
+    // flux far below the runaway limit still moves the surface a long way.
+    const cold = settle({ ...EARTH, internalHeat: 0, outgassing: 0 }, 3e6).world;
+    const hot = settle({ ...EARTH, internalHeat: 20, outgassing: 0 }, 3e6).world;
+    check('…and internal heat warms the surface, amplified like any other forcing',
+      hot.diag.Tmean - cold.diag.Tmean > 8,
+      `20 W/m² is worth ${(hot.diag.Tmean - cold.diag.Tmean).toFixed(1)} K here`);
+
+    // The imbalance is what Settle stops on. Leave the interior out of it and a
+    // heated world sits at a permanent false imbalance and Settle never returns.
+    const heated = settle({ ...EARTH, internalHeat: 80, outgassing: 0 }, 5e6).world;
+    check('…and a settled world with internal heat reads as settled',
+      Math.abs(heated.diag.imbalance) < 0.05,
+      `imbalance ${heated.diag.imbalance.toFixed(4)} W/m² at 80 W/m² internal`);
+
+    // The Tidal Venus. Insolation alone leaves this world temperate; the
+    // interior alone carries it past the Simpson-Nakajima limit.
+    const tv = settle({ ...EARTH, insolation: 0.9, internalHeat: 320, outgassing: 0 }, 2e6).world;
+    const rl = runawayLimit(tv.diag.pCO2, tv.diag.pN2 + tv.diag.pCH4);
+    check('A world can be driven into a runaway by its own interior alone',
+      tv.diag.Tmean > 450 && rl.flux - (tv.diag.absorbed + tv.diag.Fint) < 0,
+      `${tv.diag.Tmean.toFixed(0)} K, margin ` +
+      `${(rl.flux - (tv.diag.absorbed + tv.diag.Fint)).toFixed(0)} W/m² at 0.9 S⊕`);
+
+    // Heat drives melt production, and melt carries dissolved CO2 up with it.
+    check('Melt production is anchored so Earth outgasses at exactly 1×',
+      Math.abs(meltBoost({ internalHeat: 0.092 }) - 1) < 0.01,
+      `Io ${meltBoost({ internalHeat: 1.5 }).toFixed(1)}×, ` +
+      `GJ 1132 b ${meltBoost({ internalHeat: 80 }).toFixed(0)}×`);
+
+    // ...and that has to actually move the equilibrium, in a bounded way. Two
+    // opposite mistakes are possible and this catches both. Boost weathering
+    // too -- it shares the same mass scaling -- and source and sink rise
+    // together, so the answer never leaves 360 ppm. Overshoot instead and the
+    // world falls off the carbon cliff documented below and lands at 32 bar.
+    // A one-sided "it went up" assertion passes happily on the second one.
+    //
+    // 0.35 W/m2 is chosen to stay on the stable branch: it is a melt boost of
+    // 1.95x, and the cliff is at 2.7x.
+    const plain = settle({ ...EARTH, internalHeat: 0.092 }, 3e7).world;
+    const volcanic = settle({ ...EARTH, internalHeat: 0.35 }, 3e7).world;
+    const ratio = volcanic.diag.pCO2 / plain.diag.pCO2;
+    check('…so a warmer interior runs a richer carbon cycle, and not a runaway one',
+      ratio > 2 && ratio < 100,
+      `${(plain.diag.pCO2 * 1e6).toFixed(0)} ppm → ${(volcanic.diag.pCO2 * 1e6).toFixed(0)} ppm ` +
+      `(${ratio.toFixed(1)}×) at 1.95× the melt`);
+
+    // The carbon cliff itself, pinned so that it cannot move without being
+    // noticed. This is PRE-EXISTING and not caused by internal heat: on the
+    // untouched code before any of this, an Earth-like world at 2.8x outgassing
+    // sits happily at 3400 ppm and 20 C for fourteen million years, then jumps
+    // to 520 C in under four. The trigger is a tropical band crossing its local
+    // runaway limit; the amplifier is kappa, the ocean-plus-crust buffer, which
+    // collapses from 50 to 1 when the liquid goes and dumps fifty times the
+    // airborne carbon into the air at once. It is step-size independent -- the
+    // same answer at a 1000-year cap as at a 2-million-year one -- so it is a
+    // real bifurcation in the model and not an integrator artifact.
+    //
+    // Whether 2.7x is too low is a fair question the Phanerozoic's own 2-3x
+    // swings make pointed, but it is a thermostat problem, not a heat problem,
+    // and fixing it would move several anchors. Reported, not fixed.
+    const below = settle({ ...EARTH, outgassing: 2.6 }, 3e7).world;
+    const above = settle({ ...EARTH, outgassing: 2.8 }, 3e7).world;
+    check('The carbon cycle has a cliff at about 2.7× Earth\'s outgassing (known, unfixed)',
+      below.diag.Tmean < 300 && above.diag.Tmean > 700,
+      `2.6× → ${(below.diag.Tmean - 273.15).toFixed(1)} °C, ` +
+      `2.8× → ${(above.diag.Tmean - 273.15).toFixed(0)} °C; melt boost reaches it at ` +
+      `${(0.092 * 2.7 ** 2).toFixed(2)} W/m² of internal heat`);
+
+    // The mantle is not a bottomless tap. A boosted world drains it.
+    const drained = settle({ ...EARTH, internalHeat: 40, water: 0, landFraction: 1 }, 2e9).world;
+    check('…but it cannot outgas carbon the planet does not have',
+      drained.carbonDeep < 0.02 * carbonBudget(1),
+      `${(drained.carbonDeep / carbonBudget(1) * 100).toFixed(1)}% of the budget left`);
+    const endless = settle({ ...EARTH, internalHeat: 40, water: 0, landFraction: 1,
+                             mantleInfinite: true }, 2e9).world;
+    check('…unless you ask it to, which is a fair question with an ugly answer',
+      endless.co2 * endless.diag.g / 1e5 > drained.co2 * drained.diag.g / 1e5 * 1.5,
+      `${(drained.co2 * drained.diag.g / 1e5).toFixed(0)} bar → ` +
+      `${(endless.co2 * endless.diag.g / 1e5).toFixed(0)} bar unlimited`);
+
+    // A world written before this existed must not lose its volcanism to a
+    // missing field: saves, URL hashes and scenario params all predate it.
+    const legacy = settle({ ...EARTH, internalHeat: undefined }, 1e6).world;
+    check('…and a world saved before any of this still has an interior',
+      Math.abs(legacy.diag.Fint - 0.092) < 1e-9,
+      `defaults to Earth's ${legacy.diag.Fint} W/m²`);
   }
 
   // ---- 3k. the coastline has to be where the model says it is ---------------

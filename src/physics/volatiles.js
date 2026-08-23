@@ -152,6 +152,34 @@ const BSE_CARBON = 1.4e-4;      // carbon mass fraction of mantle + crust
 const SILICATE_FRACTION = 0.677; // mantle + crust as a share of planet mass
 const CO2_PER_C = 44 / 12;
 
+// ---------------------------------------------------------------------------
+// How much a planet's own heat drives its volcanism.
+//
+// Volcanic outgassing is melt production times the CO2 dissolved in the melt --
+// ocean-island primary melts average about 4 wt% CO2 -- and melt production is
+// driven by the heat coming out of the interior. So a world with a hot inside
+// erupts more, which is why Io resurfaces itself and the Moon has not erupted
+// in a billion years. GJ 1132 b's modelled 80 W/m2 is thought to leave a magma
+// ocean under a few tens of metres of crust, with Io-like volcanism above it
+// (Swain et al. 2021).
+//
+// Anchored so Earth's measured 0.092 W/m2 (47 +/- 2 TW; Davies & Davies 2010)
+// gives exactly 1x, which is what the outgassing slider already means.
+//
+// The exponent is the honest weak point. The *direction* is not in doubt, but
+// the rate also depends on the mantle's volatile content, its oxygen fugacity
+// and the tectonic regime, none of which this model knows. A half power is
+// chosen as a deliberately conservative sub-linear law -- melt production does
+// not track heat flux one for one, and the melt gets poorer in volatiles as the
+// mantle is depleted. Linear would give GJ 1132 b 870x Earth's volcanism and
+// empty its entire carbon budget in nine million years; the half power gives
+// 30x and a few hundred million, which is a timescale you can watch.
+export const EARTH_INTERNAL_FLUX = 0.092;   // W/m^2
+export function meltBoost(p) {
+  const F = p.internalHeat ?? EARTH_INTERNAL_FLUX;
+  return clamp(Math.sqrt(Math.max(F, 0) / EARTH_INTERNAL_FLUX), 0, 100);
+}
+
 export function carbonBudget(massEarths) {
   const m = Math.max(massEarths, 1e-6);
   const r = radiusFromMass(m);
@@ -484,8 +512,10 @@ export function stepVolatiles(w, dtYears) {
   // to be an infinite tap, and left running it produced 24 000 bar of CO2 --
   // thirty to a hundred times the entire carbon inventory of an Earth-mass
   // world. See carbonBudget().
-  const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0);
-  const V = (dtYears > 0 && w.carbonDeep != null)
+  // Melt production scales with the heat coming out of the interior, so a
+  // tidally heated world genuinely erupts more -- see meltBoost().
+  const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0) * meltBoost(p);
+  const V = (dtYears > 0 && w.carbonDeep != null && !p.mantleInfinite)
     ? Math.min(want, Math.max(w.carbonDeep, 0) / dtYears) : want;
 
   // ...and us, on top of the volcanoes, until the fossil carbon runs out.
@@ -556,7 +586,11 @@ export function stepVolatiles(w, dtYears) {
   // inventory it would otherwise have exhausted in eight hundred million.
   // Fossil carbon we burn is already at the surface, so it does not come out of
   // the interior; it goes back into it through weathering like any other.
-  w.carbonDeep = Math.max(0, w.carbonDeep + (Wr - V) * dtYears);
+  // Weathering is deliberately NOT boosted: it uses outgassingScale purely as a
+  // normalisation, and scaling the sink with the source would hold the
+  // equilibrium exactly where it was and make the whole coupling a no-op.
+  w.carbonDeep = p.mantleInfinite
+    ? w.carbonDeep : Math.max(0, w.carbonDeep + (Wr - V) * dtYears);
 
   // --- what is actually alive ----------------------------------------------
   // The control is the biosphere you asked for; this is the one the planet can
@@ -595,7 +629,7 @@ export function stepVolatiles(w, dtYears) {
     // stayed anoxic for a billion years with photosynthesis already running
     // (Catling & Zahnle 2020). The Great Oxidation is that threshold being
     // crossed, and here it falls out of the arithmetic rather than being staged.
-    const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing;
+    const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing * meltBoost(p);
 
     // Oxidative weathering of the crust: first order in how much oxygen there
     // is, which is what makes the level settle instead of climbing for ever.
@@ -660,7 +694,7 @@ export function stepVolatiles(w, dtYears) {
         * (1 + (CH4_ANOX_BOOST - 1) * (1 - oxidising));
 
       // And the interior makes the rest: serpentinisation and the seeps.
-      const geo = CH4_GEO * outgassingScale(p.mass) * Math.max(p.outgassing ?? 0, 0);
+      const geo = CH4_GEO * outgassingScale(p.mass) * Math.max(p.outgassing ?? 0, 0) * meltBoost(p);
 
       // Nothing on a four-hundred-kelvin surface is making methane, biologically
       // or geologically. Without this a world could boil its ocean away and keep

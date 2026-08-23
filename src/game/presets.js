@@ -29,6 +29,11 @@ export const EARTH = {
   fossilUsed: 0,    // share of the fossil reserve already burnt
   fossilInfinite: false,  // ignore the reserve and burn for ever
   outgassing: 1.0,
+  // Earth's measured interior heat: 47 +/- 2 TW over the globe, 0.092 W/m^2
+  // (Davies & Davies 2010). A twenty-six-hundredth of the sunlight it absorbs,
+  // which is why leaving it out was defensible -- and worth about a tenth of a
+  // kelvin, which is why putting it in moved the calibration slightly.
+  internalHeat: 0.092,
   landAlbedo: 0.25,
   startT: 288.3,
 };
@@ -52,8 +57,8 @@ export const PRESETS = {
   // still there if you want them -- the control does not go away, it just starts
   // at nothing.
   earthlike: { name: 'Earth-like', icon: '🌐', params: { ...PREINDUSTRIAL, co2Bar: 280e-6, emissions: 0, fossilUsed: 0 } },
-  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
-  mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
+  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
+  mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
   // 0.08 bar of CO2, not 0.02. The old value only worked because methane's
   // opacity was some five times too strong; with it fitted to the measured
   // forcings the faint young Sun needs the CO2 the literature actually asks

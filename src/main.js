@@ -559,7 +559,10 @@ function updateReadout() {
 
   const lossGyr = (w.escape?.water ?? 0) * 1e9 / d.eoColumn;
   const rl = runawayLimit(dg.pCO2, dg.pN2 + dg.pCH4);
-  const margin = rl.flux - dg.absorbed;
+  // Sunlight *and* the planet's own heat. A tidally heated world can be past the
+  // Simpson-Nakajima limit on its interior alone, and a margin computed from
+  // insolation would read comfortable while the ocean boiled.
+  const margin = rl.flux - (dg.absorbed + dg.Fint);
 
   $('#stats').innerHTML =
     stat('Mean surface', `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`) +
@@ -594,6 +597,17 @@ function updateReadout() {
     })() +
     stat('Absorbed', `${dg.absorbed.toFixed(1)}<small> W/m²</small>`) +
     stat('Emitted', `${dg.emitted.toFixed(1)}<small> W/m²</small>`) +
+    // Shown against Earth's, because the absolute number means little on its
+    // own: 2 W/m2 sounds negligible next to 240 of sunlight and is twenty times
+    // Earth's interior, enough to keep Io permanently molten.
+    stat('Internal heat', (() => {
+      const f = dg.Fint, rel = f / 0.092;
+      const mag = f <= 0 ? 'none'
+        : f >= 1 ? `${f.toFixed(f < 10 ? 2 : 0)}<small> W/m²</small>`
+        : `${(f * 1e3).toFixed(f * 1e3 < 10 ? 1 : 0)}<small> mW/m²</small>`;
+      if (f <= 0) return mag;
+      return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
+    })(), dg.Fint > 20 ? 'warn' : '') +
     stat('Runaway margin', `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
       margin < 0 ? 'bad' : margin < 15 ? 'warn' : '') +
     stat('Water left', `${(dg.totalWater).toFixed(dg.totalWater < 1 ? 3 : 2)}<small> EO</small>`,
@@ -874,6 +888,11 @@ function bindControls() {
     sim.setParams({ fossilInfinite: params.fossilInfinite });
     writeHash();
     syncFossil();
+  });
+  $('#chk-mantle-inf').addEventListener('change', (e) => {
+    params.mantleInfinite = e.target.checked;
+    sim.setParams({ mantleInfinite: params.mantleInfinite });
+    writeHash();
   });
 
   $('#btn-settle').addEventListener('click', () => {

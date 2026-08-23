@@ -119,6 +119,21 @@ for (const file of files) {
 // flicker; nothing in the module-load checks noticed. These assertions would
 // have.
 // ---------------------------------------------------------------------------
+// tick() swallows its own exceptions -- deliberately, so that one bad frame
+// cannot kill the loop in front of a user -- and reports them through
+// console.error exactly once. That means a readout throwing on every single
+// frame used to run the whole 120-frame loop below and still pass this file.
+// It is precisely the failure this project has shipped twice (a readout reading
+// null before the first step, a shader uniform never passed), so watch for it.
+const frameErrors = [];
+{
+  const realError = console.error;
+  console.error = (...a) => {
+    if (String(a[0] ?? '').includes('frame failed')) frameErrors.push(a.map(String).join(' '));
+    realError.apply(console, a);
+  };
+}
+
 const app = globalThis.window.__app;
 if (app && app.tick && app.view) {
   const v = app.view;
@@ -310,6 +325,36 @@ if (app && app.graphicsFromUrl) {
   } else {
     console.log('\x1b[32mPASS\x1b[0m  a won scenario pauses once, and play resumes it');
   }
+}
+
+// Every element main.js binds a listener to has to actually exist. The DOM stub
+// here cannot catch this -- querySelector returns a fresh element for any
+// selector, so a typo'd or missing id looks exactly like a present one -- and
+// in a browser it is an immediate TypeError at start-up that takes the whole
+// page with it. So check the ids against the markup that is supposed to carry
+// them: index.html, or a control's `extra` block.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const ctrls = readFileSync(new URL('../src/game/controls.js', import.meta.url), 'utf8');
+  const bound = new Set();
+  for (const m of src.matchAll(/\$\('#([\w-]+)'\)\s*\.addEventListener/g)) bound.add(m[1]);
+  const missing = [...bound].filter((id) =>
+    !html.includes(`id="${id}"`) && !ctrls.includes(`id="${id}"`));
+  if (missing.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  main.js binds ids that no markup defines: ${missing.join(', ')}`);
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  every id main.js binds to exists in the markup (${bound.size} checked)`);
+  }
+}
+
+if (frameErrors.length) {
+  console.log(`\x1b[31mFAIL\x1b[0m  the frame loop threw: ${frameErrors[0].slice(0, 160)}`);
+  failed++;
+} else {
+  console.log('\x1b[32mPASS\x1b[0m  no frame threw during the loop');
 }
 
 // main.js should have wired up an app handle and built its controls

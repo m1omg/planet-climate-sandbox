@@ -5,6 +5,8 @@ import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED,
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
 
+import { EARTH_INTERNAL_FLUX } from './volatiles.js';
+
 export const NBANDS = 18;
 
 // Water currently in the air, as a fraction of an Earth ocean.
@@ -335,8 +337,19 @@ export function update(w, dt) {
   const superFrac = clamp(smoothstep(T_CRIT_H2O - 25, T_CRIT_H2O + 25, Tmean)
                         * smoothstep(0.80 * pCritBar, 1.05 * pCritBar, pTotMean), 0, 1);
 
+  // Heat coming out of the planet itself: radiogenic, primordial and -- the one
+  // that can dominate -- tidal. Uniform over the globe, which is how both
+  // Barnes et al. 2013 and Barr et al. 2018 treat it when they compare it
+  // against the runaway limit.
+  //
+  // The default is Earth's own measured 0.092 W/m2 rather than zero, so that a
+  // world saved, linked or scripted before this existed keeps an interior
+  // instead of quietly becoming geologically dead -- outgassing is tied to this
+  // now, and a zero here would stop the volcanoes.
+  const Fint = Math.max(p.internalHeat ?? EARTH_INTERNAL_FLUX, 0);
+
   w.diag = {
-    g, d, pN2, pCO2, pCH4, pO2, pH2O, pTot: pTotArr, pTotMean,
+    g, d, pN2, pCO2, pCH4, pO2, pH2O, pTot: pTotArr, pTotMean, Fint,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
     flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
     exposedBasin, effLandAlbedo, liquidAllowed, pSurfPa,
@@ -345,7 +358,11 @@ export function update(w, dt) {
     landIceFrac: clamp((1 - flooded) * glaciatedShare, 0, 1),
     iceSheetTarget,
     glaciatedShare,
-    Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed - emitted,
+    // `absorbed` stays absorbed *sunlight*; the interior is reported separately.
+    // The imbalance, though, is the whole energy budget -- Settle stops when it
+    // reaches zero, so leaving the interior out of it would park a tidally
+    // heated world at a permanent false imbalance it could never settle out of.
+    Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted,
     hasWater, vapourCol: vapCol, lam, slowness, totalWater, superFrac,
     hazeTau, hazeSW,
     Tmax: Math.max(...w.T), Tmin: Math.min(...w.T),
@@ -366,7 +383,10 @@ export function tendency(w) {
   }
   for (let i = 0; i < NBANDS; i++) {
     const transport = (flux[i + 1] - flux[i]) / DX;
-    dT[i] = (dg.S[i] * (1 - dg.alb[i]) * dg.hazeSW - dg.olr[i] + transport) / dg.C[i];
+    // Interior heat enters exactly as sunlight does, so the greenhouse
+    // amplifies it identically -- which is the point, and is why a flux far
+    // below the runaway limit still moves the surface a long way.
+    dT[i] = (dg.S[i] * (1 - dg.alb[i]) * dg.hazeSW + dg.Fint - dg.olr[i] + transport) / dg.C[i];
   }
   return { dT, D };
 }
