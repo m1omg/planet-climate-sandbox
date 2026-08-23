@@ -907,15 +907,44 @@ Stated plainly, because a model that hides these is less useful:
   arbitrarily well. Real snowballs are hard to leave because the 8–12 µm window keeps radiating no
   matter how much CO₂ you add.
 
-  Adding that window was tried and reverted, which is worth recording. It works on its own terms — the
-  threshold lands at 0.13–0.22 bar, the LGM improves from −4.5 K to −5.7 K against an observed −6.1,
-  and all 22 anchors can be made to pass by splitting the water continuum into a shallow near-Earth
-  term and a steep steam term. What it also does is make cold, dry, cloudless states far too stable,
-  because *colder → drier → window opens → colder* is a positive feedback with nothing to damp it in a
-  zonal model with no vertical structure. The Archean froze solid in 10 kyr and Titan fell to 71 K. The
-  fix for the Archean (CO₂ closing its own window) did not save Titan, and the fix for Titan would have
-  been a third continuum term. At that point it was a worse model than the one it replaced, so it went
-  back — but the working parameters are in the git history if anyone wants them.
+  Adding that window has been tried twice and reverted twice. Both attempts are worth recording,
+  because the second one answers a question the first only raised.
+
+  **The first attempt** landed the threshold at 0.13–0.22 bar and improved the LGM from −4.5 K to
+  −5.7 K against an observed −6.1, with all anchors passing. What it also did was make cold, dry,
+  cloudless states far too stable: *colder → drier → window opens → colder* is a positive feedback
+  with nothing to damp it. The Archean froze solid in 10 kyr and Titan fell to 71 K. Fixing the
+  Archean did not save Titan, and fixing Titan needed a third continuum term.
+
+  **The second attempt** fixed both of those, and failed for a better reason.
+
+  Two things solve the first attempt's collapse. The share of a blackbody's emission that falls in
+  the 8–12 µm window is *not a free parameter* — it is Planck, and it is strongly temperature
+  dependent: 25.3 % at Earth's 288 K but **0.13 % at Titan's 95 K**. A constant window fraction hands
+  a frigid world a window it has no business having; a Planck-weighted one closes itself as a world
+  cools. Titan came through untouched at −182 °C. And clouds are the missing damper: `cloudCover()`
+  saturates at 0.750 from 273 K up, so it holds the window shut by a fixed amount across the whole
+  liquid-water range, then falls away below freezing where the window is actually wanted. Without the
+  cloud term, Earth with CO₂ pinned at 427 ppm froze to **−42.6 °C and 100 % ice**; with it, the
+  fixed-humidity OLR slope came to 1.63 W/m²/K against the old scheme's 1.73, and Earth stayed put.
+
+  All 21 anchors could then be hit — Earth 238 W/m², Venus 161, Simpson–Nakajima 282 — with the
+  window CO₂-blind on a snowball and shut on Venus, using the physically right quadratic
+  (CO₂–CO₂ collision-induced) closure.
+
+  **And the snowball threshold still only moved from 0.010 bar to 0.013.** That is the useful result,
+  because it is not a tuning failure. Ask the fit to reduce CO₂'s leverage on a snowball — the OLR
+  drop from 0.001 to 0.2 bar at 230 K, which is 26.5 W/m² in the shipped scheme — and driving it to
+  13.2 W/m² drags the 280→560 ppm forcing from 3.82 W/m² down to **3.00, below its 3.3 floor**. One
+  optical depth sets how well CO₂ works at 230 K and at 288 K *simultaneously*; a semi-grey scheme
+  cannot decouple them. Nor can the window make up the difference, because at 230 K the 8–12 µm band
+  carries at most 17.5 % of the emission. Deglaciation is not fixable here without spectral
+  resolution, and no amount of refitting will change that.
+
+  What the window did buy: the outer edge went from +67 °C to **+16 °C** at 0.35 S⊕ — the maximum
+  greenhouse starting to work, though still not an edge. Against that, six downstream tests broke,
+  including the methane-haze turnover, and the LGM moved *away* from observation (−4.45 → −3.42 K
+  against −6.1). Not enough, so it went back again.
 * **The runaway transient is fast when the planet is pushed hard**, which is not a deviation but is
   worth stating plainly, because the ~10⁵ yr figure from Turbet et al. (2023) gets quoted as though
   it were universal. It is not: boiling an ocean is an energy problem. Vaporising an Earth ocean
