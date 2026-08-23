@@ -908,6 +908,69 @@ the column, and the carbon leaves as tholin instead of as ethane. Titan is the a
 ceiling precisely because its haze production is the observable, so dividing by the shield counted
 the same haze twice.
 
+### Methane is made of carbon, and life needs light to make it
+
+Two reservoir bugs, found together because they produced the same symptom: a
+number that grew and never stopped.
+
+**A world under its own haze went on making methane for ever.** The biological
+source scaled with the biosphere slider, a wetness gate and a thermal one — but
+never with *light*. That is not a corner case, because the gas makes the smog
+that does the blocking: at 0.274 S⊕ with an Io-like interior a world closed its
+haze deck over, kept producing at the full Earth rate in the dark, and reached
+**744 bar of methane** and climbing.
+
+The source is now proportional to the light that actually reaches the ground —
+through `swTrans`, not top-of-atmosphere. Methanogens do not photosynthesise,
+but nearly all of them eat something that did. The saturation point is a seventh
+of Earth's mean, so Earth and the Archean are both light-saturated and neither
+moves; it only bites in the dark. The loop it closes is **negative** (more
+methane → more haze → less light → less methane), unlike the temperature loop an
+earlier attempt at this hit, which ran the other way and oscillated.
+
+That world now settles at **6.2 bar** instead of 744.
+
+**And methane was made of nothing at all.** Both source terms ran against no
+reservoir, which is invisible while methane is a trace gas and absurd when it is
+not: that same world carried 744 bar of CH₄ — 2000 bar of carbon — while its
+mantle still held 400 bar of its own. It comes out of the two pools the CO₂
+cycle already uses now, capped by what is there, and destruction hands it back.
+
+> Closing the loop is the conservative choice and it costs something real. In an
+> anoxic atmosphere methane photolysis buries its carbon as tholin — Catling's
+> irreversible oxidation of the early Earth — and that share was routed to the
+> interior first. It cannot work without an organic-carbon reservoir the model
+> does not have: burial is one-way, so at steady state it is a **pump** running
+> surface-to-mantle at the full production rate for ever, and once the surface
+> pool empties the debit clamps at zero while the credit does not.
+
+### The mantle was being refilled from nowhere
+
+Same class of bug, and it is why volcanism looked like it had a bottomless tank.
+
+The carbon cycle's exchange with the interior is damped semi-implicitly, so that
+a long step lands on the right answer instead of overshooting past zero. The
+damping was applied to the atmosphere and **not** to the mantle: over a step the
+surface gave up `(Wr−V)·dt·damping` while the interior received the whole
+`(Wr−V)·dt`. The difference is carbon that never existed.
+
+| after 20 Gyr | before | now | budget |
+|---|---|---|---|
+| Earth, 1× volcanism | 414 bar | **400** | 399 |
+| Earth, 5× volcanism | **951 bar** | **402** | 399 |
+| dry, 5× volcanism | 400 bar | 400 | 399 |
+
+A dry world was always exact, which is why this survived so long: with no liquid
+there is no weathering and the term is zero. The leak needed a **working carbon
+cycle to hide in**, and it scaled with the flux through it.
+
+So: does the mantle run out? **On a dry world, completely** — 374 bar → 0, with
+the whole 399-bar budget in the air, and then it stops. On a wet world it does
+not, and should not: weathering buries carbonate and subduction returns it, so
+the two settle into exchange. That is a cycle reaching equilibrium, not a tank
+draining. What was wrong was that the equilibrium sat at 951 bar of carbon on a
+planet given 399.
+
 ### Organic haze and the anti-greenhouse
 
 Ultraviolet light breaks methane into radicals that polymerise into a tholin smog — but only in a

@@ -698,6 +698,37 @@ export function run() {
       `2.8× → ${(above.diag.Tmean - 273.15).toFixed(1)} °C anoxic on ` +
       `${(above.diag.pCH4 * 1e6).toFixed(0)} ppm CH\u2084`);
 
+    // Carbon is conserved. This is the check that would have caught the leak,
+    // and it is worth stating why it took so long to notice: a dry world was
+    // always exact, because with no liquid there is no weathering and the
+    // interior exchange is zero. The leak needed a *working* carbon cycle to
+    // hide in, and it scaled with the flux through it -- at five times Earth's
+    // volcanism a world finished twenty billion years holding 951 bar against a
+    // 399 bar budget, its mantle fuller than it started, which is exactly why
+    // the reservoir looked bottomless however long anyone ran it.
+    //
+    // Note this counts kappa*co2, not co2. The surface system holds kappa times
+    // the atmospheric column -- that is what kappa means -- and counting the
+    // air alone makes a conserving model look like it is losing carbon.
+    {
+      const totalC = (w) => {
+        const k = w.weathering?.kappa ?? 1;
+        return (k * w.co2 + (w.co2Frozen ?? 0) + (w.ch4 ?? 0) * 44 / 16 + (w.carbonDeep ?? 0))
+          * w.diag.g / 1e5;
+      };
+      const budget = carbonBudget(1) * 9.81 / 1e5;
+      const worlds = [
+        ['Earth', {}],
+        ['5\u00d7 volcanism', { outgassing: 5 }],
+        ['dry, 5\u00d7 volcanism', { outgassing: 5, water: 0, landFraction: 1 }],
+      ].map(([name, over]) => [name, totalC(settle({ ...EARTH, ...over }, 2e10).world)]);
+      const worst = Math.max(...worlds.map(([, c]) => Math.abs(c - budget) / budget));
+      check('A planet still has the carbon it started with after twenty billion years',
+        worst < 0.05,
+        worlds.map(([n, c]) => `${n} ${c.toFixed(0)}`).join(' \u00b7 ') +
+        ` bar against a ${budget.toFixed(0)} bar budget`);
+    }
+
     // The mantle is not a bottomless tap. A boosted world drains it.
     const drained = settle({ ...EARTH, internalHeat: 40, water: 0, landFraction: 1 }, 2e9).world;
     check('…but it cannot outgas carbon the planet does not have',
@@ -861,6 +892,32 @@ export function run() {
       : INTERIOR_BODIES.map((b) => `${b.name} ${(flux(b.heat, b.outgassing) / ref).toFixed(2)}×`).join(', '));
   }
 
+  // ---- 3k4. methane in the dark ---------------------------------------------
+  // The gas makes the smog that blocks the light, and the light is what its
+  // source runs on -- so leaving that loop open let a world under a closed haze
+  // deck produce methane at the full Earth rate for ever. At 0.274 S(+) with an
+  // Io-like interior it reached seven hundred bar and was still climbing, on a
+  // planet whose entire carbon budget is four hundred bar of CO2 equivalent.
+  //
+  // Two things were missing and both are here: the biosphere needs light that
+  // actually reaches the ground, and the methane has to be made of carbon that
+  // came from somewhere.
+  {
+    const w = settle({ ...EARTH, mass: 1.2, insolation: 0.274, o2Bar: 0,
+      co2Bar: 1.06, ch4Bar: 1.9e-6, outgassing: 5, internalHeat: 1.5, startT: 286.85 }, 2e10).world;
+    check('A dark hazy world does not grow a hundred bar of methane out of nothing',
+      w.diag.pCH4 < 20,
+      `${w.diag.pCH4.toFixed(2)} bar CH\u2084 after 20 Gyr, was 744 and rising`);
+    // The gate is proportional, not a cutoff, so this is a throttle rather than
+    // a switch: the haze closes until the light it still passes supports only
+    // as much methane as photolysis can take away. That is the loop closing.
+    check('\u2026because the haze it makes throttles the biosphere that makes it',
+      w.diag.swTrans < 0.3 && w.ch4Source < 1.0 * 8.07e-4,
+      `${(w.diag.swTrans * 100).toFixed(1)}% of the sunlight reaches the ground and the ` +
+      `methane source sits at ${(w.ch4Source / 8.07e-4 * 100).toFixed(0)}% of Earth\u2019s, ` +
+      `down from 171% with the loop open`);
+  }
+
   // ---- 3l. methane is not a stable gas -------------------------------------
   // It used to sit wherever the slider put it, for ever. In today's oxidising
   // air OH radicals destroy it in about a decade; with no free oxygen the only
@@ -908,13 +965,29 @@ export function run() {
       // starting methane, from none at all to ten thousand ppm, all have to end
       // at the level this biosphere sustains. Under the old contract each one
       // held its own number for ever.
-      const ends = [0, 1.9e-6, 1e-4, 1e-2].map((ch4Bar) =>
-        settle({ ...EARTH, ch4Bar }, 1e5).world.diag.pCH4 * 1e6);
+      const runs = [0, 1.9e-6, 1e-4, 1e-2].map((ch4Bar) => settle({ ...EARTH, ch4Bar }, 1e5).world);
+      const ends = runs.map((w) => w.diag.pCH4 * 1e6);
       const spread = (Math.max(...ends) - Math.min(...ends)) / Math.max(...ends);
+      // The tolerance is 10%, not 1%, and the reason is that these four are no
+      // longer the same world. Methane is made of carbon now, and destroying it
+      // in oxidising air hands that carbon back as CO2 -- so the world built
+      // with 10 000 ppm of methane is carrying 27 500 ppm of CO2 equivalent
+      // that the empty one never had, which is most of a doubling once the
+      // ocean has taken its share. It settles a little warmer and holds a
+      // little more methane, and that is correct rather than slop. Under the
+      // bug this is guarding against the spread was not seven percent but a
+      // factor of five thousand: each world simply held whatever it was given.
       check('Methane forgets what the slider was set to',
-        spread < 0.01 && Math.abs(ends[0] - 0.80) < 0.1,
+        spread < 0.10 && Math.abs(ends[0] - 0.80) < 0.1,
         `0, 1.9, 100 and 10 000 ppm all settle at ` +
         `${ends.map((e) => e.toFixed(2)).join(' / ')} ppm`);
+      // And the carbon that came with it really did go somewhere, rather than
+      // being quietly deleted.
+      const co2s = runs.map((w) => w.diag.pCO2 * 1e6);
+      check('\u2026but the carbon it was made of does not vanish with it',
+        co2s[3] > co2s[0] * 1.2,
+        `starting with 10 000 ppm CH\u2084 leaves ${co2s[3].toFixed(0)} ppm CO\u2082 ` +
+        `against ${co2s[0].toFixed(0)} with none`);
 
       // And on an anoxic world, where the level it settles at is a thousand
       // times higher and the lifetime a thousand times longer.

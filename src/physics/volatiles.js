@@ -83,6 +83,10 @@ const CH4_ANOX_BOOST = 1.5;
 // Net photolytic destruction at Earth's distance from the Sun, which is what
 // caps an anoxic methane atmosphere. See methaneLifetime.
 const CH4_PHOTO = 1.6e-3;       // kg/m^2/yr at 1 S-earth
+// Light at the ground above which a biosphere is no longer light-limited, in
+// W/m^2. Earth's mean is 340 and the Archean's 262, so both are saturated and
+// neither moves; a world under a closed haze deck gets fractions of a watt.
+const CH4_LIGHT_SAT = 50;
 
 // ---------------------------------------------------------------------------
 // Us.
@@ -605,8 +609,21 @@ export function stepVolatiles(w, dtYears) {
   // 0.3 W / C. Without this the step-size chooser had to throttle the whole
   // clock to a crawl whenever CO2 was drawn down near zero.
   const dWdC = w.co2 > 1e-12 ? 0.3 * Wr / w.co2 : 0;
-  w.co2 = Math.max(0, w.co2 + emit * AIRBORNE * dtYears
-    + (V - Wr) * dtYears / kappa / (1 + dtYears * dWdC / kappa));
+  // The exchange with the interior, in surface-system units -- damped exactly
+  // once, and then spent on both sides of the ledger.
+  //
+  // The damping used to be applied to the atmosphere and not to the mantle, so
+  // over a long step the surface gave up (Wr-V)·dt·damping while the interior
+  // received the whole (Wr-V)·dt. The difference is carbon that never existed,
+  // and it is not small: an Earth-like world at five times Earth's volcanism
+  // finished twenty billion years holding 951 bar of a 399 bar budget, its
+  // mantle *fuller* than it started. That is why the reservoir looked
+  // bottomless however long anyone ran it -- it was being refilled from nowhere
+  // faster than the volcanoes drained it. A dry world was always exact, because
+  // with no liquid there is no weathering and this term is zero; the leak
+  // needed a working carbon cycle to hide in.
+  const toSurface = (V - Wr) * dtYears / (1 + dtYears * dWdC / kappa);
+  w.co2 = Math.max(0, w.co2 + emit * AIRBORNE * dtYears + toSurface / kappa);
 
   // Close the loop. Weathering does not destroy carbon, it buries it as
   // carbonate, and subduction carries it back down to be outgassed again --
@@ -618,7 +635,7 @@ export function stepVolatiles(w, dtYears) {
   // normalisation, and scaling the sink with the source would hold the
   // equilibrium exactly where it was and make the whole coupling a no-op.
   w.carbonDeep = p.mantleInfinite
-    ? w.carbonDeep : Math.max(0, w.carbonDeep + (Wr - V) * dtYears);
+    ? w.carbonDeep : Math.max(0, w.carbonDeep - toSurface);
 
   // --- what is actually alive ----------------------------------------------
   // The control is the biosphere you asked for; this is the one the planet can
@@ -718,7 +735,43 @@ export function stepVolatiles(w, dtYears) {
       // methanogens here is the same thing that limits everything, `makes`, at
       // the point the surface stops being habitable at all.
       const wet = smoothstep(0, 0.015, w.water.ocean);
-      const bio = CH4_BIO * Math.max(p.biosphere ?? 0, 0) * wet
+      // Light, though, it does need -- and that is a different gate from the
+      // thermal one above, which is why it does not bring the oscillation back
+      // with it.
+      //
+      // Methanogens do not photosynthesise, but almost all of them eat
+      // something that did: the organic carbon raining down from the surface.
+      // Cut the light and the substrate goes with it. This was missing, and it
+      // is not a corner case, because the gas makes the smog that does the
+      // cutting. A world whose haze had closed over -- absorbed sunlight
+      // reading 0.0 W/m² at the ground -- went on producing methane at the full
+      // Earth rate for ever, and at 0.274 S(+) with an Io-like interior it
+      // reached SEVEN HUNDRED BARS of it and was still climbing.
+      //
+      // Proportional to the light, not a threshold on it. photosynthesis()'s
+      // own bounds are survival limits -- the record, a ten-thousandth of full
+      // sunlight, where green sulphur bacteria have been recovered in the Black
+      // Sea -- and asking "could anything live here" is the wrong question for
+      // a rate. What sets the methane flux is how much carbon the biosphere
+      // fixes, and below saturation that is very nearly linear in the light it
+      // gets. Used as a threshold this gate still passed 30% of Earth's methane
+      // flux on a world whose haze let 0.2 W/m² reach the ground.
+      //
+      // CH4_LIGHT_SAT is where a biosphere stops being light-limited. At a
+      // seventh of Earth's mean it leaves Earth and the Archean untouched --
+      // both are saturated -- and only bites in the dark.
+      //
+      // The loop it closes is *negative*: more methane, more haze, less light,
+      // less methane. The one the note above warns about ran the other way,
+      // through temperature, and this does not touch temperature. What matters
+      // is that the light is measured at the ground, through `swTrans`, and not
+      // at the top of the atmosphere; photosynthesis() itself still reads the
+      // unattenuated `S`, which is a separate and smaller version of the same
+      // oversight.
+      let ground = 0;
+      for (let i = 0; i < NBANDS; i++) ground += dg.S[i] * (dg.swTrans ?? 1) / NBANDS;
+      const lit = clamp(ground / CH4_LIGHT_SAT, 0, 1);
+      const bio = CH4_BIO * Math.max(p.biosphere ?? 0, 0) * wet * lit
         * (1 + (CH4_ANOX_BOOST - 1) * (1 - oxidising));
 
       // And the interior makes the rest: serpentinisation and the seeps.
@@ -729,10 +782,60 @@ export function stepVolatiles(w, dtYears) {
       // a millibar of methane going, because the source had no idea the planet
       // had died. Titan is well below this and keeps its cryovolcanic supply.
       const makes = 1 - smoothstep(400, 600, dg.Tmean);
+
+      // Methane is made of carbon, and until now it was made of nothing.
+      //
+      // Both terms were pure sources against no reservoir, which is invisible
+      // while methane is a trace gas and absurd when it is not: the world that
+      // prompted this held three hundred bar of CH4 -- eight hundred bar of
+      // carbon -- while its mantle still had four hundred bar of its own, so
+      // the planet was carrying twice the carbon it was ever given. The CO2
+      // cycle has been drawing on a finite budget since carbonBudget() went in;
+      // methane simply was not part of that accounting.
+      //
+      // It comes out of the two reservoirs the CO2 cycle already uses, and by
+      // the same logic: the seeps and serpentinisation draw on the mantle, and
+      // the biosphere recycles surface carbon -- methanogens eat what fell from
+      // above, they do not mine it. Both are capped by what is actually there,
+      // so an exhausted pool stops the source rather than going negative.
+      const CH4_AS_CO2 = 44 / 16;    // the same carbon, weighed as CO2
+      let bioRate = bio * makes, geoRate = geo * makes;
+      if (dtYears > 0) {
+        if (!p.mantleInfinite) {
+          geoRate = Math.min(geoRate, Math.max(w.carbonDeep, 0) / CH4_AS_CO2 / dtYears);
+        }
+        bioRate = Math.min(bioRate, Math.max(w.co2, 0) * kappa / CH4_AS_CO2 / dtYears);
+      }
       // Semi-implicit, so an arbitrarily long step still lands on the right
       // answer instead of overshooting past zero.
-      w.ch4Source = (bio + geo) * makes;
+      w.ch4Source = bioRate + geoRate;
+      const ch4Before = w.ch4;
       w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * dtYears) / (1 + dtYears / tau));
+      const destroyed = Math.max(0, ch4Before + w.ch4Source * dtYears - w.ch4);
+
+      // Destroyed methane hands its carbon back to the surface pool, whatever
+      // destroyed it, so the cycle closes where it opened.
+      //
+      // The anoxic route really is different in kind -- photolysis polymerises
+      // the carbon into tholin, the hydrogen escapes, and what settles out is
+      // buried, which is Catling's irreversible oxidation of the early Earth --
+      // and sending that share to the interior instead was tried first. It does
+      // not work here, and the reason is structural rather than a tuning
+      // failure: burial is one-way, so at steady state it is a pump running
+      // surface-to-mantle at the full production rate for ever. An anoxic world
+      // at five times Earth's volcanism would have pushed six thousand bar
+      // through it in twenty billion years, emptied its surface pool, and then
+      // gone on crediting the mantle with carbon the surface no longer had,
+      // because the debit clamps at zero and the credit does not.
+      //
+      // Representing it properly needs an organic-carbon reservoir the model
+      // does not have. Closing the loop is the conservative approximation: it
+      // cannot manufacture carbon and it cannot pump it, and what it gives up
+      // is a slow burial term that on Earth is about a tenth of the total.
+      w.co2 = Math.max(0, w.co2 + (destroyed - bioRate * dtYears) * CH4_AS_CO2 / kappa);
+      if (!p.mantleInfinite) {
+        w.carbonDeep = Math.max(0, w.carbonDeep - geoRate * dtYears * CH4_AS_CO2);
+      }
       w.ch4Tau = tau;
     }
   }
