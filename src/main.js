@@ -11,7 +11,7 @@ import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
-import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
+import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -266,6 +266,35 @@ function buildSliders() {
     const input = wrap.querySelector('input[type=range]'), out = wrap.querySelector('input.val');
     els[d.key] = { input, out, def: d, editing: false, dragging: false };
 
+    // Real interiors, as one-click pairs. These set the heat *and* the
+    // volcanism, because on an actual body the two are not independent -- see
+    // INTERIOR_BODIES for where each number comes from and what `total` means.
+    if (d.bodies) {
+      const row = document.createElement('div');
+      row.className = 'chip-row body-heat';
+      for (const b of INTERIOR_BODIES) {
+        const c = document.createElement('button');
+        c.className = 'chip'; c.dataset.body = b.id;
+        c.textContent = b.name;
+        const heat = b.heat < 1 ? `${(b.heat * 1e3).toFixed(0)} mW/m²` : `${b.heat} W/m²`;
+        const volc = b.total === 0 ? 'no carbon outgassing'
+          : `${b.total < 1 ? b.total : b.total.toFixed(b.total < 10 ? 1 : 0)}× Earth’s outgassing`;
+        c.title = `${heat} · ${volc}\n${b.note}`;
+        c.addEventListener('click', () => {
+          params.internalHeat = b.heat;
+          params.outgassing = b.outgassing;
+          syncSliders();
+          applyParams('internalHeat');
+          applyParams('outgassing');
+          markBody();
+          toast(`${b.name} — ${heat}, ${volc}`);
+        });
+        row.appendChild(c);
+      }
+      wrap.appendChild(row);
+      els._bodyRow = row;
+    }
+
     input.addEventListener('input', () => {
       const v = snapToDisplay(d, fromSlider(d, +input.value));
       params[d.key] = v;
@@ -319,6 +348,18 @@ function commitTyped(d) {
   applyParams(d.key);
 }
 
+// Which interior preset, if any, the two controls are currently sitting on.
+// Both have to match: half of a pair is not that body.
+function markBody() {
+  if (!els._bodyRow) return;
+  const near = (a, b) => Math.abs(a - b) <= Math.abs(b) * 1e-6 + 1e-12;
+  for (const c of els._bodyRow.children) {
+    const b = INTERIOR_BODIES.find((x) => x.id === c.dataset.body);
+    c.classList.toggle('active',
+      !!b && near(params.internalHeat ?? 0, b.heat) && near(params.outgassing ?? 0, b.outgassing));
+  }
+}
+
 function syncSliders() {
   for (const d of SLIDERS) {
     const e = els[d.key];
@@ -328,6 +369,7 @@ function syncSliders() {
     e.out.value = d.fmt(params[d.key]);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
+  markBody();
 }
 
 // Reading the live value of a control the simulation evolves on its own.
@@ -389,6 +431,7 @@ function applyParams(key) {
     sim.setParams({});
   }
   setPresetActive(null);
+  markBody();
   writeHash();
 }
 

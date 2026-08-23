@@ -6,7 +6,7 @@ import { classify } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2 } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
-import { SLIDERS, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
+import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
@@ -792,6 +792,73 @@ export function run() {
       bounded && pbar < 0.05,
       bounded ? `settles at ${(pbar * 1e6).toFixed(0)} ppm-bar at 0.8 S\u2295 (Kharecha 2005: 100-35 000 ppmv)`
               : 'unbounded');
+  }
+
+  // ---- 3k3. the interior buttons -------------------------------------------
+  // Nine real bodies, each setting internal heat and volcanism together because
+  // on an actual planet they are not independent. The number worth checking is
+  // the one the tooltip shows: the *total* outgassing, which is the slider
+  // value times the melt boost the heat already supplies. Get that arithmetic
+  // wrong in either direction and the button quietly asks for the wrong world.
+  {
+    let bad = 0;
+    for (const b of INTERIOR_BODIES) {
+      const total = b.outgassing * meltBoost({ internalHeat: b.heat });
+      if (Math.abs(total - b.total) > Math.max(0.05 * b.total, 0.02)) {
+        bad++;
+        console.log(`      ${b.name}: says ${b.total}×, computes ${total.toFixed(2)}×`);
+      }
+    }
+    check('Every interior button\u2019s stated total matches heat × volcanism',
+      bad === 0, `${INTERIOR_BODIES.length} bodies, ` +
+      `${INTERIOR_BODIES[0].name} ${INTERIOR_BODIES[0].heat} W/m² to ` +
+      `${INTERIOR_BODIES[INTERIOR_BODIES.length - 1].name} ${INTERIOR_BODIES[INTERIOR_BODIES.length - 1].heat}`);
+
+    // They have to be reachable on the controls they set, and survive the
+    // slider round trip -- a button that lands on 79.4 W/m² is a broken button.
+    const hs = SLIDERS.find((d) => d.key === 'internalHeat');
+    const os = SLIDERS.find((d) => d.key === 'outgassing');
+    const trip = (d, v) => snapToDisplay(d, fromSlider(d, Math.round(toSlider(d, v))));
+    const off = INTERIOR_BODIES.filter((b) =>
+      b.heat > hs.max || b.outgassing > os.max
+      || Math.abs(trip(hs, b.heat) - b.heat) > Math.max(b.heat * 0.02, 1e-9)
+      || Math.abs(trip(os, b.outgassing) - b.outgassing) > Math.max(b.outgassing * 0.02, 1e-9));
+    check('\u2026and every one of them round-trips through the sliders it sets',
+      off.length === 0,
+      off.length ? off.map((b) => b.name).join(', ') : 'all nine land where they say');
+
+    // And the two that are also world presets must agree with them, or picking
+    // Venus from the presets and Venus from this row gives two different Venuses.
+    const agrees = (id, key) => {
+      const b = INTERIOR_BODIES.find((x) => x.id === id), p = PRESETS[key].params;
+      return b.heat === p.internalHeat && b.outgassing === p.outgassing;
+    };
+    check('\u2026and Venus, Mars and GJ 1132 b agree with their world presets',
+      agrees('venus', 'venus') && agrees('mars', 'mars') && agrees('gj1132b', 'gj1132b'),
+      `Venus ${PRESETS.venus.params.internalHeat} W/m² × ${PRESETS.venus.params.outgassing}, ` +
+      `GJ 1132 b ${PRESETS.gj1132b.params.internalHeat} × ${PRESETS.gj1132b.params.outgassing}`);
+
+    // End to end, through the carbon cycle rather than through meltBoost on its
+    // own: press the button and the world really does outgas what the tooltip
+    // said, measured against an Earth-mass Earth. This is the check that stands
+    // in for clicking them, and it is the stronger one -- it would catch the
+    // pair being applied to the wrong controls, or one of them not being
+    // applied at all.
+    const flux = (heat, og) => {
+      const x = new Simulation({ ...EARTH, internalHeat: heat, outgassing: og });
+      x.stepOnce(1);
+      return x.world.weathering.V;
+    };
+    const ref = flux(0.092, 1);
+    const wrong = INTERIOR_BODIES.filter((b) => {
+      const got = flux(b.heat, b.outgassing) / ref;
+      return Math.abs(got - b.total) > Math.max(0.06 * b.total, 0.02);
+    });
+    check('\u2026and pressing one really does outgas what its tooltip claims',
+      wrong.length === 0,
+      wrong.length ? wrong.map((b) => `${b.name} says ${b.total}× got ` +
+        `${(flux(b.heat, b.outgassing) / ref).toFixed(2)}×`).join('; ')
+      : INTERIOR_BODIES.map((b) => `${b.name} ${(flux(b.heat, b.outgassing) / ref).toFixed(2)}×`).join(', '));
   }
 
   // ---- 3l. methane is not a stable gas -------------------------------------

@@ -142,11 +142,17 @@ export const PRESETS = {
   // Io-like volcanism, which is why it is here: it is the observed case for a
   // world whose interior, not its star, decides what its atmosphere is. The
   // star is not the problem either way at 19 S(+).
+  //
+  // `outgassing` is 1.0 because the melt boost from 80 W/m^2 is already 29x --
+  // that IS the Io-like volcanism Swain et al. predict, and asking for three
+  // times Earth's specific activity on top of it would have counted the same
+  // heat twice and landed on ninety. It matches the GJ 1132 b button under the
+  // internal-heat slider, which is where that arithmetic is written out.
   gj1132b: { name: 'GJ 1132 b', icon: '🌋', params: { ...EARTH,
     mass: 1.66, insolation: 18.8, starTemp: 3270, tidallyLocked: true,
     rotationHours: 39.1, obliquity: 0, water: 0, landFraction: 1,
     n2Bar: 0.01, o2Bar: 0, co2Bar: 0.1, ch4Bar: 0, biosphere: 0,
-    internalHeat: 80, outgassing: 3, xuvFraction: 2e-4,
+    internalHeat: 80, outgassing: 1, xuvFraction: 2e-4,
     landAlbedo: 0.12, startT: 600 } },
   // 0.9 S-earth and Earth-like specific volcanism, both of which are
   // corrections rather than taste.

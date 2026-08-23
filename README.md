@@ -367,7 +367,7 @@ nobody has a map of any of them.
 | GJ 1132 b | 18.8 | **80 W/m²** — a thousand times Earth's | magma ocean a few tens of metres down |
 
 These are the worlds the internal-heat slider was built for. GJ 1132 b's 80 W/m² comes from an
-eccentricity of only 0.01, held by resonance, and it settles here as a **dry runaway at 919 °C** —
+eccentricity of only 0.01, held by resonance, and it settles here as a **dry runaway at 647 °C** —
 not habitable, and not close. TRAPPIST-1b's substellar band lands at **539 K** against the **503 K**
 dayside brightness temperature JWST measured (Greene et al. 2023), which is what a bare rock with
 nothing to move its heat around looks like.
@@ -516,6 +516,36 @@ would give GJ 1132 b 870× Earth's volcanism and empty its entire carbon budget 
 Weathering is deliberately *not* scaled with it. It shares the same mass normalisation, and boosting
 both would move source and sink together — an error that leaves the equilibrium looking untouched. A
 test pins it.
+
+### Real interiors, as one-click pairs
+
+Internal heat and volcanism are not two independent dials, so the internal-heat control carries a
+row of **nine real bodies** that set both at once. The slider value is *specific* activity — what
+a body's geology does per unit of heat — because the model already scales outgassing by
+`meltBoost(F) = √(F/0.092)`. The number in each button's tooltip is the **total**, which is the one
+with a physical meaning:
+
+| | heat | slider | total outgassing |
+|---|---|---|---|
+| Moon | 11 mW/m² | 0 | none — dead for a billion years |
+| Mars | 20 mW/m² | 0.02× | 0.01× Earth |
+| Venus | 31 mW/m² | 1.2× | 0.70× Earth |
+| Europa | 40 mW/m² | 0 | none — cryovolcanism moves water, not carbon |
+| **Earth** | **92 mW/m²** | **1×** | **1×** |
+| Enceladus | 0.15 W/m² | 0 | none, and south-polar rather than global |
+| Io | 1.5 W/m² | 5× | 20× Earth — and it erupts sulphur |
+| TRAPPIST-1b | 2.68 W/m² | 1.5× | 8.1× Earth |
+| GJ 1132 b | 80 W/m² | 1× | 29× Earth |
+
+The zeroes are statements, not gaps. GJ 1132 b needs no specific-activity multiplier at all: 80 W/m²
+is a melt boost of 29 on its own, and **that is** the Io-like volcanism Swain et al. predict — asking
+for 3× on top of it, as its world preset originally did, counted the same heat twice and landed on
+ninety.
+
+A button lights up only when *both* controls sit on it; half a pair is not that body. The self-test
+checks that every stated total really is the slider value times the melt boost, that all nine survive
+the slider round trip, and that Venus, Mars and GJ 1132 b agree with their world presets — so
+picking Venus from the presets and Venus from this row cannot give two different Venuses.
 
 ### How much carbon a planet has
 

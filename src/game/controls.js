@@ -12,6 +12,54 @@ const PRESSURE_UNITS = { bar: 1, bars: 1, mbar: 1e-3, mbars: 1e-3, hpa: 1e-3, kp
   pa: 1e-5, ubar: 1e-6, 'µbar': 1e-6, ppm: 1e-6, ppb: 1e-9, '%': 1e-2, atm: 1.01325 };
 const pressureUnitFor = (v) => (v >= 0.01 ? 'bar' : 'ppm');
 
+// ---------------------------------------------------------------------------
+// Real interiors, as one-click pairs.
+//
+// Internal heat and volcanism are not two independent dials -- melt production
+// is what carries dissolved CO2 up, so the model scales outgassing by
+// meltBoost(F) = sqrt(F / 0.092). That makes the *slider* value specific
+// activity: what this body's geology does per unit of heat, on top of the heat
+// itself. Which is exactly the number nobody can guess, hence these.
+//
+// So `outgassing` here is not the body's volcanic rate. It is that rate divided
+// by the melt boost its heat already supplies, and `total` is what the two come
+// to together -- the number shown in the chip's tooltip, because that is the
+// one with a physical meaning.
+//
+// Heat fluxes: Moon from global gamma-ray mapping (Apollo 15/17 gave 21 and
+// 15 mW/m² at two points); Mars modelled at 6-25, never measured, because
+// InSight's HP3 mole never reached depth; Venus from lithosphere strength, a
+// third of Earth's and consistent with a stagnant lid; Europa 6-46 with
+// radiogenic; Earth 47 +/- 2 TW (Davies & Davies 2010); Enceladus south-polar
+// and NOT global, which is why it is flagged; Io from Spencer 2000 and Veeder
+// 2004; TRAPPIST-1b from Barr, Dobos & Kiss 2018 Table 3; GJ 1132 b from Swain
+// et al. 2021, at an eccentricity of 0.01 held by resonance.
+//
+// The zeroes are deliberate and they are not "unknown". The Moon has not
+// erupted in a billion years. Europa and Enceladus are extremely active and
+// outgas no carbon at all: cryovolcanism moves water, and `outgassing` here is
+// a CO2 source. They are here because their *heat* is the point.
+export const INTERIOR_BODIES = [
+  { id: 'moon',  name: 'Moon',        heat: 0.011, outgassing: 0,     total: 0,
+    note: 'Radiogenic only, and volcanically dead for a billion years.' },
+  { id: 'mars',  name: 'Mars',        heat: 0.02,  outgassing: 0.02,  total: 0.01,
+    note: 'Modelled, never measured — the InSight mole never got deep enough. All but dead.' },
+  { id: 'venus', name: 'Venus',       heat: 0.031, outgassing: 1.2,   total: 0.70,
+    note: 'A third of Earth’s heat under a stagnant lid, but geologically active with it.' },
+  { id: 'europa', name: 'Europa',     heat: 0.04,  outgassing: 0,     total: 0,
+    note: 'Tidal, and about 39 mW/m² at the seafloor. Cryovolcanism moves water, not carbon.' },
+  { id: 'earth', name: 'Earth',       heat: 0.092, outgassing: 1,     total: 1,
+    note: '47 ± 2 TW over the globe. Everything else on this row is measured against it.' },
+  { id: 'enceladus', name: 'Enceladus', heat: 0.15, outgassing: 0,    total: 0,
+    note: 'South-polar, not global — the rest of the moon is nothing like this warm.' },
+  { id: 'io',    name: 'Io',          heat: 1.5,   outgassing: 5,     total: 20,
+    note: 'The most volcanically active body known. What it erupts is sulphur, not CO₂.' },
+  { id: 't1b',   name: 'TRAPPIST-1b', heat: 2.68,  outgassing: 1.5,   total: 8.1,
+    note: 'Twice Io’s tidal flux. Its mantle sits above the rock solidus: partially molten.' },
+  { id: 'gj1132b', name: 'GJ 1132 b', heat: 80,    outgassing: 1,     total: 29,
+    note: 'A thousand times Earth’s, from an eccentricity of 0.01. Magma ocean tens of metres down.' },
+];
+
 export const SLIDERS = [
   { g: 'body', key: 'mass', label: 'Planet mass', min: 0.05, max: 5, log: true,
     fmt: (v) => `${v.toFixed(2)} M⊕`, units: { 'm': 1, 'me': 1, 'm⊕': 1, 'earth': 1, 'earths': 1 },
@@ -116,7 +164,9 @@ export const SLIDERS = [
     units: { 'w/m2': 1, 'w/m²': 1, w: 1, 'mw/m2': 1e-3, 'mw/m²': 1e-3, mw: 1e-3,
              earth: 0.092, earths: 0.092, x: 0.092, '×': 0.092, tw: 1 / 5.1e2 },
     unitFor: (v) => (v > 0 && v < 0.9995 ? 'mW/m²' : 'W/m²'),
-    note: 'Radiogenic, primordial and — the one that can dominate — tidal. Moon 11 · Mars ~20 · Venus 31 · Europa ~40 · Earth 92 mW/m², then Enceladus 0.1–0.25 · Io 1–2 · TRAPPIST-1b 2.7 · GJ 1132 b 80 W/m². Past about 282 it boils an ocean on its own, with no help from the star.' },
+    note: 'Radiogenic, primordial and — the one that can dominate — tidal. Past about 282 W/m² it boils an ocean on its own, with no help from the star. The buttons set this <em>and</em> the volcanism below, because on a real body the two are not independent.',
+    // Rendered as a chip row under the note. See INTERIOR_BODIES.
+    bodies: true },
 
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
     // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",
