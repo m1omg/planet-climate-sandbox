@@ -28,7 +28,13 @@
         <h2>Saves</h2>
         <div id="slots" class="slot-row"></div>
         <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
-          class="supply-btn">Save…</button> then pick a slot to overwrite.</div>
+          class="supply-btn">Save…</button> then pick a slot to overwrite. Slot 1 keeps itself.<br>
+          <button type="button" id="btn-saves-export" class="supply-btn"
+            title="Every saved world in one file, to keep somewhere that is not this browser">Export all…</button>
+          <button type="button" id="btn-saves-import" class="supply-btn"
+            title="Merge a saves file in. Slots the file does not mention are left alone.">Import…</button>
+          <input type="file" id="saves-file" accept="application/json,.json" hidden>
+          <br>A single world also travels in the address bar — copy the URL.</div>
       </section>
 
       <p class="panel-note">Every control is live. Change one mid-run and the planet keeps its

@@ -692,6 +692,53 @@ of a few; core mass fraction, which changes how much silicate there is to hold c
 devolatilisation. Those are real, and they are why the band above is a factor of two wide — but none
 of them is something this model has any way to know about a given world.
 
+#### Autosave, and the guard that makes it safe
+
+**Slot 1 keeps itself**, every 30 seconds and again when the page is hidden or
+closed — `visibilitychange` and `pagehide`, because iOS Safari does not fire
+`beforeunload` at all when an app is swiped away.
+
+The rule that makes it safe rather than a hazard is that **it will not write
+until the session has been touched**. A fresh page starts with the clock
+*running*, so "the world has changed" is true within a frame of opening the tab.
+On that alone, opening the page and walking away for half a minute would put a
+default Earth over the world you left there yesterday — which is the one way an
+autosave stops being a convenience and becomes a way of losing things.
+
+So there are two flags. The clock moving makes the world **dirty**; only a
+deliberate act — a slider, a preset, a scenario, a reset, a settle, pressing
+play — makes the session **touched**; and nothing is written until both are
+true. Open it, look at it, close it, and your autosave is still yesterday's.
+Loading a slot also clears the flag, so opening slot 3 does not copy itself into
+slot 1 a moment later. `tools/smoketest.mjs` pins all of that.
+
+#### Every save in one file
+
+**Export all…** writes the whole set as JSON; **Import…** reads one back. A
+snapshot is about 1.5 kB, so a full set is a few kilobytes.
+
+Import is a **merge, not a replacement**, and that is the rule worth stating: a
+file with three planets in slots 1–3 leaves slots 4 and 5 exactly where they
+were, so importing somebody else's set cannot quietly take yours with it. A
+world that names a slot gets that slot; one that does not gets the first free
+slot; and when there is nowhere left it says so rather than overwriting.
+
+It is liberal in what it reads — the file this writes, a bare array of worlds,
+or a single world on its own — because people hand-edit these. It is strict
+about one thing: a world has to carry `params`, or it is some other JSON that
+happened to be lying around, and filling the slots with it would throw on
+restore.
+
+None of this replaces the address bar. **A single world still travels in the
+URL** and always will; that needs no file and no download, and it is how two of
+this model's bugs were reported. The file is for the other case — a whole set at
+once, or keeping saves somewhere that is not this browser's localStorage, which
+is where saves go to die the moment a browser clears site data.
+
+The rules live in `src/game/saves.js`, free of the DOM and of storage for the
+same reason `controls.js` is: which slot a world lands in is a decision worth
+testing on its own, and it needs no browser to make.
+
 ### The biosphere you ask for, and the one there is
 
 The control is a request. What the planet supports is a separate number, and until now nothing showed

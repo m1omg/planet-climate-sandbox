@@ -8,6 +8,7 @@ import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2 } from './
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
+import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
@@ -1798,6 +1799,68 @@ export function run() {
     check('A hot waterless world is not labelled frozen',
       baked.world.diag.Tmean > 350 && classify(baked.world).id !== 'frozen',
       `${(baked.world.diag.Tmean - 273.15).toFixed(0)} °C → ${classify(baked.world).name}`);
+  }
+
+  // ---- 7d. saves that leave this browser -----------------------------------
+  // The address bar already carries one world and still does; this is the other
+  // thing, which is a whole set at once and somewhere that is not localStorage
+  // -- a place saves go to die whenever a browser clears site data.
+  {
+    const world = (n) => ({ v: 1, at: 0, name: n, params: { ...EARTH }, seed: 1,
+      time: 1e6, T: [288], water: { ocean: 1 } });
+
+    // Round trip, which is the whole contract.
+    const doc = buildSaveFile([1, 2, 3, 4, 5].map((i) => ({ slot: i, ...world(`W${i}`) })), 0);
+    const back = parseSaveFile(JSON.stringify(doc));
+    check('A file of saves reads back as the worlds that went into it',
+      back && back.length === SLOTS && back[3].name === 'W4' && back[0].params.co2Bar === EARTH.co2Bar,
+      `${back ? back.length : 0} worlds, names ${back ? back.map((w) => w.name).join(' ') : '—'}`);
+
+    // Importing is a MERGE. This is the rule that stops someone else's file
+    // taking your saves with it, and it is the one worth pinning hardest.
+    {
+      const occupied = new Set([4, 5]);          // you already have two worlds
+      const file = [1, 2, 3].map((i) => ({ slot: i, ...world(`theirs${i}`) }));
+      const { writes, skipped } = planImport(file, (i) => !occupied.has(i), SLOTS);
+      const touched = writes.map((wr) => wr.slot).sort();
+      check('Importing merges: slots the file does not name are left alone',
+        skipped === 0 && touched.join() === '1,2,3',
+        `wrote ${touched.join(', ')}; 4 and 5 untouched`);
+    }
+
+    // A world with no slot number takes the first free one, and two of them
+    // cannot land on the same slot.
+    {
+      const occupied = new Set([1, 2]);
+      const file = [world('a'), world('b'), world('c')];
+      const { writes, skipped } = planImport(file, (i) => !occupied.has(i), SLOTS);
+      check('\u2026and unnumbered worlds fill the free slots, one each',
+        skipped === 0 && writes.map((wr) => wr.slot).join() === '3,4,5',
+        `three unnumbered worlds landed in ${writes.map((wr) => wr.slot).join(', ')}`);
+    }
+
+    // And when there is nowhere left, it says so rather than overwriting.
+    {
+      const file = [world('a'), world('b')];
+      const { writes, skipped } = planImport(file, () => false, SLOTS);
+      check('\u2026and with every slot full it reports rather than overwrites',
+        writes.length === 0 && skipped === 2,
+        `${skipped} worlds had nowhere to go, nothing was overwritten`);
+    }
+
+    // Not everything with a .json on it is a save.
+    check('Anything that is not a save file is refused',
+      parseSaveFile('not json at all') === null
+      && parseSaveFile('{"hello":"world"}') === null
+      && parseSaveFile('[]') === null
+      && parseSaveFile('[{"name":"no params here"}]') === null,
+      'bad JSON, wrong shape, empty list and a world with no params all rejected');
+
+    // Liberal in what it accepts, because people hand-edit these.
+    check('\u2026but a bare array, or a single world on its own, still reads',
+      parseSaveFile(JSON.stringify([world('solo')]))?.length === 1
+      && parseSaveFile(JSON.stringify(world('alone')))?.length === 1,
+      'array form and single-world form both parse');
   }
 
   // ---- 8. the controls: typed values and slider round-trips ----------------

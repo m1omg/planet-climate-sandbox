@@ -389,4 +389,10 @@ body.software-render #planet{image-rendering:auto}
 .slot-sub { color: var(--dim, #9aa4b2); font-size: 11px; font-variant-numeric: tabular-nums; }
 .slot-hint { margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--dim, #9aa4b2); }
 .slot-hint .supply-btn { margin: 0 2px; }
+/* Slot 1 says what it is, quietly. */
+.slot-auto {
+  font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--dim, #9aa4b2); border: 1px solid var(--line, rgba(255,255,255,.14));
+  border-radius: 999px; padding: 1px 5px; margin-left: 6px; opacity: .8;
+}
 .supply-btn.busy { color: #f0d9b8; background: rgba(176, 138, 90, 0.25); border-color: #b08a5a; }

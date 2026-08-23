@@ -2,6 +2,7 @@ import { Simulation } from './sim/clock.js';
 import { carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
 import { SCENARIOS } from './game/scenarios.js';
+import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
@@ -432,6 +433,7 @@ function applyParams(key) {
   }
   setPresetActive(null);
   markBody();
+  markTouched();
   writeHash();
 }
 
@@ -470,6 +472,7 @@ function loadPreset(id) {
   sim.reset(params);
   applyBody(id);
   syncSliders(); setPresetActive(id); writeHash();
+  markTouched();
   rememberStart();
   closeScenario();
   toast(BODY_MAPS[id] && view.bodyCapable
@@ -494,7 +497,7 @@ function startScenario(id) {
   renderState.seed = Math.random() * 100;
   sim.reset(params);
   syncSliders(); setPresetActive(null);
-  rememberStart();
+  rememberStart(); markTouched();
   document.querySelectorAll('[data-scenario]').forEach((b) => b.classList.toggle('active', b.dataset.scenario === id));
   const banner = $('#scenario-banner');
   banner.hidden = false;
@@ -761,7 +764,6 @@ function toast(msg, ms = 2600) {
 // below. Saving only the sliders would have given you a world that looked right
 // and had forgotten everything it had been through, which for a model whose
 // whole subject is history would be the wrong thing to keep.
-const SLOTS = 5;
 const slotKey = (i) => `planetclimate.slot${i}.v1`;
 let armedToSave = false;
 
@@ -817,13 +819,19 @@ function buildSlots() {
       if (armedToSave) {
         try { localStorage.setItem(slotKey(i), JSON.stringify(snapshot())); }
         catch { toast('Could not save — storage is full or blocked'); return; }
-        armedToSave = false; syncSlots();
+        armedToSave = false;
+        if (i === AUTOSAVE_SLOT) { dirty = false; lastAutosave = Date.now(); }
+        syncSlots();
         toast(`Saved to slot ${i}`);
         return;
       }
       const s = readSlot(i);
       if (!s) { toast(`Slot ${i} is empty — press Save… first`); return; }
       restore(s);
+      // Freshly loaded and unchanged: nothing to write back yet, and the clock
+      // has not moved. Marking it clean here is what stops loading slot 3 from
+      // copying itself into slot 1 a moment later.
+      dirty = false; lastAutosave = Date.now();
       toast(`Loaded slot ${i} — ${s.name}, ${fmtTime(s.time || 0)} in`);
     });
   }
@@ -837,15 +845,119 @@ function syncSlots() {
     const s = readSlot(i);
     b.classList.toggle('empty', !s);
     b.classList.toggle('armed', armedToSave);
+    // Slot 1 says what it is. Saving into it by hand still works and is not
+    // fought over: what you would be saving is the world that is running, which
+    // is the same world the next autosave writes.
+    const auto = i === AUTOSAVE_SLOT ? '<span class="slot-auto">auto</span>' : '';
     b.innerHTML = s
-      ? `<span class="slot-n">${i}</span><span class="slot-name">${s.name}</span>` +
+      ? `<span class="slot-n">${i}</span><span class="slot-name">${s.name}</span>${auto}` +
         `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
-      : `<span class="slot-n">${i}</span><span class="slot-name">empty</span><span class="slot-sub">—</span>`;
-    b.title = s ? `${s.name} — ${fmtTime(s.time || 0)} elapsed, saved ${new Date(s.at).toLocaleString()}`
-                : `Slot ${i} is empty`;
+      : `<span class="slot-n">${i}</span><span class="slot-name">empty</span>${auto}<span class="slot-sub">—</span>`;
+    const note = i === AUTOSAVE_SLOT
+      ? '\nKept up to date on its own, every 30 s and when you leave the page.' : '';
+    b.title = (s ? `${s.name} — ${fmtTime(s.time || 0)} elapsed, saved ${new Date(s.at).toLocaleString()}`
+                 : `Slot ${i} is empty`) + note;
   }
   const btn = $('#btn-slot-save');
   if (btn) { btn.textContent = armedToSave ? 'pick a slot' : 'Save…'; btn.classList.toggle('busy', armedToSave); }
+}
+
+// ---------------------------------------------------------------------------
+// Autosave, into slot 1.
+//
+// The rule that matters is the one that stops it being a hazard: it will not
+// write until the world has actually been touched. Open the page, look at it,
+// close it again, and the autosave from last session is still there. Without
+// that guard the first tick of a fresh page would overwrite whatever you had
+// with a default Earth you never asked for -- which is precisely the way an
+// autosave turns from a convenience into a way of losing things.
+//
+// Thirty seconds. A snapshot is about 1.1 kB and the whole set of five is 5.4,
+// so the cost is nothing; the interval is about how much work you would rather
+// not repeat, not about the write.
+const AUTOSAVE_SLOT = 1;
+const AUTOSAVE_MS = 30000;
+let dirty = false;            // has the world moved since the last write?
+let touched = false;          // has anyone actually done anything this session?
+let lastAutosave = 0;
+
+// Two flags, and the second one is the whole safety of this.
+//
+// A fresh page starts *running* -- the clock moves from the first frame -- so
+// "the world has changed" is true within milliseconds of opening the tab. On
+// that alone, opening the page and walking away for half a minute would write a
+// default Earth over the world you left there yesterday. Which is exactly how
+// an autosave stops being a convenience.
+//
+// So the clock moving makes the world dirty, but only a deliberate act -- a
+// slider, a preset, a scenario, a reset, a settle -- makes the session count as
+// touched, and nothing is written until both are true. Open it, look at it,
+// close it: your autosave is still yesterday's.
+function markDirty() { dirty = true; }
+function markTouched() { dirty = true; touched = true; }
+
+function autosave(force = false) {
+  if (!dirty || !touched) return false;
+  const now = Date.now();
+  if (!force && now - lastAutosave < AUTOSAVE_MS) return false;
+  try { localStorage.setItem(slotKey(AUTOSAVE_SLOT), JSON.stringify(snapshot())); }
+  catch { return false; }      // full or blocked: stay quiet, this is a background job
+  lastAutosave = now; dirty = false;
+  syncSlots();
+  return true;
+}
+
+// Closing the tab, switching apps, locking the phone. This is the one that
+// actually catches most sessions, because few of them end on a round thirty
+// seconds. `visibilitychange` is the reliable one on mobile -- `beforeunload`
+// is not fired at all by iOS Safari when an app is swiped away.
+addEventListener('visibilitychange', () => { if (document.hidden) autosave(true); });
+addEventListener('pagehide', () => autosave(true));
+
+// ---------------------------------------------------------------------------
+// Export and import: every save in one file.
+//
+// The address bar already carries one world, and it stays the way to send
+// somebody a single planet -- it needs no file and no download. This is the
+// other thing: handing over a whole set at once, or keeping one somewhere that
+// is not this browser's localStorage, which is a place saves go to die when a
+// browser clears site data.
+function exportSaves() {
+  const worlds = [];
+  for (let i = 1; i <= SLOTS; i++) {
+    const s = readSlot(i);
+    if (s) worlds.push({ slot: i, ...s });
+  }
+  if (!worlds.length) { toast('Nothing to export — every slot is empty'); return; }
+  const doc = buildSaveFile(worlds, Date.now());
+  const blob = new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url; a.download = `planet-climate-saves-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  // Revoked on the next turn of the event loop: revoking synchronously can
+  // race the download on some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`Exported ${worlds.length} world${worlds.length === 1 ? '' : 's'}`);
+}
+
+function importSaves(text) {
+  const worlds = parseSaveFile(text);
+  if (!worlds) { toast('That file has no worlds in it'); return; }
+  const { writes, skipped } = planImport(worlds, (i) => !readSlot(i), SLOTS);
+  for (const { slot, world } of writes) {
+    try { localStorage.setItem(slotKey(slot), JSON.stringify(world)); }
+    catch { toast('Could not import — storage is full or blocked'); syncSlots(); return; }
+  }
+  // An imported slot 1 is not the running world, so do not let the autosave
+  // write over it a moment later.
+  if (writes.some((wr) => wr.slot === AUTOSAVE_SLOT)) { dirty = false; lastAutosave = Date.now(); }
+  syncSlots();
+  toast(writes.length
+    ? `Imported ${writes.length} world${writes.length === 1 ? '' : 's'}` +
+      (skipped ? `, ${skipped} did not fit` : '')
+    : 'Nothing imported — every slot is full and the file named none of them');
 }
 
 // The living biosphere, under the control that asks for one.
@@ -909,7 +1021,7 @@ function updateGfxButton() {
 }
 
 function bindControls() {
-  $('#btn-play').addEventListener('click', () => { sim.paused = !sim.paused; syncPlay(); });
+  $('#btn-play').addEventListener('click', () => { sim.paused = !sim.paused; syncPlay(); markTouched(); });
   $('#btn-reset').addEventListener('click', () => {
     // Same world, same starting parameters, clock back to zero -- including the
     // continents, so it really is the planet you began with.
@@ -918,7 +1030,7 @@ function bindControls() {
     sim.reset(params);
     syncSliders();
     scenarioResult = null; endSettle(); sim.paused = resetPaused; syncPlay();
-    writeHash();
+    writeHash(); markTouched();
     toast(resetPaused ? 'Reset to the starting world — paused'
                       : 'Reset to the starting world');
   });
@@ -928,6 +1040,19 @@ function bindControls() {
     resetPaused = chkReset.checked;
     try { localStorage.setItem(RESET_PAUSED_KEY, resetPaused ? 'pause' : 'run'); } catch { }
   });
+  $('#btn-saves-export').addEventListener('click', exportSaves);
+  $('#btn-saves-import').addEventListener('click', () => $('#saves-file').click());
+  $('#saves-file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    // Cleared either way, so picking the same file twice in a row still fires.
+    e.target.value = '';
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => importSaves(String(r.result || ''));
+    r.onerror = () => toast('Could not read that file');
+    r.readAsText(f);
+  });
+
   $('#btn-slot-save').addEventListener('click', () => {
     armedToSave = !armedToSave;
     syncSlots();
@@ -949,10 +1074,11 @@ function bindControls() {
   $('#chk-mantle-inf').addEventListener('change', (e) => {
     params.mantleInfinite = e.target.checked;
     sim.setParams({ mantleInfinite: params.mantleInfinite });
-    writeHash();
+    writeHash(); markTouched();
   });
 
   $('#btn-settle').addEventListener('click', () => {
+    markTouched();
     if (settling) { endSettle(); return; }        // click again to stop
     settling = true;
     settleRounds = 0;
@@ -1221,6 +1347,7 @@ let last = performance.now(), chartClock = 0, reportedError = false;
 
 // One frame's worth of work, given how much real time has passed. Split out so
 // it can be driven deterministically from a test harness as well as by rAF.
+let autosaveClock = 0;
 function tick(dtReal) {
   renderState.time += dtReal;
   try {
@@ -1232,7 +1359,19 @@ function tick(dtReal) {
     }
     if (settling && !sim.paused) advanceSettle();
     else sim.advance(dtReal);
+    // A running clock is itself a change worth keeping. Kept as a separate line
+    // rather than folded into the branches above, because smoketest pins that
+    // guard by its exact text -- it exists because settling once ran straight
+    // past a paused clock, and it caught this edit when it was folded in.
+    if (!sim.paused) markDirty();
     view.render(sim.world, renderState, dtReal);
+
+    // Autosave rides the chart clock rather than a timer of its own: it is
+    // rate-limited internally, so this is just somewhere to ask, and it cannot
+    // fire while the tab is in the background with rAF frozen -- which is what
+    // `visibilitychange` above is for.
+    autosaveClock += dtReal;
+    if (autosaveClock > 1) { autosaveClock = 0; autosave(); }
 
     chartClock += dtReal;
     if (chartClock > 0.1) {

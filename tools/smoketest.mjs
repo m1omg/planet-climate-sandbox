@@ -287,6 +287,39 @@ if (app && app.graphicsFromUrl) {
   }
 }
 
+// The autosave must not be able to eat a save.
+//
+// A fresh page starts with the clock running, so "the world has changed" is
+// true within a frame of opening the tab. On that alone, opening the page and
+// walking away for half a minute would write a default Earth over the world
+// left there yesterday -- which is the one way an autosave turns from a
+// convenience into a way of losing things. It writes only once somebody has
+// actually done something, and this pins that.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  if (!/if \(!dirty \|\| !touched\) return false;/.test(src)) {
+    console.log('\x1b[31mFAIL\x1b[0m  the autosave can fire on an untouched session');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  the autosave will not write until the session has been touched');
+  }
+  // And the clock alone must not count as being touched, or the guard is moot.
+  if (/if \(!sim\.paused\) markTouched\(\)/.test(src)) {
+    console.log('\x1b[31mFAIL\x1b[0m  a running clock marks the session touched, which defeats the guard');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  a running clock makes the world dirty but not the session touched');
+  }
+  // Leaving the page has to catch the session that did not end on a round 30 s.
+  if (!/visibilitychange[\s\S]{0,120}autosave\(true\)/.test(src)) {
+    console.log('\x1b[31mFAIL\x1b[0m  nothing autosaves when the page is hidden or closed');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  hiding or leaving the page forces an autosave');
+  }
+}
+
 // The play button has to be the truth about whether time is moving. Settling
 // used to run the world straight past a paused clock, so the button read
 // "Play" while the simulation raced; and stopping a settle returned early,
