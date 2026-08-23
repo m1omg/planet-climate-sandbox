@@ -174,6 +174,59 @@ const state = { time: 0, seed: 7 };
 }
 
 // --------------------------------------------------------------------------
+// 2b. The clock on "has the browser handed the context back yet" must start
+//     when the page is in front of the user, not when the context died.
+//
+//     Losing the context happens as the page is being backgrounded. The mark
+//     used to be made there and kept, so a user who switched to another app for
+//     longer than the grace period came back to an app that had already decided
+//     the GPU was gone -- on the first frame, before the browser had any chance
+//     to restore it. Three of those in a session and it stayed on the CPU.
+// --------------------------------------------------------------------------
+{
+  const gl = makeGl();
+  const canvas = makeCanvas(gl);
+  const view = new PlanetView(canvas);
+  await view.init();
+
+  gl.lost = true;
+  canvas.dispatch('webglcontextlost');
+  const atLoss = view.lostSince;
+
+  // …the user is away for two minutes, well past any grace period…
+  await new Promise((r) => setTimeout(r, 30));
+  const away = performance.now() - atLoss;
+  view.refreshAfterResume();
+
+  const waited = performance.now() - view.lostSince;
+  check('Coming back restarts the wait for the context, rather than inheriting it',
+    view.lostSince > atLoss && waited < away,
+    `stamped ${away.toFixed(0)} ms ago at the loss, ${waited.toFixed(1)} ms ago on resume`);
+
+  // and once it really is back, the mark is cleared as before
+  gl.lost = false;
+  canvas.dispatch('webglcontextrestored');
+  await new Promise((r) => setTimeout(r, 20));
+  check('…and a genuine restore still clears it', view.lostSince === null);
+}
+
+// --------------------------------------------------------------------------
+// 2c. Losing the context on suspend is normal mobile behaviour, not evidence
+//     of a bad driver. The recovery counter used to run for the whole visit,
+//     so the third app switch of a session fell to the CPU and stayed there.
+// --------------------------------------------------------------------------
+{
+  const src = await readFile(join(root, 'src/main.js'), 'utf8');
+  const fn = src.slice(src.indexOf('function checkRendererHealth'),
+                       src.indexOf('function graphicsFromUrl'));
+  check('A GPU that has behaved for a while clears the recovery counter',
+    /recoveries = 0/.test(fn) && /healthySince/.test(fn),
+    'checkRendererHealth resets it once the context has held');
+  check('…and the drop to software is still there for a GPU that really is flaky',
+    /recoveries < 2/.test(src) && /'software'/.test(src));
+}
+
+// --------------------------------------------------------------------------
 // 3. A driver that genuinely refuses is still fatal — and says so, once, to
 //    somebody who can act on it.
 // --------------------------------------------------------------------------

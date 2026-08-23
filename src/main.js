@@ -175,7 +175,7 @@ async function useRenderer(kind) {
 // what people were seeing. A canvas cannot be given a second context, so the
 // only way back is to build a fresh one; failing that, drop to the CPU.
 // ---------------------------------------------------------------------------
-let recovering = false, recoveries = 0;
+let recovering = false, recoveries = 0, healthySince = null;
 async function recoverRenderer(why) {
   if (recovering) return;
   recovering = true;
@@ -201,11 +201,29 @@ async function recoverRenderer(why) {
 // we stop waiting for the browser to make good on restoring it.
 const LOST_GRACE_MS = 4000;
 
+// A GPU that has behaved for this long is not the flaky GPU the recovery
+// counter is meant to give up on.
+const HEALTHY_RESET_MS = 60000;
+
 function checkRendererHealth() {
   if (recovering || view.software || view.failed) return;
   if (document.visibilityState !== 'visible') return;
   const lost = view.contextLost || (view.gl && view.gl.isContextLost());
-  if (!lost) { view.lostSince = null; return; }
+  if (!lost) {
+    view.lostSince = null;
+    // `recoveries` used to count every loss for the whole visit, so the third
+    // app switch of a session dropped to the CPU and stayed there no matter how
+    // healthy the GPU was in between. Losing the context on suspend is normal
+    // mobile behaviour, not evidence of a bad driver: once a rebuild has held
+    // for a minute, forget it happened.
+    healthySince = healthySince ?? performance.now();
+    if (recoveries > 0 && performance.now() - healthySince > HEALTHY_RESET_MS) {
+      recoveries = 0;
+      console.warn('renderer healthy again; recovery counter reset');
+    }
+    return;
+  }
+  healthySince = null;
   if (view.lostSince == null) { view.lostSince = performance.now(); return; }
   if (performance.now() - view.lostSince > LOST_GRACE_MS) recoverRenderer('the context was never restored');
 }

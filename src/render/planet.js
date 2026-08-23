@@ -174,7 +174,15 @@ export class PlanetView {
     if (this.failed || !this.gl) return;
     if (this.gl.isContextLost()) {
       this.contextLost = true;
-      this.lostSince = this.lostSince ?? performance.now();
+      // Restamp, do not keep the old mark. The clock on "has the browser given
+      // the context back yet" has to start when the page is in front of the
+      // user, because that is when the browser starts trying. It used to be
+      // stamped at the moment of loss -- which happens while the page is being
+      // backgrounded -- so coming back after more than the grace period meant
+      // the app declared the context unrecoverable on the very first frame,
+      // before the browser had any chance to restore it. Switch away for five
+      // seconds and you would be told the GPU had dropped out.
+      this.lostSince = performance.now();
       this.forgetGpuState();
       return;
     }
