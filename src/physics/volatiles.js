@@ -496,14 +496,44 @@ export function photosynthesis(w) {
   if (water <= 0) return 0;
   const carbon = smoothstep(1e-6, 8e-6, dg.pCO2 ?? 0);
   if (carbon <= 0) return 0;
-  let share = 0;
+  // How much of the planet can actually photosynthesise -- and, crucially, out
+  // of how much.
+  //
+  // Summing habitable bands over the whole globe is the right question for a
+  // rotating world and the wrong one for a locked world, because the two get
+  // their insolation in different currencies. insolationProfile() hands a
+  // rotating planet the *diurnal mean*: every band is lit, and the fact that
+  // each one is dark half the time is already averaged in. A locked planet gets
+  // the instantaneous value, so half its bands sit at exactly zero for ever.
+  // Score both against the whole globe and a locked world is charged twice for
+  // its night -- once in the model's own physics, and again in a denominator
+  // that counts ground the star can never reach as ground life failed to use.
+  //
+  // Integrate properly and the two come out level. A locked world lights half
+  // its area continuously; Earth lights all of its area half the time. Same
+  // starlight intercepted, pi R^2 F either way, and since photosynthesis is
+  // light-saturated well below full sunlight -- the `lit` threshold below is
+  // half a watt, and green sulphur bacteria manage on a ten-thousandth of
+  // Earth's -- what limits production is habitable area, not flux. So a locked
+  // world whose entire day side is temperate and wet should read the same as
+  // Earth, and one with a habitable ring should read as the share of its day
+  // that ring covers.
+  //
+  // Hence: the denominator is the part of the planet the star ever reaches.
+  // `litArea` is exactly 1 on every rotating world -- the dimmest band on Earth
+  // still gets 204 W/m^2, and even a 90-degree obliquity leaves 17 -- so this
+  // changes nothing anywhere except where a permanent night side exists, which
+  // is the only place it was wrong.
+  let share = 0, litArea = 0;
   for (let i = 0; i < NBANDS; i++) {
     const warm = smoothstep(248, 258, w.T[i]);          // -25 to -15 C
     const cool = 1 - smoothstep(341, 351, w.T[i]);      // +68 to +78 C
     const lit = smoothstep(0.05, 0.5, dg.S ? dg.S[i] : 1361);
     share += (warm * cool * lit) / NBANDS;
+    litArea += lit / NBANDS;
   }
-  return water * carbon * share;
+  if (litArea <= 0) return 0;      // a world its star never reaches at all
+  return water * carbon * (share / litArea);
 }
 
 // How fast a biosphere dies, and how slowly it comes back.

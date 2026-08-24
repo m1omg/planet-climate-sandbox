@@ -4,7 +4,7 @@ import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
-import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2 } from './physics/constants.js';
+import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
@@ -1274,10 +1274,22 @@ export function run() {
     // A tidally locked world has a night side, and no amount of warmth makes up
     // for having no light. This is the check the old global-mean test could not
     // express at all.
+    //
+    // It used to assert that a locked world scored roughly its lit fraction,
+    // which quietly baked in the wrong denominator -- see 3o2b. The claim in the
+    // sentence above is the one worth keeping, and it can be made directly and
+    // far more sharply: warm the entire night side to a perfect 20 C and nothing
+    // happens, because there is still no light there.
     const locked = settle({ ...PRESETS.eyeball.params }, 2e7).world;
-    check('…and only the lit side of a world that never turns',
-      photosynthesis(locked) > 0.15 && photosynthesis(locked) < 0.55,
-      `${(photosynthesis(locked) * 100).toFixed(0)}% of the surface, the rest in permanent night`);
+    const dark = photosynthesis(locked);
+    const night = [];
+    for (let i = 0; i < NBANDS; i++) {
+      if (smoothstep(0.05, 0.5, locked.diag.S[i]) < 0.01) { night.push(i); locked.T[i] = 293; }
+    }
+    check('…and no amount of warmth makes up for having no light',
+      night.length > 4 && photosynthesis(locked) === dark,
+      `${night.length} of ${NBANDS} bands in permanent night; warming every one of ` +
+      `them to 20 °C leaves photosynthesis at ${(dark * 100).toFixed(0)}%, unchanged`);
 
     // Carbon starvation: cyanobacteria draw CO2 down to a few ppm, but not to
     // nothing.
@@ -1491,6 +1503,54 @@ export function run() {
       dead < 0.2 && back.world.diag.bio > 0.9,
       `${dead.toFixed(3)}× under the greenhouse, ${back.world.diag.bio.toFixed(3)}× ` +
       `after it cleared`);
+  }
+
+  // ---- 3o2b. a locked world is not charged twice for its night ---------------
+  // The biosphere is scored on habitable area, which is right, but it used to
+  // be scored against the whole globe -- and a tidally locked world has half a
+  // globe the star can never reach. That half is dark in the model's physics
+  // AND counted in the denominator as ground life failed to use, so a locked
+  // world with a perfectly temperate, wet, sunlit day side could not read above
+  // half of Earth however good it was.
+  //
+  // The two are not comparable as written. insolationProfile() hands a rotating
+  // world its DIURNAL MEAN, so every band is lit and the night is already
+  // averaged in; a locked world gets the instantaneous value. Integrated over
+  // time and area they are level -- half the area lit always, against all of it
+  // lit half the time, the same pi R^2 F -- and photosynthesis is light
+  // saturated far below full sunlight, so what limits it is habitable area.
+  {
+    const rotating = ['preindustrial', 'waterworld', 'dune'].map((k) => {
+      const w = settle({ ...PRESETS[k].params, biosphere: 1 }, 2e6).world;
+      return [PRESETS[k].name, photosynthesis(w)];
+    });
+    // Every rotating world must be untouched by this: the dimmest band on Earth
+    // still gets 204 W/m^2 and the `lit` threshold is half a watt, so the
+    // denominator is exactly 1 and the arithmetic is identical to before.
+    check('Scoring life by habitable area leaves every rotating world exactly as it was',
+      rotating.every(([, p]) => Math.abs(p - 1) < 1e-9),
+      rotating.map(([n, p]) => `${n} ${p.toFixed(3)}`).join(' · '));
+
+    // And a locked world is now scored on the half of it that has a day.
+    const eye = settle({ ...PRESETS.eyeball.params, biosphere: 1 }, 3e6).world;
+    let lit = 0;
+    for (let i = 0; i < NBANDS; i++) lit += smoothstep(0.05, 0.5, eye.diag.S[i]) / NBANDS;
+    check('\u2026while a locked world is judged on the half of it the star reaches',
+      lit < 0.6 && photosynthesis(eye) > 0.6,
+      `${(lit * 100).toFixed(0)}% of the Locked Eyeball ever sees light and ` +
+      `${(photosynthesis(eye) * 100).toFixed(0)}% of that is habitable — it read ` +
+      `${(photosynthesis(eye) * lit * 100).toFixed(0)}% before, as though its night were a failure`);
+
+    // The gates that should still kill a world still do. Carbon starvation is
+    // the one that catches people out: switch volcanism off and weathering
+    // draws the CO2 to nothing, and nothing photosynthesises without carbon,
+    // however warm and wet the day side is.
+    const starved = settle({ ...PRESETS.eyeball.params, biosphere: 1, outgassing: 0,
+      co2Bar: 1e-7 }, 3e7).world;
+    check('\u2026and a world with no carbon left is still dead, however sunlit and wet',
+      photosynthesis(starved) === 0 && starved.water.ocean > 0.001,
+      `${(starved.diag.pCO2 * 1e6).toFixed(2)} ppm CO\u2082 with ` +
+      `${starved.water.ocean.toFixed(3)} EO of liquid water still there`);
   }
 
   // ---- 3o3. the Great Oxidation is a scenario you can lose --------------------

@@ -850,6 +850,48 @@ this model supports with an ocean is 59 °C and the next state up is a runaway a
 73 °C limit only ever bites in transit — on the way into a runaway, where it stops the biosphere
 before the ocean is gone rather than after.
 
+#### Out of how much, though
+
+Habitable *area* is the right measure. What it is a fraction **of** was not.
+
+A tidally locked world has half a globe the star can never reach — and that half
+was dark in the physics **and** counted in the denominator, as ground life had
+failed to use. So a locked world with a perfectly temperate, wet, continuously
+sunlit day side could never read above half of Earth however good it was, and a
+good one read a third.
+
+The two were never comparable as written. `insolationProfile()` hands a rotating
+world its **diurnal mean** — every band is lit, and the fact that each is dark
+half the time is already averaged in. A locked world gets the instantaneous
+value, so half its bands sit at exactly zero for ever. Integrate properly and
+they come out level: half the area lit always, against all of it lit half the
+time, the same πR²F either way. And photosynthesis is light-saturated far below
+full sunlight, so what limits production is habitable area, not flux.
+
+So the denominator is now the part of the planet the star ever reaches.
+
+| | before | now |
+|---|---|---|
+| Earth, Waterworld, Dune World | 1.000 | **1.000** |
+| Locked Eyeball | 0.333 | **0.675** |
+| TRAPPIST-1e | 0.414 | **0.831** |
+
+Every rotating world is untouched to the last digit — the dimmest band on Earth
+still gets 204 W/m², and even 90° obliquity leaves 17, against a threshold of
+half a watt — so the denominator is exactly 1 and the arithmetic is unchanged.
+It moves nothing anywhere except where a permanent night side exists, which is
+the only place it was wrong.
+
+The night side is still worth nothing, and that is now tested directly rather
+than inferred from a number: warm every one of the Locked Eyeball's nine dark
+bands to a perfect 20 °C and photosynthesis does not move, because there is
+still no light there.
+
+**Carbon starvation is a separate death and still bites.** Switch volcanism off
+and weathering draws CO₂ down to nothing; nothing photosynthesises without
+carbon, however warm and wet the day side is. That is the usual reason a locked
+world with visible oceans reads dead — not the temperature.
+
 ### Us
 
 `Industrial CO₂` is a rate, in multiples of today's: 40 Gt of CO₂ a year at 1×, some **forty times
