@@ -548,6 +548,16 @@ export function run() {
     check('\u2026and says where its CO\u2082 went, since half of it is hot enough to melt lead',
       reasonText(w, st).includes('night side'),
       reasonText(w, st));
+    // The banner is the line people actually read, so both sides belong in it
+    // and not only in the stats panel -- and a rotating world must not grow a
+    // day and a night it does not have.
+    {
+      const spin = settle({ ...EARTH }, 1e5).world;
+      check('\u2026and the banner carries both sides on a locked world, and neither on a spinning one',
+        /day .* \u00b0C, night .* \u00b0C/.test(reasonText(w, st))
+        && !/night/.test(reasonText(spin, classify(spin))),
+        reasonText(spin, classify(spin)));
+    }
 
     // The physics behind it, which is a real and named prediction rather than
     // an artefact: below a certain pressure the night side is a cold trap and

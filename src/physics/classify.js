@@ -132,6 +132,15 @@ export function reasonText(w, st) {
   const dg = w.diag, esc = w.escape ?? {};
   const bits = [];
   bits.push(`mean surface ${(dg.Tmean - 273.15).toFixed(1)} °C`);
+  // On a locked world the mean is a number no part of the planet has: it sits
+  // between a face that never sets and one that never sees the star. The stats
+  // panel already splits them; the banner is the line people actually read, and
+  // "mean surface -13.6 °C" on a world with a +41 °C eye says the wrong thing
+  // on its own. The two sides come from classify() rather than from Tmax and
+  // Tmin, so this and the state label cannot disagree about which is which.
+  if (dg.lam > 0.5 && st && st.Tsub != null) {
+    bits.push(`day ${(st.Tsub - 273.15).toFixed(0)} °C, night ${(st.Tanti - 273.15).toFixed(0)} °C`);
+  }
   if (dg.iceMean > 0.01) bits.push(`${(dg.iceMean * 100).toFixed(0)}% ice`);
   if (Math.abs(dg.imbalance) > 0.5) bits.push(`${dg.imbalance > 0 ? '+' : ''}${dg.imbalance.toFixed(1)} W/m² imbalance`);
   if (esc.fStrat > 1e-4 && dg.totalWater > 0) {
