@@ -58,7 +58,53 @@ export const PRESETS = {
   // at nothing.
   earthlike: { name: 'Earth-like', icon: '🌐', params: { ...PREINDUSTRIAL, co2Bar: 280e-6, emissions: 0, fossilUsed: 0 } },
   venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
+  // Venus before it lost. Way et al. 2016 (GRL 43, 8376) ran Venus in a 3-D GCM
+  // with a shallow ocean and found it temperate -- a global mean near 11 C --
+  // and argued it could have stayed that way for two billion years or more.
+  //
+  // Their setup, as closely as this model can carry it: a 310 m global ocean
+  // (0.115 Earth oceans), a 1 bar mostly-nitrogen atmosphere with a few hundred
+  // ppm of CO2 rather than the 88 bar it ended up with, Venus's real topography
+  // and mass, and the same slow retrograde spin it has now -- which is the point
+  // of the paper. A day that lasts 243 Earth days gives the substellar cloud
+  // deck all the time it needs to build, and that deck is what keeps the world
+  // cool at an insolation that ought to cook it (the Yang, Cowan & Abbot 2014
+  // mechanism, working on a planet that is not tidally locked at all).
+  //
+  // The insolation is 2.9 Ga, not today: the Sun was fainter, so Venus took
+  // about 1.4 times what Earth gets now instead of the 1.91 it takes today.
+  youngVenus: { name: 'Young Venus', icon: '🌅', params: { ...EARTH, o2Bar: 0, biosphere: 0,
+    mass: 0.815, insolation: 1.40, water: 0.115, landFraction: 0.6, n2Bar: 1.0,
+    co2Bar: 400e-6, ch4Bar: 0, rotationHours: 5832, obliquity: 2.6, outgassing: 1.5,
+    internalHeat: 0.10, landAlbedo: 0.20, startT: 285 } },
   mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
+  // Mars in the Noachian, ~3.8 Ga, when the valley networks and the lake beds
+  // were cut. The Sun was about 75% as bright, so Mars took 0.32 of what Earth
+  // gets now -- less than a third -- and how it was ever warm enough for running
+  // water is genuinely unsettled.
+  //
+  // What the literature says: CO2 alone does not do it. Forget et al. 2013 reach a
+  // maximum near 225 K under a few bar, because past a couple of bar CO2's own
+  // Rayleigh scattering starts to win. Ramirez et al. 2014 need 1.3-4 bar of CO2
+  // *plus* 5-20% hydrogen, whose collision-induced absorption with CO2 supplies
+  // the rest.
+  //
+  // Loaded as it ships -- 1 bar of CO2 -- this model agrees with them and freezes
+  // it solid at -49 C, which is the honest answer and the reason the preset is
+  // set there. Turn the CO2 up and watch where the two part company: 2 bar gives
+  // -32 C, 3 bar -17 C and about 4 bar finally clears freezing, with no hydrogen
+  // involved. Forget cannot get there at any pressure. That gap is the missing
+  // maximum greenhouse -- CO2's scattering never overtakes its own greenhouse
+  // here -- and it is reported on every calibrate run.
+  //
+  // 0.3 bar of nitrogen under it, a young interior driving Tharsis at a few times
+  // the modern outgassing, and enough water for the northern lowlands -- 0.06
+  // Earth oceans is about 150 m spread over the globe, inside the 100-1500 m the
+  // geomorphology and the D/H ratio between them allow.
+  youngMars: { name: 'Young Mars', icon: '🏞', params: { ...EARTH, o2Bar: 0, biosphere: 0,
+    mass: 0.107, insolation: 0.32, water: 0.06, landFraction: 0.75, n2Bar: 0.3,
+    co2Bar: 1.0, ch4Bar: 0, rotationHours: 24.6, obliquity: 25, outgassing: 3.0,
+    internalHeat: 0.06, landAlbedo: 0.25, startT: 250 } },
   // 0.10 bar of CO2, and it has been raised for the same reason twice now.
   //
   // It was 0.02, which only worked because methane's opacity was some five
@@ -93,6 +139,47 @@ export const PRESETS = {
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },
   waterworld: { name: 'Waterworld', icon: '💧', params: { ...EARTH, mass: 1.6, water: 6, landFraction: 0.0, insolation: 1.0, startT: 290 } },
   titan:   { name: 'Titan-like', icon: '🟤', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.15, insolation: 0.011, water: 0.5, landFraction: 0.6, n2Bar: 1.5, ch4Bar: 0.05, co2Bar: 1e-6, outgassing: 0.1, startT: 95 } },
+
+  // A hot ocean world: rain, weather and open sea at seventy-odd degrees under a
+  // heavy CO2 atmosphere. Liquid water is not the hard part -- pressure lifts the
+  // boiling point far above 100 C long before the critical point at 647 K and
+  // 221 bar -- and the published models get there: von Paris et al. 2010 put
+  // Gliese 581d at 357 K under 20 bar of CO2, Wordsworth et al. 2011 melted an
+  // initially frozen ocean on the same planet with a 3-D GCM at 20 bar and up.
+  //
+  // This one sits at 0.28 of Earth's sunlight, which is Gliese 581d's, and gets
+  // everything from the greenhouse. It carries about half the CO2 von Paris
+  // needed for the same temperature, because this model has no maximum
+  // greenhouse -- CO2's Rayleigh scattering never overtakes its greenhouse the
+  // way Kasting 1993 has it -- so its dense-CO2 worlds run hot for the pressure.
+  // That gap is reported on every calibrate run and written up in the README.
+  //
+  // What makes it keep its ocean is the other half of the physics and it is not
+  // a fudge: what escapes past a cold trap is a *ratio*, and ten bars of CO2 is
+  // a very large denominator. Wordsworth & Pierrehumbert 2013 make the same
+  // point -- dense CO2 cools the upper atmosphere and tightens the trap, so a
+  // huge CO2 inventory does not by itself mean fast water loss.
+  //
+  // Getting one to *stay* hot is the interesting part, and it is not the
+  // radiation. Pin the CO2 and 10 bar at this insolation sits at 66 C quite
+  // happily. Let the carbonate-silicate thermostat run and it pulls the same
+  // world down to 2 C in half a gigayear, because weathering rises with
+  // temperature and that is exactly what a thermostat does. Which is the honest
+  // answer to whether a world like this lasts: the limit is the carbon cycle,
+  // not the greenhouse, and it is the first thing on the list of uncertainties
+  // anyone raises about these worlds.
+  //
+  // So it needs the thermostat outrun rather than switched off. Two things do
+  // it here, and both are things real planets have. There are no continents, so
+  // there is no continental weathering and only the slower seafloor sink is
+  // left -- worth twenty kelvin on its own. And the interior is Io-like at 1.5
+  // W/m^2, which is worth 4x on melt production by itself (meltBoost), with a
+  // specific activity of 7.4 on top of that for thirty times Earth's outgassing
+  // all told. That holds it at 72 C under 11 bar for a gigayear, with an ocean
+  // over every square metre and enough of a cold trap to keep it for ninety-nine.
+  hotOcean: { name: 'Hot Ocean World', icon: '♨️', params: { ...EARTH, o2Bar: 0, biosphere: 0,
+    insolation: 0.28, co2Bar: 15, n2Bar: 1.0, water: 3, landFraction: 0,
+    ch4Bar: 0, outgassing: 7.4, internalHeat: 1.5, startT: 340 } },
 
   // ---- three planets that actually exist ----------------------------------
   //

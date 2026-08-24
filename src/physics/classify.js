@@ -8,6 +8,7 @@ export const STATES = {
   dryRunaway: { name: 'Dry Runaway Greenhouse', color: '#e0553a', blurb: 'Venus. The ocean is gone — evaporated, photolysed, and the hydrogen dragged off to space — leaving a thick dry CO2 atmosphere and a surface hot enough to glow faintly. Irreversible on any human timescale.' },
   wetRunaway: { name: 'Wet Runaway Greenhouse', color: '#ff8340', blurb: 'Absorbed sunlight plus the planet\u2019s own internal heat exceeds the Simpson\u2013Nakajima limit (~282 W/m2), so no equilibrium exists at any temperature. Tidal heating alone can do it, on a world the star would have left habitable (Barnes et al. 2013). The ocean is boiling into a massive steam atmosphere; latent heat makes this transient take ~10^5 years, and losing the water takes 10^8–10^9 more.' },
   moist:      { name: 'Moist Greenhouse',     color: '#ffb03a', blurb: 'Still liquid, but the cold trap has failed: stratospheric water exceeds a mixing ratio of 10^-3, so hydrogen escapes steadily. Habitable in the short run, drying out over hundreds of millions of years (Kasting 1988).' },
+  hotocean:   { name: 'Hot Ocean World',      color: '#f08a5d', blurb: 'Oceans, rain and weather at 50-90 \u00b0C under a heavy atmosphere -- hot far past anything complex can live in, but nowhere near boiling, because pressure lifts the boiling point long before the critical point at 647 K and 221 bar. Two routes reach it: tens of bars of CO2 far from a dim star (von Paris et al. 2010 model Gliese 581d at 20 bar and 357 K; Wordsworth et al. 2011 melt an ice-covered ocean there), or Earth-like air close to a bright one (Wolf & Toon 2015; Popp et al. 2016). The dense-CO2 route also keeps its water: a heavy background gas holds the stratospheric mixing ratio down, so the cold trap survives and the ocean does not escape (Wordsworth & Pierrehumbert 2013).' },
   hothouse:   { name: 'Ice-Free Hothouse',    color: '#f2c14e', blurb: 'No permanent ice anywhere, tropics near the limit of complex life. Earth looked like this in the Cretaceous and the PETM.' },
   temperate:  { name: 'Temperate & Habitable', color: '#4ec98a', blurb: 'Liquid water across much of the surface with stable polar ice. The carbonate–silicate thermostat holds this state against slow changes in starlight over ~1 Myr.' },
   dune:       { name: 'Dune / Desert World',  color: '#d9a441', blurb: 'A land planet with little surface water. Unsaturated air lets the tropics radiate above the classical runaway limit, and a dry stratosphere throttles water loss — so desert worlds stay habitable much closer to their star than ocean worlds (Abe et al. 2011).' },
@@ -33,7 +34,6 @@ export function classify(w) {
   const water = dg.totalWater;
   const initialWater = w.waterInitial ?? p.water;
   const esc = w.escape ?? { fStrat: 0, water: 0 };
-  const lossPerGyr = (esc.water ?? 0) * 1e9 / dg.d.eoColumn;
   const pTot = dg.pTotMean;
 
   // substellar / equatorial band temperatures (top of the x grid)
@@ -64,7 +64,13 @@ export function classify(w) {
   else if (collapsed && pTot < 0.2 && T < 265) id = 'marslike';
   else if (T > 470 && water < 0.06 * Math.max(initialWater, 0.05)) id = 'dryRunaway';
   else if (T > 420) id = 'wetRunaway';
-  else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
+  // Kasting's moist greenhouse is a definition and now the model can use it
+  // directly: the stratospheric mixing ratio passing 1e-3, at which point the
+  // cold trap has failed and hydrogen leaves fast enough to matter. This used
+  // to test a loss *rate* instead, which is the same statement filtered through
+  // the star -- a world under a quiet sun could sit well past the criterion with
+  // its escape pinned by the XUV energy limit and never be labelled for it.
+  else if (esc.fStrat > 1e-3 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
   else if (water < 0.015) id = T > 290 ? 'baked' : 'frozen';
   // Terminator habitability. The eye is past boiling and the night side is
@@ -113,9 +119,24 @@ export function classify(w) {
   else if (pTot < 0.05 && T < 265 && water < 0.35) id = 'thincold';
   else if (ice > 0.93) id = water < 0.1 ? 'frozen' : 'snowball';
   else if (ice > 0.55) id = 'waterbelt';
-  else if (water < 0.12 && T > 250 && T < 340) id = 'dune';
+  // A dune world is a *land planet* (Abe et al. 2011), and this used to test the
+  // inventory alone. That is not the same question: a world with a tenth of an
+  // ocean spread thinly can still have a quarter of its surface under water, and
+  // calling that a desert while the globe shows open sea is simply wrong. Young
+  // Venus is the case that found it -- Way et al.'s 310 m ocean is 0.115 EO and
+  // floods 23% of the planet. A tenth is the line: the shipped dune world floods
+  // 0.1% of itself, and Earth's own oceans cover 70%.
+  else if (water < 0.12 && dg.flooded < 0.10 && T > 250 && T < 340) id = 'dune';
   else if (T < 250) id = 'frozen';
   else if (p.landFraction < 0.04 && T > 258 && T < 335) id = 'waterworld';
+  // Hot, wet and keeping it. Above the hothouse in temperature but below the
+  // moist greenhouse in escape -- the two are independent, which is the whole
+  // point: a world under tens of bars of CO2 runs at 340 K with a stratosphere
+  // drier than Earth's, because what gets past the cold trap is a *ratio* and
+  // the background gas is the denominator. Reached the other way, from a bright
+  // star under Earth-like air, the same temperature comes with a wet
+  // stratosphere and the branch above catches it first.
+  else if (T > 320 && water > 0.05 && dg.flooded > 0.05 && ice < 0.02) id = 'hotocean';
   else if (ice < 0.02 && T > 296) id = 'hothouse';
   else id = 'temperate';
 

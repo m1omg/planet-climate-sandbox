@@ -474,6 +474,9 @@ function loadPreset(id) {
   sim.reset(params);
   applyBody(id);
   syncSliders(); setPresetActive(id); writeHash();
+  // Picking a world off the shelf drops whatever the last one was called: the
+  // preset's own name stands in until someone types over it.
+  setWorldName('');
   markTouched();
   rememberStart();
   closeScenario();
@@ -773,6 +776,30 @@ function readSlot(i) {
   try { return JSON.parse(localStorage.getItem(slotKey(i)) || 'null'); } catch { return null; }
 }
 
+// What this planet is called. The player's, not the preset's: type a name and
+// it travels with the world into the slots, the export file and back out of
+// them. Empty means "no name given", and the preset's own name stands in --
+// which is why this is stored empty rather than pre-filled, so that loading
+// Venus after naming nothing still says Venus.
+let worldName = '';
+
+// Names reach innerHTML in syncSlots, and a name is the one string in this
+// program that a person types. Everything else rendered there is generated.
+const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// The name as it should be written down: what was typed, or the preset it came
+// from, or nothing in particular.
+function currentName() {
+  return worldName.trim() || PRESETS[activePreset]?.name || 'Custom world';
+}
+
+function setWorldName(name, { toInput = true } = {}) {
+  worldName = (name ?? '').slice(0, 28);
+  const el = $('#world-name');
+  if (el && toInput && el.value !== worldName) el.value = worldName;
+}
+
 function snapshot() {
   // The world itself comes from captureWorld, so the slots, the export file and
   // the history scrubber cannot drift apart about what a world is. What is
@@ -780,7 +807,7 @@ function snapshot() {
   // which set of continents was drawn for it.
   return {
     v: 1, at: Date.now(),
-    name: PRESETS[activePreset]?.name || 'Custom world',
+    name: currentName(),
     seed: renderState.seed,
     ...captureWorld(sim.world),
   };
@@ -823,6 +850,10 @@ function applyWorldState(s) {
 
 function restore(s) {
   applyWorldState(s);
+  // The name came out of the slot with the rest of the world. setPresetActive
+  // below clears the preset, so without this a loaded world would fall back to
+  // "Custom world" and the name you saved it under would be gone.
+  setWorldName(s.name ?? '');
   // A loaded world has no past in this session yet: the run it came from
   // happened before, and its history did not travel in the slot.
   restorePoints = [snapshot()];
@@ -877,7 +908,7 @@ function syncSlots() {
     // line down the row.
     const auto = `<span class="slot-auto">${i === AUTOSAVE_SLOT ? 'auto' : ''}</span>`;
     b.innerHTML = `<span class="slot-n">${i}</span>` + (s
-      ? `<span class="slot-name">${s.name}</span>${auto}` +
+      ? `<span class="slot-name">${escHtml(s.name ?? '')}</span>${auto}` +
         `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
       : `<span class="slot-name">empty</span>${auto}<span class="slot-sub">—</span>`);
     const note = i === AUTOSAVE_SLOT
@@ -1171,6 +1202,14 @@ function bindControls() {
     syncSlots();
     if (armedToSave) toast('Pick a slot to save into');
   });
+
+  // --- naming the planet ----------------------------------------------------
+  // Typed straight into the live name; nothing is written to a slot until the
+  // world is actually saved, so this cannot disturb a run.
+  // The document-level shortcut handler already returns early on INPUT targets,
+  // so space and r reach the field as characters without anything extra here.
+  const nameEl = $('#world-name');
+  if (nameEl) nameEl.addEventListener('input', () => setWorldName(nameEl.value, { toInput: false }));
 
   // --- the fossil reserve ---------------------------------------------------
   $('#btn-fossil-reset').addEventListener('click', () => {

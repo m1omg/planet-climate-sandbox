@@ -11,8 +11,8 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 144 physics, coverage, determinism and control checks
-node tools/calibrate.mjs        # 21 observational anchors + 2 reported known gaps
+node src/selftest.js            # 213 physics, coverage, determinism and control checks
+node tools/calibrate.mjs        # 24 observational anchors + 3 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # compiles them on a real GL driver
@@ -31,7 +31,7 @@ against `https://m1omg.github.io/planet-climate-sandbox/`, because a "built"
 status is not proof the change is out there. See `CLAUDE.md`.
 
 All eleven, before pushing — `calibrate.mjs` above all, because a change that
-fixes one anchor almost always moves three others, and the two `GAP` rows are
+fixes one anchor almost always moves three others, and the three `GAP` rows are
 known deviations that report every run rather than failing. `node --check` parses files as CommonJS and will happily
 miss ESM-only errors, which is exactly how a duplicate declaration once shipped a
 blank page; the smoke test loads the real module graph and fails on it. The shader
@@ -73,24 +73,28 @@ A single power law fitted Venus and got Earth badly wrong: it made **every doubl
 the last** (7.9, 9.6, 11.4 W/m²…), which tipped the planet into a runaway at 1.8% CO₂ — an outcome
 the literature places a hundred times further out.
 
-`tools/calibrate.mjs` checks twenty-one anchors against published values in one run, and reports
-two known gaps that are deliberately not fixed:
+`tools/calibrate.mjs` checks twenty-four anchors against published values in one run, and reports
+three known gaps that are deliberately not fixed:
 
 | Anchor | Literature | Model |
 |---|---|---|
-| CO₂ forcing per doubling | 3.71 (Myhre 1998) / 3.93 (AR6) | **3.85 W/m²**, and flat across doublings |
-| Pre-industrial Earth | 13.7 °C (1850–1900) | **13.9 °C** |
-| Warming at 427 ppm | 1.45 K observed (transient) | **2.0 K** equilibrium |
-| Equilibrium climate sensitivity | 3.0 K, likely 2.5–4.0 (AR6) | **3.1 K** |
-| Glacial CO₂, 190 ppm | part of the LGM's −6.1 K (Tierney 2020) | **−3.5 K** |
-| Planetary albedo | 0.293 (CERES) | 0.293 |
+| CO₂ forcing per doubling | 3.71 (Myhre 1998) / 3.93 (AR6) | **3.82 W/m²**, and flat across doublings |
+| Pre-industrial Earth | 13.7 °C (1850–1900) | **13.6 °C** |
+| Warming at 427 ppm | 1.45 K observed (transient) | **2.4 K** equilibrium |
+| Equilibrium climate sensitivity | 3.0 K, likely 2.5–4.0 (AR6) | **3.5 K** |
+| Glacial CO₂, 190 ppm | part of the LGM's −6.1 K (Tierney 2020) | **−4.4 K** |
+| Planetary albedo | 0.293 (CERES) | 0.294 |
 | Cloud cover | ~0.67 (ISCCP/MODIS) | 0.669 |
 | Cloud feedback | +0.42 W/m²/K (AR6) | +0.06 |
-| Equator-to-pole range | ~40 K annual mean | 36 K |
-| Modern Earth OLR | ~239 W/m² at 288 K | 239 |
+| Equator-to-pole range | ~40 K annual mean | 37.3 K |
+| Modern Earth OLR | ~239 W/m² at 288 K | 238 |
+| Stratospheric H₂O, modern Earth | ~4 ppm | 5 ppm, from psat(T_trap)/p_trap |
 | Venus | 737 K, ~161 W/m² at 92 bar | 733 K, 161 |
-| Mars | ~215 K | 212 K |
-| Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **282 W/m² at 350 K** |
+| Mars | ~215 K | 211 K |
+| Hottest stable climate | 362.8 K (Wolf & Toon 2015); >330 (Popp 2016); ~335 (Leconte 2013) | **350 K** |
+| Moist greenhouse onset | stratospheric H₂O past 10⁻³ near 340 K (Kasting 1988) | **337 K** |
+| Ocean loss there, young star | gigayears at Kasting's criterion | 6.6×10⁹ yr |
+| Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **282 W/m² at 354 K** |
 | Runaway from CO₂ alone | stable (Ramirez 2014); ~100× (Goldblatt 2013) | needs >500× pre-industrial |
 
 The runaway limit is not imposed anywhere in the code. Hold water at saturation and the fitted
@@ -237,9 +241,10 @@ touching them. Click any value to type it exactly, with units — `420ppm`, `0.5
 
 ### Climate states it recognises
 
-Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · ice-free hothouse ·
-temperate · waterbelt/slushball · hard snowball · eyeball · lobster · nightside-trapped desert ·
-dune/desert world · waterworld · Mars-like collapse · Titan-like · airless rock.
+Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · **hot ocean world** ·
+ice-free hothouse · temperate · waterbelt/slushball · hard snowball · eyeball · lobster ·
+twilight world · nightside-trapped desert · dune/desert world · waterworld · Mars-like collapse ·
+Titan-like · frozen desert · thin cold desert · baked desert · airless rock.
 
 ### Frame-rate independence
 
@@ -378,6 +383,15 @@ a quarter of the globe iced and most of its ocean liquid: an eyeball with a wide
 which is what the GCM literature gets for it too (Turbet et al. 2018 model exactly this 1 bar case).
 Those GCMs manage it on far less CO₂, because a locked world grows a thick cloud deck over the
 substellar point that this model only approximates. A bar is at the thick end of plausible.
+
+**Three worlds that might have been, and one kind that might be.** *Young Venus* is Way et al.'s
+(2016) setup — a 310 m ocean, the slow retrograde spin Venus still has, 1 bar of nitrogen and a 2.9 Ga
+Sun — on the planet that ended at 737 K. *Young Mars* is the Noachian at 0.32 S⊕ under 1 bar of CO₂,
+and it freezes solid at −49 °C, which is the honest answer: Forget et al. (2013) cannot get early
+Mars above freezing with CO₂ at any pressure and Ramirez et al. (2014) need hydrogen to do it. Turn
+the CO₂ up and watch where this model and Forget part company — 3 bar gives −17 °C here and about
+4 bar finally clears freezing, with no hydrogen involved, which is the missing maximum greenhouse
+again. *Hot Ocean World* is the pressure-cooker case, and it has its own section above.
 
 ### The mean is not a temperature a locked world has
 
@@ -578,7 +592,7 @@ It costs eighteen additions per step and no extra radiative transfer.
 | Io | 1–2 | and permanently molten for it |
 | TRAPPIST-1b | 2.68 | Barr et al. 2018, Table 3 |
 | GJ 1132 b | 80 | at e = 0.01, held by a resonance with GJ 1132 c |
-| — | **>282** | past this the interior boils an ocean with no help from the star |
+| — | **>347** | past this the interior boils an ocean with no help from the star |
 
 Barr's runaway thresholds for the TRAPPIST-1 planets — 258, 262, 277, 283, 308 W/m² — bracket this
 model's own emergent Simpson–Nakajima limit of **282**, which is a pleasing independent check on a
@@ -745,6 +759,13 @@ the clock, the band temperatures, where the water is, how far the ice sheet has 
 the fossil reserve and the carbon below. Saving only the sliders would have given back a world that
 looked right and had forgotten everything it had been through, which for a model whose subject is
 history is the wrong thing to keep.
+
+**Worlds have names.** Type one into the field under the preset row and it travels with the world —
+into the slot, into the export file, and back out of both. Leave it empty and the preset's own name
+stands in, so loading Venus after naming nothing still says Venus, and picking a world off the shelf
+drops whatever the last one was called. Names are the one string in this program a person types, and
+they are rendered into the slot markup, so they are escaped on the way in; there is a browser check
+that a planet called `<img src=x onerror=…>` shows up as those characters and not as an image.
 
 There is also an **Earth-like** world in the preset row: Earth's physics without Earth's biography. No
 industry, no real coastlines, and a fresh set of continents every time you load it — for trying
@@ -1280,6 +1301,118 @@ needs snowfall to exist at all. In a hard snowball the water cycle collapses, so
 up frosted but largely unglaciated — as on the real Snowball Earth, and in the Antarctic Dry Valleys
 today — which makes such a planet darker, and easier to escape, than one buried in ice.
 
+### The hot branch, and the moist greenhouse that ends it
+
+A planet pushed toward its star used to step off a cliff here. At 1.24 S⊕ an Earth-like world sat at
+64.8 °C; at 1.25 it was at 560 °C and its ocean was in the air. Nothing in between.
+
+Three 3-D models say that is the one thing which does not happen. Wolf & Toon (2015) hold an
+ocean-covered Earth at up to **362.8 K**, Popp et al. (2016) find a stable state above 330 K, Leconte
+et al. (2013) reach about 335 K. What ends the branch in all three is not radiation — it is water
+leaving.
+
+**The radiation was never the problem.** Taken on its own, this model's OLR curve peaks at 362 K,
+which is Wolf & Toon's number almost exactly. The energy balance was being broken well below the peak
+by the *albedo*, which fell from 0.285 at 300 K to 0.206 at 363 K as steam's near-infrared absorption
+darkened the planet. That term is real. What was missing was anything opposing it.
+
+**Cloud optical depth was the missing half.** Cloud *cover* saturates at Earth's value and stays there,
+which is right — but a much moister column condenses more water per updraught and convects deeper, and
+the deck thickens. Every one of those three papers finds the hot branch held up by clouds reflecting
+more. So the deck's albedo now rises with the vapour column, from 0.310 to a ceiling of 0.434 — thick,
+and still well short of the 0.5–0.7 of a real deep convective deck, let alone Venus's 0.75.
+
+It is exactly zero at and below Earth-like humidity, and that is deliberate rather than convenient.
+Earth's cloud albedo is observed and the anchors pin it; AR6's +0.42 W/m²/K cloud feedback is a
+*longwave* altitude effect, which brightening the deck would move the wrong way. The ramp starts at
+0.05 bar of vapour, where the modern tropics reach 0.028.
+
+The result is a branch instead of a cliff. Albedo now falls to 0.258 and then turns and climbs to
+0.269, and the world tracks up it:
+
+| S⊕ | 1.24 | 1.26 | 1.28 | 1.30 | 1.32 | 1.33 | 1.34 |
+|---|---|---|---|---|---|---|---|
+| mean surface | 63.5 °C | 68.3 | 72.4 | 76.0 | 79.4 | **81.2** | runaway |
+
+The inner edge barely moved — 1.245 S⊕ before, 1.33 after, against Wolf & Toon's 1.21 — because the
+ceiling on absorbed flux is still the OLR peak, and all the cloud term does is let the planet reach it.
+
+**The cold trap is now the textbook relation.** What gets past a cold trap is the saturation vapour
+pressure at the trap over the pressure there, `f = psat(T_ct)/p_ct`. It used to be a power law fitted
+to that, pinned at two points, and its own comment mis-stated the second one: it claimed a surface
+mixing ratio of 0.25 was "a 340 K surface", where in this model 340 K gives 0.175. So Kasting's
+criterion was met twelve kelvin late and — much worse — the curve above it was far too shallow. An
+ocean at the top of the branch took **6.2×10¹⁰ years** to leave, thirteen times the age of the Earth,
+which is not a moist greenhouse in any useful sense.
+
+Two things set the trap and both pull the same way as a planet warms: `T_ct` rises with the surface and
+`psat` is exponential in it, and `p_ct` falls, because a warmer, moister troposphere is a deeper one.
+One number is fitted, the e-folding of that second effect, and it is fitted to a single published point
+— Kasting's 10⁻³ criterion at a 340 K surface — rather than to anything downstream. Modern Earth then
+falls out instead of being imposed: a 190 K trap at 0.1 bar gives **5 ppm** against an observed ~4.
+
+So the branch now ends the way the papers say it does. Kasting's criterion is crossed at **337 K**,
+while the world is still sitting there with liquid water, and the ocean leaves in gigayears rather
+than in tens of them.
+
+**The 10⁸ years everyone quotes is the runaway, not this.** Two limits govern escape — diffusion and
+the XUV energy supply — and under the present Sun the second one binds hard: 3.4×10⁻⁶ of bolometric in
+XUV cannot lift an ocean off in 10⁸ years however wet the stratosphere gets, and the answer comes back
+1.6×10¹⁰ yr saying nothing about the cold trap at all. Asked under a young, active star — 100× that,
+roughly the first half-gigayear — the diffusion limit takes over and the ocean goes in 6.6 Gyr. The
+first version of this anchor asked it under the modern Sun and was measuring the wrong thing.
+
+**What is still short.** The branch tops out at 350 K cold-started, 354 K if you walk the insolation up
+from a settled world, against Wolf & Toon's 362.8 K. That is 9–13 K, and the model sits between their
+number and Leconte's 335 K — which is to say inside the spread of a literature that disagrees with
+itself by 30 K. Pushing the cloud term harder would close it and would be tuning to one paper.
+
+### Hot ocean worlds
+
+Oceans, rain and weather at 50–90 °C under a heavy atmosphere. Liquid water is not the hard part:
+pressure lifts the boiling point far above 100 °C long before the critical point at 647 K and 221 bar,
+so an 80 °C ocean under ten bars is unremarkable thermodynamics. (This is the region Orion's Arm's
+worldbuilding calls a *Tohulian* world — the name is fiction, the parameter space is not.)
+
+Two published routes reach it, and the model does both:
+
+* **Tens of bars of CO₂, far from a dim star.** von Paris et al. (2010) put Gliese 581d at 357 K under
+  20 bar of CO₂; Wordsworth et al. (2011) melted an initially frozen ocean on the same planet in a 3-D
+  GCM at 20 bar and above. Here, 0.28 S⊕ — Gliese 581d's — with the CO₂ held at 10 bar gives **66 °C**.
+* **Earth-like air close to a bright star.** That is the hot branch above: 81 °C at 1.33 S⊕.
+
+The two differ in the thing that matters, and not because they were made to. What escapes past a cold
+trap is a **ratio**, and ten bars of background gas is a very large denominator: the dense-CO₂ world
+runs at 66 °C with a stratosphere *drier than Earth's* and keeps its ocean, while the bright-star world
+runs at the same temperature with a wet one and loses it. Wordsworth & Pierrehumbert (2013) make
+exactly this point — a huge CO₂ inventory does not by itself mean fast water loss.
+
+**What actually stops these worlds is the carbon cycle.** Pin the CO₂ and the dense-CO₂ world sits at
+66 °C indefinitely. Let the carbonate–silicate thermostat run and it pulls the same world down to
+2 °C in half a gigayear, because weathering rises with temperature and that is what a thermostat is
+for. This is the honest answer to whether such a world lasts, and it is the first objection anyone
+raises to the idea: the limit is weathering, not the greenhouse.
+
+The shipped **Hot Ocean World** preset outruns the thermostat rather than switching it off, using two
+things real planets have. There are no continents, so continental weathering is gone and only the
+slower seafloor sink is left — worth twenty kelvin on its own. And the interior is Io-like at 1.5 W/m²,
+which is 4× on melt production by itself, with a specific activity of 7.4 on top for thirty times
+Earth's outgassing all told. That holds **72.4 °C under 11.2 bar for a gigayear**, ocean over every
+square metre, with enough cold trap left to keep it for ninety-nine. Drop it to Earth's outgassing and
+the same world settles at 24.8 °C.
+
+**Two places the model has a thumb on the scale here**, both pre-existing and both reported elsewhere:
+
+* It reaches von Paris's 357 K at about **half his pressure**, because there is no maximum greenhouse —
+  CO₂'s Rayleigh scattering never overtakes its own greenhouse the way Kasting (1993) has it. At 19 bar
+  and 0.28 S⊕ this model gives 153 °C where von Paris gives 84. Same root cause as the outer-edge `GAP`
+  row.
+* Thick atmospheres run away too easily. The Simpson–Nakajima limit falls from 282 W/m² at 1 bar to
+  156 at 6 bar here, because pressure broadening goes as `pTot^0.3` across every optical depth, so a
+  4 bar N₂ + 2 bar CO₂ world tips into a runaway at 0.9 S⊕. That is why the genuinely thick end of this
+  parameter space — Orion's Arm's 10–218 bar — is mostly out of reach, and it is a good place for a
+  fourth spectral-band attempt to look.
+
 ### What moves the habitable zone, and what does not
 
 The edges are not properties of the star alone. Measured on this model, holding CO₂ fixed and asking
@@ -1289,12 +1422,22 @@ where the world stops keeping liquid water:
 
 | | S⊕ | literature |
 |---|---|---|
-| Earth, 24 h day, 1 ocean | 1.25 | ~1.2 (Wolf & Toon 2015) |
-| slow rotator, 2000 h | 1.28 | up to ~2 (Yang, Cowan & Abbot 2014) |
-| tidally locked | 1.23 | as above |
-| 6 oceans, no land | 1.17 | wetter is worse |
-| 0.1 ocean, land planet | **1.50** | ~1.5 (Abbot, Cowan & Ciesla 2012) |
-| 0.02 ocean, desert | 1.48 | as low as 0.38 AU in the extreme (Zsom et al. 2013) |
+| Earth, 24 h day, 1 ocean | 1.33 | ~1.2 (Wolf & Toon 2015) |
+| slow rotator, 2000 h | 1.37 | up to ~2 (Yang, Cowan & Abbot 2014) |
+| tidally locked | *not robustly measurable* | as above |
+| 6 oceans, no land | 1.25 | wetter is worse |
+| 0.1 ocean, land planet | **1.57** | ~1.5 (Abbot, Cowan & Ciesla 2012) |
+| 0.02 ocean, desert | 1.58 | as low as 0.38 AU in the extreme (Zsom et al. 2013) |
+
+Every row moved out by about 0.08 S⊕ when the cloud deck was given an optical-depth feedback, which
+is the same term and the same direction as the hot branch above: a brighter deck lets a world sit
+closer in.
+
+The locked row used to read 1.23 and no longer carries a number, because measuring it that way was
+not measuring anything. Sweep a locked world's insolation with its CO₂ pinned and it goes runaway at
+0.80, runaway at 0.90, eyeball at 1.00 and runaway at 1.20 — it lands in different basins depending
+on where it starts, and it does that on the version before this one too. A single number implies a
+threshold that is not there.
 
 **Outer edge** (global glaciation), in S⊕:
 
@@ -1302,8 +1445,8 @@ where the world stops keeping liquid water:
 |---|---|---|---|
 | glaciates below | 0.90 | 0.95 | **0.78** |
 
-So: **water inventory moves the inner edge properly** — a land planet holds out to 1.50 S⊕ against
-Earth's 1.25, and the literature's ratio is 1.52/1.25. This is driven by the water a world actually
+So: **water inventory moves the inner edge properly** — a land planet holds out to 1.57 S⊕ against
+Earth's 1.33, and the literature's ratio is 1.52/1.25. This is driven by the water a world actually
 has, not by how much basin it has: `landFraction` is basin geometry and the coverage is worked out
 from the inventory, which is why draining a world uncovers its sea floor. Abbot, Cowan & Ciesla 2012
 found weathering and the habitable zone largely **insensitive to land fraction**, which is the same
@@ -1348,29 +1491,35 @@ model does not enter.
 
 Stated plainly, because a model that hides these is less useful:
 
-* **The carbon cycle has a cliff at about 2.7× Earth's outgassing, and it is not defensible.** An
-  Earth-like world at 2.6× sits at 3100 ppm and 19.8 °C indefinitely. At 2.8× it holds 3400 ppm and
-  20 °C for *fourteen million years* while CO₂ creeps up 50 ppm/Myr — then the last ice melts, the
-  albedo feedback releases ~7 K, and the world staggers: partially re-glaciating to 61 % ice at
-  −17 °C, recovering, overshooting to **1147 °C**, and finally settling at 521 °C in a steam
-  greenhouse it cannot leave, because κ — the ocean-and-crust carbon buffer — has collapsed from 50
-  to 1 and put fifty times the airborne carbon into the air at once.
+* **The carbon cycle used to have a cliff at about 2.7× Earth's outgassing, and it has gone.** This
+  entry is kept rather than deleted because the old behaviour is worth recording and because nothing
+  was aimed at it.
 
-  The **endpoint** is step-independent: 530.7 °C at a 2-Myr step cap, 532.5 °C at a 5000-year one.
-  So the hot attractor is real. The **path** is not — different step sequences swing through
-  different intermediate states, and a 1147 °C overshoot on the way to 521 °C is not physics.
-  Endpoint robustness is not evidence that the transition is well posed.
+  What it did: an Earth-like world at 2.6× outgassing sat at 3100 ppm and 19.8 °C indefinitely, and
+  at 2.8× it held 3400 ppm for *fourteen million years* while CO₂ crept up 50 ppm/Myr — then the last
+  ice melted, the albedo feedback released ~7 K, and the world staggered through a partial
+  re-glaciation to 61 % ice at −17 °C, recovered, overshot to **1147 °C**, and settled at 521 °C in a
+  steam greenhouse it could not leave. The endpoint was step-independent, so the hot attractor was
+  real; the path was not. It tipped at ~21,000 ppm, about 48× present, where Goldblatt et al. (2013)
+  put a *conceivable* CO₂-driven runaway at ~100× and Wolf & Toon (2015) have Earth stable to 1.21×
+  solar forcing with a moist greenhouse arriving first. Real Earth ran the Cretaceous and the Eocene
+  at elevated outgassing and did none of this.
 
-  Nor is the threshold merely arguable. It tips at ~21,000 ppm, about 48× present. Goldblatt et al.
-  (2013) put a *conceivable* CO₂-driven runaway at ~100× present; Wolf & Toon (2015) have Earth
-  stable against runaway to 1.21× solar forcing, with a moist greenhouse arriving first — a stable
-  state that loses its water over 10⁸ years, not a jump to 521 °C. This model offers no
-  moist-greenhouse landing here at all; it goes straight to steam. Real Earth ran the Cretaceous and
-  the Eocene at elevated outgassing and did not do this.
+  It is now a smooth curve with no cliff in it at all:
 
-  It is a thermostat problem rather than a heat one, and fixing it means the atmospheric window this
-  scheme does not have. It long predates internal heat — but internal heat is how you now meet it,
-  since a melt boost of 2.7× arrives at **0.67 W/m²**, a seventh of Io's. A test pins it.
+  | outgassing | 2.6× | 2.8× | 3.5× | 4× | 6× | 8× | 12× |
+  |---|---|---|---|---|---|---|---|
+  | after 2 Gyr | 20.1 °C | 12.9 | 21.0 | 17.3 | 22.4 | 26.6 | 30.6 |
+  | CO₂ | 3,365 ppm | 22,526 | 22,871 | 24,097 | 28,513 | 33,269 | 45,596 |
+
+  The old entry named the fix — "it is a thermostat problem rather than a heat one, and fixing it
+  means the atmospheric window this scheme does not have" — and that turned out to be half right
+  about the diagnosis and wrong about the remedy. It was a damping problem, and what supplied the
+  damping was the cloud optical-depth feedback built for the hot branch: the runaway that used to
+  take off at 21,000 ppm now brightens the deck instead. Nothing in that work was aimed here, which
+  is the honest way to report it and also the reason to keep the entry — a deviation that disappears
+  as a side effect of unrelated work deserves more suspicion than one that is fixed on purpose, and
+  the table above is what to re-run if it comes back.
 
 * **There is no outer edge to the habitable zone.** Kasting et al. (1993) put it at 1.67 AU — 0.36
   S⊕ — and it is set by a *maximum greenhouse*: CO₂ Rayleigh-scatters about 2.5× better than air, so
@@ -1564,6 +1713,25 @@ Stated plainly, because a model that hides these is less useful:
   assumptions, so the model sits on the conservative side of a genuine disagreement in the
   literature rather than outside it.
 
+* **Young Venus comes out 30 K too warm.** Way et al. (2016) ran Venus with a 310 m ocean, slow
+  retrograde spin and a 2.9 Ga Sun and got a global mean near 11 °C, arguing it could have stayed
+  that way for two billion years. The shipped preset is their setup and settles at **41 °C**. The
+  reason is the one already recorded two sections up: their result is carried by a thick substellar
+  cloud deck that a slow rotator builds, and a one-dimensional zonal scheme gets the direction of
+  that and about a twentieth of the magnitude. It is still liquid water on a world that ended up at
+  737 K, which is the point of the preset, but the number is not theirs.
+
+* **The hot branch stops 9–13 K short of Wolf & Toon.** 350 K cold-started, 354 K walked up from a
+  settled world, against their 362.8 K — though the same model spread runs down to Leconte et al.'s
+  335 K, so this sits inside a literature that disagrees with itself by 30 K rather than outside it.
+  Closing it would mean pushing the cloud term until it matched one paper.
+
+* **Thick atmospheres run away too easily**, which is what puts most of the hot-ocean parameter space
+  out of reach. The Simpson–Nakajima limit here falls from 282 W/m² at 1 bar to 156 at 6 bar, because
+  pressure broadening multiplies every optical depth by `pTot^0.3`, so 4 bar of N₂ under 2 bar of CO₂
+  tips into a runaway at 0.9 S⊕. Worlds in the 10–200 bar range with liquid oceans are therefore much
+  harder to build here than the literature suggests they should be.
+
 Two deviations recorded in earlier versions have since been **fixed** rather than excused: the
 runaway inner edge now falls at 1.3–1.4 S⊕ (literature 1.2–1.4), and a dune world stays habitable
 about 0.35 S⊕ further in than an ocean world, which is the Abe et al. (2011) result. Both were
@@ -1574,7 +1742,7 @@ actually is.
 
 ## References
 
-Archer 2005, Lenton & Cannell 2002 (the fate of fossil carbon, recoverable reserves) · Sleep & Zahnle 2001 (carbon cycling through the mantle), Dasgupta & Hirschmann 2010 (the deep carbon cycle), Rushby et al. 2018 (carbonate-silicate cycling on other planet sizes) · Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Saunois et al. 2020 (the global methane budget) · Yung, Allen & Pinto 1984, Nixon et al. 2018 (Titan's methane and its ~10–100 Myr photochemical lifetime) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
+Way et al. 2016 (was Venus habitable?) · von Paris et al. 2010, Wordsworth et al. 2011 (Gliese 581d under tens of bars of CO2) · Wordsworth & Pierrehumbert 2013 (water loss from CO2-rich terrestrial planets) · Popp, Schmidt & Marotzke 2016 (the stable moist greenhouse) · Forget et al. 2013, Ramirez et al. 2014 (early Mars, and what CO2 alone cannot do) · Archer 2005, Lenton & Cannell 2002 (the fate of fossil carbon, recoverable reserves) · Sleep & Zahnle 2001 (carbon cycling through the mantle), Dasgupta & Hirschmann 2010 (the deep carbon cycle), Rushby et al. 2018 (carbonate-silicate cycling on other planet sizes) · Catling & Zahnle 2020, Pavlov et al. 2001, Zahnle 1986 (methane photochemistry, oxygen sinks) · Saunois et al. 2020 (the global methane budget) · Yung, Allen & Pinto 1984, Nixon et al. 2018 (Titan's methane and its ~10–100 Myr photochemical lifetime) · Brady & Gíslason 1997, Coogan & Dosso 2015, Krissansen-Totton & Catling 2017 (seafloor weathering) · Byrne & Goldblatt 2014 (Archean radiative forcing) · McKay, Pollack & Courtin 1991 (Titan's greenhouse and anti-greenhouse) · Trainer et al. 2006, Zerkle et al. 2012 (Archean organic haze) · Lobo, Shields, Palubski & Wolf 2023 (terminator habitability) · Menou 2013 (water-trapped worlds) · Abe-Ouchi et al. 2013 (ice-sheet hysteresis) · Goldblatt et al. 2013 (runaway radiation limit) · Kasting 1988 (moist/runaway greenhouse, water
 loss) · Goldblatt & Watson 2012 · Turbet et al. 2023 (3-D runaway transition) · Wolf & Toon 2014 ·
 Leconte et al. 2013 · Abe et al. 2011 (habitable zone limits for dry planets) · Yang et al. 2014
 (slow rotators, substellar cloud deck) · Pierrehumbert, *Principles of Planetary Climate* ·

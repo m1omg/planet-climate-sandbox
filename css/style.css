@@ -404,3 +404,13 @@ body.software-render #planet{image-rendering:auto}
    the world back into its own past. */
 .chart.scrub { cursor: ew-resize; touch-action: none; }
 .supply-btn.busy { color: #f0d9b8; background: rgba(176, 138, 90, 0.25); border-color: #b08a5a; }
+
+/* Naming a world. The name is the player's, so it travels with the world into
+   the slots and the export file rather than being a label on the preset. */
+.world-name{display:flex;align-items:center;gap:.5rem;margin-top:.5rem;
+  font-size:.78rem;color:var(--fg-dim)}
+.world-name input{flex:1 1 auto;min-width:0;font:inherit;color:var(--fg);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+  padding:.25rem .45rem}
+.world-name input::placeholder{color:var(--fg-faint)}
+.world-name input:focus{outline:none;border-color:var(--accent)}

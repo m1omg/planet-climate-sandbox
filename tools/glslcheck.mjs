@@ -2,12 +2,40 @@
 // exactly as the runtime does (noise spliced in from the shared file), and
 // enforces a per-pixel noise budget so the cost that once made this unusable on
 // mobile cannot silently creep back.
-import { parse } from '/home/mroz/.nvm/versions/node/v20.20.2/lib/node_modules/@shaderfrog/glsl-parser/parser/parser.js';
-import { readFileSync } from 'node:fs';
+//
+// The parser is a dev-only dependency and deliberately not vendored -- there is
+// no package.json here and there is not going to be one, so it lives in the
+// global npm root and gets resolved at run time. It used to be imported by
+// absolute path into one specific nvm directory. That worked, on the one machine
+// whose node version matched: the path carried `v20.20.2` in it, nvm keeps its
+// global node_modules per version, and `nvm install 22` would have killed this
+// check on the machine it was written for.
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+
+const PARSER = '@shaderfrog/glsl-parser/parser/parser.js';
+function locateParser() {
+  // A local node_modules, if one ever exists.
+  try { return createRequire(import.meta.url).resolve(PARSER); } catch { /* not local */ }
+  // The global root, which is where it actually lives.
+  try {
+    const g = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim();
+    const p = join(g, PARSER);
+    if (existsSync(p)) return p;
+  } catch { /* npm not on PATH */ }
+  return null;
+}
+const parserPath = locateParser();
+if (!parserPath) {
+  console.error('GLSL parser not found. Install it with:\n\n  npm i -g @shaderfrog/glsl-parser\n');
+  process.exit(1);
+}
+const { parse } = await import(`file://${parserPath}`);
 const read = (f) => readFileSync(join(root, 'src/render/glsl', f), 'utf8');
 const noise = read('noise.glsl');
 const splice = (src) => src.replace('//__NOISE__', noise);

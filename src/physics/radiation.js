@@ -286,10 +286,42 @@ export function cloudCover(pH2O, slowness, subStellar) {
   return Math.min(0.88, c0 * Math.tanh(pH2O / 0.0030));
 }
 
+// How bright the cloud deck itself is, which is not a constant.
+//
+// Cloud *cover* saturates around Earth's value and stays there (above), so on
+// its own it says a warming planet reflects no more than it used to. Cloud
+// optical depth does not behave that way. A much moister column condenses more
+// water per updraught and convects deeper, and the deck thickens and rises;
+// 3-D models of planets driven toward the inner edge all find the hot branch is
+// held up by clouds reflecting more, not by radiation alone (Wolf & Toon 2015;
+// Popp et al. 2016; Leconte et al. 2013 for the same effect on the threshold).
+//
+// Without it this model had no hot branch at all. Water vapour's near-infrared
+// absorption darkens a steam atmosphere -- the term at the end of
+// planetaryAlbedo, which is real -- and with nothing opposing it the albedo
+// *fell* from 0.285 at 300 K to 0.206 at 363 K. That is a positive feedback
+// with no damper, and it broke the energy balance 23 K below the point where
+// the OLR curve actually peaks: the planet went from 342 K straight to 560 °C,
+// where Wolf & Toon hold a stable ocean at 362.8 K.
+//
+// It switches on above Earth-like humidity and is exactly zero at and below it,
+// which is deliberate. Earth's cloud albedo is observed, the anchors pin it,
+// and the AR6 cloud feedback is a *longwave* altitude effect that brightening
+// the deck would move the wrong way. This is the shortwave behaviour of a much
+// wetter atmosphere than any Earth anchor covers, so it is confined there:
+// P_THICK_LO sits well above the 0.028 bar the modern tropics reach, and the
+// deck tops out at an albedo of 0.43 -- thick, but well short of the 0.5-0.7 of
+// a real deep convective deck, let alone Venus's 0.75.
+const CLOUD_THICKEN = 0.40, P_THICK_LO = 0.10, P_THICK_HI = 0.45;   // bar of vapour
+
+export function cloudAlbedo(pH2O) {
+  return ALB_CLOUD * (1 + CLOUD_THICKEN * smoothstep(P_THICK_LO, P_THICK_HI, pH2O));
+}
+
 export function planetaryAlbedo(T, o) {
   const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated, o.waterCap);
   const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * (o.cloudBoost ?? 1), 0, 0.9);
-  const withClouds = ALB_CLOUD * C + surf * (1 - C);
+  const withClouds = cloudAlbedo(o.pH2O) * C + surf * (1 - C);
   // Rayleigh + haze from the *dry* gas. Exponent set so a 92 bar CO2 atmosphere
   // reaches Venus's bright scattering (~0.7) while 1 bar stays at Earth's 0.06.
   const pDry = Math.max(0, o.pTot - o.pH2O);

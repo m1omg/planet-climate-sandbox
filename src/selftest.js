@@ -255,7 +255,21 @@ export function run() {
       // twilight. So this is still one fixed point in the trapped basin and not
       // a robust region, exactly as before; the interleaving has not gone away
       // and is not expected to.
-      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.03,
+      // Re-pinned a fourth time, from 0.03 bar to 0.01, when the cloud deck was
+      // given an optical-depth feedback. Measured before moving it, as the note
+      // above insists: this perturbation is nothing like the methane one. The
+      // substellar band here carries 1.22 bar of vapour, which takes the cloud
+      // albedo from 0.310 to 0.434 -- a deck 40% brighter over the eye, which is
+      // the Yang, Cowan & Abbot 2014 mechanism the README lists as a weakness
+      // and is meant to be large. A cooler eye sublimates less, so a temperate
+      // ring survives at the terminator and this world lands in twilight.
+      //
+      // Thinning the air to 0.01 bar moves less heat to the night side and puts
+      // it back in the trapped basin -- and this pin is a better one than the
+      // one it replaces: 0.03 held at 0, 0.03, 0.092, 0.13 and 0.18 W/m^2 with a
+      // miss at 0.06, where 0.01 holds at 0, 0.092 and 0.2 together. 0.02 and
+      // 0.015 both still interleave, so the interleaving is exactly where it was.
+      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.01,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
       // to the night side to stop the trap.
@@ -856,6 +870,114 @@ export function run() {
     check('…and a world saved before any of this still has an interior',
       Math.abs(legacy.diag.Fint - 0.092) < 1e-9,
       `defaults to Earth's ${legacy.diag.Fint} W/m²`);
+  }
+
+  // ---- 3j-6. the hot branch, and what ends it -------------------------------
+  // A planet pushed toward its inner edge used to go from temperate straight to
+  // a 560 C steam greenhouse. Three 3-D models say otherwise -- Wolf & Toon 2015
+  // hold an ocean at 362.8 K, Popp et al. 2016 above 330 K, Leconte et al. 2013
+  // near 335 K -- and what ends the branch in all three is water leaving, not
+  // radiation. calibrate.mjs anchors the numbers; these are the statements.
+  {
+    // Hold the CO2 still and walk the insolation up. The hot branch is a
+    // fixed-CO2 object, which is how the papers drive it too, and the thermostat
+    // test below is the other half of that.
+    const eqAt = (S) => {
+      const sim = new Simulation({ ...EARTH, insolation: S, outgassing: 0 });
+      const co2 = sim.world.co2;
+      let t = 0;
+      while (t < 3e5) { const dt = Math.min(20 + t * 0.02, 5000); sim.stepOnce(dt); t += dt; sim.world.co2 = co2; }
+      return sim.world;
+    };
+    let top = null;
+    for (let S = 1.20; S <= 1.45; S += 0.01) {
+      const w = eqAt(S);
+      if (w.diag.Tmean > 400) break;
+      top = w;
+    }
+    check('There is a stable climate well above anything Earth has seen',
+      top != null && top.diag.Tmean > 340,
+      top ? `${(top.diag.Tmean - 273.15).toFixed(1)} °C with liquid water, ` +
+            `${(top.diag.flooded * 100).toFixed(0)}% of it flooded` : 'no branch at all');
+
+    // And it ends as a moist greenhouse rather than as a cliff: Kasting's
+    // criterion is met on the branch, while the world is still sitting there.
+    check('…and the cold trap has failed by the top of it (Kasting 1988)',
+      top != null && top.escape.fStrat > 1e-3,
+      top ? `stratospheric H₂O ${top.escape.fStrat.toExponential(2)}, past the 1e-3 criterion` : '');
+
+    // The cold trap is now psat(T_ct)/p_ct rather than a power law fitted to it,
+    // so modern Earth is a prediction and not a pin. Observed is ~4e-6.
+    const earthNow = settle({ ...EARTH }, 2e5).world;
+    check('…and the same relation gives modern Earth its observed ~4 ppm',
+      earthNow.escape.fStrat > 1e-6 && earthNow.escape.fStrat < 2e-5,
+      `${earthNow.escape.fStrat.toExponential(2)} against an observed ~4e-6`);
+
+    // Under a young, active star that is fast enough to matter. Under the
+    // present Sun it is not, and that is the XUV energy limit rather than the
+    // trap -- worth separating, because the two answers differ by a hundredfold.
+    const younger = (() => {
+      const sim = new Simulation({ ...EARTH, insolation: 1.30, xuvFraction: 3.4e-4, outgassing: 0 });
+      const co2 = sim.world.co2;
+      let t = 0;
+      while (t < 3e5) { const dt = Math.min(20 + t * 0.02, 5000); sim.stepOnce(dt); t += dt; sim.world.co2 = co2; }
+      return sim.world;
+    })();
+    const gyr = (younger.diag.d.eoColumn / younger.escape.water) / 1e9;
+    // Gigayears, not tens of them: long, but a fraction of a planet's life, which
+    // is what makes the moist greenhouse a way of losing an ocean rather than a
+    // curiosity. The 10^8 figure that gets quoted belongs to the runaway above
+    // this, where the stratosphere is all steam and the ratio is 1 rather than
+    // 10^-3.
+    check('…and under a young star the ocean actually leaves, within a planet\u2019s life',
+      gyr > 0.1 && gyr < 20, `${(gyr * 1000).toFixed(0)} Myr per ocean at 100× the modern Sun's XUV`);
+  }
+
+  // ---- 3j-7. a hot ocean world, and why they are hard -----------------------
+  // Liquid water at 300-370 K under tens of bars is not exotic: von Paris et al.
+  // 2010 model Gliese 581d at 20 bar and 357 K, Wordsworth et al. 2011 melt its
+  // ocean in a GCM. What is hard is keeping one, and the obstacle is not the
+  // greenhouse.
+  {
+    const hot = settle(PRESETS.hotOcean.params, 1e9).world;
+    const st = classify(hot);
+    check('A hot ocean world holds for a gigayear with the carbon cycle running',
+      st.id === 'hotocean' && hot.diag.flooded > 0.9,
+      `${(hot.diag.Tmean - 273.15).toFixed(1)} °C under ${hot.diag.pTotMean.toFixed(1)} bar, ` +
+      `${(hot.diag.flooded * 100).toFixed(0)}% ocean`);
+
+    // The Wordsworth & Pierrehumbert 2013 half: what escapes past a cold trap is
+    // a ratio, and ten bars of background gas is a very large denominator. This
+    // world is hotter than the moist greenhouse above and loses water far slower.
+    const gyr = (hot.diag.d.eoColumn / hot.escape.water) / 1e9;
+    check('…and a heavy atmosphere keeps its water, hot as it is',
+      hot.escape.fStrat < 1e-3 && gyr > 20,
+      `stratospheric H₂O ${hot.escape.fStrat.toExponential(2)}, an ocean every ${gyr.toFixed(0)} Gyr`);
+
+    // The thermostat is the limit, not the radiation, and that is worth pinning
+    // because it is the first objection anyone raises to these worlds. Same
+    // world, Earth's outgassing: the carbon cycle pulls it back down.
+    const cooled = settle({ ...PRESETS.hotOcean.params, outgassing: 1, internalHeat: 0.092 }, 5e8).world;
+    check('…and what stops one is weathering, not the greenhouse',
+      cooled.diag.Tmean < hot.diag.Tmean - 30,
+      `${(cooled.diag.Tmean - 273.15).toFixed(1)} °C at Earth's outgassing against ` +
+      `${(hot.diag.Tmean - 273.15).toFixed(1)} °C at thirty times it`);
+  }
+
+  // ---- 3j-8. a dune world is a land planet ----------------------------------
+  // Abe et al. 2011's dune worlds are *land* planets. This used to be tested on
+  // the water inventory alone, which is a different question: Way et al. 2016's
+  // young Venus carries 0.115 EO and still floods a quarter of itself.
+  {
+    const venus = settle(PRESETS.youngVenus.params, 2e7).world;
+    check('A shallow ocean is not a desert if it is still an ocean',
+      classify(venus).id !== 'dune' && venus.diag.flooded > 0.15,
+      `${(venus.diag.flooded * 100).toFixed(0)}% flooded on ${venus.diag.totalWater.toFixed(3)} EO ` +
+      `— ${classify(venus).name}`);
+    const dune = settle(PRESETS.dune.params, 2e7).world;
+    check('…while a real land planet still is one',
+      classify(dune).id === 'dune',
+      `${(dune.diag.flooded * 100).toFixed(1)}% flooded — ${classify(dune).name}`);
   }
 
   // ---- 3k. the coastline has to be where the model says it is ---------------
@@ -1494,7 +1616,17 @@ export function run() {
 
     // It comes back, which is the half that makes it a biosphere rather than a
     // switch: something survived and spread.
-    const back = new Simulation({ ...EARTH, co2Bar: 0.393 });
+    // 0.6 bar, raised from 0.393 when the cloud deck was given an optical-depth
+    // feedback. That feedback is worth real cooling exactly where this test
+    // lives -- a very wet, very warm atmosphere -- and 0.393 bar now settles at
+    // 70 C, which is inside what photosynthesis can still do here rather than
+    // past it. 0.6 puts the world at 82 C and kills it outright.
+    //
+    // There is a ceiling on how far this can be pushed and it is close: 0.8 bar
+    // tips into a runaway at 516 C, from which nothing grows back and the second
+    // half of the check could never pass. So the window is 0.6 to somewhere
+    // under 0.8, and this sits in it deliberately.
+    const back = new Simulation({ ...EARTH, co2Bar: 0.6 });
     back.runYears(5e4);
     const dead = back.world.diag.bio;
     back.world.co2 = 280e-6 * 1e5 / back.world.diag.g;

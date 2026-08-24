@@ -228,6 +228,65 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   if (last) console.log(`   (warmest non-runaway sampled: ${last.mult}× → ${last.T.toFixed(1)} °C)`);
 }
 
+// ---- the hot stable branch, and the moist greenhouse that ends it ---------
+// A planet pushed toward its inner edge does not step off a cliff. Three
+// independent 3-D models find a *stable* hot branch first: Wolf & Toon (2015)
+// hold an ocean-covered Earth at up to 362.8 K, Popp et al. (2016) get a stable
+// state above 330 K, Leconte et al. (2013) reach about 335 K. What ends it is
+// not radiation but water: the cold trap fails, the stratosphere wets, and the
+// ocean leaves over 10^8-10^9 years (Kasting 1988).
+//
+// This model used to run temperate straight into a 560 °C steam greenhouse with
+// nothing in between, which is the one thing all three papers agree does not
+// happen.
+{
+  let hottest = null, hotS = 1.20;
+  for (let S = 1.20; S <= 1.70; S += 0.01) {
+    const w = eq({ ...EARTH, insolation: S }, { years: 3e5 });
+    if (w.diag.Tmean > 400) break;          // over the edge: no equilibrium
+    hottest = w; hotS = S;
+  }
+  const Ttop = hottest ? hottest.diag.Tmean : 0;
+  anchor('hottest stable climate', Ttop, 345, 375, 'K',
+    'Wolf & Toon 2015: 362.8 K; Popp 2016: >330 K; Leconte 2013: ~335 K');
+
+  // Kasting's moist greenhouse is a definition, not a temperature: the
+  // stratospheric water mixing ratio passing 1e-3, at which point hydrogen
+  // escapes fast enough to matter. Find the surface temperature where the
+  // model crosses it.
+  let onset = 0;
+  for (let S = 1.00; S <= 1.70; S += 0.01) {
+    const w = eq({ ...EARTH, insolation: S }, { years: 3e5 });
+    if (w.diag.Tmean > 400) break;
+    if ((w.escape?.fStrat ?? 0) > 1e-3) { onset = w.diag.Tmean; break; }
+  }
+  anchor('moist greenhouse onset', onset, 320, 355, 'K',
+    'Kasting 1988: stratospheric H2O passes 1e-3 near 340 K');
+
+  // And once it is there, the ocean has to actually go somewhere.
+  //
+  // Asked under the *present* Sun this is the wrong question, and asking it that
+  // way was the first version of this anchor. Escape is the lesser of the
+  // diffusion and XUV energy limits, and 3.4e-6 of bolometric in XUV cannot lift
+  // an ocean off in 10^8 years however wet the stratosphere gets -- the energy
+  // limit binds at 1.6e10 yr and the answer says nothing about the cold trap.
+  // The literature's 10^8-10^9 yr is Kasting's Venus calculation, and it is for
+  // a *young, active* star. So the anchor asks it under one: 100x the modern
+  // Sun's XUV, which is roughly the first half-gigayear.
+  const young = eq({ ...EARTH, insolation: hotS, xuvFraction: 3.4e-4 }, { years: 3e5 });
+  const perYear = (young?.escape?.water ?? 0);
+  const oceanMyr = perYear > 0 ? (young.diag.d.eoColumn / perYear) / 1e6 : Infinity;
+  //
+  // The band is 10^8-10^10 yr and it is worth saying why it is that wide rather
+  // than the 10^8 the phrase "loses its water" usually carries. 10^8 is the
+  // *runaway*, where the stratosphere is all steam. Kasting's moist greenhouse,
+  // which is what this is, sits at a mixing ratio near 10^-3 and takes a few
+  // gigayears -- long, but a fraction of a planet's life, which is the whole
+  // point of the state. The model lands at 6.6 Gyr.
+  anchor('ocean lost at the branch top', Math.min(oceanMyr, 1e6), 100, 10000, 'Myr',
+    'Kasting 1988: gigayears at the moist-greenhouse criterion; 10^8 belongs to the runaway above it');
+}
+
 // ---- report ---------------------------------------------------------------
 let bad = 0;
 console.log('');

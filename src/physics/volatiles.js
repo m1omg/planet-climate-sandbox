@@ -322,17 +322,48 @@ export function basinWater(w) {
 // 10^8-10^9 yr to disappear, which is the Venus story and the reason a wet
 // runaway drifts into a dry one over hundreds of millions of years.
 // ---------------------------------------------------------------------------
+// Cold-trap geometry. PCT_EARTH is where Earth's tropopause sits as a fraction
+// of surface pressure; PCT_TAU is how fast that fraction falls as the surface
+// warms and the troposphere deepens, fitted to put Kasting's moist-greenhouse
+// criterion (stratospheric H2O past 1e-3) on his 340 K surface.
+const PCT_EARTH = 0.10, PCT_TAU = 36.1;   // K
+
 export function escapeRates(w) {
   const p = w.params, dg = w.diag, d = dg.d;
   const pTot = Math.max(1e-6, dg.pTotMean);
   const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
 
-  // Stratospheric water mixing ratio. The cold trap suppresses it enormously,
-  // but the suppression weakens as the lower atmosphere gets wetter. This power
-  // law is pinned to two points: modern Earth (surface mixing ratio 0.011 gives
-  // the observed ~4 ppm in the stratosphere) and the moist-greenhouse onset
-  // (surface 0.25, i.e. a 340 K surface, gives Kasting's 1e-3 criterion). The
-  // x^8 term takes over when the air is mostly steam and there is no trap left.
+  // Stratospheric water mixing ratio -- the thing that decides whether a planet
+  // keeps its ocean, and now the textbook relation rather than a power law
+  // fitted to it: what gets past a cold trap is the saturation vapour pressure
+  // at the trap over the pressure there.
+  //
+  //     f = psat(T_ct) / p_ct
+  //
+  // The old fit was a power law in the *surface* mixing ratio, pinned at modern
+  // Earth and at a second point its own comment mis-stated: it claimed a surface
+  // ratio of 0.25 was "a 340 K surface", where in this model 340 K gives 0.175.
+  // So the moist-greenhouse criterion was met about twelve kelvin late, and --
+  // much worse -- the curve above it was far too shallow. An ocean at the top of
+  // the hot branch took 6.2e10 years to leave, which is thirteen times the age of
+  // the Earth and not a moist greenhouse in any useful sense.
+  //
+  // Two things set the trap, and they pull the same way as a planet warms:
+  //
+  //   * T_ct rises with the surface, and psat is exponential in it. The existing
+  //     linear fit is kept -- it was already here, computed, and then not used
+  //     for anything.
+  //   * p_ct falls. A warmer, moister troposphere is a deeper one and the
+  //     tropopause sits at lower pressure; Earth's is near 0.1 of the surface
+  //     pressure. PCT_TAU is the one fitted number here and it is fitted to a
+  //     single published point -- Kasting's 1e-3 criterion at a 340 K surface --
+  //     rather than to anything downstream of it.
+  //
+  // Modern Earth then falls out rather than being imposed: a 190 K trap at 0.1
+  // bar gives 3e-6, against an observed 4e-6, with nothing tuned to make it.
+  // The x^8 term stays for the other end, where the air is mostly steam, the
+  // trap has gone entirely and the ratio has to reach one.
+  //
   // Evaluated band by band and then area-averaged: escape is dominated by the
   // warmest, wettest latitudes, not by the global mean.
   const xSteam = pH2Omean / pTot;
@@ -340,7 +371,11 @@ export function escapeRates(w) {
   let fStrat = 0;
   for (let i = 0; i < NBANDS; i++) {
     const x = clamp(dg.pH2O[i] / Math.max(dg.pTot[i], 1e-9), 0, 1);
-    fStrat += clamp(0.0115 * Math.pow(x, 1.764) + Math.pow(x, 8), 0, 1) / NBANDS;
+    const tct = clamp(190 + 0.62 * (w.T[i] - 288), 120, 700);
+    const pctFrac = clamp(PCT_EARTH * Math.exp(-(w.T[i] - 288) / PCT_TAU), 1e-6, 0.5);
+    const pct = pctFrac * Math.max(dg.pTot[i], 1e-9);
+    const trap = psatH2O(tct) / 1e5 / pct;
+    fStrat += clamp(trap + Math.pow(x, 8), 0, 1) / NBANDS;
   }
 
   // Diffusion-limited: 2.5e13 * f H atoms/cm^2/s  ->  kg/m^2/yr of water
