@@ -9,6 +9,8 @@ import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
+import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
+import { captureWorld, applyWorld } from './game/snapshot.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
@@ -1861,6 +1863,96 @@ export function run() {
       parseSaveFile(JSON.stringify([world('solo')]))?.length === 1
       && parseSaveFile(JSON.stringify(world('alone')))?.length === 1,
       'array form and single-world form both parse');
+  }
+
+  // ---- 7e. standing in a world\u2019s own past -------------------------------
+  // Dragging the temperature chart puts the simulation back into a state it was
+  // actually in, so that a slider moved from there sends it somewhere else.
+  //
+  // The property that has to hold is that going back is EXACT: a world restored
+  // to a moment and run on must arrive exactly where it would have arrived
+  // without the detour. Anything less and the scrubber is quietly a different
+  // simulation, and so is every save slot, since they share this snapshot.
+  {
+    const P = { ...EARTH, insolation: 0.94, outgassing: 1 };
+    const state = (w) => [w.diag.Tmean, w.diag.pCO2, w.diag.iceMean, w.water.ocean,
+                          w.carbonDeep, w.ch4, w.o2, w.iceSheet];
+
+    const a = new Simulation({ ...P });
+    a.runYears(3e5, 2e3);
+    const snap = captureWorld(a.world);
+    a.runYears(7e5, 2e3);
+    const straight = state(a.world);
+
+    const b = new Simulation({ ...P });
+    applyWorld(b, snap, { ...snap.params });
+    b.runYears(7e5, 2e3);
+    const rewound = state(b.world);
+
+    // Exactly equal, not nearly. The stepper is deterministic, so any drift at
+    // all means the snapshot is missing something -- dropping carbonDeep alone
+    // moves the mantle by 50 kg/m\u00b2 over this span, which is what this catches.
+    check('A world put back into its own past arrives exactly where it would have',
+      straight.every((v, i) => v === rewound[i]),
+      `${straight.length} state variables identical after 700 kyr, ` +
+      `${(a.world.diag.Tmean - 273.15).toFixed(4)} \u00b0C either way`);
+
+    // And the point of it: the same moment, one thing changed, another fate.
+    const c = new Simulation({ ...P });
+    applyWorld(c, snap, { ...snap.params, insolation: 0.80 });
+    c.runYears(7e5, 2e3);
+    check('\u2026and one thing changed from there sends it somewhere else',
+      c.world.diag.iceMean > 0.9 && a.world.diag.iceMean < 0.5,
+      `from the same moment: 0.94 S\u2295 \u2192 ${(a.world.diag.Tmean - 273.15).toFixed(0)} \u00b0C ` +
+      `and ${(a.world.diag.iceMean * 100).toFixed(0)}% ice, 0.80 S\u2295 \u2192 ` +
+      `${(c.world.diag.Tmean - 273.15).toFixed(0)} \u00b0C and ` +
+      `${(c.world.diag.iceMean * 100).toFixed(0)}% ice`);
+  }
+
+  // ---- 7f. which moment a click lands on ------------------------------------
+  {
+    const pts = [0, 10, 100, 1000, 10000].map((t) => ({ time: t }));
+    check('Going back lands on the latest moment at or before the click',
+      findRestore(pts, 500).time === 100 && findRestore(pts, 1000).time === 1000
+      && findRestore(pts, 1e9).time === 10000,
+      'a click between two points goes to the earlier one — a world can only be '
+      + 'put back into a moment it was actually in');
+    check('\u2026and clicking before the run began goes as far back as it goes',
+      findRestore(pts, -5).time === 0 && findRestore([], 5) === null,
+      'earliest point, and nothing at all on a world with no past yet');
+
+    // Thinning, tested against the schedule the simulation really samples on --
+    // t += max(1, t*0.02), so points are geometric in time. Testing it with
+    // evenly spaced integers, which was the first attempt, hides the entire
+    // problem: it is the interaction between geometric spacing and repeated
+    // halving that opens the gaps.
+    //
+    // What matters is the worst gap as a share of the CHART, since that is what
+    // a drag crosses. Two earlier versions of this left a gap of two thirds of
+    // the width -- most of the run with nothing to land on.
+    {
+      let worst = 0, fewest = Infinity;
+      for (const span of [1e6, 1e8, 2.2e9, 1e10]) {
+        const ring = [];
+        for (let t = 1; t < span; t += Math.max(1, t * 0.02)) {
+          pushRestore(ring, { time: t }, RESTORE_CAP);
+        }
+        const L = ring.map((p) => Math.log10(p.time + 1));
+        const axis = L[L.length - 1] - L[0];
+        for (let i = 1; i < L.length; i++) worst = Math.max(worst, (L[i] - L[i - 1]) / axis);
+        fewest = Math.min(fewest, ring.length);
+      }
+      check('Moments stay spread across the whole run, not bunched at one end',
+        worst < 0.05 && fewest >= RESTORE_CAP / 2 - 1,
+        `over runs of 1 Myr to 10 Gyr the widest gap is ${(worst * 100).toFixed(1)}% ` +
+        `of the chart, with at least ${fewest} moments kept`);
+    }
+
+    const fut = [0, 10, 100, 1000].map((t) => ({ time: t }));
+    truncateAfter(fut, 100);
+    check('\u2026and changing something drops the future it is replacing',
+      fut.length === 3 && fut[fut.length - 1].time === 100,
+      'a world has one history, not a tree of them — save a slot to keep the other');
   }
 
   // ---- 8. the controls: typed values and slider round-trips ----------------

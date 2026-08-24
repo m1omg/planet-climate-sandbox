@@ -674,6 +674,70 @@ Sleep & Zahnle (2001) picture, in one reservoir rather than four.
 The same world at 4 S⊕ with the outgassing control at 20× now stops at **400 bar and 1759 K** — the
 whole budget in the air, a magma ocean, and nowhere further to go.
 
+### Standing in a world's own past
+
+The temperature chart is a control as well as a picture. **Drag along it** and the
+simulation goes back into a state it was actually in — the sliders move back to
+what they were, the ice returns, the carbon goes back underground. Change one
+thing from there and the world takes a different route.
+
+That is the question this model is really for: not *what happened*, but **what
+would it have taken for this not to happen**. Run a world into a runaway, drag
+back to before the ocean went, drop the insolation a tenth, and watch it not
+happen.
+
+Whole world states are kept as it runs — about 1.1 kB each, 160 of them, so
+roughly 180 kB against the megabytes of surface texture already resident. They
+are captured on the sampler the clock already runs, so every moment you can go
+back to is a moment the chart actually draws.
+
+**A world has one history, not a tree of them.** Going back and changing
+something drops the path you are leaving. If you want to keep it, save it to a
+slot first — and since slot 1 has been keeping itself, in practice the version
+you walked away from is usually still there.
+
+#### The property that has to hold
+
+Going back must be **exact**. A world restored to a moment and run on has to
+arrive precisely where it would have arrived without the detour — not nearly,
+exactly, because the stepper is deterministic and any drift at all means the
+snapshot is missing something. The self-test runs 700 kyr both ways and compares
+eight state variables:
+
+```
+straight through : 279.20489  0.0012817195  0.18303652  0.79893916  4068551.6 …
+via a rewind     : 279.20489  0.0012817195  0.18303652  0.79893916  4068551.6 …
+```
+
+Verified to bite: deleting `carbonDeep` from the snapshot moves the mantle by
+50 kg/m² over that span and the check fails. That guard covers the save slots
+too — they share one definition of what a world is, in `src/game/snapshot.js`,
+precisely so this test means something for both.
+
+#### Thinning, and two versions of it that were wrong
+
+The buffer fills, and half the moments have to go. What matters is the **widest
+gap as a share of the chart**, because that is what a drag crosses.
+
+| | widest gap |
+|---|---|
+| keep every second point | **63% of the chart** |
+| re-space evenly by array index | **63% of the chart** |
+| re-space evenly by log time | **3.1%** |
+
+Both simple versions fail the same way: they thin an array whose spacing is
+already uneven and preserve that unevenness, so the old end doubles its gap
+every round while the new end stays dense. After sixteen hundred points the
+worst gap was 1008 against a best of 1 — two thirds of the run with nothing to
+land on, and dragging there snapped back to one ancient moment. Selecting
+against log time re-derives the spacing from the times themselves every round,
+so it cannot drift.
+
+The first version of that test used evenly spaced integers and passed all three.
+The simulation samples **geometrically** — the next sample is 2% of elapsed time
+away — and it is the interaction between geometric spacing and repeated halving
+that opens the gaps. The test feeds it real runs of 1 Myr to 10 Gyr now.
+
 ### Saves
 
 Five slots, in the browser's own storage. A slot holds the whole world rather than just the controls:

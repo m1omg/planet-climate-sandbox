@@ -36,15 +36,39 @@ function label(ctx, text, x, y, align = 'left', color = 'rgba(233,240,255,0.55)'
 // Temperature vs time, log axis, with the band between coldest and warmest
 // latitude shaded.
 // ---------------------------------------------------------------------------
-export function drawHistory(canvas, world) {
+// The time axis of the temperature chart, in both directions.
+//
+// Exported because the chart is a scrubber now: a click has to be turned back
+// into a year, and the only way for the marker to land under the pointer is for
+// the two mappings to be the same one written once. Log time, because this
+// model's runs span a kiloyear to ten billion years and a linear axis would put
+// the whole Archean in the first pixel.
+export const HISTORY_PAD = { l: 38, r: 8, t: 10, b: 18 };
+
+export function historyX(t, tMax, w) {
+  const { l, r } = HISTORY_PAD;
+  return l + (Math.log10(Math.max(t, 1) + 1) / Math.log10(Math.max(tMax, 10) + 1)) * (w - l - r);
+}
+
+export function historyTimeAtX(x, tMax, w) {
+  const { l, r } = HISTORY_PAD;
+  const span = Math.max(w - l - r, 1);
+  const f = Math.min(Math.max((x - l) / span, 0), 1);
+  return Math.pow(10, f * Math.log10(Math.max(tMax, 10) + 1)) - 1;
+}
+
+// `markT` draws the scrub handle: where in its own history the world is
+// currently standing. Absent on a world running normally, which is every world
+// until somebody goes back.
+export function drawHistory(canvas, world, markT = null) {
   const { ctx, w, h } = setup(canvas);
-  const pad = { l: 38, r: 8, t: 10, b: 18 };
+  const pad = HISTORY_PAD;
   const H = world.history;
   axes(ctx, w, h, pad);
   if (H.length < 2) { label(ctx, 'collecting…', w / 2, h / 2, 'center'); return; }
 
   const tMax = Math.max(world.time, 10);
-  const lx = (t) => pad.l + (Math.log10(Math.max(t, 1) + 1) / Math.log10(tMax + 1)) * (w - pad.l - pad.r);
+  const lx = (t) => historyX(t, tMax, w);
   let tlo = 1e9, thi = -1e9;
   for (const p of H) { tlo = Math.min(tlo, p.Tmin); thi = Math.max(thi, p.Tmax); }
   tlo = Math.min(tlo, 240); thi = Math.max(thi, 320);
@@ -75,6 +99,18 @@ export function drawHistory(canvas, world) {
   label(ctx, `${(tlo - 273.15).toFixed(0)}°C`, pad.l - 4, h - pad.b, 'right');
   label(ctx, 'time →', w - pad.r, h - 5, 'right');
   label(ctx, 'surface temperature', pad.l + 4, pad.t + 8, 'left', 'rgba(233,240,255,0.4)');
+
+  // The scrub handle, drawn last so it sits over the trace. Everything to the
+  // right of it is the future being abandoned, dimmed to say so.
+  if (markT != null) {
+    const mx = lx(markT);
+    ctx.fillStyle = 'rgba(8,12,20,0.55)';
+    ctx.fillRect(mx, pad.t, Math.max(0, w - pad.r - mx), h - pad.t - pad.b);
+    ctx.strokeStyle = '#f0d9b8'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(mx, pad.t); ctx.lineTo(mx, h - pad.b); ctx.stroke();
+    ctx.fillStyle = '#f0d9b8';
+    ctx.beginPath(); ctx.arc(mx, pad.t + 3, 3, 0, Math.PI * 2); ctx.fill();
+  }
 }
 
 // ---------------------------------------------------------------------------

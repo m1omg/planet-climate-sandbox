@@ -3,14 +3,16 @@ import { carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
+import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
+import { captureWorld, applyWorld } from './game/snapshot.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
-import { NBANDS, lockFactor, update as updateWorld } from './physics/climate.js';
+import { NBANDS, lockFactor } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
-import { drawHistory, drawProfile, drawWater, drawPhase } from './render/charts.js';
+import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 
@@ -772,37 +774,59 @@ function readSlot(i) {
 }
 
 function snapshot() {
-  const w = sim.world;
+  // The world itself comes from captureWorld, so the slots, the export file and
+  // the history scrubber cannot drift apart about what a world is. What is
+  // added here is the part that is not physics: which world this is called, and
+  // which set of continents was drawn for it.
   return {
     v: 1, at: Date.now(),
     name: PRESETS[activePreset]?.name || 'Custom world',
-    params: { ...params }, seed: renderState.seed,
-    time: w.time, T: Array.from(w.T), water: { ...w.water },
-    iceSheet: w.iceSheet, co2Frozen: w.co2Frozen, waterInitial: w.waterInitial,
-    fossil: w.fossil, carbonDeep: w.carbonDeep, bio: w.bio,
-    co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
+    seed: renderState.seed,
+    ...captureWorld(sim.world),
   };
 }
 
-function restore(s) {
+// ---------------------------------------------------------------------------
+// Standing somewhere in a world's own past.
+//
+// The temperature chart has always drawn where a planet has been. This makes
+// that history somewhere you can go: whole world states are kept as it runs,
+// and dragging on the chart puts the simulation back into one of them. From
+// there, move a slider and the world takes a different route -- which is the
+// only way to ask the question this model is really for, "what would it have
+// taken for this not to happen".
+//
+// Declared here rather than lower down because applyWorldState() below touches
+// them: a `let` used before its declaration line has run is a temporal dead
+// zone, which is a crash and not a warning, and this project has shipped one.
+let restorePoints = [];       // whole worlds, oldest first
+let suspendCapture = false;   // no snapshots of a half-written world
+let scrubMark = null;         // where the handle is while dragging, else null
+
+// The physics half: put a saved world state back into the simulation.
+//
+// Split out from restore() because going back along a world's own history is
+// not the same act as loading a save slot, and wants none of the rest of it --
+// a rewind must not drop Earth's surface map, must not move what Reset goes
+// back to, and must not stop calling this planet Earth. It is the same physics
+// either way, which is exactly the part that should not be written twice.
+function applyWorldState(s) {
+  suspendCapture = true;
+  // The live params object is handed through rather than replaced: the sliders
+  // read and write it, and it is what makes a change made after a rewind reach
+  // the simulation at all.
   Object.assign(params, s.params);
   renderState.seed = s.seed ?? renderState.seed;
-  sim.reset(params);
-  const w = sim.world;
-  w.time = s.time ?? 0;
-  if (Array.isArray(s.T)) for (let i = 0; i < w.T.length && i < s.T.length; i++) w.T[i] = s.T[i];
-  if (s.water) Object.assign(w.water, s.water);
-  w.iceSheet = s.iceSheet ?? null;
-  w.co2Frozen = s.co2Frozen ?? 0;
-  w.waterInitial = s.waterInitial ?? w.waterInitial;
-  w.fossil = s.fossil ?? null;
-  w.carbonDeep = s.carbonDeep ?? null;
-  w.bio = s.bio ?? null;
-  if (s.co2 != null) w.co2 = s.co2;
-  if (s.n2 != null) w.n2 = s.n2;
-  if (s.o2 != null) w.o2 = s.o2;
-  if (s.ch4 != null) w.ch4 = s.ch4;
-  updateWorld(w, 0);
+  applyWorld(sim, s, params);
+  suspendCapture = false;
+}
+
+function restore(s) {
+  applyWorldState(s);
+  // A loaded world has no past in this session yet: the run it came from
+  // happened before, and its history did not travel in the slot.
+  restorePoints = [snapshot()];
+  scrubMark = null;
   applyBody(null);
   syncSliders(); setPresetActive(null); writeHash(); rememberStart();
   sim.paused = resetPaused; syncPlay();
@@ -848,11 +872,14 @@ function syncSlots() {
     // Slot 1 says what it is. Saving into it by hand still works and is not
     // fought over: what you would be saving is the world that is running, which
     // is the same world the next autosave writes.
-    const auto = i === AUTOSAVE_SLOT ? '<span class="slot-auto">auto</span>' : '';
-    b.innerHTML = s
-      ? `<span class="slot-n">${i}</span><span class="slot-name">${s.name}</span>${auto}` +
+    // The badge span is emitted on every slot, empty where it does not apply, so
+    // all five keep the same four grid columns and the elapsed time stays in
+    // line down the row.
+    const auto = `<span class="slot-auto">${i === AUTOSAVE_SLOT ? 'auto' : ''}</span>`;
+    b.innerHTML = `<span class="slot-n">${i}</span>` + (s
+      ? `<span class="slot-name">${s.name}</span>${auto}` +
         `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
-      : `<span class="slot-n">${i}</span><span class="slot-name">empty</span>${auto}<span class="slot-sub">—</span>`;
+      : `<span class="slot-name">empty</span>${auto}<span class="slot-sub">—</span>`);
     const note = i === AUTOSAVE_SLOT
       ? '\nKept up to date on its own, every 30 s and when you leave the page.' : '';
     b.title = (s ? `${s.name} — ${fmtTime(s.time || 0)} elapsed, saved ${new Date(s.at).toLocaleString()}`
@@ -958,6 +985,92 @@ function importSaves(text) {
     ? `Imported ${writes.length} world${writes.length === 1 ? '' : 's'}` +
       (skipped ? `, ${skipped} did not fit` : '')
     : 'Nothing imported — every slot is full and the file named none of them');
+}
+
+// Capture, on the sampler the clock already runs -- so restore points land on
+// the same geometric schedule as the chart's own points, and every one of them
+// is a moment the chart actually draws.
+sim.onSample = (w) => {
+  if (suspendCapture) return;
+  // A reset, a preset, a scenario or a loaded slot all clear the history and
+  // take one fresh sample. That is the signal that this is a different world
+  // and the old restore points are not its past.
+  if (w.history.length <= 1) restorePoints.length = 0;
+  pushRestore(restorePoints, snapshot(), RESTORE_CAP);
+};
+
+// Going back. `commit` is false while the pointer is still down -- the world
+// moves, so you can see what it was, but nothing is thrown away until you let
+// go somewhere.
+let scrubAt = null;           // the point currently applied, to avoid redoing it
+
+function scrubTo(t, commit) {
+  const p = findRestore(restorePoints, t);
+  if (!p) return;
+  // A drag crosses many pixels per restore point. Rebuilding the world for a
+  // point it is already standing in would be pure waste, and this is what makes
+  // the drag cost the number of points passed rather than the number of pointer
+  // events -- a few dozen instead of a few hundred.
+  if (p !== scrubAt) {
+    const w = sim.world;
+    const past = w.history.filter((h) => h.t <= p.time);
+    const future = w.history;            // kept whole until the pointer lifts
+    applyWorldState(p);
+    // sim.reset() inside applyWorldState empties the history and takes one
+    // sample. Put the run back, because the chart is the thing being dragged on
+    // and it must not collapse to a single point under the pointer.
+    sim.world.history = commit ? past : future;
+    scrubAt = p;
+    syncSliders();
+  }
+  if (!commit) { scrubMark = p.time; return; }
+
+  // Letting go is what actually costs the future.
+  const w = sim.world;
+  sim.world.history = w.history.filter((h) => h.t <= p.time);
+  truncateAfter(restorePoints, p.time);
+  scrubMark = null; scrubAt = null;
+  markTouched();
+  // Only on release. writeHash() goes through history.replaceState, which
+  // browsers rate-limit -- Safari at around a hundred calls per thirty seconds
+  // -- and a drag across a chart generates far more pointer events than that.
+  // Calling it per move would silently stop updating the URL, or throw.
+  writeHash();
+}
+
+// The chart is the control. Pointer events rather than click, so it can be
+// dragged: the whole point is moving back and forth along the run to find the
+// moment before it went wrong, and a single click cannot do that.
+function bindScrub() {
+  const cv = $('#chart-history');
+  if (!cv) return;
+  let dragging = false;
+  const timeAt = (e) => {
+    const r = cv.getBoundingClientRect();
+    return historyTimeAtX(e.clientX - r.left, Math.max(sim.world.time, 10), r.width);
+  };
+  cv.addEventListener('pointerdown', (e) => {
+    if (sim.world.history.length < 2 || restorePoints.length < 2) return;
+    dragging = true;
+    // Paused while scrubbing, or the clock would run the world forward out
+    // from under the handle.
+    sim.paused = true; syncPlay();
+    cv.setPointerCapture(e.pointerId);
+    scrubTo(timeAt(e), false);
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    scrubTo(timeAt(e), false);
+  });
+  const end = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    scrubTo(timeAt(e), true);
+    toast(`Back to ${fmtTime(sim.world.time)} — change something, then press play`);
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
 }
 
 // The living biosphere, under the control that asks for one.
@@ -1377,7 +1490,7 @@ function tick(dtReal) {
     if (chartClock > 0.1) {
       chartClock = 0;
       updateReadout();
-      drawHistory($('#chart-history'), sim.world);
+      drawHistory($('#chart-history'), sim.world, scrubMark);
       drawPhase($('#chart-phase'), sim.world);
       drawProfile($('#chart-profile'), sim.world);
       drawWater($('#chart-water'), sim.world);
@@ -1406,6 +1519,7 @@ buildSliders();
 buildPresets();
 buildSlots();
 buildScenarios();
+bindScrub();
 syncSliders();
 bindControls();
 buildLogUI($('#statelog'), discovered, (id) => {
