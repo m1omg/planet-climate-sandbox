@@ -449,5 +449,34 @@ if (created < 20) {
   }
 }
 
+// Every gas the model carries a partial pressure for has to appear in the
+// composition readout. Hydrogen did not: it was absent from `parts`, so it was
+// missing from the bar, from the list, and -- worse -- from the total the
+// percentages are taken over, so a world holding 255 mbar of it reported its
+// remaining gases summing to 100.09%. The readout was quietly renormalising
+// the atmosphere to exclude a quarter of a bar of it.
+//
+// Checked against the gases climate.js actually puts in the diag rather than a
+// list written out here, so the next gas added cannot be left out of the panel.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const clim = readFileSync(new URL('../src/physics/climate.js', import.meta.url), 'utf8');
+  const at = clim.indexOf('w.diag = {');
+  const gases = [...new Set([...clim.slice(at, at + 300).matchAll(/\bp(N2|CO2|CH4|O2|H2|H2O)\b/g)]
+    .map((m) => 'p' + m[1]))];
+  const fn = src.slice(src.indexOf('function composition('), src.indexOf('const total = parts.reduce'));
+  // \b matters: "dg.pH2O" contains "dg.pH2", and that is exactly the confusion
+  // that would let hydrogen look present when only water is.
+  const missing = gases.filter((g) => !new RegExp(`dg\\.${g}\\b`).test(fn));
+  if (missing.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  the composition readout leaves out ${missing.join(', ')} — ` +
+      `absent from the bar and from the total the percentages divide by`);
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  the composition readout covers every gas the model tracks (${gases.length})`);
+  }
+}
+
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);

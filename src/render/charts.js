@@ -116,9 +116,35 @@ export function drawHistory(canvas, world, markT = null) {
 // ---------------------------------------------------------------------------
 // Zonal temperature profile.
 // ---------------------------------------------------------------------------
-export function drawProfile(canvas, world) {
+// The x axis of the zonal profile, in both directions, so the pointer and the
+// drawing agree about which band is under the cursor rather than each doing its
+// own arithmetic and drifting apart.
+const PROFILE_PAD = { l: 38, r: 8, t: 10, b: 20 };
+export function profileBandAtX(x, width) {
+  const span = width - PROFILE_PAD.l - PROFILE_PAD.r;
+  if (!(span > 0)) return null;
+  const i = Math.round(((x - PROFILE_PAD.l) / span) * (NBANDS - 1));
+  if (i < -0.5 || i > NBANDS - 0.5) return null;
+  return clamp(i, 0, NBANDS - 1);
+}
+
+// Where a band sits, said the way the world makes sense: latitude on a rotating
+// planet, angle from the substellar point on a locked one, because on a locked
+// world "60 degrees north" is not the thing the reader wants to know.
+export function bandPlaceLabel(world, i) {
+  const lam = lockFactor(world.params);
+  if (lam > 0.5) {
+    const ang = Math.acos(clamp(X[i], -1, 1)) * 180 / Math.PI;
+    return `${ang.toFixed(0)}° from substellar`;
+  }
+  const lat = Math.asin(clamp(X[i], -1, 1)) * 180 / Math.PI;
+  if (Math.abs(lat) < 1) return 'equator';
+  return `${Math.abs(lat).toFixed(0)}°${lat > 0 ? 'N' : 'S'}`;
+}
+
+export function drawProfile(canvas, world, hover = null) {
   const { ctx, w, h } = setup(canvas);
-  const pad = { l: 38, r: 8, t: 10, b: 20 };
+  const pad = PROFILE_PAD;
   axes(ctx, w, h, pad);
   const lam = lockFactor(world.params);
   const T = world.T;
@@ -160,6 +186,28 @@ export function drawProfile(canvas, world) {
     label(ctx, 'S pole', pad.l, h - 6, 'left');
     label(ctx, 'equator', (pad.l + w - pad.r) / 2, h - 6, 'center');
     label(ctx, 'N pole', w - pad.r, h - 6, 'right');
+  }
+
+  // What the cursor is on. The chart already draws eighteen points and no way
+  // to read one of them off; this puts the number under the pointer.
+  if (hover != null && hover >= 0 && hover < NBANDS) {
+    const x = px(hover), y = py(T[hover]);
+    ctx.strokeStyle = 'rgba(255,196,107,0.35)';
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, h - pad.b); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, 7);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = '#ffc46b'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    const ice = iceFraction(T[hover]) * (world.diag.hasWater ? 1 : 0);
+    const txt = `${bandPlaceLabel(world, hover)}  ${(T[hover] - 273.15).toFixed(1)}°C` +
+      (ice > 0.02 ? `  ${(ice * 100).toFixed(0)}% ice` : '');
+    ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
+    const tw = ctx.measureText(txt).width;
+    // Keep the readout inside the chart whichever end the pointer is at.
+    const bx = clamp(x - tw / 2 - 5, pad.l, w - pad.r - tw - 10);
+    ctx.fillStyle = 'rgba(10,14,24,0.88)';
+    ctx.fillRect(bx, pad.t + 1, tw + 10, 15);
+    label(ctx, txt, bx + 5, pad.t + 12, 'left', '#ffe9c9');
   }
 }
 
