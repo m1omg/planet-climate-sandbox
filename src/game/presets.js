@@ -25,6 +25,14 @@ export const EARTH = {
   biosphere: 1.0,   // oxygenic photosynthesis, relative to Earth's
   co2Bar: 427e-6,
   ch4Bar: 1.9e-6,
+  // Hydrogen. Zero on modern Earth and on anything with an oxidised mantle, but
+  // the difference between a frozen early Mars and a wet one (Ramirez et al.
+  // 2014), and the whole atmosphere of a Hycean world.
+  h2Bar: 0,
+  // How reduced the mantle is, as a multiplier on hydrogen outgassing. 1 is
+  // Earth today; Ramirez et al. put early Mars near 20, three log units below
+  // the iron-wustite buffer.
+  mantleRedox: 1,
   emissions: 0,     // see the `earth` preset; only that world has us on it
   fossilUsed: 0,    // share of the fossil reserve already burnt
   fossilInfinite: false,  // ignore the reserve and burn for ever
@@ -83,28 +91,42 @@ export const PRESETS = {
   // gets now -- less than a third -- and how it was ever warm enough for running
   // water is genuinely unsettled.
   //
-  // What the literature says: CO2 alone does not do it. Forget et al. 2013 reach a
-  // maximum near 225 K under a few bar, because past a couple of bar CO2's own
-  // Rayleigh scattering starts to win. Ramirez et al. 2014 need 1.3-4 bar of CO2
-  // *plus* 5-20% hydrogen, whose collision-induced absorption with CO2 supplies
-  // the rest.
+  // What the literature says: CO2 alone does not do it. Forget et al. 2013 reach
+  // a maximum near 225 K under a few bar, because past a couple of bar CO2's own
+  // Rayleigh scattering starts to win. This model agrees and is harsher still --
+  // with the hydrogen turned off it cannot get this world past 198 K at any CO2
+  // pressure whatever.
   //
-  // Loaded as it ships -- 1 bar of CO2 -- this model agrees with them and freezes
-  // it solid at -49 C, which is the honest answer and the reason the preset is
-  // set there. Turn the CO2 up and watch where the two part company: 2 bar gives
-  // -32 C, 3 bar -17 C and about 4 bar finally clears freezing, with no hydrogen
-  // involved. Forget cannot get there at any pressure. That gap is the missing
-  // maximum greenhouse -- CO2's scattering never overtakes its own greenhouse
-  // here -- and it is reported on every calibrate run.
+  // But "cold and icy" is one reading of the evidence, not the settled one.
+  // Ramirez et al. 2014 warm it with 1.3-4 bar of CO2 plus 5-20 per cent H2,
+  // outgassed from a mantle three log units below the iron-wustite buffer.
+  // Hydrogen has no dipole and therefore no bands of its own, but its
+  // collision-induced absorption with CO2 runs straight through the 8-12 um
+  // window, which is exactly the part of the spectrum a CO2-H2O atmosphere
+  // leaves open. That is why a few per cent of it outperforms doubling the CO2.
   //
-  // 0.3 bar of nitrogen under it, a young interior driving Tharsis at a few times
-  // the modern outgassing, and enough water for the northern lowlands -- 0.06
-  // Earth oceans is about 150 m spread over the globe, inside the 100-1500 m the
-  // geomorphology and the D/H ratio between them allow.
+  // So this preset is the wet reading: 1.53 bar of CO2 under 0.27 of H2, 15 per
+  // cent, for 1.8 bar total -- inside the 1.9 bar upper limit Kite et al. 2014
+  // derive from secondary crater sizes. Turn the H2 slider to zero and watch it
+  // freeze, which is the experiment the argument is actually about.
+  //
+  // The honest part, and it is the actual open question. Hydrogen is a steady
+  // state rather than an inventory: it escapes as fast as it is made, in about a
+  // megayear here, so what matters is the flux and not what the planet started
+  // with. Set `mantleRedox` to Ramirez's own value of 20 and this model sustains
+  // 1.20 per cent H2 -- against the 1.3 per cent he computes, which is a decent
+  // independent check on both halves -- and at 1.2 per cent the planet is frozen
+  // at -69 C. His climate model wants 5-20 per cent. That gap is his too; he
+  // notes his outgassing estimate falls a factor of four short and that the rate
+  // is uncertain by at least a factor of five.
+  //
+  // So the preset ships at 300, which sustains 17 per cent and a temperate
+  // planet, and is frankly the optimistic end. Wind it back to 20 and watch what
+  // his own numbers actually give you.
   youngMars: { name: 'Young Mars', icon: '🏞', params: { ...EARTH, o2Bar: 0, biosphere: 0,
-    mass: 0.107, insolation: 0.32, water: 0.06, landFraction: 0.75, n2Bar: 0.3,
-    co2Bar: 1.0, ch4Bar: 0, rotationHours: 24.6, obliquity: 25, outgassing: 3.0,
-    internalHeat: 0.06, landAlbedo: 0.25, startT: 250 } },
+    mass: 0.107, insolation: 0.32, water: 0.06, landFraction: 0.75, n2Bar: 0.05,
+    co2Bar: 1.53, h2Bar: 0.27, mantleRedox: 300, ch4Bar: 0, rotationHours: 24.6,
+    obliquity: 25, outgassing: 3.0, internalHeat: 0.06, landAlbedo: 0.25, startT: 260 } },
   // 0.10 bar of CO2, and it has been raised for the same reason twice now.
   //
   // It was 0.02, which only worked because methane's opacity was some five

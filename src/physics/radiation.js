@@ -1,93 +1,197 @@
 import { SIGMA, psatH2O, clamp, smoothstep } from './constants.js';
 
 // ---------------------------------------------------------------------------
-// Semi-grey two-stream longwave:   OLR = sigma T^4 / (1 + 0.75 tau)
+// Four-band longwave radiative transfer.
 //
-// Band optical depths take the form  tau = k * p_gas^m * p_total^0.3, the
-// second factor being pressure broadening by the background air. The three
-// coefficients were fitted simultaneously to three independent anchors:
+// Each band is a two-stream semi-grey problem in its own right, and what is
+// emitted into it is the true Planck share of that band at the surface
+// temperature:
 //
-//   * modern Earth        240 W/m^2 at 288 K, 280 ppm CO2, 1 bar   (observed)
-//   * Venus               161 W/m^2 at 737 K under 92 bar CO2      (observed)
-//   * the runaway limit   283 W/m^2 at 351 K for a saturated ocean
+//     OLR = SUM_i f_i(T) sigma T^4 [ (1-C)/(1+3/4 tau_i) + C/(1+3/4(tau_i+tc)) ]
 //
-// The third is not imposed anywhere in the code: hold water at saturation and
-// this expression *peaks* at 283 W/m^2, which is the Simpson-Nakajima limit
-// (282 W/m^2, Goldblatt et al. 2013). Push absorbed sunlight past that peak and
-// no equilibrium exists at any temperature -- the runaway greenhouse emerges
-// from the radiative physics instead of being triggered by a threshold test.
+// The bands are 0-8, 8-12 (the atmospheric window), 12-18 (CO2's 15 um band)
+// and >18 um (water's rotation band). The shares are the entire point, because
+// they move enormously with temperature:
+//
+//   |            | 0-8  | 8-12 | 12-18 | >18  |
+//   | Titan 95 K |  0.0 |  0.1 |   2.8 | 97.0 |
+//   | snowball   |  4.4 | 17.5 |  28.7 | 49.4 |
+//   | Earth 288  | 12.1 | 25.3 |  28.2 | 34.4 |
+//   | Venus 737  | 72.9 | 15.7 |   7.2 |  4.3 |
+//
+// On a snowball two thirds of the emission is in the window and the far
+// infrared, where there is no water vapour and CO2 has almost no grip; on Earth
+// water closes the far infrared so CO2's own band carries proportionally more.
+// That is what a single grey optical depth provably cannot do: it has to decide
+// how well CO2 works at 230 K and at 288 K with one number, and the two answers
+// differ by a factor of three. The semi-grey scheme this replaces put snowball
+// deglaciation thirty times too low for exactly that reason, and no refit could
+// move it -- driving CO2's snowball leverage down to the published value dragged
+// the 280->560 ppm forcing below its floor at the same time.
+//
+// This is the fourth attempt at spectral bands here. The first two were
+// atmospheric-window schemes and were reverted; the third worked and was not
+// shipped, because a steam atmosphere radiated too freely through band 1 and
+// pushed the habitable zone's inner edge out to 1.4 S(+). That was diagnosed at
+// the time as a band-1 water-opacity problem and it was: band 1 had water as a
+// single weak power law, w^0.48, which grows by a factor of two while the column
+// grows by a factor of seventy. Two things were missing from it, and both are
+// ordinary spectroscopy --
+//
+//   * the 6.3 um vibration-rotation band sits inside band 1 and saturates, so it
+//     belongs in a logarithm, exactly like CO2's 15 um band; and
+//   * the self-broadened continuum, which goes as the square of the vapour
+//     pressure and is what actually closes the near infrared in a steam
+//     atmosphere. Without it the dry subsiding fin kept radiating through band 1
+//     at 450 K and the effective OLR curve never turned over at all -- no
+//     runaway limit, just a hotter equilibrium.
+//
+// Band assignment is enforced rather than fitted: CO2's logarithmic term is
+// large in band 3 and small in band 1 (where CO2 has only the weak 2.7 and
+// 4.3 um pair), methane's 7.7 um band is in band 1, water's rotation band is in
+// band 4, and band 2 is the window where only continua live.
 // ---------------------------------------------------------------------------
 
-// CO2's 15 um band is already saturated at its centre at Earth-like amounts, so
-// adding more only widens the wings: the forcing grows with the *logarithm* of
-// the amount, about 3.9 W/m^2 per doubling (Myhre et al. 1998, 5.35 ln(C/C0);
-// IPCC AR6 Table 7.SM.1). A single power law reproduced Venus and got Earth
-// badly wrong -- it made every doubling hit harder than the last, so a couple of
-// percent of CO2 tipped the planet into a runaway that the literature puts at a
-// hundred times pre-industrial or beyond (Ramirez et al. 2014; Goldblatt 2013).
-//
-// A_CO2 sets the forcing per doubling, P_CO2 the amount at which the band core
-// saturates and the logarithm takes over. The second term is the
-// pressure-induced continuum: utterly negligible below a few percent of a bar,
-// and what carries Venus's 92 bar to an optical depth of 35.
-const A_CO2 = 0.0514, P_CO2 = 5.46e-6, C_CO2 = 0.6735, D_CO2 = 0.87;
-// Refitted when methane's opacity was corrected. The old value was propping up
-// Earth's greenhouse alongside a methane term that was contributing 6.7 W/m^2
-// where it should have been 0.7 -- take that away and Earth settled at 4 C. The
-// water term is the only one that can absorb the difference without disturbing
-// Venus (no methane) or the runaway limit (a saturated ocean, no methane), and
-// as it happens the fit is better on both counts than it was: the
-// Simpson-Nakajima limit lands at 282 W/m^2, which is the literature value
-// exactly, where before it was 287.
-//
-// The exponent had to move too, and it is the exponent that made the refit
-// possible at all. Earth sits at 0.011 bar of water vapour and the runaway peak
-// at 0.43, so the coefficient alone could only trade one against the other --
-// warming Earth pushed the runaway limit down to 263. Lowering the exponent
-// puts relatively more opacity at Earth's end of that range than at the
-// runaway's, which is what let both land at once.
-const K_H2O = 2.989,  M_H2O = 0.34;
+// ---- the cumulative Planck function ---------------------------------------
+// The share of a blackbody's emission below a wavelength depends only on the
+// product lambda*T, so one table in log(lambda T) serves every temperature and a
+// band share is the difference of two lookups. Built once at module load;
+// checked against the published blackbody radiation functions to 5e-5.
+const C2 = 1.4387768775e-2;              // m K, second radiation constant
+const NPL = 2048, PL_LO = Math.log(2e-5), PL_HI = Math.log(2e-1);
+const PL_SCALE = (NPL - 1) / (PL_HI - PL_LO);
+const PLANCK = new Float64Array(NPL);
+{
+  const pi4 = Math.pow(Math.PI, 4);
+  for (let i = 0; i < NPL; i++) {
+    const x = C2 / Math.exp(PL_LO + (PL_HI - PL_LO) * i / (NPL - 1));
+    let sum = 0;
+    for (let n = 1; n <= 40; n++) {
+      const nx = n * x;
+      if (nx > 80) break;
+      sum += Math.exp(-nx) / n * (x * x * x + 3 * x * x / n + 6 * x / (n * n) + 6 / (n * n * n));
+    }
+    PLANCK[i] = 15 / pi4 * sum;
+  }
+}
+function planckBelow(lambdaT) {
+  if (lambdaT <= 2e-5) return 0;
+  if (lambdaT >= 2e-1) return 1;
+  const f = (Math.log(lambdaT) - PL_LO) * PL_SCALE;
+  const i = f | 0;
+  return PLANCK[i] + (PLANCK[i + 1] - PLANCK[i]) * (f - i);
+}
+const EDGE1 = 8e-6, EDGE2 = 12e-6, EDGE3 = 18e-6;   // m
+const FR = new Float64Array(4);
+export function bandFractions(T, out = FR) {
+  const b1 = planckBelow(EDGE1 * T), b2 = planckBelow(EDGE2 * T), b3 = planckBelow(EDGE3 * T);
+  out[0] = b1; out[1] = b2 - b1; out[2] = b3 - b2; out[3] = 1 - b3;
+  return out;
+}
 
-// Methane's bands are narrow and saturate early, so like CO2 its forcing goes
-// as the logarithm of the amount, not as a power of it. The power law here was
-// never anchored to anything and was four to ten times too strong: it gave the
-// 1.8 ppm in modern air 6.7 W/m^2 where the accepted figure is about 0.7, and it
-// made one millibar of methane a bigger greenhouse than twenty millibars of
-// CO2. That is why an Archean world tipped into a runaway the moment the Sun
-// brightened. Fitted to Myhre et al. 1998 at present-day amounts and to Byrne &
-// Goldblatt 2014 at Archean ones.
-const A_CH4 = 0.0293, P_CH4 = 6.9e-6;
-// Collision-induced absorption: pairs of molecules absorbing during a collision,
-// which needs no dipole and so has no bands to saturate. It is what actually
-// keeps Titan warm, and being a two-body process it goes as the square of the
-// density -- which is why it is nothing at a few parts per million and dominant
-// under a bar and a half of cold nitrogen.
+// ---- band optical depths ---------------------------------------------------
+// Fitted simultaneously to eleven published targets by Nelder-Mead, regularised
+// toward the third attempt's coefficients so the fit makes the smallest change
+// that fixes band 1 rather than wandering off to a different corner. The targets
+// and their tolerances are the ones calibrate.mjs checks, plus the shape
+// constraints that a stable hot branch and a real runaway limit both require.
 //
-// Standing in for the CH4-N2 and N2-N2 continuum together, and fitted to Titan.
-//
-// The continuum lives in the far infrared, beyond about 16 um, which is where a
-// 94 K surface does nearly all of its radiating and where a 288 K one does very
-// little -- and on any wet planet that region is closed by the water vapour
-// rotation band before methane gets a look in. The quadratic in pCH4 used to
-// carry that job on its own, on the argument that no wet world holds enough
-// methane for it to matter. It does not hold: fifteen millibars of methane over
-// a temperate ocean is a perfectly reachable state, and there the Titan-fitted
-// continuum was worth a quarter of an optical depth in front of the *whole*
-// Planck function. That is what turned an anoxic world into a runaway.
-//
-// So the masking is now written down as what it actually is. Water vapour
-// closes the far infrared at a few kilograms a square metre -- millimetres of
-// precipitable water, a hundredth of what Earth carries -- and Titan, at 1e-14
-// bar of vapour, keeps its continuum untouched. A cold dry world keeps it too,
-// which is right: that is exactly where the far infrared is both open and where
-// the surface is radiating.
-const CIA_CH4 = 867.0, CIA_H2O_MASK = 1.0e-3;   // bar of vapour
+// A degeneracy worth recording, because it cost the third attempt an afternoon:
+// Venus cannot tell "opaque" from "absurdly opaque". At 92 bar the band-3 term
+// is saturated for any coefficient above about ten, so the fit is free to leave
+// it at thousands -- identical on Venus, catastrophic on a world carrying one
+// bar of CO2. Every coefficient here is bounded for that reason.
+const A1L = 0.303521, A1U = 0.993371, A1W = 0.0446001, A1WL = 0.263935,
+      A1WC = 0.00122251, A1G = 0.417371;
+const A2W = 4.22658, A2C = 0.00260231;
+const A3L = 0.213948, A3U = 13.5626, A3W = 6.72949, A3WC = 0.226336;
+const A4W = 9.70414, A4U = 0.0000918162;
+const P_CO2 = 5.46e-6, P_CH4 = 6.9e-6, P_H2O = 0.00891768;
+const M_H2O = 0.482077, D_CO2 = 1.44915;
+const N_BROADEN = 0.30;
+// Methane collision-induced absorption, in the window and the far infrared.
+// Refitted for the band scheme against Titan, which is the one world with a
+// measured anti-greenhouse and the only thing anchoring it.
+const CIA_CH4 = 232.873;
+// Extra optical depth under cloud, and the reason every caller has to pass a
+// cloud fraction: leave it out and the window sits spuriously wide open.
+export const TAU_CLOUD = 0.1;
 
-export function tauCH4(pCH4, pTot, pH2O = 0) {
-  if (!(pCH4 > 0)) return 0;
-  const open = pH2O > 0 ? Math.exp(-pH2O / CIA_H2O_MASK) : 1;
-  return A_CH4 * Math.log(1 + pCH4 / P_CH4)
-       + CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0) * open;
+const TAU = new Float64Array(4);
+
+// Optical depth in each band. `pH2` is the hydrogen partial pressure; its
+// collision-induced absorption is handled in h2Cia() below.
+export function bandTau(pCO2, pH2O, pCH4, pTot, pH2 = 0, out = TAU) {
+  const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
+  const w = pH2O > 0 ? Math.pow(pH2O, M_H2O) : 0;
+  const wc = pH2O > 0 ? pH2O * pH2O : 0;
+  const u = pCO2 > 0 ? Math.pow(pCO2, D_CO2) : 0;
+  const L = pCO2 > 0 ? Math.log(1 + pCO2 / P_CO2) : 0;
+  const Lw = pH2O > 0 ? Math.log(1 + pH2O / P_H2O) : 0;
+  const g = pCH4 > 0 ? Math.log(1 + pCH4 / P_CH4) : 0;
+  const ciaC = pCH4 > 0 ? CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0) : 0;
+  const h2 = h2Cia(pH2, pTot);
+  out[0] = (A1L * L + A1U * u + A1W * w + A1WL * Lw + A1G * g) * br + A1WC * wc + H2_B1 * h2;
+  out[1] = A2W * w * w * w + A2C * pCO2 * pCO2 + ciaC + H2_B2 * h2;
+  out[2] = (A3L * L + A3U * u + A3W * w) * br + A3WC * wc + H2_B3 * h2;
+  out[3] = (A4W * w + A4U * u * u) * br + ciaC + H2_B4 * h2;
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Hydrogen, and why a trace gas that is not even a dipole matters.
+//
+// H2 has no permanent dipole moment and therefore no absorption bands at all on
+// its own. What it has is collision-induced absorption: during a collision with
+// another molecule the pair briefly acquires one, which lets H2 absorb while it
+// climbs from one rotational state to the next. Being a two-body process it goes
+// as the product of the two densities, so it is nothing in trace amounts and
+// dominant at percent level under a thick atmosphere.
+//
+// What makes it matter for climate is *where* it absorbs. At room temperature
+// the H2 CIA spectrum runs straight through the 8-12 um window (Wordsworth &
+// Pierrehumbert 2013), which is precisely the part of the spectrum a CO2-H2O
+// atmosphere leaves open. So hydrogen plugs the hole that everything else
+// misses, and a few percent of it is worth more than doubling the CO2.
+//
+// Ramirez et al. (2014) is the anchor: 1.3-4 bar of CO2 with 5-20% H2 lifts
+// early Mars above freezing where CO2 alone cannot reach 230 K at any pressure.
+// They assume H2-CO2 CIA is as strong as H2-N2, for which cross sections are
+// calculated, and note that if anything CO2 broadens harder. The coefficient
+// here is fitted to their three published thresholds -- 273 K at ~3 bar with 5%
+// H2, ~2.5 bar with 10%, ~1.6 bar with 20%.
+// Fitted to Ramirez's three published thresholds and it lands on two of them
+// exactly: 273 K at 3.0 bar with 5% H2 (he has 3), 2.2 bar with 10% (2.5) and
+// 1.6 bar with 20% (1.6). With no hydrogen at all this model, like his, cannot
+// get early Mars anywhere near freezing at any CO2 pressure whatever.
+const K_H2 = 5.0;
+const H2_B1 = 0.15, H2_B2 = 1.0, H2_B3 = 0.55, H2_B4 = 0.85;
+export function h2Cia(pH2, pTot) {
+  if (!(pH2 > 0)) return 0;
+  return K_H2 * pH2 * Math.max(pTot, 0);
+}
+
+export function olr(T, pCO2, pH2O, pCH4, pTot, pH2 = 0, cloud = 0) {
+  const tau = bandTau(pCO2, pH2O, pCH4, pTot, pH2);
+  const fr = bandFractions(T);
+  const C = clamp(cloud, 0, 1);
+  const sT4 = SIGMA * T * T * T * T;
+  let s = 0;
+  for (let i = 0; i < 4; i++) {
+    const t = tau[i];
+    s += fr[i] * ((1 - C) / (1 + 0.75 * t) + C / (1 + 0.75 * (t + TAU_CLOUD)));
+  }
+  return sT4 * s;
+}
+
+// Total band-averaged optical depth, for readouts only. The physics never uses
+// it -- there is no single optical depth any more, which is the whole point.
+export function opticalDepth(pCO2, pH2O, pCH4, pTot, pH2 = 0) {
+  const tau = bandTau(pCO2, pH2O, pCH4, pTot, pH2);
+  const fr = bandFractions(288);
+  let s = 0;
+  for (let i = 0; i < 4; i++) s += fr[i] * tau[i];
+  return s;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,34 +229,15 @@ export function ch4Shortwave(pCH4) {
   if (!(pCH4 > 0)) return 0;
   return SW_CH4_MAX * (1 - Math.exp(-pCH4 / P_SW_CH4));
 }
-const N_BROADEN = 0.30;
-
-// Optical depth of CO2 alone, before pressure broadening.
-export function tauCO2(pCO2) {
-  if (!(pCO2 > 0)) return 0;
-  return A_CO2 * Math.log(1 + pCO2 / P_CO2) + C_CO2 * Math.pow(pCO2, D_CO2);
-}
-
-export function opticalDepth(pCO2, pH2O, pCH4, pTot) {
-  const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
-  let t = tauCO2(pCO2);
-  if (pH2O > 0) t += K_H2O * Math.pow(pH2O, M_H2O);
-  if (pCH4 > 0) t += tauCH4(pCH4, pTot, pH2O);
-  return t * br;
-}
-
-export function olr(T, pCO2, pH2O, pCH4, pTot) {
-  const tau = opticalDepth(pCO2, pH2O, pCH4, pTot);
-  return SIGMA * T * T * T * T / (1 + 0.75 * tau);
-}
 
 // The peak of the saturated OLR curve: the runaway threshold for this planet.
-// Reported in the UI so the player can see how close they are sailing.
-export function runawayLimit(pCO2, pN2) {
+// Clear-sky, because that is how the literature defines it. Reported in the UI
+// so the player can see how close they are sailing.
+export function runawayLimit(pCO2, pN2, pH2 = 0) {
   let best = 0, bestT = 0;
-  for (let T = 275; T < 520; T += 1) {
+  for (let T = 275; T < 600; T += 1) {
     const p = psatH2O(T) / 1e5;
-    const F = olr(T, pCO2, p, 0, pN2 + pCO2 + p);
+    const F = olr(T, pCO2, p, 0, pN2 + pCO2 + p + pH2, pH2, 0);
     if (F > best) { best = F; bestT = T; }
   }
   return { flux: best, T: bestT };
@@ -314,22 +399,73 @@ export function cloudCover(pH2O, slowness, subStellar) {
 // a real deep convective deck, let alone Venus's 0.75.
 const CLOUD_THICKEN = 0.40, P_THICK_LO = 0.10, P_THICK_HI = 0.45;   // bar of vapour
 
-export function cloudAlbedo(pH2O) {
-  return ALB_CLOUD * (1 + CLOUD_THICKEN * smoothstep(P_THICK_LO, P_THICK_HI, pH2O));
+// And a slow rotator's substellar deck is a different object again.
+//
+// Yang, Cowan & Abbot (2014): a world that turns slowly convects hard and
+// steadily at one fixed point, and what it builds there is not merely more cloud
+// but far *brighter* cloud -- a deep, optically thick anvil sitting over the eye,
+// exactly where all the sunlight arrives. It is a negative feedback with real
+// force, because warming the dayside thickens the deck, and it is why slow
+// rotators and tidally locked worlds stay habitable at insolations that would
+// have boiled a fast rotator long before.
+//
+// This model used to get the direction of that and about a twentieth of the
+// magnitude, through a cover term alone, with the deck no brighter than an
+// ordinary cloud. The consequence was not a small error: a locked world tipped
+// into a runaway at 0.54 S(+), where the literature has it habitable out past
+// 1.4 -- Zhang & Yang (2020) put the runaway onset for a 60-day rotator at
+// 1700-1950 W/m2, and worldbuildingpasta's survey of the same literature puts a
+// locked world's inner edge near 0.66 au, which is 2.3 S(+).
+//
+// CLOUD_DECK is where the deck's albedo goes at the substellar point of a fully
+// locked world. 0.72 is a thick convective anvil -- bright, but still below
+// Venus's 0.75, and it is reached only where the rotation is slow, the point is
+// under the star, and there is enough water to convect with.
+const CLOUD_DECK = 0.72;
+// How much of the vapour column sits above the cloud deck rather than below it.
+const CLOUD_SHIELD = 0.30;
+
+export function cloudAlbedo(pH2O, deck = 0) {
+  const base = ALB_CLOUD * (1 + CLOUD_THICKEN * smoothstep(P_THICK_LO, P_THICK_HI, pH2O));
+  const d = clamp(deck, 0, 1);
+  return base + Math.max(0, CLOUD_DECK - base) * d;
 }
 
 export function planetaryAlbedo(T, o) {
   const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated, o.waterCap);
   const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * (o.cloudBoost ?? 1), 0, 0.9);
-  const withClouds = cloudAlbedo(o.pH2O) * C + surf * (1 - C);
+  // The deck needs all three: a slow rotation to hold the convection in one
+  // place, a point actually under the star, and water to build it out of.
+  // Locking, not the period, is what anchors the deck. Yang's mechanism needs
+  // the substellar point to stay in one place; a synchronous world has that by
+  // definition however long its year is, so the deck is at full strength for any
+  // locked world and only partial for a merely sluggish one. Blending the two
+  // through `slowness` had a world locked at 264 h getting barely half a deck and
+  // running away at 0.92 S(+), below a fast rotator -- backwards.
+  const spin = Math.max(o.locked ?? 0, o.slowness ?? 0);
+  const deck = spin * Math.pow(clamp(o.subStellar ?? 0, 0, 1), 1.5)
+             * smoothstep(0.004, 0.05, o.pH2O);
   // Rayleigh + haze from the *dry* gas. Exponent set so a 92 bar CO2 atmosphere
   // reaches Venus's bright scattering (~0.7) while 1 bar stays at Earth's 0.06.
   const pDry = Math.max(0, o.pTot - o.pH2O);
   const rayleigh = Math.min(0.75, 0.06 * Math.pow(clamp(pDry, 0, 300), 0.545));
-  let a = rayleigh + (1 - rayleigh) * withClouds;
   // A thick steam envelope is dark, not bright: water vapour absorbs strongly in
   // the near infrared, so a runaway greenhouse soaks up sunlight rather than
-  // reflecting it. Negligible at Earth's 0.01 bar of vapour, decisive above 1 bar.
-  a *= 1 / (1 + 1.2 * o.pH2O / (1 + o.pH2O));
+  // reflecting it. Negligible at Earth's 0.01 bar of vapour, decisive above 1.
+  //
+  // But it does not apply equally to both paths, and treating it as if it did is
+  // what kept a locked world's cloud deck from ever mattering. Sunlight that
+  // reflects off the *top* of a deep convective deck turns round above most of
+  // the column and never traverses it; only what goes through the gaps makes the
+  // full journey. Attenuating the deck's own reflection by the whole vapour
+  // column had a locked world's albedo falling as its eye got wetter -- the
+  // opposite of the Yang, Cowan & Abbot mechanism, and the reason such a world
+  // ran away at 0.54 S(+). CLOUD_SHIELD is the share of the column that still
+  // sits above the deck.
+  const dark = 1 / (1 + 1.2 * o.pH2O / (1 + o.pH2O));
+  const darkAboveDeck = 1 / (1 + 1.2 * CLOUD_SHIELD * o.pH2O / (1 + o.pH2O));
+  const cloudy = (rayleigh + (1 - rayleigh) * cloudAlbedo(o.pH2O, deck)) * darkAboveDeck;
+  const clear = (rayleigh + (1 - rayleigh) * surf) * dark;
+  const a = C * cloudy + (1 - C) * clear;
   return { albedo: clamp(a, 0.02, 0.92), cloud: C };
 }

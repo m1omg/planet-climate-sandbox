@@ -327,6 +327,22 @@ export function basinWater(w) {
 // warms and the troposphere deepens, fitted to put Kasting's moist-greenhouse
 // criterion (stratospheric H2O past 1e-3) on his 340 K surface.
 const PCT_EARTH = 0.10, PCT_TAU = 36.1;   // K
+// Diffusion-limited hydrogen loss, in kg/m2/yr per unit H2 mixing ratio.
+// Hunten's flux is 2.5e13 f_H atoms/cm2/s and H2 carries two hydrogens, so
+// 2.5e13 * 2 * x * 1.66e-24 g/cm2/s, which is 0.0262 kg/m2/yr per unit x.
+//
+// This started life at 0.118, which is the *water* constant -- the same atom
+// flux carried away as 18 g/mol instead of 2. It made hydrogen escape four and a
+// half times too fast and put early Mars's sustainable H2 at 0.5% where Ramirez
+// et al. compute 1.3%. Checked the other way now: their outgassing flux of
+// 2e11 H2/cm2/s balances this loss at x = 0.013, which is their number.
+const H2_DIFFUSION = 0.0262;
+// Modern Earth's subaerial H2 outgassing: 1e10 H2 molecules/cm2/s, which is
+// 2.4e12 mol/yr globally (Ramirez et al. 2014, from Holland's estimate).
+// 1.05e-5 kg/m2/yr -- about two per cent of the carbon flux by mass.
+const H2_OUTGAS_EARTH = 1.05e-5;
+const H2_OXIDISED_LIFETIME = 2;   // years, in air like today's
+const TRAP_FAIL_LO = 1e-4, TRAP_FAIL_HI = 2e-3;
 
 export function escapeRates(w) {
   const p = w.params, dg = w.diag, d = dg.d;
@@ -375,7 +391,18 @@ export function escapeRates(w) {
     const pctFrac = clamp(PCT_EARTH * Math.exp(-(w.T[i] - 288) / PCT_TAU), 1e-6, 0.5);
     const pct = pctFrac * Math.max(dg.pTot[i], 1e-9);
     const trap = psatH2O(tct) / 1e5 / pct;
-    fStrat += clamp(trap + Math.pow(x, 8), 0, 1) / NBANDS;
+    // A cold trap does not leak its way into a moist greenhouse -- it fails.
+    // Once psat at the trap approaches the pressure there, nothing is being
+    // trapped any more and the stratospheric mixing ratio runs up to the
+    // tropospheric one, which is what "moist greenhouse" means. Reporting the
+    // trap ratio alone gave an ocean 1.2e10 years to leave at the top of the
+    // hot branch, where the number for a Sun-like star is 1e8: the trap ratio
+    // was still saying 1.6e-3 while the atmosphere below it was a fifth water.
+    //
+    // TRAP_FAIL_LO is Kasting's criterion, near enough, and by TRAP_FAIL_HI the
+    // trap is gone. Earth sits four orders of magnitude below the low end.
+    const failed = smoothstep(TRAP_FAIL_LO, TRAP_FAIL_HI, trap);
+    fStrat += clamp(trap + x * failed + Math.pow(x, 8), 0, 1) / NBANDS;
   }
 
   // Diffusion-limited: 2.5e13 * f H atoms/cm^2/s  ->  kg/m^2/yr of water
@@ -392,6 +419,38 @@ export function escapeRates(w) {
 
   const water = Math.min(diffusion, energy) * (dg.totalWater > 0 ? 1 : 0);
 
+  // Hydrogen leaves faster than anything else and by the same two limits. It is
+  // the lightest gas there is, it needs no photolysis to free it, and on a small
+  // planet it is gone in a geological instant -- which is exactly why early Mars
+  // needed it *maintained* by volcanism rather than inherited (Ramirez et al.
+  // 2014), and why a Hycean world has to be massive enough to hold one.
+  // Against the *dry* background, not the total. Hydrogen diffuses through the
+  // non-condensible gas; water vapour is not a background it has to cross,
+  // because it condenses out below the cold trap. Measured against total
+  // pressure a steam-loaded Earth looked to this term like a world where
+  // hydrogen was a trace gas, its diffusion limit collapsed accordingly, and the
+  // planet held two bars of H2 it has no business holding -- Liggins et al.
+  // (2020) put an anoxic Earth-mass planet with an Earth-like mantle at 0.2-3%,
+  // and Kuramoto et al. argue efficient EUV-driven escape keeps it under 1%.
+  const pDryBg = Math.max(pTot - pH2Omean, 1e-9);
+  const xH2 = clamp((dg.pH2 ?? 0) / pDryBg, 0, 1);
+  // The diffusion limit is a statement about a *trace* gas working its way up
+  // through a background. It stops applying once hydrogen is the background:
+  // there is nothing left for it to diffuse through, the whole envelope goes
+  // hydrodynamically, and what binds is the energy supply alone. Dividing by
+  // (1-x) is the cheap way to say that -- the diffusion ceiling lifts out of the
+  // way as x approaches one and `min` falls through to the energy limit.
+  //
+  // It is also what makes hydrogen retention a question about *mass*, which it
+  // should be and previously was not. The energy limit goes as 1/(gR), so a ten
+  // Earth-mass world keeps an H2 envelope for the age of the universe while a
+  // Mars-sized one cannot hold a thick one at all -- and before this, a small
+  // anoxic planet sat on the diffusion limit and held far more hydrogen than it
+  // has any business holding.
+  const h2Diff = xH2 * H2_DIFFUSION * (dg.g / G_EARTH) / Math.max(1 - xH2, 0.02);
+  const h2Energy = 0.15 * xuv * Math.pow(inflate, 3) / (dg.g * d.R) * YEAR * 9;
+  const h2 = (dg.pH2 ?? 0) > 0 ? Math.min(h2Diff, h2Energy) : 0;
+
   // Background gas loss. Gated on the cosmic shoreline: XUV irradiation has to
   // overcome gravitational binding (~ v_esc^4) before N2/CO2 go anywhere.
   const vescRel = d.vesc / 11186;
@@ -399,7 +458,7 @@ export function escapeRates(w) {
   const gate = smoothstep(0.3, 3, xuv / Math.max(fCrit, 1e-12));
   const background = 0.005 * xuv / (dg.g * d.R) * YEAR * gate;
 
-  return { water, background, fStrat, Tct, diffusion, energy, xSteam };
+  return { water, background, h2, fStrat, Tct, diffusion, energy, xSteam };
 }
 
 // ---------------------------------------------------------------------------
@@ -929,6 +988,36 @@ export function stepVolatiles(w, dtYears) {
   if (esc.background > 0) {
     const f = Math.max(0, 1 - esc.background * dtYears / Math.max(w.n2 + w.co2 + w.o2, 1e-6));
     w.n2 *= f; w.co2 *= f; w.o2 *= f;
+  }
+
+  // --- hydrogen: outgassed by a reduced mantle, and leaking the whole time ---
+  //
+  // The balance is the point. Hydrogen escapes so fast that its abundance is a
+  // steady state between volcanism and loss rather than an inventory, which is
+  // why Ramirez et al. (2014) have to argue for a *sustained* 5-20% on early
+  // Mars rather than an initial one, and why they end up an uncomfortable factor
+  // of four short with their own best outgassing estimate.
+  //
+  // The source scales the same way carbon does -- melt production, so planet
+  // size and interior heat -- times how reduced the mantle is. `mantleRedox` is
+  // 1 for an Earth-like oxidised mantle and rises as fO2 falls; Ramirez puts
+  // early Mars around twenty, three log units below the iron-wustite buffer.
+  if (w.h2 == null) w.h2 = 0;
+  {
+    const redox = Math.max(p.mantleRedox ?? 1, 0);
+    const src = H2_OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0)
+              * meltBoost(p) * redox;
+    w.h2 = Math.max(0, w.h2 + (src - (esc.h2 ?? 0)) * dtYears);
+    // And free oxygen takes it straight back out. Escape alone left modern Earth
+    // holding 134 ppm of hydrogen against an observed 0.55, because on an
+    // oxygenated world escape is not what limits it -- reaction is. H2 lasts
+    // about two years in today's air and geological ages in anoxic air, which is
+    // the same redox switch that governs methane, for the same reason.
+    const oxidising = smoothstep(3e-7, 2e-4, dg.pO2);
+    if (oxidising > 0 && w.h2 > 0) {
+      const tau = H2_OXIDISED_LIFETIME / oxidising;
+      w.h2 *= Math.exp(-Math.max(dtYears, 0) / tau);
+    }
   }
 
   // --- a molten surface degasses hard -------------------------------------

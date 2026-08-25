@@ -381,6 +381,7 @@ const LIVE_READERS = {
   n2: (w) => w.n2 * w.diag.g / 1e5,
   o2: (w) => w.o2 * w.diag.g / 1e5,
   ch4: (w) => w.ch4 * w.diag.g / 1e5,
+  h2: (w) => (w.h2 ?? 0) * w.diag.g / 1e5,
   water: (w) => w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour,
 };
 

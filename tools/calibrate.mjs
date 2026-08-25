@@ -48,14 +48,17 @@ function deviation(name, value, lo, hi, unit, source) {
 // ---- radiative, no simulation needed --------------------------------------
 {
   const T = 288.15, pH2O = 0.0110, pN2 = 1.0;
-  const F = (c) => olr(T, c, pH2O, 1.8e-6, pN2 + c + pH2O);
+  // Under Earth's actual cloud cover, not clear sky: with the window as a band
+  // of its own, a clear-sky forcing is a different number entirely.
+  const CLOUD = 0.669;
+  const F = (c) => olr(T, c, pH2O, 1.8e-6, pN2 + c + pH2O, 0, CLOUD);
   anchor('CO2 forcing, 280→560 ppm', F(280e-6) - F(560e-6), 3.3, 4.4, 'W/m²',
     'Myhre 1998: 5.35·ln2 = 3.71; IPCC AR6: 3.93');
   anchor('CO2 forcing, 1120→2240 ppm', F(1120e-6) - F(2240e-6), 3.3, 5.2, 'W/m²',
     'stays ~constant per doubling until the band saturates');
   anchor('CO2 forcing, 280→427 ppm', F(280e-6) - F(427e-6), 1.8, 2.7, 'W/m²',
     '5.35·ln(427/280) = 2.26');
-  anchor('Earth OLR at 288.15 K', F(280e-6), 234, 243, 'W/m²', 'observed ~239');
+  anchor('Earth OLR at 288.15 K', F(280e-6), 234, 243, 'W/m²', 'observed ~239, under cloud');
   anchor('Venus OLR at 737 K, 92 bar', olr(737, 92, 0, 0, 92), 149, 173, 'W/m²',
     'observed 160-165');
   const rl = runawayLimit(280e-6, 1.0);

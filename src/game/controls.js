@@ -61,9 +61,12 @@ export const INTERIOR_BODIES = [
 ];
 
 export const SLIDERS = [
-  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.05, max: 5, log: true,
+  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.05, max: 10, log: true,
     fmt: (v) => `${v.toFixed(2)} M⊕`, units: { 'm': 1, 'me': 1, 'm⊕': 1, 'earth': 1, 'earths': 1 },
-    note: 'Sets radius, gravity and how well the world holds its air.' },
+    note: 'Sets radius, gravity and how well the world holds its air. Ten Earth masses is the top of the Hycean range (Madhusudhan et al. 2021).' },
+  { g: 'body', key: 'mantleRedox', label: 'Mantle reduction', min: 1, max: 400, log: true,
+    fmt: (v) => `${v.toFixed(0)}×`, units: { 'x': 1, '': 1 },
+    note: 'How reduced the interior is, as a multiplier on hydrogen outgassing. 1 is Earth today; Ramirez et al. put early Mars near 20, three log units below the iron–wüstite buffer.' },
   { g: 'body', key: 'water', label: 'Water inventory', min: 0, max: 12, log: true, zero: true, live: 'water',
     // Below a thousandth of an ocean, "0.000 EO" says nothing; a global layer a
     // few centimetres deep says a great deal. Metres, then, at the dry end.
@@ -110,6 +113,9 @@ export const SLIDERS = [
   { g: 'atmo', key: 'o2Bar', label: 'Oxygen', min: 0, max: 2, log: true, zero: true, live: 'o2',
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'Made by life, consumed by volcanic gases and by weathering rock. Set the biosphere below the volcanoes and it stays at nothing however long you wait — that threshold is the Great Oxidation.' },
+  { g: 'atmo', key: 'h2Bar', label: 'Hydrogen', min: 0, max: 100, log: true, zero: true, live: 'h2',
+    fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
+    note: 'No dipole, so no bands of its own — but its collision-induced absorption runs straight through the 8–12 µm window that CO₂ and water leave open, which is why a few per cent outperforms doubling the CO₂ (Ramirez et al. 2014). It also escapes in about a megayear, so what holds it up is volcanism, not what the planet started with.' },
   { g: 'atmo', key: 'co2Bar', label: 'Carbon dioxide', min: 0, max: 100, log: true, zero: true, live: 'co2',
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'Evolves on its own: volcanoes add it, weathering removes it, cold traps freeze it out.' },

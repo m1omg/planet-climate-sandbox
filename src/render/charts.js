@@ -270,7 +270,7 @@ export function drawPhase(canvas, world) {
   for (let T = T0; T <= T1; T += 2) {
     const pw = Math.min(dg.RH * psatH2O(T) / 1e5, dg.totalWater * dg.d.eoColumn * dg.g / 1e5);
     const pTot = dg.pN2 + dg.pCO2 + dg.pCH4 + pw;
-    const O = olr(T, dg.pCO2, pw, dg.pCH4, pTot);
+    const O = olr(T, dg.pCO2, pw, dg.pCH4, pTot, dg.pH2 ?? 0, dg.cloud?.[9] ?? 0);
     const a = planetaryAlbedo(T, {
       oceanFrac: dg.oceanFrac, landAlbedo: p.landAlbedo, hasWater: dg.hasWater,
       waterCap: dg.waterCap, pH2O: pw, pTot, slowness: dg.slowness, subStellar: 0.4,

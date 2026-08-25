@@ -44,8 +44,8 @@ export function run() {
   check('Simpson–Nakajima limit ≈ 282 W/m² (literature)',
     near(rl.flux, 283, 6), `${rl.flux.toFixed(1)} W/m² at ${rl.T} K`);
   check('Modern Earth OLR ≈ 240 W/m²',
-    near(olr(288, 280e-6, 0.0110, 1.8e-6, 1.011), 238, 6),
-    `${olr(288, 280e-6, 0.0110, 1.8e-6, 1.011).toFixed(1)} W/m²`);
+    near(olr(288, 280e-6, 0.0110, 1.8e-6, 1.011, 0, 0.669), 238, 6),
+    `${olr(288, 280e-6, 0.0110, 1.8e-6, 1.011, 0, 0.669).toFixed(1)} W/m²`);
   check('Venus OLR ≈ 160 W/m² at 737 K, 92 bar',
     near(olr(737, 92, 0, 0, 92), 161, 12), `${olr(737, 92, 0, 0, 92).toFixed(0)} W/m²`);
 
@@ -98,12 +98,17 @@ export function run() {
       }
       return null;
     };
-    const near = transientAt(1.35), hard = transientAt(2.6);
+    // 1.5, raised from 1.35 when the four-band scheme moved the runaway edge out
+    // from 1.30 to 1.38 S(+) and the substellar cloud deck moved it further. At
+    // 1.35 the world now sits on the stable hot branch at 80 C indefinitely and
+    // never runs away at all, so this returned null rather than failing.
+    const near = transientAt(1.5), hard = transientAt(2.6);
     check('Runaway takes centuries to millennia — never instantaneous',
       near !== null && hard !== null && hard > 50 && near < 1e6,
-      `${hard.toExponential(1)} yr at 2.6 S⊕, ${near.toExponential(1)} yr near threshold`);
+      `${hard?.toExponential(1) ?? 'never'} yr at 2.6 S⊕, ${near?.toExponential(1) ?? 'never'} yr near threshold`);
     check('…and is slower the closer the planet sits to the threshold',
-      near > hard * 1.5, `${(near / hard).toFixed(1)}× slower near the edge`);
+      near !== null && hard !== null && near > hard * 1.5,
+      near !== null && hard !== null ? `${(near / hard).toFixed(1)}× slower near the edge` : 'no transient');
     check('Ocean loss takes 10⁸–10⁹ yr under a young-Sun XUV (Kasting 1988)',
       tLost !== null && tLost > 3e7 && tLost < 5e9, tLost ? `${tLost.toExponential(1)} yr` : 'not lost');
     check('It passes through the moist greenhouse on the way', sawMoist, sawMoist ? 'seen' : 'skipped');
@@ -147,7 +152,7 @@ export function run() {
     // doubling hit harder than the last, and tipped the planet into a runaway
     // at a few percent CO2 -- an outcome the literature puts at a hundred times
     // pre-industrial or beyond.
-    const F = (c) => olr(288.15, c, 0.011, 1.8e-6, 1.011 + c);
+    const F = (c) => olr(288.15, c, 0.011, 1.8e-6, 1.011 + c, 0, 0.669);
     const d1 = F(280e-6) - F(560e-6), d3 = F(1120e-6) - F(2240e-6);
     check('CO₂ forcing ≈ 3.7–3.9 W/m² per doubling (Myhre 1998)',
       near(d1, 3.8, 0.6), `${d1.toFixed(2)} W/m²`);
@@ -188,7 +193,11 @@ export function run() {
     // Above 647 K and 220 bar there is no liquid water at any pressure: the
     // liquid and the vapour stop being different things. A wet runaway must
     // therefore show no sea at all, not a hot one.
-    const wet = new Simulation({ ...EARTH, co2Bar: 1, startT: 288 });
+    // 4 bar, raised from 1. Four bands cost CO2 a good deal of its leverage at
+    // Earth-like temperatures -- which is the point of them, and what moved
+    // snowball deglaciation into its literature range -- so 1 bar now settles at
+    // 44 C as an ice-free hothouse instead of running away.
+    const wet = new Simulation({ ...EARTH, co2Bar: 4, startT: 288 });
     let n = 0;
     while (wet.world.time < 5e6 && n++ < 3e5) wet.runYears(2e5, 2e5);
     const d = wet.world.diag;
@@ -269,12 +278,20 @@ export function run() {
       // one it replaces: 0.03 held at 0, 0.03, 0.092, 0.13 and 0.18 W/m^2 with a
       // miss at 0.06, where 0.01 holds at 0, 0.092 and 0.2 together. 0.02 and
       // 0.015 both still interleave, so the interleaving is exactly where it was.
-      water: 0.03, landFraction: 0.7, insolation: 0.9, n2Bar: 0.01,
+      // Re-pinned a fifth time for the four-band scheme and the substellar deck.
+      // The trapped basin moved rather than closed, and it moved for a reason
+      // worth reading: with only 0.01 bar of background gas the night side now
+      // freezes the CO2 out and the world files as a Mars-like collapse instead,
+      // while at 0.9 S(+) the eye is hot enough to take the whole inventory into
+      // the air. 0.2 bar of nitrogen keeps the CO2 in the gas phase and 0.85 S(+)
+      // keeps the eye below boiling, which leaves the trap itself intact: 100% of
+      // the water ends up as night-side ice with 0.2% of the surface flooded.
+      water: 0.03, landFraction: 0.7, insolation: 0.85, n2Bar: 0.2,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
       // to the night side to stop the trap.
       o2Bar: 0, biosphere: 0,
-      co2Bar: 1e-3, outgassing: 0.3, startT: 280 }, 2e7);
+      co2Bar: 0.05, outgassing: 0.3, startT: 280 }, 2e7);
     const w = locked.world, st = classify(w);
     check('A locked world with a modest ocean traps it all on the night side',
       st.id === 'trapped', `${st.name}, ${(w.water.landIce / w.diag.totalWater * 100).toFixed(0)}% of the water as night-side ice`);
@@ -365,16 +382,20 @@ export function run() {
       }
       return { dt: null, f0 };
     };
-    const hard = boil(2.6), mild = boil(1.416);
+    // 1.6, raised from 1.416 for the same reason as the transient probe above:
+    // the four-band scheme and the substellar deck moved the runaway edge out,
+    // and 1.416 S(+) is now a stable 90 C ocean rather than a slow boil.
+    const hard = boil(2.6), mild = boil(1.6);
     const pred = (f) => NEED / f;
     const ok = (r) => r.dt !== null && r.dt < pred(r.f0) * 1.6 && r.dt > pred(r.f0) * 0.25;
     check('Boiling an ocean takes the time energy conservation says it should',
       ok(hard) && ok(mild),
-      `at 2.6 S⊕ ${hard.dt.toExponential(1)} yr against ${pred(hard.f0).toExponential(1)} predicted; ` +
-      `at 1.416 S⊕ ${mild.dt.toExponential(1)} yr against ${pred(mild.f0).toExponential(1)}`);
+      `at 2.6 S⊕ ${hard.dt?.toExponential(1) ?? 'never'} yr against ${pred(hard.f0).toExponential(1)} predicted; ` +
+      `at 1.6 S⊕ ${mild.dt?.toExponential(1) ?? 'never'} yr against ${pred(mild.f0).toExponential(1)}`);
     check('…so a planet barely over the limit boils far more slowly than one well past it',
-      mild.dt > hard.dt * 1.5,
-      `${(mild.dt / hard.dt).toFixed(1)}× longer at 1.416 S⊕ than at 2.6 S⊕`);
+      mild.dt !== null && hard.dt !== null && mild.dt > hard.dt * 1.5,
+      mild.dt !== null && hard.dt !== null
+        ? `${(mild.dt / hard.dt).toFixed(1)}× longer at 1.6 S⊕ than at 2.6 S⊕` : 'no boil');
   }
 
   // ---- 3h. the steam envelope must not hide the thing it is made of ---------
@@ -1025,9 +1046,9 @@ export function run() {
   {
     const T = 288.15, pCO2 = 0.01, pH2O = 0.011, pN2 = 1.0;   // their pCO2 = 1000 Pa
     const ABS = 200;                                          // Archean absorbed sunlight
-    const base = olr(T, pCO2, pH2O, 0, pN2 + pCO2 + pH2O);
+    const base = olr(T, pCO2, pH2O, 0, pN2 + pCO2 + pH2O, 0, 0.669);
     const Pas = [1, 3, 10, 30, 60, 100, 200, 300, 600, 1000, 2000, 3500];
-    const F = Pas.map((Pa) => base - olr(T, pCO2, pH2O, Pa / 1e5, pN2 + pCO2 + pH2O + Pa / 1e5)
+    const F = Pas.map((Pa) => base - olr(T, pCO2, pH2O, Pa / 1e5, pN2 + pCO2 + pH2O + Pa / 1e5, 0, 0.669)
                             - ABS * ch4Shortwave(Pa / 1e5));
     const max = Math.max(...F), at = Pas[F.indexOf(max)];
     check('Methane\u2019s total forcing peaks at the measured 8.5-9 W/m\u00b2 and turns over',
