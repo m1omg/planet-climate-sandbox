@@ -1354,6 +1354,83 @@ export function run() {
       `CH₄ ${cooked.diag.pCH4.toExponential(1)} bar`);
   }
 
+  // ---- 3l-2. hydrogen is not a stable gas either ----------------------------
+  // The same redox switch as methane, and steeper. H2 has an observed lifetime
+  // of about two years in today's air -- soil uptake takes roughly three
+  // quarters of it and OH the rest (Novelli 1999; Ehhalt & Rohrer 2009) -- while
+  // in anoxic air nothing consumes it and what it has to get past is escape,
+  // which is geologically slow. That contrast is the whole reason a reduced
+  // early Mars or a Hycean world can hold percent-level hydrogen and modern
+  // Earth holds half a part per million of it.
+  //
+  // Pinned here because hydrogen arrived with a radiative lever bigger than
+  // anything else in the model and no test of its own, and the first thing that
+  // happened was a description of this decay that was wrong by six orders of
+  // magnitude -- "about ten megayears" for something that is half gone in
+  // eighteen months. An untested number is one nobody can be corrected against.
+  {
+    const bars = (w) => w.h2 * w.diag.g / 1e5;
+    const decay = (params, years) => {
+      const s = new Simulation(params);
+      const start = bars(s.world);
+      s.runYears(years, 0.25);
+      return bars(s.world) / start;
+    };
+    // A *trace* amount, because that is the regime the two-year number
+    // describes: 2 ppm here against Earth's observed 0.55. A bar of it cannot
+    // decay this way and must not be asked to -- burning a bar needs 7.94 bar
+    // of oxygen and the planet has 0.21, which is the check below this one.
+    const oxic = { ...EARTH, h2Bar: 2e-6, outgassing: 0 };
+    const half = decay(oxic, 1.4), decade = decay(oxic, 10), century = decay(oxic, 100);
+    check('Hydrogen lasts ~2 years in today\u2019s air, while it is a trace gas',
+      half > 0.35 && half < 0.65 && decade < 0.02,
+      `${(half * 100).toFixed(0)}% left after 1.4 yr, ${(decade * 100).toFixed(2)}% after a decade, ` +
+      `${(century * 100).toExponential(1)}% after a century`);
+
+    // The other side of the switch, and the one the hot ocean world stands on.
+    const anoxic = decay({ ...EARTH, o2Bar: 0, biosphere: 0, h2Bar: 2e-6, outgassing: 0 }, 100);
+    check('\u2026and geological ages in air with no oxygen in it',
+      anoxic > 0.9,
+      `${(anoxic * 100).toFixed(1)}% still there after a century, against ` +
+      `${(century * 100).toExponential(1)}% with oxygen`);
+  }
+
+  // ---- 3l-3. burning hydrogen costs oxygen and makes water -------------------
+  // The two-year lifetime above is a *trace gas* lifetime. It assumes the
+  // oxidant is effectively infinite next to the hydrogen, which is true at
+  // Earth's 0.55 ppm and false the moment anyone drags the slider. 2 H2 + O2 ->
+  // 2 H2O: burning a kilogram of hydrogen costs 7.94 kg of oxygen and yields
+  // 8.94 kg of water, so a bar of H2 needs 7.94 bar of O2 to finish, and Earth
+  // has 0.21. Past that ratio the oxygen is the thing that runs out, the air
+  // ends up reduced, and what is left of the hydrogen is stable -- which is the
+  // anoxic branch above, reached from the oxic one.
+  //
+  // It used to be a bare exponential gated on pO2, consuming no oxygen and
+  // making no water: ten bars of hydrogen vanished in two centuries while the
+  // oxygen budget moved by six parts in a million and the ocean did not move at
+  // all. Mass and redox both, out of the same hole the methane reservoir was
+  // pulled out of earlier.
+  {
+    const s = new Simulation({ ...EARTH, h2Bar: 1.0, outgassing: 0, biosphere: 0 });
+    const w = s.world, g = w.diag.g;
+    const bar = (col) => col * g / 1e5;
+    const o2Start = bar(w.o2), waterStart = w.diag.totalWater;
+    s.runYears(500, 0.25);
+    const h2Left = bar(w.h2), o2Left = bar(w.o2);
+
+    check('A bar of hydrogen takes Earth\u2019s oxygen with it, not the other way round',
+      o2Left < o2Start * 0.02 && h2Left > 0.9,
+      `O₂ ${o2Start.toFixed(3)} → ${o2Left.toExponential(1)} bar, ` +
+      `H₂ 1.000 → ${h2Left.toFixed(3)} bar left standing in reduced air`);
+
+    // 0.21 bar of O2 can only burn 0.0265 bar of H2, and that makes 8.8e-4 EO
+    // of water. Small, and the point is that it is not zero.
+    const made = w.diag.totalWater - waterStart;
+    check('\u2026and the hydrogen that did burn turned into water',
+      made > 5e-4 && made < 1.5e-3,
+      `${made.toExponential(2)} EO of new water from ${(1 - h2Left).toFixed(4)} bar of H₂ burnt`);
+  }
+
   // ---- 3m. the oxygen cycle -------------------------------------------------
   // Oxygen used to be a fossil of hydrogen escape and nothing else, so the only
   // route to an oxygen-rich atmosphere was to boil an ocean -- the Venus story,
