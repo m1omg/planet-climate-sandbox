@@ -967,6 +967,27 @@ export function run() {
       `${(hot.diag.Tmean - 273.15).toFixed(1)} °C under ${hot.diag.pTotMean.toFixed(1)} bar, ` +
       `${(hot.diag.flooded * 100).toFixed(0)}% ocean`);
 
+    // Arriving in the right place is not the same as staying in it, and every
+    // check above this one reads only the arrival. This world used to boot
+    // ninety W/m^2 out of balance -- fifteen bar of CO2 held at a temperature
+    // that only eight and a half bar can support once hydrogen is in the air --
+    // so it fell to a snowball inside two centuries, condensed its atmosphere
+    // onto the ground, and came back through a 668 C runaway some tens of
+    // megayears later. It still arrived at 73 C, so the endpoint checks passed
+    // throughout. What gives it away is watching it: at three hundred megayears
+    // a second the whole excursion goes past in a second of wall clock, which
+    // is exactly how it was found.
+    //
+    // The bound is on the recorded history rather than on the final state,
+    // because the history is what the chart draws and what a player actually
+    // sees. Sampling is 2% of elapsed time, so an excursion lasting tens of
+    // megayears cannot slip between two samples.
+    const trip = hot.history.map((h) => h.T);
+    const lo = Math.min(...trip) - 273.15, hi = Math.max(...trip) - 273.15;
+    check('\u2026and it holds all the way there, not just when it arrives',
+      lo > 40 && hi < 110,
+      `${lo.toFixed(0)}\u2026${hi.toFixed(0)} °C across ${trip.length} samples of the gigayear`);
+
     // The Wordsworth & Pierrehumbert 2013 half: what escapes past a cold trap is
     // a ratio, and ten bars of background gas is a very large denominator. This
     // world is hotter than the moist greenhouse above and loses water far slower.

@@ -182,9 +182,15 @@ export const PRESETS = {
   // loss. It is only half the story though, and the note below the parameters
   // says which half.
   //
-  // Getting one to *stay* hot is the interesting part, and it is not the
-  // radiation. Pin the CO2 and 10 bar at this insolation sits at 66 C quite
-  // happily. Let the carbonate-silicate thermostat run and it pulls the same
+  // Getting one to *stay* hot is the interesting part, and it is no longer the
+  // thermostat alone. Pinning the CO2 used to be enough -- 10 bar at this
+  // insolation sat at 66 C quite happily -- and since the four-band radiation
+  // and the reflecting cloud deck went in, it is not: with no hydrogen, 0.28
+  // S(+) has exactly one stable solution and it is a snowball, -106 C at 10
+  // bar, -98 C at 15, -83 C at 20, the warm crossing near 145 C unstable in
+  // every case. More CO2 warms the cold branch and never reaches the warm one.
+  // That is Kasting's outer edge finally showing up, and it is why the preset
+  // below carries hydrogen. Let the carbonate-silicate thermostat run and it pulls the same
   // world down to 2 C in half a gigayear, because weathering rises with
   // temperature and that is exactly what a thermostat does. Which is the honest
   // answer to whether a world like this lasts: the limit is the carbon cycle,
@@ -197,12 +203,37 @@ export const PRESETS = {
   // left -- worth twenty kelvin on its own. And the interior is Io-like at 1.5
   // W/m^2, which is worth 4x on melt production by itself (meltBoost), with a
   // specific activity of 7.4 on top of that for thirty times Earth's outgassing
-  // all told. That holds it at 72 C under 11 bar for a gigayear, with an ocean
+  // all told. That holds it at 73 C under 10 bar for a gigayear, with an ocean
   // over every square metre and enough of a cold trap to keep it for ninety-nine.
-  // It settles at 74 C and the classifier calls it a Moist Greenhouse, and that is
-  // the intended reading rather than a mislabel: at a stratospheric mixing ratio
-  // of 1.0e-3 it is sitting on Kasting's criterion to two figures. A 74 C ocean is
-  // already marginal for keeping its water, however it got to 74 C.
+  // It settles at 73 C, and the classifier now calls it a Hot Ocean World rather
+  // than a Moist Greenhouse -- the stratospheric mixing ratio comes out at
+  // 8.4e-4, just under Kasting's 1e-3, where booting out of balance used to
+  // land it at 1.04e-3 and just over. It sits on that criterion either way, so
+  // the label can still cross while you watch it, and a 73 C ocean is marginal
+  // for keeping its water however it got to 73 C.
+  //
+  // The composition below is that gigayear state, and it is written down here
+  // rather than discovered at runtime because the two are not the same world.
+  // The preset used to boot at 15 bar and 340 K, which is ninety W/m^2 short of
+  // balance -- fifteen bar cannot hold 340 K once the hydrogen is counted -- so
+  // the world fell to a snowball inside two centuries, condensed its atmosphere
+  // onto the ground, and came back through a 668 C runaway some tens of
+  // megayears later before arriving at the same 73 C. Every check that read the
+  // arrival passed the whole time; what it looks like is a world that flashes
+  // through a runaway and a snowball the moment you run the clock fast enough
+  // to see thirty megayears go by. The trajectory is now pinned by a self-test
+  // as well as the endpoint.
+  //
+  // The hydrogen is a third of the story and was not here before. At thirty
+  // times Earth's outgassing and 0.28 S(+) the XUV is too weak to strip it, so
+  // it stands at 0.117 bar in steady state, and its collision-induced
+  // absorption -- which goes as pH2 x pTot, and so is ten times stronger under
+  // ten bar than under one -- is worth about 110 W/m^2 here. That is what holds
+  // the world up: at this insolation there is no CO2-only branch to stand on,
+  // which is the outer edge of the habitable zone behaving as it should. It
+  // does mean this world is a hydrogen greenhouse wearing a CO2 label, and the
+  // CIA coefficient is fitted to Ramirez et al. 2014's early Mars at one to
+  // three bar and extrapolated here without saturating. See the README.
   //
   // Which corrects something written here earlier. The contrast with the Sunbaked
   // Ocean below is *not* that dense CO2 retains water and starlight does not --
@@ -217,8 +248,8 @@ export const PRESETS = {
   // the outgassing from 7.4 to 5 and the same world is a hard snowball at -103 C.
   // There is no lukewarm version of it at this distance.
   hotOcean: { name: 'Hot Ocean World', icon: '♨️', params: { ...EARTH, o2Bar: 0, biosphere: 0,
-    insolation: 0.28, co2Bar: 15, n2Bar: 1.0, water: 3, landFraction: 0,
-    ch4Bar: 0, outgassing: 7.4, internalHeat: 1.5, startT: 340 } },
+    insolation: 0.28, co2Bar: 8.742, h2Bar: 0.1165, n2Bar: 1.0, water: 3, landFraction: 0,
+    ch4Bar: 0, outgassing: 7.4, internalHeat: 1.5, startT: 346.44 } },
 
   // The other way to a hot ocean, and the contrast is the point.
   //
