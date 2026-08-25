@@ -1431,9 +1431,27 @@ an OLR of 176 and 60 W/m² at 346 K. There is no CO₂-only branch left to stand
 which is the outer edge of the habitable zone finally behaving as it should. But the CIA goes as
 `pH₂ × pTot` with no saturation, and the coefficient is fitted to Ramirez et al. (2014)'s early Mars
 at 1.6–3 bar: under ten bar the same *fraction* of hydrogen buys ten times the optical depth, so 1%
-H₂ here is worth what 20% is on Mars. **Hydrogen has no anchor row and no self-test of its own** — it
-is the largest radiative lever in the model and the least pinned. Treat this world's temperature as
-resting on an extrapolation until that is fixed.
+H₂ here is worth what 20% is on Mars. There is still **no anchor row** for it — it is the largest
+radiative lever in the model and the least pinned, so treat this world's temperature as resting on an
+extrapolation until there is one.
+
+**Hydrogen is a redox budget, not just a decay constant.** It has two sinks and they behave nothing
+alike. Escape is the slow one, limited by diffusion and by the XUV energy supply, and it is what makes
+retention a question about *mass*: a bar of H₂ on an anoxic world is still all there after a
+kiloyear, and after a megayear a Mars-sized planet has lost a third of it where an 8 M⊕ one has lost
+six per cent. Reaction is the fast one — about **two years** in air like today's, against geological
+ages with no oxygen in it, the same redox switch that governs methane.
+
+But two years is a *trace gas* number. It assumes the oxidant is effectively infinite beside the
+hydrogen, which is true at Earth's 0.55 ppm and false the moment there is a bar of it. `2 H₂ + O₂ →
+2 H₂O`: burning a kilogram of hydrogen costs 7.94 kg of oxygen and yields 8.94 kg of water, so a bar
+of H₂ needs **7.94 bar of O₂** to finish and Earth has 0.21. Past that ratio the oxygen is what runs
+out — 0.21 bar of it burns 0.0265 bar of hydrogen, makes 8.8×10⁻⁴ EO of water, and leaves 0.974 bar
+of H₂ standing in air that is now reduced and cannot touch it. This used to be a bare exponential
+gated on pO₂: ten bars of hydrogen vanished in two centuries while the oxygen budget moved by six
+parts in a million and the ocean did not move at all. The steady volcanic trickle of H₂ is *not*
+charged here, because `O2_REDUCTANT` already pays for it once — billing it twice added 42% to the
+reductant flux and took Earth's oxygen, its surface pressure and its carbon cycle out with it.
 
 **Two places the model has a thumb on the scale here**, both pre-existing and both reported elsewhere:
 

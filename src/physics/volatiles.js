@@ -342,6 +342,12 @@ const H2_DIFFUSION = 0.0262;
 // 1.05e-5 kg/m2/yr -- about two per cent of the carbon flux by mass.
 const H2_OUTGAS_EARTH = 1.05e-5;
 const H2_OXIDISED_LIFETIME = 2;   // years, in air like today's
+// 2 H2 + O2 -> 2 H2O, by mass: M(O2)/2M(H2) of oxygen spent and M(H2O)/M(H2) of
+// water made, per kilogram of hydrogen burnt. The two-year lifetime is a *trace
+// gas* number and assumes the oxidant is effectively infinite beside the
+// hydrogen -- true at Earth's 0.55 ppm, false the moment there is a bar of it.
+const O2_PER_H2 = 31.998 / (2 * 2.016);    // 7.94 kg of O2 per kg of H2
+const H2O_PER_H2 = 18.015 / 2.016;         // 8.94 kg of H2O per kg of H2
 const TRAP_FAIL_LO = 1e-4, TRAP_FAIL_HI = 2e-3;
 
 export function escapeRates(w) {
@@ -1013,10 +1019,42 @@ export function stepVolatiles(w, dtYears) {
     // oxygenated world escape is not what limits it -- reaction is. H2 lasts
     // about two years in today's air and geological ages in anoxic air, which is
     // the same redox switch that governs methane, for the same reason.
+    //
+    // The kinetics set the rate and the oxygen sets the budget, and it used to
+    // be only the first of those: a bare exponential that consumed no oxygen
+    // and made no water, so ten bars of hydrogen disappeared in two centuries
+    // while the O2 moved by six parts in a million. A bar of H2 needs 7.94 bar
+    // of O2 to finish and Earth has 0.21, so past that ratio it is the oxygen
+    // that runs out. The air ends up reduced, the leftover hydrogen is stable
+    // -- the anoxic branch, reached from the oxic one -- and the switch closes
+    // itself, because `oxidising` is a function of the pO2 being spent here.
+    //
+    // Escape is untouched by this and stays where it is: it is the slow,
+    // gravity-limited loss that decides what a planet can hold over geological
+    // time, and it is the reason a bar of hydrogen does not last for ever even
+    // once the oxygen is gone.
     const oxidising = smoothstep(3e-7, 2e-4, dg.pO2);
     if (oxidising > 0 && w.h2 > 0) {
       const tau = H2_OXIDISED_LIFETIME / oxidising;
-      w.h2 *= Math.exp(-Math.max(dtYears, 0) / tau);
+      const wanted = w.h2 * (1 - Math.exp(-Math.max(dtYears, 0) / tau));
+      const afford = Math.max(w.o2, 0) / O2_PER_H2;
+      const burnt = Math.min(wanted, afford);
+      if (burnt > 0) {
+        w.h2 -= burnt;
+        // Only the hydrogen burnt *faster than it is being made* is charged to
+        // the oxygen. The steady volcanic trickle is already paid for, once, by
+        // O2_REDUCTANT above -- that term is the reduced volcanic gases the
+        // biosphere has to outrun, and O2_BIO is fitted against it to put Earth
+        // at 0.21 bar. Billing it again here is billing the same reductant
+        // twice: it added 42% to the flux and took Earth's oxygen, its surface
+        // pressure and its carbon cycle out with it. In steady state this term
+        // is zero and nothing moves; it bites only on hydrogen that arrived by
+        // some other route, which is exactly the case that was broken.
+        const excess = Math.max(0, burnt - src * dtYears);
+        w.o2 = Math.max(0, w.o2 - excess * O2_PER_H2);
+        // The water from it, on the same footing and for the same reason.
+        w.water.ocean += excess * H2O_PER_H2 / Math.max(d.eoColumn, 1e-9);
+      }
     }
   }
 
