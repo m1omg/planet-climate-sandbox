@@ -402,5 +402,52 @@ if (created < 20) {
   failed++;
 }
 
+// A slider the simulation moves on its own is read *back* out of the world ten
+// times a second, so if setting it never reaches the reservoir the readout
+// snaps it straight back and the control looks like it is being undone by
+// physics. Hydrogen shipped that way: dragging it on a paused Earth set
+// params.h2Bar and nothing else, and a tenth of a second later the live reader
+// put it back to the reservoir's actual zero -- which reads exactly like
+// hydrogen escaping from a world whose clock is not running.
+//
+// So: every live slider needs a write-back in applyParams, and the gate on that
+// is RESERVOIR_KEYS. Checked against the slider table rather than a list
+// written out here, so a live slider added later cannot miss it.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const { SLIDERS } = await import('../src/game/controls.js');
+  const m = src.match(/const RESERVOIR_KEYS = new Set\(\[([^\]]*)\]\)/);
+  const keys = m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : [];
+  const live = SLIDERS.filter((d) => d.live).map((d) => d.key);
+  const missing = live.filter((k) => !keys.includes(k));
+  // and the write itself has to be there, not just the key in the set
+  const body = src.slice(src.indexOf('function applyParams'), src.indexOf('function applyParams') + 1600);
+  const unwritten = live.filter((k) => !new RegExp(`key === '${k}'`).test(body) && k !== 'mass');
+  if (missing.length || unwritten.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  live sliders the world never hears about: ` +
+      `${[...new Set([...missing, ...unwritten])].join(', ')} — setting one is undone by the next readout`);
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  every live slider writes through to its reservoir (${live.length} of them)`);
+  }
+}
+
+// The name box is empty on a preset and saves as the preset's name -- that is
+// what currentName() does. The placeholder has to say the same thing, or the
+// field claims "Custom world" for a world the slot will file as "Earth".
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const start = src.indexOf('function setPresetActive');
+  const fn = src.slice(start, src.indexOf('\n}', start));
+  if (!/placeholder/.test(fn)) {
+    console.log('\x1b[31mFAIL\x1b[0m  the name box says "Custom world" on a preset it would save as the preset');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  the name box offers the preset\'s own name, as the save would');
+  }
+}
+
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);
