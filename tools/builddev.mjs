@@ -27,7 +27,7 @@ const out = process.argv[2];
 if (!out) { console.error('usage: node tools/builddev.mjs <path-to-main-checkout>'); process.exit(1); }
 const dev = join(out, 'dev');
 
-const NOTE = 'four-band radiation, hydrogen and Hycean work in progress — 24 of 213 self-tests failing';
+const NOTE = 'four-band radiation, hydrogen and Hycean work in progress — 22 of 214 self-tests failing';
 
 rmSync(dev, { recursive: true, force: true });
 mkdirSync(dev, { recursive: true });

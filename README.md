@@ -1374,12 +1374,23 @@ pressure lifts the boiling point far above 100 °C long before the critical poin
 so an 80 °C ocean under ten bars is unremarkable thermodynamics. (This is the region Orion's Arm's
 worldbuilding calls a *Tohulian* world — the name is fiction, the parameter space is not.)
 
-Two published routes reach it, and the model does both:
+Two published routes reach it. The model used to do both; **on this branch it does one**:
 
 * **Tens of bars of CO₂, far from a dim star.** von Paris et al. (2010) put Gliese 581d at 357 K under
   20 bar of CO₂; Wordsworth et al. (2011) melted an initially frozen ocean on the same planet in a 3-D
-  GCM at 20 bar and above. Here, 0.28 S⊕ — Gliese 581d's — with the CO₂ held at 10 bar gives **66 °C**.
-* **Earth-like air close to a bright star.** That is the hot branch above: 81 °C at 1.33 S⊕.
+  GCM at 20 bar and above. This used to give **66 °C** at 0.28 S⊕ — Gliese 581d's — with the CO₂ held
+  at 10 bar. It no longer does. With the four-band radiation and the reflecting cloud deck in place,
+  and **no hydrogen**, 0.28 S⊕ has one stable solution and it is a snowball: **−106 °C at 10 bar,
+  −98 °C at 15, −83 °C at 20**, with the warm crossing near 145 °C unstable in every case. Piling on
+  more CO₂ warms the cold branch and never reaches the warm one. This is the outer edge of the
+  habitable zone appearing where Kasting (1993) says it should, and it is arguably the model getting
+  *better* — but it means the dense-CO₂ hot ocean is now reached by adding hydrogen, not CO₂, and the
+  shipped preset does exactly that. See the preset section below.
+* **Earth-like air close to a bright star.** That is the hot branch above: 81 °C at 1.33 S⊕. This one
+  is intact, and it is what the **Sunbaked Ocean** preset rides — stable across 10 Gyr and every step
+  size tested, 54–68 °C, with the classifier crossing between Hot Ocean and Moist Greenhouse inside
+  that band because Kasting's 10⁻³ criterion falls inside it. That crossing is a label boundary, not
+  an instability.
 
 The two differ in the thing that matters, and not because they were made to. What escapes past a cold
 trap is a **ratio**, and ten bars of background gas is a very large denominator: the dense-CO₂ world
@@ -1397,9 +1408,32 @@ The shipped **Hot Ocean World** preset outruns the thermostat rather than switch
 things real planets have. There are no continents, so continental weathering is gone and only the
 slower seafloor sink is left — worth twenty kelvin on its own. And the interior is Io-like at 1.5 W/m²,
 which is 4× on melt production by itself, with a specific activity of 7.4 on top for thirty times
-Earth's outgassing all told. That holds **72.4 °C under 11.2 bar for a gigayear**, ocean over every
+Earth's outgassing all told. That holds **72.5 °C under 10.1 bar for a gigayear**, ocean over every
 square metre, with enough cold trap left to keep it for ninety-nine. Drop it to Earth's outgassing and
-the same world settles at 24.8 °C.
+the same world freezes solid at −109 °C.
+
+**It used to get there the wrong way, and only the arrival was ever checked.** The preset booted at
+15 bar and 340 K, which is **90 W/m² short of balance** — fifteen bar cannot hold 340 K once the
+hydrogen below is counted. So the world fell to a snowball inside two centuries, condensed its
+atmosphere onto the ground, and came back through a **668 °C runaway** some tens of megayears later
+before settling at the same 73 °C it always reported. Every endpoint check passed throughout. What
+gives it away is watching it: at 300 Myr/s the whole excursion goes past in about a second of wall
+clock, which is how it was found and reported. The trajectory is now pinned by its own self-test —
+`…and it holds all the way there, not just when it arrives`, on the recorded history rather than the
+final state — and the preset ships at the composition it actually settles into. It is **not** a
+step-size problem: capping the step at 100 years, fifty thousand times smaller than the clock's
+maximum, traced the identical excursion to a fraction of a degree.
+
+**A third of this world's greenhouse is hydrogen, and that is new.** At thirty times Earth's
+outgassing and 0.28 S⊕ the XUV is far too weak to strip it, so H₂ stands at **0.117 bar** in steady
+state, and its collision-induced absorption is worth about **110 W/m² here** — the difference between
+an OLR of 176 and 60 W/m² at 346 K. There is no CO₂-only branch left to stand on at this insolation,
+which is the outer edge of the habitable zone finally behaving as it should. But the CIA goes as
+`pH₂ × pTot` with no saturation, and the coefficient is fitted to Ramirez et al. (2014)'s early Mars
+at 1.6–3 bar: under ten bar the same *fraction* of hydrogen buys ten times the optical depth, so 1%
+H₂ here is worth what 20% is on Mars. **Hydrogen has no anchor row and no self-test of its own** — it
+is the largest radiative lever in the model and the least pinned. Treat this world's temperature as
+resting on an extrapolation until that is fixed.
 
 **Two places the model has a thumb on the scale here**, both pre-existing and both reported elsewhere:
 

@@ -188,7 +188,14 @@ body.software-render #planet{image-rendering:auto}
 /* ---------------- time bar ---------------- */
 #timebar{
   position:absolute;left:16px;right:16px;bottom:16px;z-index:4;
-  display:flex;align-items:center;gap:10px;
+  /* Wrapping is not a narrow-screen concern. The bar lives in the centre grid
+     column, so what decides whether its contents fit is that column's width,
+     not the viewport's -- a wide window with both side panels open leaves it
+     about 700px for some 790px of buttons, clock and slider. Without wrap the
+     overflow lands on the last child and the time-acceleration slider is cut
+     off at the panel edge, which is exactly where it was found. `--bar` is
+     measured by a ResizeObserver, so a second row costs nothing. */
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px;
   background:var(--panel);backdrop-filter:blur(18px);
   border:1px solid var(--line);border-radius:var(--radius);padding:9px 12px;
   box-shadow:0 10px 34px rgba(0,0,0,.45);
@@ -216,7 +223,8 @@ body.software-render #planet{image-rendering:auto}
 .clock{display:flex;flex-direction:column;line-height:1.15;padding:0 6px;flex:none;min-width:104px}
 .clock .t-label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint)}
 #simtime{font:14px/1.2 var(--mono);color:var(--fg)}
-.rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.rate{display:flex;align-items:center;gap:9px;flex:1 1 260px;min-width:0}  /* 260px is label+slider+readout at their minimums: below that the row
+     wraps and the slider gets a full line rather than being clipped. */
 .rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
 .rate input{flex:1;min-width:60px}
 .rate output{font:11.5px/1 var(--mono);color:var(--accent);min-width:78px;text-align:right;flex:none;transition:color .2s}

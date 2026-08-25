@@ -414,8 +414,20 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // damping, and both cost eighteen radiative-transfer evaluations. Compute
   // once and hand the result on; the cache is discarded the moment the world
   // state moves.
-  const tend = tendency(w);
-  const k = radiativeDamping(w);
+  //
+  // Most of these evaluations are discarded. The clock has to ask how big the
+  // next step would be before it can know whether it has the credit to pay for
+  // one, and at a year a second it can afford one frame in eighteen -- so 95%
+  // of this work is computed and thrown away, and it is thrown away on exactly
+  // the machines with the least to spare. Reuse is safe on the same test
+  // `stepTemperature` already trusts: `update()` builds a *fresh* w.diag every
+  // time anything moves, on the step, parameter, reset, scrub and save-load
+  // paths alike, so matching identity means the world has not moved and the
+  // same solve still stands. A hit returns bit-identical numbers; it is the
+  // same pure function of the same state.
+  const hit = w._solve && w._solve.diag === dg ? w._solve : null;
+  const tend = hit ? hit.tend : tendency(w);
+  const k = hit ? hit.k : radiativeDamping(w);
   const { dT } = tend;
   w._solve = { diag: dg, tend, k };
 
@@ -542,11 +554,14 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // the log, bounded to a factor of four either way, follows genuine changes
   // while ignoring the flicker.
   //
-  // This function must stay free of side effects: the clock asks it what the
-  // next step would be before deciding whether it can afford to take one, so
-  // recording the answer here would make the sequence depend on where frame
-  // boundaries happened to fall. `dtPrev` is advanced in stepOnce instead, once
-  // per step actually taken.
+  // This function must record nothing that the *step sequence* depends on: the
+  // clock asks it what the next step would be before deciding whether it can
+  // afford to take one, so remembering the answer here would make the sequence
+  // depend on where frame boundaries happened to fall. `dtPrev` is advanced in
+  // stepOnce instead, once per step actually taken. (It is not side-effect
+  // free, and never was -- it fills the `_solve` cache above. That cache is
+  // keyed on state identity and returns the same numbers either way, so it
+  // cannot move the sequence; `dtPrev` would.)
   const prev = w.dtPrev;
   if (prev > 0) {
     const smoothed = Math.exp(0.7 * Math.log(dt) + 0.3 * Math.log(prev));
