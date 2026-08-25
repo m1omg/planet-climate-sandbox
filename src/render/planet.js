@@ -13,6 +13,18 @@ export const TEXTURE_SET = ['rock', 'desert', 'vegetation', 'ice', 'ocean', 'lav
 // Real worlds, and which of them has topography to go with its photograph.
 // Only Earth: it is the one body with a clean public-domain grayscale DEM at a
 // usable size, and a wrong Mars is worse than a procedural one.
+// Where the surface maps and textures live, relative to the page.
+//
+// Normally alongside index.html, which is what the plain 'assets/' means. The
+// override exists so a second copy of the site can be served from a
+// subdirectory -- /dev/ on the Pages site -- without a second 23 MB copy of the
+// JPEGs to go with it. That copy sets window.__assetBase to '../assets/' and
+// shares the ones at the root.
+function assetBase() {
+  const b = (typeof window !== 'undefined' && window.__assetBase) || 'assets/';
+  return b.endsWith('/') ? b : `${b}/`;
+}
+
 export const BODY_MAPS = {
   earth: { colour: 'earth.jpg', height: 'earth_height.png' },
   preindustrial: { colour: 'earth.jpg', height: 'earth_height.png' },
@@ -534,7 +546,7 @@ export class PlanetView {
 
   // Load the generated albedo maps. Failure is not fatal: the planet simply
   // stays on the procedural path, which is a complete look in its own right.
-  async loadTextures(dir = 'assets/textures/') {
+  async loadTextures(dir = `${assetBase()}textures/`) {
     if (this.failed || !this.ready) return false;
     if (!this.albedoCapable) return false;
     if (this.texturesLoaded) return true;
@@ -586,7 +598,7 @@ export class PlanetView {
     if (!def) { this.body = null; this.bodyTarget = 0; return false; }
     if (this.body === name) { this.bodyTarget = 1; return true; }
     const gl = this.gl;
-    const base = new URL('assets/bodies/', location.href);
+    const base = new URL(`${assetBase()}bodies/`, location.href);
     try {
       const [colour, height] = await Promise.all([
         decodeOnce(new URL(def.colour, base).href),
