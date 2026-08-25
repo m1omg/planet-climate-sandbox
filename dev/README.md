@@ -1,22 +1,18 @@
 # /dev — the development build
 
-This directory is a **built copy** of the `claude/project-status-review-mhk04n`
-branch, served at <https://m1omg.github.io/planet-climate-sandbox/dev/> so the
-work in progress can be looked at without touching the stable site at the root.
+Built by `tools/builddev.mjs` from the `claude/project-status-review-mhk04n`
+branch and served at <https://m1omg.github.io/planet-climate-sandbox/dev/>.
 
-It is not the source. Edit the branch, then rebuild this directory from it —
-`index.html`, `css/` and `src/`, with two changes to `index.html`:
+**Do not edit anything in here.** Edit the branch and rebuild:
 
-* `window.__assetBase = "../assets/"` before the module script, so this copy
-  borrows the surface maps and textures at the site root rather than shipping a
-  second 23 MB of identical JPEGs; and
-* the banner across the top, which says what is broken.
+```bash
+node tools/builddev.mjs /path/to/main/checkout
+```
 
-`assets/` is deliberately absent for that reason.
+`assets/` is deliberately absent: this copy sets `window.__assetBase` to
+`../assets/` and borrows the surface maps at the site root, which is 668 KB
+instead of 23 MB.
 
-**This build is knowingly not green.** At the time of writing 24 of its 213
-self-tests fail, all downstream of replacing the semi-grey radiative scheme with
-four spectral bands — methane and Titan are still calibrated for the old scheme.
-Two of the twenty-four are failing because they assert the *old* deviation:
-snowball deglaciation now lands at 143 mbar against the literature's 100–300,
-where it used to be thirty times too low.
+**This build is knowingly not green** — four-band radiation, hydrogen and Hycean work in progress — 24 of 213 self-tests failing. Two of those failures are tests
+asserting the *old* deviation: snowball deglaciation now lands at 143 mbar
+against the literature's 100–300, where it used to be thirty times too low.
