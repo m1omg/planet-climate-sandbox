@@ -128,7 +128,11 @@ export function classify(w) {
   // 0.1% of itself, and Earth's own oceans cover 70%.
   else if (water < 0.12 && dg.flooded < 0.10 && T > 250 && T < 340) id = 'dune';
   else if (T < 250) id = 'frozen';
-  else if (p.landFraction < 0.04 && T > 258 && T < 335) id = 'waterworld';
+  // Capped at 320 K rather than 335 so it cannot claim a world that is plainly a
+  // hot ocean. Having no continents and being 60 C are independent facts, and
+  // the temperature is the one worth leading with -- the hot-ocean branch above
+  // already accepts a fully flooded world.
+  else if (p.landFraction < 0.04 && T > 258 && T < 320) id = 'waterworld';
   // Hot, wet and keeping it. Above the hothouse in temperature but below the
   // moist greenhouse in escape -- the two are independent, which is the whole
   // point: a world under tens of bars of CO2 runs at 340 K with a stratosphere

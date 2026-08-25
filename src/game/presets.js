@@ -123,7 +123,7 @@ export const PRESETS = {
   // So the preset ships at 300, which sustains 17 per cent and a temperate
   // planet, and is frankly the optimistic end. Wind it back to 20 and watch what
   // his own numbers actually give you.
-  youngMars: { name: 'Young Mars', icon: '🏞', params: { ...EARTH, o2Bar: 0, biosphere: 0,
+  youngMars: { name: 'Young Mars', icon: '🟠', params: { ...EARTH, o2Bar: 0, biosphere: 0,
     mass: 0.107, insolation: 0.32, water: 0.06, landFraction: 0.75, n2Bar: 0.05,
     co2Bar: 1.53, h2Bar: 0.27, mantleRedox: 300, ch4Bar: 0, rotationHours: 24.6,
     obliquity: 25, outgassing: 3.0, internalHeat: 0.06, landAlbedo: 0.25, startT: 260 } },
@@ -176,11 +176,11 @@ export const PRESETS = {
   // way Kasting 1993 has it -- so its dense-CO2 worlds run hot for the pressure.
   // That gap is reported on every calibrate run and written up in the README.
   //
-  // What makes it keep its ocean is the other half of the physics and it is not
-  // a fudge: what escapes past a cold trap is a *ratio*, and ten bars of CO2 is
-  // a very large denominator. Wordsworth & Pierrehumbert 2013 make the same
-  // point -- dense CO2 cools the upper atmosphere and tightens the trap, so a
-  // huge CO2 inventory does not by itself mean fast water loss.
+  // Wordsworth & Pierrehumbert 2013's point applies here -- what escapes past a
+  // cold trap is a *ratio*, so a large non-condensible inventory holds the
+  // stratosphere dry and a huge CO2 budget does not by itself mean fast water
+  // loss. It is only half the story though, and the note below the parameters
+  // says which half.
   //
   // Getting one to *stay* hot is the interesting part, and it is not the
   // radiation. Pin the CO2 and 10 bar at this insolation sits at 66 C quite
@@ -199,9 +199,51 @@ export const PRESETS = {
   // specific activity of 7.4 on top of that for thirty times Earth's outgassing
   // all told. That holds it at 72 C under 11 bar for a gigayear, with an ocean
   // over every square metre and enough of a cold trap to keep it for ninety-nine.
+  // It settles at 74 C and the classifier calls it a Moist Greenhouse, and that is
+  // the intended reading rather than a mislabel: at a stratospheric mixing ratio
+  // of 1.0e-3 it is sitting on Kasting's criterion to two figures. A 74 C ocean is
+  // already marginal for keeping its water, however it got to 74 C.
+  //
+  // Which corrects something written here earlier. The contrast with the Sunbaked
+  // Ocean below is *not* that dense CO2 retains water and starlight does not --
+  // that was an artefact of comparing worlds at different temperatures. The cold
+  // trap works on the ratio pH2O/pTot, vapour pressure is exponential in
+  // temperature and the denominator is merely linear, so temperature wins:
+  // Sunbaked at 59 C keeps its water comfortably under four bars, this one at
+  // 74 C does not under ten. Adding nitrogen here makes it *warmer* faster than it
+  // dilutes, which is why 2 bar tested worse than 1.
+  //
+  // It is also bistable, which is the outer habitable zone being what it is: drop
+  // the outgassing from 7.4 to 5 and the same world is a hard snowball at -103 C.
+  // There is no lukewarm version of it at this distance.
   hotOcean: { name: 'Hot Ocean World', icon: '♨️', params: { ...EARTH, o2Bar: 0, biosphere: 0,
     insolation: 0.28, co2Bar: 15, n2Bar: 1.0, water: 3, landFraction: 0,
     ch4Bar: 0, outgassing: 7.4, internalHeat: 1.5, startT: 340 } },
+
+  // The other way to a hot ocean, and the contrast is the point.
+  //
+  // The world above is hot because of what is in its air. This one is hot because
+  // of where it sits: 1.2 times Earth's sunlight, ordinary CO2, and no greenhouse
+  // worth the name. What keeps it liquid rather than boiling is that it has no
+  // continents -- so no continental weathering, and the carbon thermostat is left
+  // with only the slow seafloor sink -- and four bars of nitrogen over it.
+  //
+  // The nitrogen does two things at once, and both are in the literature. It
+  // warms, by pressure-broadening everything else's absorption lines: 2 bar gives
+  // 52.8 C here and 4 bar gives 58.5. And it keeps the water, because what gets
+  // past a cold trap is the *ratio* pH2O/pTot, so raising the denominator holds
+  // the stratosphere dry -- 2.4e-4 here, below Kasting's 1e-3, where the same
+  // world under 1 bar is already a moist greenhouse. Vladilo et al. (2013) find
+  // the same direction, the inner edge moving from 0.87 to 0.77 au as pressure
+  // goes from a third of a bar to three.
+  //
+  // It is a narrow ledge. At 1.25 S(+) with the same four bars this world is at
+  // 222 C with its ocean in the air, so the margin is about four per cent in
+  // insolation -- which is roughly what Zhang & Yang (2020) mean when they call
+  // the inner edge a non-monotonic function of background pressure.
+  sunbakedOcean: { name: 'Sunbaked Ocean', icon: '🌞', params: { ...EARTH, o2Bar: 0, biosphere: 0,
+    insolation: 1.20, co2Bar: 280e-6, n2Bar: 4.0, water: 3, landFraction: 0,
+    ch4Bar: 0, outgassing: 1.0, internalHeat: 0.092, startT: 330 } },
 
   // ---- three planets that actually exist ----------------------------------
   //
