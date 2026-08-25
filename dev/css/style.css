@@ -1,0 +1,416 @@
+:root{
+  --bg:#070a12;
+  --panel:rgba(14,19,32,0.82);
+  --panel-2:rgba(20,27,44,0.7);
+  --line:rgba(255,255,255,0.09);
+  --line-2:rgba(255,255,255,0.16);
+  --fg:#e9f0ff;
+  --fg-dim:rgba(233,240,255,0.58);
+  --fg-faint:rgba(233,240,255,0.36);
+  --accent:#7fd4ff;
+  --accent-2:#ffc46b;
+  --good:#4ec98a;
+  --bad:#ff6b57;
+  --radius:12px;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+#app{
+  display:grid;
+  grid-template-columns:320px minmax(0,1fr) 360px;
+  height:100dvh;
+}
+
+/* ---------------- panels ---------------- */
+.panel{
+  background:var(--panel);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  display:flex;flex-direction:column;min-height:0;
+  border-right:1px solid var(--line);
+  position:relative;z-index:3;
+}
+#readout{border-right:none;border-left:1px solid var(--line)}
+.scroller{overflow-y:auto;overflow-x:hidden;padding:4px 16px 28px;flex:1;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.scroller::-webkit-scrollbar{width:9px}
+.scroller::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px;border:3px solid transparent;background-clip:content-box}
+
+.panel-head{padding:18px 16px 10px}
+.panel-head h1{
+  margin:0;font-size:15px;font-weight:650;letter-spacing:.02em;line-height:1.25;
+}
+.panel-head h1 span{display:block;font-weight:400;color:var(--fg-faint);font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+
+.group{padding:14px 0;border-top:1px solid var(--line)}
+.group:first-child{border-top:none}
+.group>h2{
+  margin:0 0 10px;font-size:10.5px;font-weight:650;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--fg-faint);
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+}
+.group>h2 small{font-weight:400;letter-spacing:.02em;text-transform:none;font-size:10.5px;opacity:.85}
+
+/* ---------------- sliders ---------------- */
+.ctl{margin-bottom:13px}
+.ctl-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.ctl-top label{font-size:12px;color:var(--fg-dim)}
+.ctl-top input.val{font:11.5px/1 var(--mono);color:var(--fg);background:var(--panel-2);
+  padding:4px 6px;border-radius:5px;border:1px solid var(--line);white-space:nowrap;
+  width:92px;text-align:right;transition:border-color .15s,background .15s}
+.ctl-top input.val:hover{border-color:var(--line-2)}
+.ctl-top input.val:focus{outline:none;border-color:var(--accent);background:rgba(127,212,255,.10);
+  color:var(--fg);text-align:left}
+.ctl-top input.val.bad{border-color:var(--bad);color:var(--bad)}
+.ctl-note{font-size:10.5px;color:var(--fg-faint);margin-top:3px}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:grab;display:block;
+}
+input[type=range]:active{cursor:grabbing}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent) var(--fill,50%),rgba(255,255,255,0.12) var(--fill,50%))}
+input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:rgba(255,255,255,0.12)}
+input[type=range]::-moz-range-progress{height:3px;border-radius:2px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;
+  margin-top:-5px;border:none;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.5);
+  transition:transform .12s ease}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.18)}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:#fff;border:none}
+
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.toggle label{font-size:12px;color:var(--fg-dim)}
+.switch{position:relative;width:38px;height:21px;border-radius:11px;background:rgba(255,255,255,0.12);
+  border:1px solid var(--line);cursor:pointer;transition:background .18s;flex:none}
+.switch::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:#fff;transition:transform .18s cubic-bezier(.3,1.4,.5,1)}
+.switch[aria-pressed=true]{background:var(--accent)}
+.switch[aria-pressed=true]::after{transform:translateX(17px)}
+
+.panel-note{font-size:11px;line-height:1.55;color:var(--fg-faint);margin:2px 0 0;
+  padding:9px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px}
+
+/* controls the simulation drives by itself */
+.ctl.live .ctl-top label::after{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--accent);margin-left:6px;vertical-align:middle;opacity:.75}
+.ctl.live input.val{color:var(--accent)}
+
+.derived{
+  display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-top:10px;
+  padding:9px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+  font:11px/1.35 var(--mono);color:var(--fg-dim);
+}
+.derived b{color:var(--fg);font-weight:500}
+
+/* ---------------- chips ---------------- */
+.chip-row{display:flex;flex-wrap:wrap;gap:6px}
+.chip-col{display:flex;flex-direction:column;gap:6px}
+.chip{
+  font:inherit;font-size:12px;color:var(--fg-dim);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer;
+  transition:.15s;display:inline-flex;align-items:center;gap:6px;
+}
+.chip:hover{color:var(--fg);border-color:var(--line-2);background:rgba(255,255,255,.07)}
+.chip.active{color:#071018;background:var(--accent);border-color:var(--accent);font-weight:600}
+.chip-col .chip{border-radius:9px;text-align:left;justify-content:flex-start;padding:9px 11px;line-height:1.35}
+.chip-col .chip b{display:block;color:var(--fg);font-weight:600;font-size:12.5px}
+.chip-col .chip.active b{color:#071018}
+.chip-col .chip span{font-size:11px;opacity:.75}
+
+/* Real-interior pairs under the internal-heat slider. Smaller than the world
+   chips: these live inside a control rather than above the panel. */
+.chip-row.body-heat{margin-top:8px;gap:4px}
+.chip-row.body-heat .chip{font-size:11px;padding:3px 8px;border-radius:7px}
+
+/* ---------------- stage ---------------- */
+#stage{position:relative;min-width:0;overflow:hidden;background:#05070d}
+#planet{position:absolute;inset:0;width:100%;height:100%;display:block;
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+#planet.dragging{cursor:grabbing}
+/* software rendering: the planet is drawn small and scaled up, so let the
+   browser smooth it rather than showing the pixels */
+body.software-render #planet{image-rendering:auto}
+
+#view-controls{position:absolute;right:16px;bottom:70px;z-index:4;display:flex;flex-direction:column;gap:6px}
+#view-controls .icon-btn{width:32px;font-size:15px;line-height:1}
+#view-controls .icon-btn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+#view-controls .icon-btn:disabled{opacity:.4}
+#view-controls #btn-quality[aria-pressed=true]{color:var(--accent-2);border-color:var(--accent-2)}
+/* Which renderer is running, and the switch between them. Reads as a label
+   because that is mostly what it is: the state matters more than the action. */
+#view-controls .renderer-btn{width:auto;padding:0 8px;font:10px/1 var(--mono);letter-spacing:.08em}
+#view-controls .renderer-btn[data-kind=software]{color:var(--accent-2);border-color:var(--accent-2)}
+#view-controls .renderer-btn[data-kind=gpu]{color:var(--good);border-color:rgba(78,201,138,.5)}
+
+#state-banner{
+  position:absolute;top:18px;left:50%;transform:translateX(-50%);
+  text-align:center;pointer-events:none;z-index:2;max-width:min(560px,86%);
+}
+.state-name{display:flex;align-items:center;justify-content:center;gap:9px;
+  font-size:20px;font-weight:600;letter-spacing:.01em;
+  text-shadow:0 2px 18px rgba(0,0,0,.85),0 0 40px rgba(0,0,0,.6)}
+.state-name .swatch{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 12px currentColor}
+.state-reason{margin-top:4px;font:11.5px/1.45 var(--mono);color:rgba(233,240,255,.72);
+  text-shadow:0 1px 10px rgba(0,0,0,.9)}
+
+#scenario-banner{
+  position:absolute;top:16px;left:16px;width:290px;z-index:4;
+  background:var(--panel);backdrop-filter:blur(18px);border:1px solid var(--line-2);
+  border-radius:var(--radius);padding:12px 13px;box-shadow:0 12px 40px rgba(0,0,0,.5);
+}
+.sc-head{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.sc-head .sc-icon{font-size:16px}
+.sc-close{margin-left:auto;background:none;border:none;color:var(--fg-faint);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:4px}
+.sc-close:hover{color:var(--fg);background:rgba(255,255,255,.08)}
+.sc-brief{margin:7px 0 0;font-size:11.5px;line-height:1.5;color:var(--fg-dim)}
+.sc-status{margin-top:9px;font:11px/1.4 var(--mono);color:var(--accent-2)}
+.sc-status.win{color:var(--good)}
+.sc-status.lose{color:var(--bad)}
+
+#toast{
+  position:absolute;left:50%;bottom:96px;transform:translate(-50%,14px);
+  background:var(--panel);border:1px solid var(--line-2);border-radius:10px;
+  padding:9px 15px;font-size:12.5px;opacity:0;pointer-events:none;transition:.35s;
+  box-shadow:0 10px 32px rgba(0,0,0,.55);z-index:5;max-width:78%;text-align:center;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------------- time bar ---------------- */
+#timebar{
+  position:absolute;left:16px;right:16px;bottom:16px;z-index:4;
+  display:flex;align-items:center;gap:10px;
+  background:var(--panel);backdrop-filter:blur(18px);
+  border:1px solid var(--line);border-radius:var(--radius);padding:9px 12px;
+  box-shadow:0 10px 34px rgba(0,0,0,.45);
+}
+.icon-btn{
+  font:inherit;font-size:13px;color:var(--fg-dim);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:8px;height:30px;min-width:32px;padding:0 9px;
+  cursor:pointer;transition:.15s;flex:none;
+}
+.icon-btn:hover{color:var(--fg);border-color:var(--line-2);background:rgba(255,255,255,.08)}
+.icon-btn.wide{padding:0 12px}
+.icon-btn:disabled{opacity:.45;cursor:default}
+
+/* The play/pause control is the one button people hunt for, so give it a real
+   label, a fixed width so it does not jump when the label changes, and a colour
+   that says at a glance which state the simulation is in. */
+.play-btn{
+  min-width:92px;font-weight:600;letter-spacing:.02em;
+  color:#071018;background:var(--accent);border-color:var(--accent);
+}
+.play-btn:hover{color:#071018;background:#9adeff;border-color:#9adeff}
+.play-btn.paused{color:#071018;background:var(--good);border-color:var(--good)}
+.play-btn.paused:hover{background:#6fdca2;border-color:#6fdca2}
+.icon-btn.busy{color:var(--accent-2);border-color:var(--accent-2)}
+.clock{display:flex;flex-direction:column;line-height:1.15;padding:0 6px;flex:none;min-width:104px}
+.clock .t-label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint)}
+#simtime{font:14px/1.2 var(--mono);color:var(--fg)}
+.rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
+.rate input{flex:1;min-width:60px}
+.rate output{font:11.5px/1 var(--mono);color:var(--accent);min-width:78px;text-align:right;flex:none;transition:color .2s}
+.rate output.throttled{color:var(--accent-2)}
+.rate output.throttled::after{content:' ⏳'}
+
+/* ---------------- stats & charts ---------------- */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.stat .k{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .v{font:14px/1.25 var(--mono);color:var(--fg);margin-top:2px}
+.stat .v small{font-size:10px;color:var(--fg-dim)}
+.stat.wide{grid-column:span 2}
+.stat.warn .v{color:var(--accent-2)}
+.stat.bad .v{color:var(--bad)}
+
+.chart{width:100%;height:118px;display:block;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:8px}
+#chart-phase{height:132px}
+
+/* ---------------- discovery log ---------------- */
+.state-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.state-card{
+  display:flex;align-items:center;gap:7px;text-align:left;
+  background:var(--panel-2);border:1px solid var(--line);border-radius:7px;
+  padding:6px 8px;font:inherit;font-size:11px;color:var(--fg-faint);cursor:pointer;
+  transition:.18s;overflow:hidden;
+}
+.state-card .dot{width:7px;height:7px;border-radius:50%;flex:none;opacity:.28;transition:.25s}
+.state-card .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.state-card.found{color:var(--fg)}
+.state-card.found .dot{opacity:1;box-shadow:0 0 9px currentColor}
+.state-card:hover{border-color:var(--line-2);background:rgba(255,255,255,.06)}
+.state-card.just-found{animation:pop 2.2s ease}
+@keyframes pop{
+  0%{transform:scale(1)}12%{transform:scale(1.07);box-shadow:0 0 0 3px rgba(127,212,255,.28)}
+  40%{transform:scale(1)}100%{box-shadow:0 0 0 0 rgba(127,212,255,0)}
+}
+.state-detail{margin-top:9px;font-size:11.5px;line-height:1.55;color:var(--fg-dim);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+
+.about p{font-size:11.5px;line-height:1.6;color:var(--fg-dim);margin:0 0 9px}
+.about a{color:var(--accent)}
+
+/* Panel tabs, phone only. One at each edge, at thumb height, each opening the
+   panel it points at -- rather than one button cycling through three states,
+   which gave no clue what the next tap would do. */
+.panel-tab{
+  display:none;position:fixed;top:50%;transform:translateY(-50%);z-index:30;
+  align-items:center;gap:6px;padding:14px 8px;
+  background:rgba(18,24,40,.92);border:1px solid var(--line);color:var(--fg-dim);
+  backdrop-filter:blur(8px);cursor:pointer;
+  writing-mode:vertical-rl;font:11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+}
+#panel-left{left:0;border-left:0;border-radius:0 10px 10px 0}
+#panel-right{right:0;border-right:0;border-radius:10px 0 0 10px;rotate:180deg}
+.panel-tab[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+.panel-tab:active{background:rgba(30,40,64,.95)}
+#panel-scrim{display:none}
+
+/* ---------------- responsive ---------------- */
+@media (max-width:1180px){
+  #app{grid-template-columns:290px minmax(0,1fr) 310px}
+}
+@media (max-width:940px){
+  #app{grid-template-columns:1fr}
+  .panel{
+    position:fixed;top:0;bottom:0;width:min(340px,86vw);z-index:20;
+    transform:translateX(-102%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+    box-shadow:0 0 60px rgba(0,0,0,.6);
+  }
+  #controls{left:0}
+  #readout{right:0;left:auto;transform:translateX(102%);border-left:1px solid var(--line)}
+  body.show-left #controls,body.show-right #readout{transform:translateX(0)}
+  .panel-tab{display:flex}
+  /* A panel is open: the tab would sit on top of it, and tapping the darkened
+     rest of the screen should put it away again. */
+  body.show-left #panel-left,body.show-right #panel-right{opacity:0;pointer-events:none}
+  #panel-scrim{position:fixed;inset:0;z-index:19;background:rgba(4,7,14,.5)}
+  body.show-left #panel-scrim,body.show-right #panel-scrim{display:block}
+  /* The view controls run along the bottom instead of stacking up the side.
+     Stacked, the column grew past the top of the wrapped timebar and the
+     renderer button was clipped off the screen entirely. --bar is the timebar's
+     measured height, because it wraps to two rows on a narrow screen. */
+  #view-controls{
+    flex-direction:row;flex-wrap:wrap;justify-content:flex-end;
+    left:10px;right:10px;bottom:calc(var(--bar,104px) + 10px);gap:8px;
+  }
+  #view-controls .icon-btn{width:38px;height:34px;font-size:16px}
+  #view-controls .renderer-btn{height:34px}
+  #scenario-banner{width:min(280px,72vw);top:56px}
+  #timebar{flex-wrap:wrap;gap:8px}
+  .rate{order:5;width:100%;flex-basis:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
+/* Atmospheric composition: a proportion bar with the numbers under it. The bar
+   alone cannot show a trace gas, and 0.04% CO2 is the whole modern greenhouse,
+   so the numbers carry what the bar physically cannot. */
+.stat.wide{grid-column:1/-1}
+.comp-bar{display:flex;height:9px;border-radius:3px;overflow:hidden;
+  background:rgba(255,255,255,.07);margin:3px 0 5px}
+.comp-bar i{display:block;height:100%}
+.comp-list{font:10px/1.55 var(--mono);color:var(--fg-dim);
+  display:flex;flex-wrap:wrap;gap:2px 10px}
+.comp-list b{font-weight:600}
+.comp-none{font:11px/1 var(--mono);color:var(--fg-dim)}
+
+/* ---- the fossil reserve, under the Industrial CO2 slider ---------------- */
+.supply {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 7px; font-size: 11px;
+}
+.supply-bar {
+  flex: 1 1 auto; height: 5px; min-width: 40px;
+  border-radius: 3px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.10);
+}
+.supply-bar > i {
+  display: block; height: 100%; width: 100%;
+  background: linear-gradient(90deg, #6d8bb0, #b08a5a);
+  transition: width 0.25s linear;
+}
+.supply-bar > i.spent { background: #7c4a3a; }
+.supply-left {
+  flex: 0 0 auto; min-width: 3.6em; text-align: right;
+  color: var(--dim, #9aa4b2); font-variant-numeric: tabular-nums;
+}
+.supply-left.spent { color: #d08a6a; }
+.supply-btn {
+  flex: 0 0 auto; cursor: pointer;
+  padding: 2px 7px; font: inherit; font-size: 11px;
+  color: var(--dim, #9aa4b2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 5px;
+}
+.supply-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.13); }
+.supply-inf {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+  cursor: pointer; color: var(--dim, #9aa4b2); white-space: nowrap;
+}
+.supply-inf input { accent-color: #b08a5a; margin: 0; }
+
+/* ---- pause-on-reset, beside the Reset button ---------------------------- */
+.reset-paused {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: -2px; font-size: 11px; white-space: nowrap;
+  color: var(--dim, #9aa4b2); cursor: pointer; user-select: none;
+}
+.reset-paused input { accent-color: #6d8bb0; margin: 0; }
+.reset-paused:hover { color: #fff; }
+@media (max-width: 900px) { .reset-paused { display: none; } }
+
+/* ---- save slots --------------------------------------------------------- */
+.slot-row { display: flex; flex-direction: column; gap: 4px; }
+.slot {
+  display: grid; grid-template-columns: 1.4em 1fr auto auto; align-items: baseline; gap: 8px;
+  width: 100%; padding: 5px 9px; cursor: pointer; text-align: left;
+  font: inherit; font-size: 12px; color: var(--fg, #e8edf4);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 7px;
+}
+.slot:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(255, 255, 255, 0.22); }
+.slot.empty { color: var(--dim, #9aa4b2); }
+.slot.armed { border-color: #b08a5a; box-shadow: 0 0 0 1px rgba(176, 138, 90, 0.35) inset; }
+.slot-n { color: var(--dim, #9aa4b2); font-variant-numeric: tabular-nums; }
+.slot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-sub { color: var(--dim, #9aa4b2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.slot-hint { margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--dim, #9aa4b2); }
+.slot-hint .supply-btn { margin: 0 2px; }
+/* Slot 1 says what it is, quietly. Its own grid column, and the column is there
+   on every slot even when the badge is not, so the elapsed time stays lined up
+   down the row. Adding a fourth child to a three-column grid was what pushed
+   the time onto a second line. */
+.slot-auto {
+  font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--dim, #9aa4b2); border: 1px solid var(--line, rgba(255,255,255,.14));
+  border-radius: 999px; padding: 1px 5px; opacity: .8;
+}
+.slot-auto:empty { border: 0; padding: 0; }
+
+/* The temperature chart is a control as well as a picture: drag along it to put
+   the world back into its own past. */
+.chart.scrub { cursor: ew-resize; touch-action: none; }
+.supply-btn.busy { color: #f0d9b8; background: rgba(176, 138, 90, 0.25); border-color: #b08a5a; }
+
+/* Naming a world. The name is the player's, so it travels with the world into
+   the slots and the export file rather than being a label on the preset. */
+.world-name{display:flex;align-items:center;gap:.5rem;margin-top:.5rem;
+  font-size:.78rem;color:var(--fg-dim)}
+.world-name input{flex:1 1 auto;min-width:0;font:inherit;color:var(--fg);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+  padding:.25rem .45rem}
+.world-name input::placeholder{color:var(--fg-faint)}
+.world-name input:focus{outline:none;border-color:var(--accent)}
