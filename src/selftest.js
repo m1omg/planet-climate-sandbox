@@ -491,11 +491,19 @@ export function run() {
       `warmest at ${(ch4s[peak] * 1e5).toFixed(0)} Pa CH\u2084 (${(Ts[peak] - 273.15).toFixed(1)} \u00b0C); ` +
       `Eager-Nash 2023 peak at 30-300 Pa`);
     // The first turn is the gas on its own: still no haze at all where it falls.
+    // findIndex returns -1 when the peak is the last point in the sweep, i.e.
+    // when there is no turn inside it at all. That is a result -- the turnover
+    // is off the end of the range -- and it has to read as a failure rather
+    // than as ds[-1], which is undefined and took the whole suite down with it
+    // the first time the peak moved to the top of the sweep.
     const after = ds.findIndex((d, i) => i > peak && Ts[i] < Ts[peak] - 2);
     check('\u2026and the first turn is methane shading the ground itself, with no haze yet',
       after > 0 && ds[after].hazeSW > 0.999 && ds[after].ch4SW < 0.99,
-      `${(ch4s[after] * 1e5).toFixed(0)} Pa is ${(Ts[peak] - Ts[after]).toFixed(1)} K below the peak with ` +
-      `${((1 - ds[after].ch4SW) * 100).toFixed(1)}% of the sunlight taken by methane and none by haze`);
+      after > 0
+        ? `${(ch4s[after] * 1e5).toFixed(0)} Pa is ${(Ts[peak] - Ts[after]).toFixed(1)} K below the peak with ` +
+          `${((1 - ds[after].ch4SW) * 100).toFixed(1)}% of the sunlight taken by methane and none by haze`
+        : `no turn inside the sweep: warmest point is ${(ch4s[peak] * 1e5).toFixed(0)} Pa, ` +
+          `the top of the range, so the turnover is beyond it`);
     // And the second is the smog, which is a much bigger hammer.
     const last = ds.length - 1;
     check('\u2026and the second is the haze, which takes the planet down much harder',
@@ -1625,6 +1633,36 @@ export function run() {
       Math.abs(forever.fossil - start) < 1e-6 && forever.diag.pCO2 > 4 * 427e-6,
       `${(forever.diag.pCO2 * 1e6).toFixed(0)} ppm after 3 kyr with the reserve still ` +
       `exactly where it started, at ${(forever.fossil / FOSSIL_TOTAL * 100).toFixed(0)}%`);
+  }
+
+  // ---- 3m3. the Archean does not end as a steam atmosphere ------------------
+  // It used to. The preset booted 27.5 W/m^2 above its own warm branch, and the
+  // branch it was heading for sat at +1.2 C with the ice-albedo tipping point
+  // only six kelvin below it -- so the cooling transient overshot straight past
+  // it and the world was a hard snowball inside fifteen hundred years. Frozen,
+  // there is no weathering, so volcanic CO2 accumulated with nothing to remove
+  // it: 0.1 bar to 10 bar over two hundred megayears. And this model's
+  // Simpson-Nakajima limit falls with total pressure (259 W/m^2 at 0.1 bar, 158
+  // at 10, 113 at 20) while this world absorbs 185, so somewhere past five bar
+  // the runaway stopped being escapable. It arrived at 1099 C with its ocean in
+  // the air, having passed through waterbelt, snowball, hothouse, hot ocean and
+  // moist greenhouse on the way.
+  //
+  // Two of those three links are known model gaps and are not fixed here -- the
+  // cold Archean is the semi-grey scheme's, and the collapsing runaway limit is
+  // the pressure-broadening one the README reports. What is fixed is the first
+  // link: the preset now boots on its own branch with enough margin that the
+  // transient cannot reach the tipping point, and the carbon cycle then keeps
+  // it there because a world with liquid water on it weathers.
+  {
+    const s = settle(PRESETS.earlyEarth.params, 1e9);
+    const trip = s.world.history.map((h) => h.T);
+    const lo = Math.min(...trip) - 273.15, hi = Math.max(...trip) - 273.15;
+    check('The Archean stays a planet, not a steam atmosphere',
+      hi < 60 && lo > -25,
+      `${lo.toFixed(0)}\u2026${hi.toFixed(0)} °C across ${trip.length} samples of the gigayear, ` +
+      `ending at ${(s.world.diag.Tmean - 273.15).toFixed(1)} °C on ` +
+      `${s.world.diag.pCO2.toFixed(2)} bar of CO₂`);
   }
 
   // ---- 3n. the Great Oxidation, played forwards -----------------------------

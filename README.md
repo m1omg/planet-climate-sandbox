@@ -518,6 +518,40 @@ Earth's air is now **N₂ 78 / O₂ 21 / H₂O 1.4 / CO₂ 0.04**, against a rea
 0.042. Splitting nitrogen from oxygen also takes the mean molar mass from 28.00 to 28.85 against a
 real dry-air 28.96, which slightly sharpens the realistic atmosphere's scale height.
 
+### The Archean used to end as a steam atmosphere
+
+It ran away. Left alone for a gigayear the preset finished at **1099 °C with its ocean in the air**,
+having passed through waterbelt, snowball, hothouse, hot ocean and moist greenhouse on the way — and
+it is worth writing down because no single part of it was a bug in the physics. Three things composed:
+
+1. **The preset booted 27.5 W/m² above its own warm branch.** At 0.10 bar of CO₂ and 0.77 S⊕ that
+   branch sits at **+1.2 °C**, with the ice-albedo tipping point only six kelvin below it. The cooling
+   transient from 290 K overshot straight past it and the world was a hard snowball inside **1500
+   years**.
+2. **A frozen planet does not weather.** With the only CO₂ sink switched off, volcanism piled it up
+   with nothing to take it out: 0.1 bar to 10 bar over two hundred megayears.
+3. **This model's runaway limit falls with total pressure.** Simpson–Nakajima goes 259 W/m² at 0.1
+   bar → 158 at 10 → **113 at 20**, because pressure broadening goes as `pTot^0.3`. This world absorbs
+   185 W/m². Somewhere past five bar the runaway simply stopped being escapable.
+
+Only the first is fixed here. The preset now boots at **0.336 bar with a +10 °C branch and twenty
+kelvin of margin** instead of six, and 0.336 bar is where weathering and volcanism balance on this
+world, so nothing is straining to move: three gigayears at every step size tested, −1.5 to 10.3 °C,
+temperate throughout, pinned by its own trajectory self-test rather than by an endpoint.
+
+The other two are known gaps and stay reported. The CO₂ is high against the literature — paleosol work
+generally wants 0.01–0.1 bar for the late Archean — and that is **this model running about fifteen
+kelvin cold under a faint young Sun**, the same semi-grey deficiency the snowball rows report: one
+optical depth serving 230 K and 288 K at once. It settles at −0.9 °C mean with about a quarter of
+itself under ice and ~370 ppm of methane, which is squarely in the published range. A world that cool
+is the model's honest answer, not the real Archean.
+
+Worth being explicit about one thing, because it is the moral of the whole episode: **hydrogen was not
+the cause.** It was the obvious suspect — volcanic H₂ with the oxidation sink switched off by the
+anoxic air, and a CIA greenhouse bigger than anything else in the model — but it only ever reaches
+0.021 bar here, worth 9 W/m² against the 27.5 that started the collapse. The ocean's evaporation was
+not anomalous either; it evaporated because the planet was already past the runaway limit.
+
 ### The Huronian, played forwards
 
 Raise the biosphere on an Archean world and the model runs the whole chain by itself:

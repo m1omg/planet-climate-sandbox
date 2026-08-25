@@ -155,7 +155,35 @@ export const PRESETS = {
   // is the semi-grey scheme's gap, not methane's. It is the same one optical
   // depth having to serve 230 K and 288 K at once, reported against the
   // snowball rows in calibrate.mjs.
-  earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2, insolation: 0.77, landFraction: 0.1, co2Bar: 0.10, ch4Bar: 1e-3, startT: 290 } },
+  //
+  // The composition here is the state the coupled model actually rests in, and
+  // it is written down for the same reason the Hot Ocean World's is. This used
+  // to boot at 0.10 bar and 290 K, which is 27.5 W/m^2 above its own warm
+  // branch -- and that branch sat at +1.2 C with the ice-albedo tipping point
+  // only six kelvin under it, so the cooling transient overshot straight past it
+  // and the world was a hard snowball inside fifteen hundred years. A frozen
+  // planet does not weather, so volcanic CO2 then piled up with nothing to take
+  // it out, 0.1 bar to 10 over two hundred megayears, and this model's runaway
+  // limit falls with total pressure (259 W/m^2 at 0.1 bar, 158 at 10, 113 at 20)
+  // where the world absorbs 185. Past about five bar the runaway was no longer
+  // escapable and it finished at 1099 C with its ocean in the air.
+  //
+  // Booting at 0.336 bar puts the warm branch at +10 C with twenty kelvin of
+  // margin instead of six, and the carbon cycle holds it: 0.336 bar is where
+  // weathering and volcanism balance on this world, so nothing is straining to
+  // move. Three gigayears at every step size tested, -1.5 to 10.3 C, temperate
+  // throughout.
+  //
+  // The CO2 is high against the literature -- paleosol work generally wants
+  // 0.01-0.1 bar for the late Archean -- and that is this model being about
+  // fifteen kelvin cold for a faint young Sun rather than a claim about the
+  // real Archean. It is the same semi-grey gap the snowball rows report: one
+  // optical depth serving 230 K and 288 K at once. The methane it settles on,
+  // ~300 ppm, is squarely in the published range, and the world it makes is
+  // anoxic, wet and cool with about a quarter of itself under ice.
+  earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2,
+    insolation: 0.77, landFraction: 0.1, co2Bar: 0.3359, ch4Bar: 3.686e-4, h2Bar: 4.467e-4,
+    startT: 283.23 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },
