@@ -20,11 +20,27 @@ export const SCENARIOS = [
     id: 'hold',
     name: 'Hold Back the Runaway',
     icon: '🔥',
-    brief: 'The star has brightened by a third and the oceans sit a whisker below the Simpson–Nakajima limit — pass it and no equilibrium exists at any temperature. Keep this world habitable for 100 million years while the carbon cycle does its worst.',
+    brief: 'The star has brightened by two fifths and the oceans sit a whisker below the Simpson–Nakajima limit — pass it and no equilibrium exists at any temperature. Keep this world habitable for 100 million years while the carbon cycle does its worst.',
     hint: 'You cannot dim the star, and the volcanoes are working against you. Strip the CO₂ and keep it stripped, brighten the ground, and remember that a drier planet radiates better than a wet one.',
-    params: { ...EARTH, insolation: 1.30, co2Bar: 1.2e-3, outgassing: 2.5, startT: 300 },
+    // 1.40, not the 1.30 this shipped at, and the difference is that 1.30 has no
+    // runaway in it. This model's Earth-like runaway sits at 1.42 S(+) -- too far
+    // out, and reported as its own gap in calibrate.mjs -- so at 1.30 the world
+    // simply sat at 41 C for the full hundred megayears. Worse, it sat there
+    // classified as a moist greenhouse, which `habitable` does not include, so
+    // `check` could never pass and `fail` could never fire: the scenario was
+    // unwinnable and unloseable at once, which is precisely how it looked.
+    //
+    // At 1.40 the threat is real -- do nothing and it is over in 760 years -- and
+    // every route the hint describes works: stripping the CO2 wins, brightening
+    // the ground wins, drying the planet wins.
+    params: { ...EARTH, insolation: 1.40, co2Bar: 1.2e-3, outgassing: 2.5, startT: 300 },
     limit: 1e8,
-    check: (w) => w.time > 1e8 && classify(w).habitable,
+    // A moist greenhouse that still has its ocean counts. It is what the brief
+    // asks for -- the world held -- and the state's own entry says habitable in
+    // the short run; a hundred megayears is the short run. Losing the ocean is
+    // still a loss, and `fail` below is what says so.
+    check: (w) => w.time > 1e8 && w.water.ocean > 0.05
+      && (classify(w).habitable || classify(w).id === 'moist'),
     fail: (w) => w.diag.Tmean > 400 || w.water.lost > 0.25,
   },
   {
