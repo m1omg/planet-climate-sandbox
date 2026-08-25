@@ -1499,6 +1499,56 @@ reductant flux and took Earth's oxygen, its surface pressure and its carbon cycl
   parameter space — Orion's Arm's 10–218 bar — is mostly out of reach, and it is a good place for a
   fourth spectral-band attempt to look.
 
+### Earth's inner edge is too far out, and the carbon cycle is why
+
+Ask this model where an Earth-like planet stops being habitable and you get two
+different answers depending on one switch:
+
+| | moist greenhouse | runaway |
+|---|---|---|
+| CO₂ held at 400 ppm | **1.24 S⊕** | 1.42 S⊕ |
+| carbon cycle running | **1.38 S⊕** | 1.42 S⊕ |
+| *Kopparapu 2013 (1-D)* | *1.015* | *1.066* |
+| *Leconte 2013 (3-D GCM)* | *— none before the runaway* | *~1.10* |
+| *Wolf & Toon 2015 (CAM4)* | *habitable to ~1.21, 350–360 K* | *above that* |
+
+Held at 400 ppm the model is defensible: 1.24 sits just past Wolf & Toon's 1.21,
+which is the most generous published number. **Let the thermostat run and it goes
+to 1.38**, which is past everything. So an Earth at 1.28 S⊕ reads here as a
+comfortable 34 °C hothouse with an eleven-watt margin, where the literature has
+it losing its ocean.
+
+**The mechanism is a feedback that should not exist.** The Simpson–Nakajima limit
+is a property of a steam atmosphere and is very nearly independent of CO₂: at the
+peak the surface is near 330 K, the air holds 0.18 bar of water, and a few hundred
+ppm of CO₂ is a rounding error beside it (Goldblatt 2013). In this scheme it is
+not. CO₂'s optical depth is *added* to water's in each band rather than
+overlapping it, and at the peak the window band still has a water opacity of only
+0.8 — the self-continuum that should be closing it goes as `pH₂O²` with a
+coefficient fitted at Earth's 0.011 bar, where it is worth 4×10⁻⁵. So stripping
+CO₂ buys a transparency a steam atmosphere does not have, and the limit moves
+**43 W/m²** across the span a brightening Earth walks through as weathering
+empties its air. The thermostat stops being a thermostat and starts moving the
+edge of the map.
+
+Both rows are reported by `calibrate.mjs` every run.
+
+**Two fixes were tried and neither shipped.** Raising the continuum coefficient to
+20 puts the Simpson–Nakajima limit on Goldblatt's 282 W/m² exactly and brings the
+runaway to 1.32 — and destroys the stable moist-greenhouse branch, which Kasting
+(1988), Popp (2016) and Wolf & Toon (2015) all support and which this model was
+deliberately built to have. Flooring the CO₂ drawdown instead moves the moist
+onset to 1.26–1.32 and leaves the runaway at 1.42, because the runaway is set by
+the limit and not by the CO₂. The honest fix is band overlap and a refit — the
+same fourth-band work the snowball rows describe as attempted and reverted twice.
+
+Rotation is *not* part of this gap and is handled: `slowness` is zero for a
+24-hour day, so Earth gets none of the substellar cloud deck that lets a slow
+rotator survive far more sunlight. Way et al. (2016) put early Venus at moderate
+temperatures under **46–70% more flux than Earth** provided it turned slower than
+about 16 days, and Yang et al. (2014) find the same stabilising deck; the model
+reproduces that through `slowness` rather than by accident.
+
 ### What moves the habitable zone, and what does not
 
 The edges are not properties of the star alone. Measured on this model, holding CO₂ fixed and asking

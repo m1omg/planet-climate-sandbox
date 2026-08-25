@@ -257,14 +257,57 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // stratospheric water mixing ratio passing 1e-3, at which point hydrogen
   // escapes fast enough to matter. Find the surface temperature where the
   // model crosses it.
-  let onset = 0;
+  let onset = 0, onsetS = 0;
   for (let S = 1.00; S <= 1.70; S += 0.01) {
-    const w = eq({ ...EARTH, insolation: S }, { years: 3e5 });
+    // pin:false -- the carbon cycle running, which is what a player has. The
+    // pinned sweep says 1.22 and the free one says something else entirely, and
+    // the difference between those two numbers is the whole finding below.
+    const w = eq({ ...EARTH, insolation: S }, { years: 3e5, pin: false });
     if (w.diag.Tmean > 400) break;
-    if ((w.escape?.fStrat ?? 0) > 1e-3) { onset = w.diag.Tmean; break; }
+    if ((w.escape?.fStrat ?? 0) > 1e-3) { onset = w.diag.Tmean; onsetS = S; break; }
   }
   anchor('moist greenhouse onset', onset, 320, 355, 'K',
     'Kasting 1988: stratospheric H2O passes 1e-3 near 340 K');
+
+  // The same crossing said in the units a player is actually looking at. The
+  // temperature anchor above can sit inside its range while the *insolation* it
+  // happens at is half an au out, and the insolation is the slider.
+  deviation('Earth\u2019s inner edge', onsetS, 1.05, 1.25, 'S\u2295',
+    'Kopparapu 2013 (1-D): moist greenhouse 1.015, runaway 1.066. Leconte 2013 (3-D GCM): ' +
+    'runaway near 1.10, and no moist greenhouse before it. Wolf & Toon 2015 (CAM4): habitable ' +
+    'to about 1.21 at 350-360 K. Every published threshold is below 1.25 and this model puts the ' +
+    'crossing well outside them, so an Earth at 1.28 S(+) reads as a comfortable hothouse here ' +
+    'where the literature has it losing its ocean. The cause is the row below. Holding CO2 at ' +
+    '400 ppm instead of letting the thermostat run brings this to 1.24, which is inside the ' +
+    'range -- the radiation is not far off, the *interaction* is.');
+
+  // Why. The Simpson-Nakajima limit is a property of a steam atmosphere and is
+  // very nearly independent of CO2: at the peak the surface is near 330 K, the
+  // air holds 0.18 bar of water, and a few hundred ppm of CO2 is a rounding
+  // error beside it (Goldblatt 2013; Kopparapu 2013).
+  //
+  // Here it is not. CO2's optical depth is *added* to water's in each band
+  // rather than overlapping it, and at the peak this scheme's window band still
+  // has a water opacity of only 0.8 -- the self-continuum, which should be
+  // closing it, goes as pH2O^2 with a coefficient fitted at Earth's 0.011 bar
+  // and is worth 4e-5 at 0.18. So stripping CO2 buys real transparency that a
+  // steam atmosphere does not have.
+  //
+  // The consequence is a feedback that should not exist. Brighten the star, the
+  // planet warms, weathering draws CO2 down -- and in this model that also
+  // *raises the cliff*, by more than forty watts. The thermostat stops being a
+  // thermostat and starts moving the edge of the map.
+  //
+  // Not fixed, and not fixable by moving a coefficient: raising the continuum
+  // lowers the whole curve without narrowing the spread, and enough of it to
+  // matter takes Earth's OLR out of its own anchor. It needs band overlap and a
+  // refit -- the fourth-band work the snowball rows above already describe as
+  // attempted and reverted twice.
+  const snSpread = runawayLimit(4e-7, 0.78).flux - runawayLimit(280e-6, 1.0).flux;
+  deviation('runaway limit moved by CO2 alone', snSpread, 0, 10, 'W/m²',
+    'should be near zero: at the peak the atmosphere is steam and water carries the opacity. ' +
+    '0.4 ppm over 0.78 bar against 280 ppm over 1 bar — the whole span a brightening Earth ' +
+    'walks through as its carbon cycle empties.');
 
   // And once it is there, the ocean has to actually go somewhere.
   //
