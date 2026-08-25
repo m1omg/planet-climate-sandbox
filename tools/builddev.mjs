@@ -21,6 +21,7 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const out = process.argv[2];
@@ -28,6 +29,17 @@ if (!out) { console.error('usage: node tools/builddev.mjs <path-to-main-checkout
 const dev = join(out, 'dev');
 
 const NOTE = 'four-band radiation, hydrogen and Hycean work in progress — 22 of 214 self-tests failing';
+
+// Which branch this copy came from. Asked of git rather than written down here,
+// because the written-down one went stale the moment the work moved to another
+// branch and the /dev/ README then named a branch that was no longer being
+// built. A detached HEAD or a tarball gets the honest answer instead of a lie.
+let BRANCH;
+try {
+  BRANCH = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'],
+    { cwd: root, encoding: 'utf8' }).trim();
+  if (!BRANCH || BRANCH === 'HEAD') BRANCH = null;
+} catch { BRANCH = null; }
 
 rmSync(dev, { recursive: true, force: true });
 mkdirSync(dev, { recursive: true });
@@ -73,8 +85,7 @@ writeFileSync(join(dev, 'index.html'), html);
 
 writeFileSync(join(dev, 'README.md'), `# /dev — the development build
 
-Built by \`tools/builddev.mjs\` from the \`claude/project-status-review-mhk04n\`
-branch and served at <https://m1omg.github.io/planet-climate-sandbox/dev/>.
+Built by \`tools/builddev.mjs\` from ${BRANCH ? `the \`${BRANCH}\`\nbranch` : 'a detached checkout'} and served at <https://m1omg.github.io/planet-climate-sandbox/dev/>.
 
 **Do not edit anything in here.** Edit the branch and rebuild:
 
