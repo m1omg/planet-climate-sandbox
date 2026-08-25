@@ -406,7 +406,7 @@ function syncLiveControls() {
 
 // Changing a *composition* slider rewrites the reservoir; changing an external
 // forcing just changes the forcing and lets the planet respond.
-const RESERVOIR_KEYS = new Set(['n2Bar', 'o2Bar', 'co2Bar', 'ch4Bar', 'water', 'mass']);
+const RESERVOIR_KEYS = new Set(['n2Bar', 'o2Bar', 'co2Bar', 'ch4Bar', 'h2Bar', 'water', 'mass']);
 function applyParams(key) {
   const w = sim.world;
   sim.setParams({ [key]: params[key] });
@@ -416,10 +416,18 @@ function applyParams(key) {
     if (key === 'o2Bar') w.o2 = params.o2Bar * 1e5 / d.g;
     if (key === 'co2Bar') { w.co2 = params.co2Bar * 1e5 / d.g; w.co2Frozen = 0; }
     if (key === 'ch4Bar') w.ch4 = params.ch4Bar * 1e5 / d.g;
+    // Hydrogen is a reservoir like the rest of them, and was missing here. The
+    // slider is `live`, so the readout reads it back out of the world ten times
+    // a second: with nothing writing it in, dragging it on a *paused* Earth set
+    // the parameter, the next readout put it back to the world's actual zero,
+    // and it looked for all the world like hydrogen escaping from a planet
+    // whose clock was not running.
+    if (key === 'h2Bar') w.h2 = params.h2Bar * 1e5 / d.g;
     if (key === 'mass') {
       w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g;
       w.o2 = params.o2Bar * 1e5 / d.g;
       w.ch4 = params.ch4Bar * 1e5 / d.g;
+      w.h2 = params.h2Bar * 1e5 / d.g;
     }
     if (key === 'water') {
       // The control shows the water still present, so set that directly and
@@ -455,6 +463,20 @@ function setPresetActive(id) {
   activePreset = id;
   document.querySelectorAll('[data-preset]').forEach((b) =>
     b.classList.toggle('active', b.dataset.preset === id));
+  // An untouched preset saves under the preset's own name -- that is what
+  // currentName() falls back to -- so the empty box has to offer that name and
+  // not "Custom world". It said "Custom world" on every preset in the list,
+  // which is the one thing the world was guaranteed not to be filed as.
+  const nameEl = $('#world-name');
+  if (nameEl) nameEl.placeholder = PRESETS[id]?.name || 'Custom world';
+  syncShelf();
+}
+
+// The Worlds button carries the current world's name, so folding the list away
+// does not cost you the one thing it was telling you.
+function syncShelf() {
+  const el = $('#shelf-world');
+  if (el) el.textContent = currentName();
 }
 // Which real world, if any, this preset is. Geography is not a function of
 // climate: warming Earth does not move its continents, so the map stays put
@@ -799,6 +821,7 @@ function setWorldName(name, { toInput = true } = {}) {
   worldName = (name ?? '').slice(0, 28);
   const el = $('#world-name');
   if (el && toInput && el.value !== worldName) el.value = worldName;
+  syncShelf();
 }
 
 function snapshot() {
@@ -1330,6 +1353,36 @@ function bindControls() {
     $('#panel-left').setAttribute('aria-pressed', String(b.classList.contains('show-left')));
     $('#panel-right').setAttribute('aria-pressed', String(b.classList.contains('show-right')));
   };
+  // --- the Worlds / Saves menus --------------------------------------------
+  // They open over the panel instead of living in it. Only one at a time, and
+  // anything that completes -- picking a world, picking a slot -- puts the menu
+  // away, because a menu that stays open after you have chosen is just covering
+  // the thing you chose. Arming a save is *not* completing: `Save…` sits outside
+  // #slots precisely so that arming leaves the menu up for you to pick into.
+  const MENUS = [['#btn-worlds', '#menu-worlds'], ['#btn-saves', '#menu-saves']];
+  const openMenu = (want) => {
+    for (const [btn, menu] of MENUS) {
+      const on = menu === want;
+      $(menu).hidden = !on;
+      $(btn).setAttribute('aria-expanded', String(on));
+    }
+    $('#menu-scrim').hidden = !want;
+    if (want) {
+      // Anchor the menu under the shelf rather than at a guessed offset: the
+      // header is a different height once the title wraps.
+      const r = $('.shelf').getBoundingClientRect();
+      const p = $('#controls').getBoundingClientRect();
+      $('#controls').style.setProperty('--shelf-bottom', `${Math.round(r.bottom - p.top + 8)}px`);
+    }
+  };
+  for (const [btn, menu] of MENUS) {
+    $(btn).addEventListener('click', () => openMenu($(menu).hidden ? menu : null));
+  }
+  $('#menu-scrim').addEventListener('click', () => openMenu(null));
+  $('#presets').addEventListener('click', () => openMenu(null));
+  $('#slots').addEventListener('click', () => openMenu(null));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') openMenu(null); });
+
   $('#panel-left').addEventListener('click', () => showPanel('left'));
   $('#panel-right').addEventListener('click', () => showPanel('right'));
   $('#panel-scrim').addEventListener('click', () => showPanel(null));

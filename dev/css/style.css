@@ -51,6 +51,40 @@ body{
 }
 .panel-head h1 span{display:block;font-weight:400;color:var(--fg-faint);font-size:12px;letter-spacing:.16em;text-transform:uppercase}
 
+/* ---------------- the Worlds / Saves shelf ---------------- */
+/* Two menus over the panel rather than two sections in it. Measured: the pair
+   cost 769px of the scroller and put the first climate slider at 966px, past
+   the fold on a 1512px laptop. */
+.shelf{display:flex;gap:6px;margin-top:12px}
+.shelf-btn{
+  font:inherit;font-size:12px;color:var(--fg-dim);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer;
+  display:flex;align-items:center;gap:6px;min-width:0;transition:.15s;
+}
+.shelf-btn:first-child{flex:1 1 auto}
+.shelf-btn:hover{color:var(--fg);border-color:var(--line-2);background:rgba(255,255,255,.07)}
+.shelf-btn[aria-expanded=true]{color:var(--accent);border-color:var(--accent);background:rgba(127,212,255,.10)}
+.shelf-btn b{font-weight:600;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.shelf-btn[aria-expanded=true] b{color:var(--accent)}
+
+/* The menu is a sibling of .scroller, not a child: a child would be clipped by
+   the scroller's own overflow and would scroll away underneath the button. */
+.menu{
+  position:absolute;left:10px;right:10px;top:var(--shelf-bottom,104px);z-index:12;
+  max-height:calc(100% - var(--shelf-bottom,104px) - 16px);overflow-y:auto;
+  background:var(--panel-2);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid var(--line-2);border-radius:var(--radius);
+  box-shadow:0 18px 44px rgba(0,0,0,.55);
+  padding:2px 14px 12px;
+  scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;
+}
+.menu[hidden]{display:none}
+.menu .group{border-top:none}
+/* Clicking anywhere else puts the menu away, which needs something to catch the
+   click. It sits under the menu and over everything else in the panel. */
+#menu-scrim{position:fixed;inset:0;z-index:11}
+#menu-scrim[hidden]{display:none}
+
 .group{padding:14px 0;border-top:1px solid var(--line)}
 .group:first-child{border-top:none}
 .group>h2{

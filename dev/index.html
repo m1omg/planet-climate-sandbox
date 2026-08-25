@@ -42,30 +42,24 @@
   <aside id="controls" class="panel">
     <header class="panel-head">
       <h1>Planet Climate<span>Sandbox</span></h1>
+      <!-- Worlds and Saves used to sit at the top of the scroller and cost 769px
+           between them, which put the first climate control at 966px -- below the
+           fold on every screen this was measured on, a 1512px laptop included.
+           They are the two things you use once and then stop using; the sliders
+           are what you came for. So they fold into menus and the panel opens on
+           the physics. The shelf lives in the head rather than the scroller so
+           it cannot scroll away from you. -->
+      <div class="shelf">
+        <button type="button" id="btn-worlds" class="shelf-btn" aria-expanded="false"
+          aria-controls="menu-worlds" title="Pick a world to start from, and name it">
+          <span aria-hidden="true">🌍</span> Worlds <b id="shelf-world">Earth</b></button>
+        <button type="button" id="btn-saves" class="shelf-btn" aria-expanded="false"
+          aria-controls="menu-saves" title="Save slots, import and export">
+          <span aria-hidden="true">💾</span> Saves</button>
+      </div>
     </header>
 
     <div class="scroller">
-      <section class="group">
-        <h2>Worlds</h2>
-        <div id="presets" class="chip-row"></div>
-        <label class="world-name">Name<input type="text" id="world-name" maxlength="28"
-          placeholder="Custom world" autocomplete="off" spellcheck="false"
-          title="What to call this planet. It travels with the world into the save slots and the export file."></label>
-      </section>
-
-      <section class="group">
-        <h2>Saves</h2>
-        <div id="slots" class="slot-row"></div>
-        <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
-          class="supply-btn">Save…</button> then pick a slot to overwrite. Slot 1 keeps itself.<br>
-          <button type="button" id="btn-saves-export" class="supply-btn"
-            title="Every saved world in one file, to keep somewhere that is not this browser">Export all…</button>
-          <button type="button" id="btn-saves-import" class="supply-btn"
-            title="Merge a saves file in. Slots the file does not mention are left alone.">Import…</button>
-          <input type="file" id="saves-file" accept="application/json,.json" hidden>
-          <br>A single world also travels in the address bar — copy the URL.</div>
-      </section>
-
       <p class="panel-note">Every control is live. Change one mid-run and the planet keeps its
       current temperature, ice and history — you are intervening on a running world, not restarting
       it. The four highlighted below also move on their own as the simulation evolves them.
@@ -90,6 +84,33 @@
       <section class="group">
         <h2>Surface &amp; Interior</h2>
         <div id="sliders-surface"></div>
+      </section>
+    </div>
+
+    <div id="menu-scrim" hidden></div>
+
+    <div class="menu" id="menu-worlds" hidden>
+      <section class="group">
+        <h2>Worlds</h2>
+        <div id="presets" class="chip-row"></div>
+        <label class="world-name">Name<input type="text" id="world-name" maxlength="28"
+          placeholder="Custom world" autocomplete="off" spellcheck="false"
+          title="What to call this planet. It travels with the world into the save slots and the export file."></label>
+      </section>
+    </div>
+
+    <div class="menu" id="menu-saves" hidden>
+      <section class="group">
+        <h2>Saves</h2>
+        <div id="slots" class="slot-row"></div>
+        <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
+          class="supply-btn">Save…</button> then pick a slot to overwrite. Slot 1 keeps itself.<br>
+          <button type="button" id="btn-saves-export" class="supply-btn"
+            title="Every saved world in one file, to keep somewhere that is not this browser">Export all…</button>
+          <button type="button" id="btn-saves-import" class="supply-btn"
+            title="Merge a saves file in. Slots the file does not mention are left alone.">Import…</button>
+          <input type="file" id="saves-file" accept="application/json,.json" hidden>
+          <br>A single world also travels in the address bar — copy the URL.</div>
       </section>
     </div>
   </aside>
