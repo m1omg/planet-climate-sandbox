@@ -181,9 +181,35 @@ export const PRESETS = {
   // optical depth serving 230 K and 288 K at once. The methane it settles on,
   // ~300 ppm, is squarely in the published range, and the world it makes is
   // anoxic, wet and cool with about a quarter of itself under ice.
+  //
+  // The interior is the Archean's, not today's, and that had to be said out loud
+  // because it was silently inheriting modern Earth's. Every other young world
+  // here sets its own -- Young Mars 0.06 W/m^2, Young Venus 0.1 -- and this one
+  // set neither, so a planet three and a half billion years old ran on 0.092
+  // W/m^2 and Earth's present specific activity: a total outgassing of exactly
+  // 1.00x modern, bit-identical to the `earth` preset. That was an oversight
+  // rather than a decision.
+  //
+  // Radiogenic heat production was about twice today's at 3.5 Ga and the mantle
+  // ran 150-250 K hotter (Herzberg et al. 2010), which puts surface heat flow
+  // near 2-3x modern; 0.2 W/m^2 is the middle of that. meltBoost turns it into
+  // 1.47x the melt, and the specific-activity dial is left at Earth's because
+  // meltBoost is already the "hotter interior makes more melt" term and raising
+  // both would charge for it twice.
+  //
+  // It is bounded above by its own biology, which is the interesting part. The
+  // reductant flux the biosphere has to outrun scales with exactly this
+  // volcanism, so past about 2.5x total the Great Oxidation stops being
+  // winnable at all: 2.2x still oxygenates, 2.5x does not. A hotter Archean is
+  // a harder one to oxygenate, and there is a ceiling on how hot it can be and
+  // still have the Huronian happen.
+  //
+  // Worth 4 K: the world rests at +3.9 C under 19% ice where it used to sit at
+  // -0.3 C under 27%, and the composition below is that new fixed point.
   earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2,
-    insolation: 0.77, landFraction: 0.1, co2Bar: 0.3359, ch4Bar: 3.686e-4, h2Bar: 4.467e-4,
-    startT: 283.23 } },
+    insolation: 0.77, landFraction: 0.1, internalHeat: 0.2,
+    co2Bar: 0.3429, ch4Bar: 3.742e-4, h2Bar: 7.395e-4,
+    startT: 283.56 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },

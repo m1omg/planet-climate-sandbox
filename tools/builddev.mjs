@@ -28,7 +28,7 @@ const out = process.argv[2];
 if (!out) { console.error('usage: node tools/builddev.mjs <path-to-main-checkout>'); process.exit(1); }
 const dev = join(out, 'dev');
 
-const NOTE = 'four-band radiation, hydrogen and Hycean work in progress — 20 of 219 self-tests failing';
+const NOTE = 'four-band radiation, hydrogen and Hycean work in progress — 19 of 219 self-tests failing';
 
 // Which branch this copy came from. Asked of git rather than written down here,
 // because the written-down one went stale the moment the work moved to another
