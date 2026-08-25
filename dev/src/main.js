@@ -12,7 +12,8 @@ import { NBANDS, lockFactor } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
-import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX } from './render/charts.js';
+import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX,
+         profileBandAtX } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 
@@ -588,6 +589,12 @@ function composition(dg) {
     ['H₂O·sc', pH2O * (dg.superFrac || 0), '#c98ad0', 'water past its critical point: neither liquid nor gas'],
     ['O₂', dg.pO2, '#6fc7a0', 'free oxygen: made by life, or left behind when a lost ocean\u2019s hydrogen escaped'],
     ['CH₄', dg.pCH4, '#c9b04a', 'methane'],
+    // Hydrogen was missing from this list, which left it out of the bar, out of
+    // the numbers, and out of `total` -- so on a world holding a quarter of a
+    // bar of it the remaining gases were renormalised over an atmosphere that
+    // did not include it, and reported themselves summing to 100.09%.
+    ['H₂', dg.pH2, '#e0899f', 'hydrogen: no bands of its own, but its collision-induced absorption '
+      + 'plugs the 8-12 µm window CO₂ and water leave open'],
   ];
   const total = parts.reduce((a, p) => a + Math.max(p[1], 0), 0);
   if (!(total > 0)) return '<span class="comp-none">no atmosphere</span>';
@@ -1096,6 +1103,32 @@ function scrubTo(t, commit) {
 // The chart is the control. Pointer events rather than click, so it can be
 // dragged: the whole point is moving back and forth along the run to find the
 // moment before it went wrong, and a single click cannot do that.
+// Which band the pointer is over on the zonal profile, or null. Read by the
+// chart tick and redrawn on the spot as the pointer moves, because waiting for
+// the next ten-hertz tick to move a crosshair feels broken.
+let profileHover = null;
+function bindProfileHover() {
+  const cv = $('#chart-profile');
+  if (!cv) return;
+  const redraw = () => drawProfile(cv, sim.world, profileHover);
+  const at = (e) => {
+    const r = cv.getBoundingClientRect();
+    return profileBandAtX(e.clientX - r.left, r.width);
+  };
+  cv.addEventListener('pointermove', (e) => {
+    const b = at(e);
+    if (b === profileHover) return;
+    profileHover = b;
+    redraw();
+  });
+  // Touch: a tap should read a band out too, and it has to let go of it again
+  // or the crosshair is stuck wherever the last finger was.
+  cv.addEventListener('pointerdown', (e) => { profileHover = at(e); redraw(); });
+  const clear = () => { if (profileHover === null) return; profileHover = null; redraw(); };
+  cv.addEventListener('pointerleave', clear);
+  cv.addEventListener('pointercancel', clear);
+}
+
 function bindScrub() {
   const cv = $('#chart-history');
   if (!cv) return;
@@ -1585,7 +1618,7 @@ function tick(dtReal) {
       updateReadout();
       drawHistory($('#chart-history'), sim.world, scrubMark);
       drawPhase($('#chart-phase'), sim.world);
-      drawProfile($('#chart-profile'), sim.world);
+      drawProfile($('#chart-profile'), sim.world, profileHover);
       drawWater($('#chart-water'), sim.world);
     }
   } catch (err) {
@@ -1613,6 +1646,7 @@ buildPresets();
 buildSlots();
 buildScenarios();
 bindScrub();
+bindProfileHover();
 syncSliders();
 bindControls();
 buildLogUI($('#statelog'), discovered, (id) => {
