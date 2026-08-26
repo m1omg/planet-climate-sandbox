@@ -19,6 +19,7 @@ export const STATES = {
   trapped:    { name: 'Nightside-Trapped Desert', color: '#9aa7c9', blurb: 'On a locked world the night side is a permanent cold trap. Every drop of water has migrated there as glacier ice, leaving a bone-dry sunlit desert that cannot recover it.' },
   waterbelt:  { name: 'Waterbelt / Slushball', color: '#8fd8d0', blurb: 'Ice reaches deep into the tropics but a narrow band of open equatorial ocean survives. A genuine stable state, and a far softer landing than a hard snowball.' },
   snowball:   { name: 'Hard Snowball',        color: '#cfe8f5', blurb: 'Runaway ice–albedo feedback has frozen the planet pole to pole. Weathering stops, so volcanic CO2 accumulates unopposed for 5–50 Myr until 0.1–0.3 bar finally breaks the ice.' },
+  frostbound: { name: 'Frostbound Eyeball',   color: '#7ea8c4', blurb: 'The air has frozen onto the permanent night side, but the sunlit face is still warm enough for open water. Most of the atmosphere is lying on the far hemisphere as dry ice and what is left is a few tens of millibars — yet the eye under the star holds a sea, so the global mean says frozen while the half of the planet anyone would stand on does not. Nightside collapse on a tidally locked world is a known outcome for planets on the outer edge of an M-dwarf’s habitable zone (Joshi et al. 1997; Turbet et al. 2018), and it is escapable the same way a Mars-like collapse is: thicker air warms the night side back above the frost point.' },
   marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'The air itself has frozen onto the ground. Below the CO2 frost point the atmosphere condenses onto the winter pole faster than volcanoes can resupply it, and the pressure falls until what is left is in equilibrium with the caps. It is escapable: enough outgassing thickens the air, warms the poles above the frost point and puts the atmosphere back where it belongs.' },
   titan:      { name: 'Titan-Like',           color: '#c9a86a', blurb: 'A frigid world under a thick nitrogen–methane haze, far too cold for liquid water but warm enough for other liquids to run on the surface.' },
   frozen:     { name: 'Frozen Desert',        color: '#a8b8c8', blurb: 'Cold, dry and still. Not enough water for a true snowball and not enough greenhouse to thaw.' },
@@ -61,6 +62,15 @@ export function classify(w) {
   const collapsed = w.co2Frozen > 0.25 * (w.co2 + w.co2Frozen + 1e-12) && w.co2Frozen > 1e-3;
   if (T > 1400) id = 'magma';
   else if (pTot < 0.0015 && water < 0.05) id = 'airless';
+  // A collapse on a locked world is not the same object as a collapse on a
+  // spinning one, and calling both "Mars-Like" was wrong about the interesting
+  // half. TRAPPIST-1e sits at a global mean of -99 C with 45 mbar left and 1.3
+  // bar of CO2 frozen onto the night side -- and a 32 C day side with an open
+  // sea on it. Mars has no such face. What distinguishes them is where the cold
+  // is: a locked world puts all of it on one hemisphere and keeps the other one
+  // habitable, which is the whole reason these planets are interesting.
+  else if (collapsed && pTot < 0.2 && lam > 0.5 && Tsub > 275 && liquidShare > 0.05
+           && dg.flooded > 0.02) id = 'frostbound';
   else if (collapsed && pTot < 0.2 && T < 265) id = 'marslike';
   else if (T > 470 && water < 0.06 * Math.max(initialWater, 0.05)) id = 'dryRunaway';
   else if (T > 420) id = 'wetRunaway';
@@ -147,7 +157,7 @@ export function classify(w) {
   const s = STATES[id];
   const habitable = (id === 'temperate' || id === 'waterworld' || id === 'dune' ||
                      id === 'eyeball' || id === 'lobster' || id === 'hothouse' ||
-                     id === 'waterbelt') && water > 0.005;
+                     id === 'waterbelt' || id === 'frostbound') && water > 0.005;
 
   return { id, name: s.name, color: s.color, blurb: s.blurb, habitable, Tsub, Tanti };
 }

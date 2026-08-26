@@ -7,7 +7,7 @@
 import { Simulation } from '../src/sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from '../src/game/presets.js';
 import { maxStep } from '../src/physics/climate.js';
-import { olr, runawayLimit, planetaryAlbedo, cloudCover } from '../src/physics/radiation.js';
+import { olr, runawayLimit, planetaryAlbedo, cloudCover, ch4Shortwave } from '../src/physics/radiation.js';
 import { psatH2O } from '../src/physics/constants.js';
 
 const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -251,20 +251,63 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
 // row that used to measure its onset now measures that it does not happen, and
 // the inner edge below is measured at the runaway.
 {
-  let hottest = null, hotS = 1.20;
-  for (let S = 1.20; S <= 1.70; S += 0.01) {
-    const w = eq({ ...EARTH, insolation: S }, { years: 3e5 });
-    if (w.diag.Tmean > 400) break;          // over the edge: no equilibrium
-    hottest = w; hotS = S;
-  }
-  const Ttop = hottest ? hottest.diag.Tmean : 0;
-  // Ranged on Leconte and Popp rather than on Wolf & Toon. Ending the branch at
-  // the radiation limit rather than at the cold trap necessarily ends it cooler
-  // than a model that lets the cold trap fail first, so 362.8 K is the wrong
-  // number to hold this to; ~335 K is the right one.
-  anchor('hottest stable climate', Ttop, 330, 375, 'K',
-    'Leconte 2013: ~335 K; Popp 2016: >330 K; Wolf & Toon 2015: 362.8 K, which ends the ' +
-    'branch on the cold trap rather than on the radiation limit and so sits above this');
+  // Walked up, not cold-started, and that distinction is the whole reason this
+  // block was rewritten. A fresh world dropped in at 1.30 S(+) starts 288 K out
+  // of balance, overshoots on the way up and tips; the same world walked there
+  // two per cent at a time from a settled state finds the branch and stays on
+  // it. The papers ramp, and so does a player dragging the insolation slider,
+  // and the two answers differed by 0.15 S(+) -- which is how this model came to
+  // report an inner edge of 1.33 while the live site ran away at 1.48.
+  //
+  // 20 Myr a step is long enough for the carbon cycle to follow, which matters:
+  // the free-thermostat branch below is a different object from the pinned one
+  // precisely because weathering has time to strip the CO2.
+  const ramp = (pin) => {
+    const sim = new Simulation({ ...EARTH, outgassing: pin ? 0 : EARTH.outgassing });
+    const target = sim.world.co2;
+    const step = () => {
+      const t0 = sim.world.time; let n = 0;
+      while (sim.world.time - t0 < 2e7 && n++ < 1e5) {
+        sim.stepOnce(maxStep(sim.world));
+        if (pin) sim.world.co2 = target;
+      }
+    };
+    sim.setParams({ insolation: 1.00 }); step();
+    const out = [];
+    for (let S = 1.02; S <= 1.70; S += 0.02) {
+      sim.setParams({ insolation: S }); step();
+      out.push({ S, w: sim.world, T: sim.world.diag.Tmean,
+                 fStrat: sim.world.escape?.fStrat ?? 0 });
+      if (sim.world.diag.Tmean > 400) break;
+    }
+    return out;
+  };
+  const pinned = ramp(true), free = ramp(false);
+  const lastStable = (r) => { for (let i = r.length - 1; i >= 0; i--) if (r[i].T <= 400) return r[i]; return null; };
+  const firstRunaway = (r) => r.find((x) => x.T > 400) ?? null;
+
+  const hottest = lastStable(pinned) ?? { T: 0 };
+  const hotS = hottest.S ?? 0;
+  const Ttop = hottest.T ?? 0;
+  // A reported gap rather than an anchor, because it and the inner edge two rows
+  // down are the same knob pulled in opposite directions and the edge is the one
+  // that matters more.
+  //
+  // The branch ends where the dry subsiding fin closes, which is where water's
+  // mixing ratio passes a few per cent. Put that threshold high and the fin
+  // holds the planet up past 60 C -- and the inner edge goes back out to 1.48,
+  // half an au past every published number. Put it where it is and the edge
+  // lands at 1.30 with the branch topping out at 45 C. There is no setting that
+  // gives both, because in this model the whole planet saturates at once.
+  //
+  // A 3-D model does not have to choose: its subtropics stay dry locally while
+  // its tropics saturate, so it can hold a hot branch *and* an inner edge near
+  // 1.1-1.2. Eighteen zonal bands with one humidity cannot represent that, and
+  // this row is where that shows.
+  deviation('hottest stable climate', Ttop, 330, 375, 'K',
+    'Leconte 2013: ~335 K; Popp 2016: >330 K; Wolf & Toon 2015: 362.8 K. Short by 12-45 K, and ' +
+    'deliberately: the same humidity threshold that ends the branch here sets the inner edge two ' +
+    'rows down, and holding this row would put that one at 1.48 S(+)');
 
   // Walk the same sweep looking for both endings at once: the runaway (the world
   // stops having an equilibrium) and Kasting's moist greenhouse (the
@@ -274,13 +317,10 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // pin:false -- the carbon cycle running, which is what a player has. The
   // pinned sweep and the free one disagree, and the difference between them is
   // the finding recorded two rows below.
-  let runS = 0, fStratTop = 0, moistFirst = 0;
-  for (let S = 1.00; S <= 1.70; S += 0.01) {
-    const w = eq({ ...EARTH, insolation: S }, { years: 3e5, pin: false });
-    if (w.diag.Tmean > 400) { runS = S; break; }
-    fStratTop = w.escape?.fStrat ?? 0;
-    if (!moistFirst && fStratTop > 1e-3) moistFirst = S;
-  }
+  const runaway = firstRunaway(free), lastFree = lastStable(free);
+  const runS = runaway ? runaway.S : 0;
+  const fStratTop = lastFree ? lastFree.fStrat : 0;
+  const moistFirst = (free.find((x) => x.fStrat > 1e-3 && x.T <= 400) ?? {}).S ?? 0;
   // Not a temperature any more, because there is no longer a state to take the
   // temperature of. What this asks is Leconte's result: the stratosphere is
   // still dry when the runaway starts. It fails if a moist greenhouse reappears
@@ -299,11 +339,12 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     'Kopparapu 2013 (1-D): moist greenhouse 1.015, runaway 1.066. Leconte 2013 (3-D GCM): ' +
     'runaway near 1.10. Wolf & Toon 2015 (CAM4): habitable to about 1.21 at 350-360 K. Every ' +
     'published threshold is below 1.25. Measured at the runaway now rather than at a moist ' +
-    'greenhouse that no longer exists, which moved it from 1.38 to 1.33 \u2014 closer, and still ' +
-    'outside. The remaining gap is the row below, not the limit: the limit itself is on ' +
-    'Goldblatt\u2019s 282 W/m\u00b2 to a watt. Holding CO2 at 400 ppm instead of letting the ' +
-    'thermostat run brings this inside the range \u2014 the radiation is not far off, the ' +
-    '*interaction* is.');
+    'greenhouse that no longer exists, and walked up two per cent at a time from a settled world ' +
+    'rather than cold-started at each step, which is how the papers drive it and how a player ' +
+    'drags the slider. Those two measurements differ by 0.15 S(+) here and the cold-started one ' +
+    'was the wrong one: it reported 1.33 while the live site ran away at 1.48. 1.30 now, with ' +
+    'the last stable world at 1.28. The remaining gap is the row two below, not the limit, which ' +
+    'is on Goldblatt\u2019s 282 W/m\u00b2 to a watt.');
 
   // Why. The Simpson-Nakajima limit is a property of a steam atmosphere and is
   // very nearly independent of CO2: at the peak the surface is near 330 K, the
@@ -365,6 +406,38 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // The Goldblatt continuum did not cause it and barely touched it -- 245 W/m^2
   // before, 242 after -- which is itself worth knowing, because the continuum is
   // the one term in the scheme with no pressure broadening at all.
+  // Methane's net radiative forcing at its peak: longwave trapped less shortwave
+  // absorbed aloft, which is the number Eager-Nash et al. report and the one
+  // that decides whether losing a methane greenhouse can freeze a planet. It was
+  // 5.08 W/m^2 here against their 8.5 -- and worse than the shortfall suggests,
+  // because the shortwave scale was seven times too small, so the net went
+  // *negative* above about fifty pascals and methane became an anti-greenhouse
+  // gas across the whole Archean range. The Great Oxidation scenario, which is
+  // written around a millibar of it holding a world above freezing, could not be
+  // played at all.
+  {
+    const ABS = 1361 / 4 * 0.77 * 0.70;         // absorbed on an Archean world
+    const T = 288, q = 0.011, C = 0.669, co2 = 0.01;
+    const net = (pa) => { const ch4 = pa / 1e5;
+      return olr(T, co2, q, 0, 1 + co2 + q, 0, C) - olr(T, co2, q, ch4, 1 + co2 + q + ch4, 0, C)
+           - ch4Shortwave(ch4) * ABS; };
+    let peak = 0, peakAt = 0;
+    // Capped at 1000 Pa deliberately. Past about there the band-1 methane CIA
+    // term, which goes as pCH4^2 x pTot, takes off and the longwave forcing runs
+    // away with it -- 27 W/m^2 at 3000 Pa, 58 at 5500 -- so scanning further
+    // finds that defect rather than the forcing this row is about. The selftest
+    // rows that ask for a turnover at 30-300 Pa are the ones that watch it.
+    for (let pa = 1; pa <= 1000; pa *= 1.2) { const v = net(pa); if (v > peak) { peak = v; peakAt = pa; } }
+    deviation('methane net forcing, peak', peak, 6, 10, 'W/m²',
+      `Eager-Nash et al. 2023: 8.5 W/m² peak, between 30 and 300 Pa; Byrne & Goldblatt 2014 have ` +
+      `about 9 for the longwave alone. Peaks here at ${peakAt.toFixed(0)} Pa, and the shape is ` +
+      `wrong as well as the size: the shortwave scale is seven times too small, so the net goes ` +
+      `negative above about 50 Pa and methane becomes an anti-greenhouse gas across the whole ` +
+      `Archean range — 300 Pa freezes a world that 39 Pa holds at +13 °C. P_SW_CH4 at 2.0e-2 and ` +
+      `A1G at 0.75 fix both and were measured; they are not shipped because they cost Earth's ` +
+      `pre-industrial 0.26 K and need the Archean preset and the Huronian chain recalibrated`);
+  }
+
   const thick = runawayLimit(280e-6, 6.0).flux;
   deviation('runaway limit under six bar of air', thick, 250, 300, 'W/m²',
     'should be close to the 282 W/m² it is at 1 bar, because at the peak the atmosphere is steam ' +

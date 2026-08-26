@@ -96,6 +96,21 @@ export function bandFractions(T, out = FR) {
 // and their tolerances are the ones calibrate.mjs checks, plus the shape
 // constraints that a stable hot branch and a real runaway limit both require.
 //
+// A1G, methane's 7.7 um band in band 0, is a known gap rather than a fit and is
+// worth naming here because nothing that anchored it ever had any grip on it.
+// The *net* methane forcing -- longwave less the shortwave absorbed aloft -- peaks
+// at 5.1 W/m^2 here against Eager-Nash et al. (2023)'s 8.5 and Byrne & Goldblatt
+// (2014)'s ~9 for the longwave alone. That is not academic: it makes methane worth
+// about one kelvin on an Archean world, so the Great Oxidation cannot freeze a
+// planet by taking it away, which is the one thing that scenario is about.
+//
+// The fix was measured: A1G at 0.75 brings the net peak to 7.4 W/m^2, and Titan
+// does not move by a tenth of a kelvin across the whole range -- its greenhouse is
+// haze and collision-induced absorption, not this band. It is not shipped because
+// this term warms the pre-industrial world 0.14 K per 0.2 of coefficient and that
+// anchor is already over its ceiling, so it needs the Archean preset rebooted and
+// the Huronian chain in selftest.js recalibrated with it. See the README.
+//
 // A degeneracy worth recording, because it cost the third attempt an afternoon:
 // Venus cannot tell "opaque" from "absurdly opaque". At 92 bar the band-3 term
 // is saturated for any coefficient above about ten, so the fit is free to leave
@@ -342,9 +357,20 @@ export function opticalDepth(pCO2, pH2O, pCH4, pTot, pH2 = 0) {
 // Weak-line absorption is linear in the column and saturates once the bands
 // fill, so a plain exponential approach to a ceiling is the right shape. The
 // ceiling is the share of the solar spectrum those bands can reach at all.
-// SW_MAX and P_SW are fitted below to put the peak of the *net* forcing on
-// Eager-Nash's 8.5 W/m^2 at their pCO2 = 1000 Pa; at modern Earth's 1.8 ppm the
-// term is worth 4 mW/m^2, so nothing in the present-day calibration moves.
+// SW_MAX and P_SW are the other half of the same gap, and this one is wrong in
+// *shape* rather than in size. At 2.9e-3 bar the shortwave term becomes
+// significant at 3 Pa, where Eager-Nash put it at 10, and it takes the net forcing
+// negative at 50 Pa -- inside the 30-300 Pa window where the same paper has the
+// net forcing at its maximum. So on an Archean world methane is an anti-greenhouse
+// gas above about fifty pascals: 300 Pa freezes a world that 39 Pa holds at +13 C,
+// and a millibar of it -- which is what the Great Oxidation scenario starts with --
+// makes a planet colder rather than warmer.
+//
+// P_SW_CH4 at 2.0e-2 puts the turnover where the paper puts it and was measured
+// alongside the A1G change above; the two go together and neither is shipped yet.
+//
+// At modern Earth's 1.8 ppm the term is worth 4 mW/m^2 either way, so nothing in
+// the present-day calibration turns on it.
 const SW_CH4_MAX = 0.081, P_SW_CH4 = 2.9e-3;   // bar
 
 // The share of incoming sunlight methane absorbs before it reaches the ground.

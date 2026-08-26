@@ -136,6 +136,18 @@ was held to **23.6-year steps through a million years of nothing happening**. 18
 979. Anything that reads a rate to choose a step needs to ask whether the thing it is reading can
 actually move.
 
+The other half of the same lesson is a cap that reads the wrong quantity, and it is still there. The
+biological methane source is limited to *(surface carbon) / dt* — which says a longer step may make
+less methane per year than a short one. Methanogens recycle carbon that is already at the surface:
+what they emit is CO₂ again within a methane lifetime, and nothing is debited for it anywhere. What
+the carbon really limits is the standing **stock**, which does not care how long the step was. It is
+invisible today because methane's band is too weak for anyone to feel it; raise that band to the
+published forcing and Earth's methane collapses from 800 to 126 ppb on every long stride and climbs
+back over the short ones after it — a clean period-five limit cycle in the step controller, worth
+0.4 K and a tenfold slowdown. It belongs with the methane round below, because the obvious repair
+(cap the stock instead of the flux) lets methane draw on the whole mantle budget and unleashes the
+high-pressure end of the same band, which is its own unfixed defect.
+
 ### Two ways to draw a planet
 
 The surface can be drawn from **generated albedo maps** (the default) or **fully procedurally**.
@@ -253,6 +265,7 @@ touching them. Click any value to type it exactly, with units — `420ppm`, `0.5
 ### Climate states it recognises
 
 Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · **hot ocean world** ·
+**frostbound eyeball** ·
 ice-free hothouse · temperate · waterbelt/slushball · hard snowball · eyeball · lobster ·
 twilight world · nightside-trapped desert · dune/desert world · waterworld · Mars-like collapse ·
 Titan-like · frozen desert · thin cold desert · baked desert · airless rock.
@@ -1430,12 +1443,14 @@ XUV cannot lift an ocean off in 10⁸ years however wet the stratosphere gets, a
 roughly the first half-gigayear — the diffusion limit takes over and the ocean goes in 6.6 Gyr. The
 first version of this anchor asked it under the modern Sun and was measuring the wrong thing.
 
-**What is still short.** Nothing, on this row, and it is worth being clear that it got there by
-accident rather than by aim. Walking the insolation up from a settled world at fixed CO₂ now tops the
-branch out at **364 K** against Wolf & Toon's 362.8 — it was 344 K before this change, and the
-continuum that was raised to fix the limit lifted it. The model sits at the top of a literature that
-disagrees with itself by 30 K rather than at the bottom of it. The number that is short instead is
-the *free-thermostat* branch top, 311 K, which is the same gap as the inner edge below.
+**What is still short, and what it is being traded against.** The branch tops out at **318 K**
+against Leconte's 335 and Wolf & Toon's 362.8. That is deliberate and it is the *same knob* as the
+inner edge: the branch ends where the dry fin closes, so pushing that threshold up to hold a 60 °C
+branch puts the runaway back out at 1.48 S⊕. There is no setting that gives both, because in this
+model the whole planet saturates at once. A 3-D model does not have to choose — its subtropics stay
+dry locally while its tropics saturate, so it holds a hot branch *and* an edge near 1.1–1.2.
+Eighteen zonal bands with one humidity cannot represent that, and `calibrate.mjs` reports the branch
+top as a gap for exactly that reason.
 
 ### Hot ocean worlds
 
@@ -1552,19 +1567,37 @@ different answers depending on one switch:
 
 | | moist greenhouse | runaway |
 |---|---|---|
-| CO₂ held at 400 ppm | **1.21 S⊕** | 1.32 S⊕ |
-| carbon cycle running | *— none before the runaway* | **1.33 S⊕** |
+| CO₂ held at 400 ppm, walked up | — | 1.30 S⊕ |
+| carbon cycle running, walked up | *— none before the runaway* | **1.30 S⊕**, last stable 1.28 |
+| *cold-started at each step* | *—* | *1.20 — an overshoot, not an edge* |
 | *Kopparapu 2013 (1-D)* | *1.015* | *1.066* |
 | *Leconte 2013 (3-D GCM)* | *— none before the runaway* | *~1.10* |
 | *Wolf & Toon 2015 (CAM4)* | *habitable to ~1.21, 350–360 K* | *above that* |
 
-Held at 400 ppm the model is now defensible on both halves: the moist greenhouse
-begins at 1.21, which is Wolf & Toon's number, and the runaway follows at 1.32.
-**Let the thermostat run and there is no moist greenhouse at all** — weathering
-strips the CO₂, the branch runs 25 K cooler, and the world crosses the radiation
-limit at 1.33 with a stratosphere at 2.5×10⁻⁴. Row two agrees with Leconte's GCM
-in *shape* and is 0.23 out in *place*. An Earth at 1.28 S⊕ still reads here as a
-comfortable 34 °C hothouse where the literature has it losing its ocean.
+**How you ask matters more than it should, and getting that wrong hid the real
+number for a long time.** Every measurement of the inner edge in this repo used
+to cold-start a fresh world at each insolation — and a fresh world starts 288 K
+out of balance, overshoots on the way up and tips early. So `calibrate.mjs`
+reported 1.33 while the live site, where the slider is dragged on a settled
+world, held out to **1.48**. A player reported exactly that. Both rows are now
+walked up two per cent at a time from a settled state, which is how the papers
+drive it and how the slider works.
+
+What was holding the branch out to 1.48 was the dry subsiding fin and the 0.85
+cap on relative humidity. Together they let the planet radiate **31 W/m² above
+its own saturated limit** indefinitely — at 1.46 S⊕ it absorbed 349 W/m² against
+a limit of 318 and sat there. That is not a small licence: the Simpson–Nakajima
+limit is *defined* on a saturated profile, because subsidence dries air by
+compressing it along a dry adiabat while the rising branch follows a moist one,
+and as water becomes a major constituent those two adiabats converge. Both the
+fin and the humidity cap now close on water's **mixing ratio**, which is the
+variable that makes it safe: Earth runs at 1.1%, a waterworld at 2.4%, the Hot
+Ocean preset at 3.5% under ten bar and the Sunbaked Ocean at 3.6% under four,
+while an Earth at the top of its hot branch is at 11.7%. A thick background keeps
+a hot ocean's air ordinary; it is being mostly steam that closes the fin.
+
+The edge came in from 1.48 to **1.30, with the last stable world at 1.28** — the
+number the player asked for, and within 0.05 of Wolf & Toon's 1.21.
 
 **The mechanism is a feedback that should not exist.** The Simpson–Nakajima limit
 is a property of a steam atmosphere and is very nearly independent of CO₂: at the
@@ -1763,6 +1796,82 @@ Stated plainly, because a model that hides these is less useful:
   out of reach on this world, not repaired — and would still bite a world that sits at a comparable
   temperature inside the edge.
 
+* **GJ 1132 b was a 3561 °C magma ocean under 230 bar of CO₂, and it has next to no atmosphere.**
+  A JWST secondary eclipse (Xue et al. 2024) gives a substellar temperature of 709 ± 31 K, barely
+  under the 746 K a bare zero-albedo rock would reach, and rules out a pure-CO₂ atmosphere above
+  0.006 bar or a pure-water one above 0.16. Two earlier claims of a hydrogen atmosphere and one of a
+  hazy CH₄/HCN one did not survive reanalysis. It sits well above Zahnle & Catling's cosmic
+  shoreline, with LHS 3844 b, GJ 1252 b, TRAPPIST-1b and c, GJ 367 b and GJ 486 b.
+
+  Both halves of the fix are the same fact said twice. At 29× Earth's melt production — which is
+  Swain et al.'s Io-like volcanism, and stays — it empties its **entire** mantle carbon budget in
+  about twenty megayears, so an old planet has nothing left to outgas; a new `carbonSpent` parameter
+  says that. And what it does outgas leaves: the shoreline term in `escapeRates` was already there
+  but was applied as a constant flux subtracted from a nearly-empty reservoir, which made a stripped
+  world's atmosphere a property of the step size. It is throttled by the column now, cubed, because
+  either the XUV heating organises a transonic outflow or it does not — that is the whole content of
+  being on one side of the shoreline. The preset ships with 0.055 bar of mostly nitrogen, under the
+  observational ceiling, and the model takes it to an airless rock at 472 °C day-side within about
+  ten megayears.
+
+* **TRAPPIST-1e was labelled a Mars-Like Collapse, which was wrong about the interesting half.** It
+  sits at a global mean of −92 °C with 78 mbar left and 1.3 bar of CO₂ frozen onto the night side —
+  and a **34 °C day side with an open sea on it**. Mars has no such face. A collapse on a tidally
+  locked world is not the same object as a collapse on a spinning one: the locked world puts all the
+  cold on one hemisphere and keeps the other habitable, which is the whole reason those planets are
+  interesting. It is a **Frostbound Eyeball** now, and it counts as habitable. Nightside collapse
+  with a warm day side is a known outcome for planets on the outer edge of an M dwarf's habitable
+  zone (Joshi et al. 1997; Turbet et al. 2018).
+
+* **Methane's greenhouse is about half the published one, and above fifty pascals it is an
+  anti-greenhouse.** Two separate errors in the same gas, diagnosed here and **not yet fixed**. The
+  shortwave term — methane's own near-infrared bands absorbing sunlight aloft, which is what puts a
+  ceiling on the methane greenhouse — has a scale seven times too small, so it becomes significant at
+  3 Pa where Eager-Nash et al. (2023) put it at 10, and it takes the *net* forcing negative at 50 Pa,
+  inside the 30–300 Pa window where the same paper has the net forcing at its **maximum**. And the
+  longwave term, methane's 7.7 µm band, gives 5.8 W/m² at 100 Pa where Byrne & Goldblatt (2014) have
+  about 9.
+
+  Together they make methane worth **+1 K at best** on an Archean world and −64 K at 300 Pa: three
+  hundred pascals freeze a world that thirty-nine holds at +13 °C. The net peak is 5.1 W/m² against
+  the literature's 8.5.
+
+  The fix is known and was measured: `P_SW_CH4` at 2.0e-2 puts the turnover where the paper puts it,
+  and `A1G` at 0.75 brings the net peak to 7.4 W/m². Titan does not move by a tenth of a kelvin
+  either way — its greenhouse is haze and collision-induced absorption, not the 7.7 µm band. It is
+  **not shipped**, because it cascades: Earth's pre-industrial goes 14.23 → 14.49 °C against a
+  14.2 ceiling, the Archean preset needs rebooting at 0.402 bar rather than 0.457, the Huronian chain
+  in `selftest.js` stops firing because oxygen no longer crosses the reductant flux at that preset's
+  volcanism, and the maximum-greenhouse threshold moves again. That is a calibration round, not a
+  coefficient change, and shipping it half-done is the thing this file keeps saying not to do.
+
+* **The Great Oxidation scenario cannot be played.** It boots at 0.08 bar of CO₂ and 288 K, and at
+  0.77 S⊕ with a tenth of the surface as land that world has **no warm branch at all** — the only
+  equilibrium is a snowball, and it reaches one inside twenty thousand years, before the player has
+  done anything. Then, frozen, it piles CO₂ for three hundred megayears and finishes as a 758 °C
+  runaway. Reported from the live site, and reproduced exactly.
+
+  Three things are wrong with it and all three are measured:
+
+  1. **It has no branch to sit on.** 0.30 bar is where weathering and volcanism balance on that
+     world; 0.08 is a third of it.
+  2. **Its premise is not in the model.** The scenario is written around a millibar of methane
+     holding a planet above freezing. A millibar of methane in this model makes a planet *colder* —
+     see the row above. Rebuilt at 0.30 bar with the methane fix in place it works exactly as
+     designed: +4 °C, oxygen crosses, the methane goes, and the world is a hard snowball by 80 Myr.
+     Without that fix there is no configuration where losing the methane costs anything.
+  3. **Its outcome depends on the step size.** Capped at 5 kyr it ends temperate at +3.6 °C; at
+     20 kyr it snowballs and runs away. 1 kyr and 5 kyr agree with each other, so the converged
+     answer is the temperate one and the runaway is a coarse-step artefact — and the runaway it
+     produces is the pressure-broadening gap in one number: a frozen world at 0.77 S⊕ piles 17.7 bar
+     of CO₂, and at that pressure this model's Simpson–Nakajima limit is **123 W/m²** against the
+     144–183 the deglaciated world absorbs, so the runaway is forced. Goldblatt has the limit very
+     nearly CO₂-independent; at 282 there would be no runaway and the world would settle as a
+     hothouse.
+
+  So the scenario is fixable and the fix is written down, but it needs the methane round above to
+  land first.
+
 * **The moist greenhouse no longer exists on a world whose carbon cycle is running.** Deliberate,
   asked for, and the price of putting the inner edge where Goldblatt (2013) and Leconte (2013) put
   it. Raising the band-0 water self-continuum to 20 sets the Simpson–Nakajima limit to 282 W/m²
@@ -1784,17 +1893,22 @@ Stated plainly, because a model that hides these is less useful:
   an equilibrium instead: at 10 a world at 1.6 S⊕ sits at 410 °C holding an eighth of its water as
   liquid three hundred kelvin above the critical point, and never boils.
 
-  And **two ledges moved with the edge, neither of them lost.** The Sunbaked Ocean preset goes from
-  1.20 S⊕ to 1.15 — see the hot-ocean section above. The Twilight World is the other: a tidally
-  locked land planet with 0.08 Earth oceans under 0.3 bar of air holds about a bar of steam over its
-  eye at 100 °C, which is enough vapour for the raised continuum to close band 0 there, so at 1.0 S⊕
-  the eye now runs away and takes the night side with it at every water fraction from 0.04 up. The
-  state is intact one per cent of a star's output further in: at **0.93 S⊕** the eye sits at 69 °C
-  with a temperate two-band ring and a −111 °C night side. A bar of background air instead of 0.3
-  also holds it at 1.0 S⊕, which is the same cold-trap ratio the Sunbaked preset runs on.
+  And **three ledges moved with the edge, none of them lost.** The Sunbaked Ocean preset goes from
+  1.20 S⊕ to 1.15 — see the hot-ocean section above. The other two are locked worlds and they moved
+  in *pressure* rather than in insolation, which is the mixing ratio saying what it is about:
 
-  That these all moved the same way is the change doing what it was asked to do. The inner edge came
-  in by 0.05 S⊕, and every state that was sitting within 0.05 of it had to move with it.
+  * the **Twilight World**, a locked land planet with 0.08 Earth oceans, holds about a bar of steam
+    over its eye at 100 °C, so under 0.3 bar of background it is two thirds water — the fin shuts
+    over the substellar point, the eye runs away and takes the night side with it at every water
+    fraction from 0.04 up. Under **0.5 bar** it is half that and the eye sits at 91 °C with a
+    three-band temperate ring and a −60 °C night. Cold-starting does not help: booted at 260 K
+    instead of 300 it reaches the same runaway, because it is the ratio and not a transient.
+  * the **nightside-trapped desert** wanted 0.2 bar at 0.85 S⊕ and now wants **0.6 bar at 0.70**,
+    with a 37 °C eye against a −98 °C far side.
+
+  That these all moved the same way is the change doing what it was asked to do. A thick background
+  keeps a hot world's air ordinary; being mostly steam is what closes the fin, and every state that
+  was living on a thin one had to find more gas or less sunlight.
 
   The one thing that got worse: a 0.30 S⊕ world at a thousand times Earth's volcanism now builds
   421 bar and runs away to 2278 K, where the previous coefficients froze its CO₂ onto the ground at

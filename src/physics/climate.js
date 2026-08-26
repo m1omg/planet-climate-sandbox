@@ -36,6 +36,29 @@ const MIXED_LAYER = 60;        // m
 
 // Fraction of the surface under dry descending air, and how humid that air is.
 export const FIN_FRACTION = 0.18, RH_DRY = 0.20;
+// ...and where it stops being one.
+//
+// The dry fin and the sub-saturated moist column together let this model radiate
+// above its own Simpson-Nakajima limit indefinitely: on the hot branch at 330 K
+// the fin is worth 19 W/m^2 and the RH cap another 17, so an Earth walked up the
+// insolation slider sat 31 W/m^2 over the saturated limit at 1.46 S(+) and only
+// ran away at 1.48. Every published inner edge is below 1.25.
+//
+// The limit is computed saturated for a reason. Subsidence dries air by
+// compressing it along a *dry* adiabat while the rising branch follows a moist
+// one, and that separation is what leaves the subtropics arid. As water becomes
+// a major constituent the two adiabats converge, the circulation that maintains
+// the contrast weakens, and the troposphere approaches the saturated profile the
+// limit assumes -- which is why Goldblatt (2013), Kasting (1988) and Leconte
+// (2013) all compute it that way.
+//
+// The variable is water's *mixing ratio*, not its partial pressure, and that is
+// what makes this safe for the worlds that have to survive it: Earth runs at
+// 1.1%, a waterworld at 2.4%, the Hot Ocean preset at 3.5% under ten bar and the
+// Sunbaked Ocean at 3.6% under four, while an Earth at the top of its hot branch
+// is at 11.7%. A thick background keeps a hot ocean's air ordinary; it is being
+// mostly steam that closes the fin.
+const SAT_LO = 0.05, SAT_HI = 0.16;
 
 export function createWorld(params) {
   const w = {
@@ -239,6 +262,8 @@ export function update(w, dt) {
 
   const pH2O = new Float64Array(NBANDS);
   const pH2Odry = new Float64Array(NBANDS);
+  const pH2Osat = new Float64Array(NBANDS);
+  const satShare = new Float64Array(NBANDS);
   let vapCol = 0;
   for (let i = 0; i < NBANDS; i++) {
     const col = demand[i] * scale;
@@ -247,7 +272,14 @@ export function update(w, dt) {
     // radiates straight to space above the classical runaway limit, which is
     // exactly why 3-D models push the inner edge outward relative to 1-D ones
     // (Leconte et al. 2013; Wolf & Toon 2014).
-    pH2Odry[i] = pH2O[i] * (RH_DRY / RH);
+    // How far this band has gone toward the saturated profile.
+    const x = pH2O[i] / Math.max(pN2 + pCO2 + pCH4 + pO2 + pH2 + pH2O[i], 1e-12);
+    satShare[i] = smoothstep(SAT_LO, SAT_HI, x);
+    // Both halves close together: the fin's air moistens toward the moist
+    // column's humidity, and the moist column itself goes to saturation.
+    const rhDry = RH_DRY + (RH - RH_DRY) * satShare[i];
+    pH2Odry[i] = pH2O[i] * (rhDry / RH);
+    pH2Osat[i] = pH2O[i] / RH;
     vapCol += col / NBANDS;
   }
 
@@ -290,9 +322,15 @@ export function update(w, dt) {
     // The cloud fraction is passed, and has to be: with four bands the window is
     // a band of its own, and leaving cloud out of it lets a planet radiate
     // straight to space through a hole that its own cloud deck is covering.
-    const moistOLR = olr(w.T[i], pCO2, pH2O[i], pCH4, pTot, pH2, a.cloud);
+    // The moist column, blended toward saturation by the same share that closes
+    // the fin. Both are the one statement: a mostly-steam troposphere is the
+    // saturated one the runaway limit is defined on.
+    const sat = satShare[i];
+    const moistOLR = olr(w.T[i], pCO2, pH2O[i] + (pH2Osat[i] - pH2O[i]) * sat,
+                         pCH4, pTot, pH2, a.cloud);
     const dryOLR = olr(w.T[i], pCO2, pH2Odry[i], pCH4, pTot, pH2, a.cloud);
-    out[i] = (1 - FIN_FRACTION) * moistOLR + FIN_FRACTION * dryOLR;
+    const fin = FIN_FRACTION * (1 - sat);
+    out[i] = (1 - fin) * moistOLR + fin * dryOLR;
     Tmean += w.T[i] / NBANDS;
     // Two different questions, so two numbers. `iceMean` is how much of the
     // planet is frozen, which is what decides whether this is a snowball.

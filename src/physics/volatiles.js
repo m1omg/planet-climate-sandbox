@@ -168,6 +168,10 @@ const AIRBORNE = 0.44;
 // are real and they are why the band is a factor of two wide, but none of them
 // is something this model has any way to know about a given world.
 const BSE_CARBON = 1.4e-4;      // carbon mass fraction of mantle + crust
+// The column below which a hydrodynamic wind cannot organise itself and the
+// background gas stops leaving on any timescale that matters here. About ten
+// millibars at Earth gravity.
+const COL_HYDRO = 1e3 / G_EARTH;                 // kg/m^2, i.e. 0.01 bar
 const SILICATE_FRACTION = 0.677; // mantle + crust as a share of planet mass
 const CO2_PER_C = 44 / 12;
 
@@ -776,8 +780,16 @@ export function stepVolatiles(w, dtYears) {
   // surface system holds kappa times the atmospheric column, because that is
   // what kappa means -- Earth's ocean carries some forty-four times the carbon
   // its air does, which is where the 50 came from.
+  // `carbonSpent` is how much of that budget the planet has already outgassed
+  // and lost before the clock starts, which is not a detail on an old world with
+  // a hot interior. GJ 1132 b runs 29x Earth's melt production off 80 W/m^2 of
+  // tidal heat: at that rate it empties its entire mantle carbon budget in about
+  // twenty megayears, so after gigayears there is nothing left to outgas. Booting
+  // it with a full mantle had it build 230 bar of CO2 and 3561 C inside eight
+  // megayears, which is the opposite of what JWST sees.
   if (w.carbonDeep == null) {
-    w.carbonDeep = Math.max(0, carbonBudget(p.mass)
+    const spent = clamp(p.carbonSpent ?? 0, 0, 1);
+    w.carbonDeep = Math.max(0, carbonBudget(p.mass) * (1 - spent)
       - kappa * w.co2 - (w.co2Frozen ?? 0));
   }
   // Semi-implicit, so an arbitrarily long step still lands on the right answer
@@ -1106,9 +1118,35 @@ export function stepVolatiles(w, dtYears) {
   }
 
   // --- atmospheric escape of the background gas ---------------------------
+  //
+  // Energy-limited escape is a constant mass flux, not a fractional one, and
+  // subtracting a constant flux from a reservoir that is nearly empty is how a
+  // result becomes a property of the step size: a long stride took the column
+  // straight to zero and the next step's outgassing put some back, so a stripped
+  // world's atmosphere was whatever one step's volcanism happened to be.
+  //
+  // The flux is throttled by the column instead. Hydrodynamic escape needs an
+  // outflow to organise itself over many scale heights above the surface; as the
+  // column falls toward one scale height there is no longer a wind, the exobase
+  // sits on the ground, and what is left leaves by Jeans escape at a rate that
+  // is negligible on these timescales. COL_HYDRO is that column, in surface-
+  // pressure terms about ten millibars at Earth gravity, and the cube is there
+  // because that transition is sharp rather than gradual: either the XUV heating
+  // organises a transonic outflow or it does not, which is the whole content of
+  // being on one side of the cosmic shoreline or the other.
+  //
+  // What this buys is a real steady state. A world above the cosmic shoreline
+  // with volcanoes still running settles where escape balances outgassing rather
+  // than oscillating between empty and one step's worth.
   if (esc.background > 0) {
-    const f = Math.max(0, 1 - esc.background * dtYears / Math.max(w.n2 + w.co2 + w.o2, 1e-6));
-    w.n2 *= f; w.co2 *= f; w.o2 *= f;
+    const col = Math.max(w.n2 + w.co2 + w.o2, 0);
+    if (col > 0) {
+      const t = col / (col + COL_HYDRO);
+      const rate = esc.background * t * t * t;
+      const k = rate / col;                       // first order in the thin limit
+      const f = 1 / (1 + k * Math.max(dtYears, 0));
+      w.n2 *= f; w.co2 *= f; w.o2 *= f;
+    }
   }
 
   // --- hydrogen: outgassed by a reduced mantle, and leaking the whole time ---

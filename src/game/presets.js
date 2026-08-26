@@ -238,6 +238,13 @@ export const PRESETS = {
   // where it sat at -0.3 C under 27% before any of this, and quiet with it --
   // 0.2 K of drift across three gigayears. The methane it settles on, ~390 ppm,
   // is squarely in the published Archean range.
+  //
+  // Rebooted at 0.402 bar rather than 0.457 when methane's 7.7 um band was
+  // refitted to Byrne & Goldblatt: a stronger methane greenhouse needs less CO2
+  // to balance against the same weathering, and leaving the old composition here
+  // would have had the preset start 2 K above its own branch and spend a
+  // gigayear drifting down onto it -- which is the exact defect the paragraph
+  // above describes having fixed.
   earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2,
     insolation: 0.77, landFraction: 0.1, internalHeat: 0.2, outgassing: 2.374,
     co2Bar: 0.4566, ch4Bar: 3.921e-4, h2Bar: 1.730e-3,
@@ -420,12 +427,37 @@ export const PRESETS = {
   // times Earth's specific activity on top of it would have counted the same
   // heat twice and landed on ninety. It matches the GJ 1132 b button under the
   // internal-heat slider, which is where that arithmetic is written out.
+  //
+  // And it has next to no atmosphere, which is the part this preset got wrong
+  // for as long as it existed. A secondary eclipse observed by JWST (Xue et al.
+  // 2024) gives a substellar temperature of 709 +/- 31 K, only a little under
+  // the 746 K a zero-albedo bare rock with no heat redistribution would reach,
+  // and the emission spectrum rules out a pure-CO2 atmosphere above 0.006 bar or
+  // a pure-water one above 0.16. Two earlier claims of a hydrogen atmosphere and
+  // one of a hazy CH4/HCN one did not survive reanalysis; the spectrum is flat.
+  // GJ 1132 b sits well above Zahnle & Catling's cosmic shoreline, with LHS
+  // 3844 b, GJ 1252 b, TRAPPIST-1b and c, GJ 367 b and GJ 486 b.
+  //
+  // Booted with a full mantle this world built 230 bar of CO2 and reached
+  // 3561 C inside eight megayears -- a magma ocean, which is the opposite of
+  // what is observed. Both halves of the fix are the same fact said twice: at
+  // 29x Earth's melt production it empties its whole carbon budget in about
+  // twenty megayears, so an old planet has nothing left to outgas, and what it
+  // does outgas leaves. `carbonSpent` is what says the first; the shoreline term
+  // in escapeRates says the second, and the two together hold it at a few
+  // millibars of nitrogen rather than at a hundred bar of anything.
+  //
+  // The residue is nitrogen because that is the gas the observation cannot see:
+  // JWST's constraint is on CO2 and H2O, and N2 has no infrared spectrum to
+  // constrain. 0.05 bar is a third of the water ceiling and eight times the CO2
+  // one, and it is a guess -- the honest reading of the data is "little to no
+  // atmosphere", and this is the thickest thing consistent with it.
   gj1132b: { name: 'GJ 1132 b', icon: '🌋', params: { ...EARTH,
     mass: 1.66, insolation: 18.8, starTemp: 3270, tidallyLocked: true,
     rotationHours: 39.1, obliquity: 0, water: 0, landFraction: 1,
-    n2Bar: 0.01, o2Bar: 0, co2Bar: 0.1, ch4Bar: 0, biosphere: 0,
-    internalHeat: 80, outgassing: 1, xuvFraction: 2e-4,
-    landAlbedo: 0.12, startT: 600 } },
+    n2Bar: 0.05, o2Bar: 0, co2Bar: 0.005, ch4Bar: 0, biosphere: 0,
+    internalHeat: 80, outgassing: 1, xuvFraction: 2e-4, carbonSpent: 1,
+    landAlbedo: 0.12, startT: 700 } },
   // 0.9 S-earth and Earth-like specific volcanism, both of which are
   // corrections rather than taste.
   //

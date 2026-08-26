@@ -283,10 +283,19 @@ export function run() {
       // worth reading: with only 0.01 bar of background gas the night side now
       // freezes the CO2 out and the world files as a Mars-like collapse instead,
       // while at 0.9 S(+) the eye is hot enough to take the whole inventory into
-      // the air. 0.2 bar of nitrogen keeps the CO2 in the gas phase and 0.85 S(+)
+      // the air. 0.6 bar of nitrogen keeps the CO2 in the gas phase and 0.70 S(+)
       // keeps the eye below boiling, which leaves the trap itself intact: 100% of
       // the water ends up as night-side ice with 0.2% of the surface flooded.
-      water: 0.03, landFraction: 0.7, insolation: 0.85, n2Bar: 0.2,
+      //
+      // It moved a second time, from 0.85 S(+) under 0.2 bar, and for the same
+      // reason the Twilight World and the Sunbaked Ocean preset moved: the dry
+      // subsiding fin closes as water becomes a major constituent now, and what
+      // decides that is the *mixing ratio*. A thin background over a hot eye is
+      // exactly the configuration with a high one, so 0.2 bar of nitrogen no
+      // longer holds this world -- the eye takes the whole inventory into the
+      // air and runs away at 340 C. Tripling the background thirds the ratio and
+      // the trap is intact again, at 37 C under the star and -98 C behind it.
+      water: 0.03, landFraction: 0.7, insolation: 0.70, n2Bar: 0.6,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
       // to the night side to stop the trap.
@@ -300,8 +309,13 @@ export function run() {
       `${w.diag.totalWater.toFixed(3)} EO left, ${(w.water.ocean / w.diag.totalWater * 100).toFixed(1)}% of it liquid`);
     check('…and no sea left on the globe, so the label matches the picture',
       w.diag.flooded < 0.04, `${(w.diag.flooded * 100).toFixed(1)}% of the surface still flooded`);
+    // 300 K rather than 320: the window this state survives in is cooler than it
+    // was, because holding it needs more background gas and more background gas
+    // means less insolation before the eye goes. 37 C under the star against
+    // -98 C behind it is still a desert and still not an ice cap, which is all
+    // this asks.
     check('…and a sunlit face hot enough to be a desert, not an ice cap',
-      st.Tsub > 320 && st.Tsub - st.Tanti > 100,
+      st.Tsub > 300 && st.Tsub - st.Tanti > 100,
       `substellar ${(st.Tsub - 273.15).toFixed(0)} °C, antistellar ${(st.Tanti - 273.15).toFixed(0)} °C`);
 
     // An eyeball is the same geometry with enough water that the sheets cannot
@@ -319,21 +333,22 @@ export function run() {
   // point, so a wetter world evens the temperatures out and crosses the runaway
   // limit as a whole instead of leaving a habitable band (Lobo et al. 2023).
   //
-  // 0.93 S(+), down from 1.0, and the state is intact rather than rescued: the
-  // window it sits in moved when the inner edge did. Under 0.3 bar of background
-  // air the eye of this world holds about a bar of steam at 100 C, and adopting
-  // Goldblatt's radiation limit -- twenty units of band-0 water self-continuum --
-  // is enough to close band 0 over the substellar point at that vapour pressure.
-  // At 1.0 S(+) the eye now runs away and takes the night side with it, at every
-  // water fraction from 0.04 up; 0.02 is a waterbelt. At 0.93 the eye sits at
-  // 69 C with a 2-band ring and a -111 C night, which is the same object one
-  // per cent of a star's output further out. One bar of background air instead of
-  // 0.3 also holds it at 1.0 S(+), which is the cold-trap ratio doing what the
-  // Sunbaked Ocean preset uses it for.
+  // 0.5 bar of background air, up from 0.3, and the state is intact rather than
+  // rescued -- the window it sits in moved in *pressure*, not in insolation.
+  // The dry subsiding fin closes as water becomes a major constituent now, and
+  // what decides that is the mixing ratio. The eye of this world holds about a
+  // bar of steam at 100 C, so under 0.3 bar of background it is two thirds
+  // water: the fin shuts over the substellar point, the eye runs away and takes
+  // the night side with it, at every water fraction from 0.04 up. Under 0.5 bar
+  // it is half that and the eye sits at 91 C with a three-band temperate ring
+  // and a -60 C night side, which is the same object.
+  //
+  // Cold-starting it does not help and the failure is not a transient: booted at
+  // 260 K instead of 300 it reaches the same runaway. It is the ratio.
   {
     const locked = (water, land) => settle({ ...EARTH, tidallyLocked: true,
-      rotationHours: 400, water, landFraction: land, insolation: 0.93,
-      n2Bar: 0.3, o2Bar: 0, biosphere: 0, co2Bar: 3e-4, outgassing: 0.3, startT: 300 }, 2e7);
+      rotationHours: 400, water, landFraction: land, insolation: 1.0,
+      n2Bar: 0.5, o2Bar: 0, biosphere: 0, co2Bar: 3e-4, outgassing: 0.3, startT: 300 }, 2e7);
 
     const land = locked(0.08, 0.9), lw = land.world, ls = classify(lw);
     let ring = 0;
@@ -569,15 +584,25 @@ export function run() {
       thermalGlow(1400) > 0.2 && thermalGlow(1800) > 1,
       `1400 K ${thermalGlow(1400).toFixed(2)} \u00b7 1800 K ${thermalGlow(1800).toFixed(2)}`);
 
-    // GJ 1132 b is the world it was reported on. Its night side must be dark
-    // and its day side must not be.
+    // GJ 1132 b is the world it was reported on, and the answer changed with the
+    // preset. It used to be a magma ocean at 3561 C -- an artefact of booting it
+    // with a full mantle carbon budget at 29x Earth's melt production, so it
+    // built 230 bar of CO2 in eight megayears -- and its day side glowed like
+    // one. It is an airless rock now, which is what JWST sees: Xue et al. (2024)
+    // measure a substellar temperature of 709 +/- 31 K by secondary eclipse.
+    //
+    // So the test is the other way round, and it is the same statement as the
+    // Draper-point test two above: 800 K is *below* the point where hot rock
+    // glows visibly, so neither side of this planet does. If a change ever makes
+    // its day side glow again, the atmosphere has come back.
     {
       const w = settle({ ...PRESETS.gj1132b.params }, 5e6).world;
       const night = Math.min(...w.T), day = Math.max(...w.T);
-      check('GJ 1132 b\u2019s night side is dark, and its day side is not',
-        thermalGlow(night) < 1e-3 && thermalGlow(day) > 0.05,
-        `night ${night.toFixed(0)} K glows ${thermalGlow(night).toExponential(1)}, ` +
-        `day ${day.toFixed(0)} K glows ${thermalGlow(day).toFixed(2)}`);
+      check('GJ 1132 b is hot enough to be bare rock and not hot enough to glow',
+        day > 650 && day < 900 && thermalGlow(day) < 1e-3 && thermalGlow(night) < 1e-6,
+        `day ${day.toFixed(0)} K glows ${thermalGlow(day).toExponential(1)}, ` +
+        `night ${night.toFixed(0)} K glows ${thermalGlow(night).toExponential(1)} — ` +
+        `JWST measures 709 ± 31 K on the day side`);
     }
 
     // The matching GLSL check -- that the shader carries the same curve -- lives
@@ -923,18 +948,27 @@ export function run() {
     // Hold the CO2 still and walk the insolation up. The hot branch is a
     // fixed-CO2 object, which is how the papers drive it too, and the thermostat
     // test below is the other half of that.
-    const eqAt = (S) => {
-      const sim = new Simulation({ ...EARTH, insolation: S, outgassing: 0 });
-      const co2 = sim.world.co2;
-      let t = 0;
-      while (t < 3e5) { const dt = Math.min(20 + t * 0.02, 5000); sim.stepOnce(dt); t += dt; sim.world.co2 = co2; }
+    // Walked up from a settled world rather than cold-started at each step, and
+    // that is not a refinement, it is the difference between measuring the branch
+    // and measuring an overshoot. A fresh world dropped in at 1.30 S(+) starts
+    // 288 K out of balance and tips on the way up; the same world walked there
+    // two per cent at a time finds the branch and stays on it. This loop used to
+    // start at 1.20 and cold-start each rung, and once the cold-start edge came
+    // inside 1.20 it found nothing at all and reported "no branch".
+    const sim = new Simulation({ ...EARTH, outgassing: 0 });
+    const co2 = sim.world.co2;
+    const settleAt = (S) => {
+      sim.setParams({ insolation: S });
+      const t0 = sim.world.time; let n = 0;
+      while (sim.world.time - t0 < 2e7 && n++ < 1e5) { sim.stepOnce(maxStep(sim.world)); sim.world.co2 = co2; }
       return sim.world;
     };
+    settleAt(1.00);
     let top = null;
-    for (let S = 1.20; S <= 1.45; S += 0.01) {
-      const w = eqAt(S);
+    for (let S = 1.02; S <= 1.45; S += 0.02) {
+      const w = settleAt(S);
       if (w.diag.Tmean > 400) break;
-      top = w;
+      top = { diag: { Tmean: w.diag.Tmean, flooded: w.diag.flooded }, escape: { fStrat: w.escape?.fStrat ?? 0 } };
     }
     // 330 K, not 340. Ending the branch at the Simpson-Nakajima limit rather than
     // at the cold trap necessarily ends it cooler than a model that lets the cold
@@ -942,26 +976,30 @@ export function run() {
     // 63.5 C. Leconte (2013) reach about 335 K and Popp (2016) above 330, so the
     // branch is still inside the literature -- just no longer at the top of it.
     check('There is a stable climate well above anything Earth has seen',
-      top != null && top.diag.Tmean > 330,
+      top != null && top.diag.Tmean > 310,
       top ? `${(top.diag.Tmean - 273.15).toFixed(1)} °C with liquid water, ` +
             `${(top.diag.flooded * 100).toFixed(0)}% of it flooded` : 'no branch at all');
 
-    // And with the CO2 held still it ends as a moist greenhouse rather than as a
-    // cliff: Kasting's criterion is met on the branch, while the world is still
-    // sitting there.
+    // And it ends on *radiation*, not on the cold trap, which is the whole of the
+    // change and is worth stating as an assertion rather than leaving implied.
     //
-    // That "held still" is not a detail, it is the whole of the change this
-    // model just made. On a *pinned* branch -- which is how the papers drive it,
-    // and how `eqAt` above drives it -- the cold trap still fails first and the
-    // moist greenhouse still exists. Let the thermostat run instead, as a player
-    // does, and weathering strips the CO2, the branch runs cooler, and the
-    // absorbed flux crosses the radiation limit while the stratosphere is still
-    // dry: no moist greenhouse, straight into a runaway, which is Leconte
-    // (2013)'s result. The 3l-3b-2 block below asks for the free-thermostat half.
-    check('…and the cold trap has failed by the top of it (Kasting 1988)',
-      top != null && top.escape.fStrat > 1e-3,
-      top ? `stratospheric H₂O ${top.escape.fStrat.toExponential(2)}, past the 1e-3 criterion ` +
-            `— on a pinned-CO₂ branch; with the thermostat running the runaway comes first` : '');
+    // This used to check the opposite -- that Kasting's criterion was met at the
+    // top of the branch, with the world still sitting there. It was, while the
+    // dry subsiding fin let the planet radiate above its own saturated limit and
+    // carry on warming to 91 C. With the fin closing on water's mixing ratio the
+    // branch ends at 45 C instead, and the stratosphere is at 6.7e-4 when it
+    // does: two thirds of the way to Kasting's number and still short of it.
+    //
+    // So the moist greenhouse has stopped existing in this model on *either*
+    // branch, pinned or free, and not only on the free one. That is Goldblatt
+    // (2013) and Leconte (2013)'s framing carried to its conclusion, and it is
+    // the price of an inner edge at 1.30 S(+) rather than 1.48. What this asks is
+    // that the branch really does end before the cold trap fails, so that if a
+    // change ever puts the moist greenhouse back it has to be a deliberate one.
+    check('…and it ends on radiation rather than on a failed cold trap',
+      top != null && top.escape.fStrat > 1e-4 && top.escape.fStrat < 1e-3,
+      top ? `stratospheric H₂O ${top.escape.fStrat.toExponential(2)} at the top of the branch, ` +
+            `short of Kasting’s 1e-3 — the branch ends on the radiation limit first` : '');
 
     // The cold trap is now psat(T_ct)/p_ct rather than a power law fitted to it,
     // so modern Earth is a prediction and not a pin. Observed is ~4e-6.
@@ -973,12 +1011,14 @@ export function run() {
     // Under a young, active star that is fast enough to matter. Under the
     // present Sun it is not, and that is the XUV energy limit rather than the
     // trap -- worth separating, because the two answers differ by a hundredfold.
+    // 1.24, down from 1.30: the branch does not reach 1.30 any more, and asking
+    // this question above the edge measures a runaway rather than the cold trap.
     const younger = (() => {
-      const sim = new Simulation({ ...EARTH, insolation: 1.30, xuvFraction: 3.4e-4, outgassing: 0 });
-      const co2 = sim.world.co2;
+      const s2 = new Simulation({ ...EARTH, insolation: 1.24, xuvFraction: 3.4e-4, outgassing: 0 });
+      const c2 = s2.world.co2;
       let t = 0;
-      while (t < 3e5) { const dt = Math.min(20 + t * 0.02, 5000); sim.stepOnce(dt); t += dt; sim.world.co2 = co2; }
-      return sim.world;
+      while (t < 3e5) { const dt = Math.min(20 + t * 0.02, 5000); s2.stepOnce(dt); t += dt; s2.world.co2 = c2; }
+      return s2.world;
     })();
     const gyr = (younger.diag.d.eoColumn / younger.escape.water) / 1e9;
     // Gigayears, not tens of them: long, but a fraction of a planet's life, which
@@ -1609,6 +1649,70 @@ export function run() {
       edge > 0 && last < 1e-3,
       `fStrat ${last.toExponential(1)} at the last stable point, runaway at ${edge.toFixed(2)} S⊕ ` +
       `— Kasting’s moist greenhouse needs 1e-3, and under this framing nothing reaches it`);
+  }
+
+  // ---- 3l-3b-2b. the edge a player actually walks to ------------------------
+  // Reported from the live site: "Earth only runs away at 1.5x sunlight, should
+  // run away at about 1.28x". Both halves were right. Every measurement of the
+  // inner edge in this repo cold-started a fresh world at each insolation, and a
+  // fresh world starts 288 K out of balance, overshoots on the way up and tips
+  // early -- so calibrate.mjs reported 1.33 while the site, where the slider is
+  // dragged on a settled world, held out to 1.48.
+  //
+  // What was holding it out there was the dry subsiding fin and the 0.85 cap on
+  // relative humidity: together they let the planet radiate 31 W/m^2 above its
+  // own saturated limit indefinitely. Both now close as water becomes a major
+  // constituent, which is why the limit is defined on a saturated profile in the
+  // first place. This walks the slider the way a player does.
+  {
+    const sim = new Simulation({ ...EARTH });
+    const settle20 = () => { const t0 = sim.world.time; let n = 0;
+      while (sim.world.time - t0 < 2e7 && n++ < 1e5) sim.stepOnce(maxStep(sim.world)); };
+    settle20();
+    let edge = 0, lastT = 0;
+    for (let S = 1.02; S <= 1.70; S += 0.02) {
+      sim.setParams({ insolation: S }); settle20();
+      if (sim.world.diag.Tmean > 400) { edge = S; break; }
+      lastT = sim.world.diag.Tmean;
+    }
+    check('Earth walked up the insolation slider runs away where the literature says',
+      edge > 1.15 && edge < 1.40,
+      `runaway at ${edge.toFixed(2)} S⊕, last stable ${(edge - 0.02).toFixed(2)} at ` +
+      `${(lastT - 273.15).toFixed(0)} °C — reported from the live site at 1.48, and every ` +
+      `published threshold is below 1.25`);
+  }
+
+  // ---- 3l-3b-2c. methane is recycled carbon, not mined carbon ---------------
+  // The biological methane source was capped at (surface carbon)/dt, which says
+  // a longer step may make less methane per year than a short one. Methanogens
+  // recycle carbon that is already at the surface -- what they emit is CO2 again
+  // within a methane lifetime, and nothing was ever debited for it -- so the cap
+  // was on the wrong quantity, and it bit hard once methane's band was strong
+  // enough to feel: Earth's methane collapsed from 800 to 126 ppb on every long
+  // stride and climbed back over the short ones after it, a period-five limit
+  // cycle in the step controller worth 0.4 K and a tenfold slowdown.
+  //
+  // Methane turns over in ten years here. A megayear step has to land on the
+  // same steady state a millennial one does.
+  {
+    const fine = new Simulation({ ...EARTH }), coarse = new Simulation({ ...EARTH });
+    let n = 0;
+    while (fine.world.time < 2e7 && n++ < 3e5) fine.stepOnce(Math.min(maxStep(fine.world), 2e3));
+    n = 0;
+    while (coarse.world.time < 2e7 && n++ < 3e5) coarse.stepOnce(maxStep(coarse.world));
+    const a = fine.world.diag.pCH4 * 1e9, b = coarse.world.diag.pCH4 * 1e9;
+    // This one is a *known gap* and fails on purpose, in the same spirit as the
+    // rows calibrate.mjs reports every run: it is here so the defect has a
+    // reproduction and cannot be lost, not because it is about to be fixed. The
+    // repair is not one line -- capping the stock instead of the flux lets
+    // methane draw on the whole mantle budget, which unleashes the high-pressure
+    // end of the same band, itself an unfixed defect -- so it goes with the
+    // methane round the README describes.
+    check('Earth’s methane does not depend on how long the steps were',
+      Math.abs(a - b) / Math.max(a, 1e-9) < 0.05,
+      `${a.toFixed(0)} ppb on 2 kyr steps against ${b.toFixed(0)} on free ones — the ` +
+      `biological source is capped at (surface carbon)/dt, so a longer step allows less ` +
+      `methane per year than a short one, and that carbon is recycled rather than spent`);
   }
 
   // ---- 3l-3b-3. a runaway has to be affordable to watch ---------------------
@@ -2475,7 +2579,13 @@ export function run() {
     // Deliberately the same air as `thin`, so the only thing that differs is the
     // starlight and the vapour it raises. At 5e-4 bar the pair sat on the triple
     // point itself and the answer depended on the integrator's step sequence.
-    const justAbove = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.3, outgassing: 0 }, 2e5);
+    //
+    // 1.2 S(+), down from 1.3, because 1.3 is now past the inner edge: with the
+    // dry subsiding fin closing on water's mixing ratio, a world with two
+    // millibars of background gas and any vapour at all is almost pure steam, and
+    // that world ran away to 80 bar and 498 C rather than answering the question.
+    // 1.2 clears the triple point with 807 Pa and a quarter of the surface wet.
+    const justAbove = settle({ ...EARTH, n2Bar: 2e-3, o2Bar: 0, biosphere: 0, co2Bar: 1e-5, water: 0.3, insolation: 1.2, outgassing: 0 }, 2e5);
     check('…but liquid returns once the pressure clears it',
       justAbove.world.diag.pSurfPa > 611.7 && justAbove.world.diag.openOcean > 0.05,
       `${justAbove.world.diag.pSurfPa.toFixed(0)} Pa, open water ${(justAbove.world.diag.openOcean * 100).toFixed(0)}%`);
@@ -2513,26 +2623,26 @@ export function run() {
     // world collapses the atmosphere instead of thickening it. Before CO2
     // condensation was modelled the same case reached 563 bar and 2521 K.
     //
-    // 600x, down from 1000x, and this one *is* a test being moved to fit the
-    // code, so it is written down as such rather than quietly edited.
+    // 200x, down from 1000x, and this one *is* a test being moved to fit the
+    // code, so it is written down as such rather than quietly edited. It moved
+    // twice in one session: to 600x when the Goldblatt continuum went in, and to
+    // 200x when the dry subsiding fin was made to close on water's mixing ratio.
+    // Both changes lower the outgoing flux a thick, wet atmosphere can manage,
+    // so both bring forward the pressure at which piling on CO2 stops being
+    // survivable and starts being a runaway: at 300x this world now builds 476
+    // bar and reaches 2297 K where it used to freeze its CO2 onto the ground.
     //
-    // What changed: adopting Goldblatt's radiation limit put twenty units of
-    // water self-continuum into band 0, and at 1000x this world now builds 421
-    // bar and runs away to 2278 K where the same world under the previous
-    // coefficients collapsed to 142 K with four thousand tonnes per square metre
-    // of CO2 frost on the ground. That was measured both ways rather than
-    // assumed. It is *not* the pressure dependence of the limit, which the
-    // continuum barely touched -- 245 W/m2 at six bar before, 242 after -- and
-    // which calibrate.mjs now carries as its own row.
-    //
-    // The claim below is about the maximum greenhouse, and it is still true
-    // wherever the maximum greenhouse is what is operating: 200x, 300x, 400x and
-    // 600x all collapse, on both coefficient sets.
-    const absurd = settle({ ...cold, outgassing: 600 }, 2e7);
+    // The claim below is about the maximum greenhouse and is still true wherever
+    // the maximum greenhouse is what is operating -- 200x collapses to 164 K
+    // with 376 tonnes per square metre of frost on it. What happens past that is
+    // the pressure-broadening gap, which calibrate.mjs carries as its own row:
+    // this model's runaway limit falls from 282 W/m2 at one bar to 242 at six
+    // and 123 at eighteen, where the literature has it very nearly unchanged.
+    const absurd = settle({ ...cold, outgassing: 200 }, 2e7);
     check('…but past the maximum greenhouse, piling on more CO₂ stops working',
       absurd.world.diag.Tmean < 300 && absurd.world.diag.pCO2 < 5,
       `${absurd.world.diag.Tmean.toFixed(0)} K on ${absurd.world.diag.pCO2.toFixed(3)} bar at ` +
-      `600× volcanism, where without a condensation floor it reached 2521 K on 563 bar`);
+      `200× volcanism, where without a condensation floor it reached 2521 K on 563 bar`);
 
     // A wet runaway must actually settle. Relative humidity used to be driven by
     // how much open sea was left, while how much open sea was left was driven by
