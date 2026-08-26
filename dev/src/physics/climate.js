@@ -509,18 +509,6 @@ export function maxStep(w, maxDeltaT = 2.5) {
     }
   }
 
-  // Hydrogen, bounded on its *net* rate rather than its escape flux -- the same
-  // shape as the CO2 bound above and for the same reason. The reservoir is
-  // integrated semi-implicitly now, so it is stable at any step; what this
-  // protects is the escape flux that credits the oxygen budget, which must not
-  // become a property of the step sequence while hydrogen is still moving. On a
-  // world sitting at its steady state the net rate is zero and this costs
-  // nothing, which is what keeps the Archean affordable to watch.
-  if (w.h2Rate) {
-    const floor = 1e-6 * 1e5 / dg.d.g;
-    dt = Math.min(dt, Math.max(0.25 * ((w.h2 ?? 0) + floor) / Math.abs(w.h2Rate), 1.0));
-  }
-
   // The methane reservoir needs the same bound, and for the same reason the ice
   // sheet does. It is semi-implicit, so it is stable at any step -- but its
   // source and its lifetime both depend on state that is moving underneath it
