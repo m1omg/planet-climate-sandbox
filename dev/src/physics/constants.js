@@ -121,3 +121,45 @@ export function frostPointCO2(pPa) {
   if (pPa >= CO2_TRIPLE_P) return CO2_LIQ_B / (CO2_LIQ_A - Math.log(pPa));
   return 3167.8 / Math.log(1.2264e12 / pPa);
 }
+
+// ---------------------------------------------------------------------------
+// The Sun getting brighter, which is the one forcing no player controls.
+//
+// A main-sequence star burns hydrogen to helium, its core mean molecular weight
+// rises, and it has to run hotter and denser to hold itself up. The luminosity
+// climbs roughly linearly in fractional age, and Gough (1981) fits it to about a
+// per cent over the Sun's whole main sequence:
+//
+//     L(t)/L_now = 1 / (1 + 0.4 (1 - t/t_now))
+//
+// with t_now = 4.57 Gyr. That is the relation the "Earth +N Gyr" preset was
+// already built on and it is now the one the brightening mode drives, so the
+// preset and the mode cannot disagree about where the Sun is.
+//
+// "About ten per cent a gigayear" is right where we are and gets steeper: 9.6%
+// over the next gigayear, 10.1% at +0.5, 10.6% at +1, 12.2% at +2.2 and 15.6%
+// at +4 -- the denominator is shrinking. Worth knowing before setting a rate by
+// hand, and selftest.js pins all of it.
+//
+// The Faint Young Sun is the same formula run backwards: 0.77 at 3.3 Ga, which
+// is the number the Archean preset carries.
+export const SUN_AGE_NOW = 4.57e9;               // years
+export function mainSequenceLuminosity(ageYears) {
+  const t = Math.max(ageYears, 1e6) / SUN_AGE_NOW;
+  return 1 / (1 + 0.4 * (1 - t));
+}
+
+// The same relation read backwards: how old a Sun would have to be to shine
+// this much. Used to answer "where in its life is this star?" from the one
+// number the game actually has, which is how much light the planet receives.
+//
+// That reading only makes sense for a planet at something like one au of a
+// Sun-like star, and it is nonsense for a world that is dim because it orbits
+// far out rather than because its star is young. So the caller is given a range
+// to test: outside 0.74-2.29 S(+) the inversion lands outside the Sun's own main
+// sequence (0.5 to 11 Gyr) and should be ignored rather than clamped.
+export const SUN_AGE_MIN = 0.5e9, SUN_AGE_MAX = 11e9;
+export function mainSequenceAge(rel) {
+  if (!(rel > 0)) return SUN_AGE_NOW;
+  return SUN_AGE_NOW * (1 - (1 / rel - 1) / 0.4);
+}

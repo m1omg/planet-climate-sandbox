@@ -13,9 +13,19 @@ node tools/builddev.mjs /path/to/main/checkout
 `../assets/` and borrows the surface maps at the site root, which is 668 KB
 instead of 23 MB.
 
-**This build is knowingly not green** — Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation and Hycean work in progress — known gaps reported by calibrate.mjs. Two of those failures are tests
-asserting the *old* deviation: snowball deglaciation now lands at 143 mbar
-against the literature's 100–300, where it used to be thirty times too low.
+**This build is knowingly not green** — Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes and Hycean work in progress — known gaps reported by calibrate.mjs. `selftest.js` has seventeen
+standing failures, every one of them a test asserting a deviation the README
+names and explains; two of them assert the *old* deviation, since snowball
+deglaciation now lands at 140 mbar against the literature's 100–300 where it
+used to be thirty times too low. `calibrate.mjs` passes all 28 of its anchors
+and reports eight known gaps that never fail.
+
+Two of those gaps were failing anchors until recently and are reclassified
+rather than fixed: Earth's pre-industrial temperature, which is 0.79 K warm and
+0.26 K of that is the priced cost of methane's band at its published strength;
+and CO₂'s forcing per doubling at high concentration, which falls off where the
+real thing strengthens because a semi-grey band saturates all at once. Both
+print their numbers on every run.
 
 A band-overlap refit that closed four more gaps was reverted from this build: it
 left a 1.32 S⊕ ocean world with no energy balance at any temperature, which shows

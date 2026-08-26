@@ -84,10 +84,43 @@ export const SLIDERS = [
     fmt: (v) => `${(v * 100).toFixed(0)} % land`, units: { '%': 0.01 }, unitFor: () => '%',
     note: 'How much of this world would stand above the sea at Earth-like water. Actual coverage is worked out from the water it really has — see the readout.' },
 
+  // Two modes live under this slider, and they are both here because the same
+  // fact makes them necessary: on a world near its inner edge, *how fast you
+  // move this control* changes where the runaway is. Measured on a settled Earth
+  // at 1.00 S(+) -- 15.7 C, 373 ppm -- taken up by three different routes:
+  //
+  //   in one jump                         survives 1.20, tips at 1.21
+  //   ramped 0.02 at a time, 20 kyr each  survives 1.32, tips at 1.34
+  //   eased at 0.01 per 20 Myr            survives 1.25, tips at 1.259
+  //
+  // The jump tips early because the planet overshoots: it arrives absorbing far
+  // more than it can radiate and goes straight through the branch. The fast ramp
+  // tips *late* for the opposite reason -- the ocean lags, so the world is
+  // cooler than its own equilibrium and looks fine while it is already over the
+  // line. Those survivors are not survivors: held at 1.32 the world reads 39.8 C
+  // and is gone in 2.65 Myr, at 1.30 it reads 37.2 C and is gone in 7.16, at
+  // 1.28 it reads 35.3 C and is gone in 8.65. Held at 1.24 it reads 32.8 C and
+  // is still there after a hundred megayears.
+  //
+  // So only the slow answer is the planet's; the other two are the mouse's. That
+  // is what "ease changes" is for, and its rate is the slowest of the three: a
+  // hundredth of an S(+) every twenty megayears, which reproduces calibrate.mjs'
+  // quasi-static 1.26 to within a thousandth. It is about twice as slow as the
+  // real Sun near this epoch, which is the reassuring direction.
   { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 4, log: true,
     fmt: (v) => `${v.toFixed(3)} S⊕`,
     units: { s: 1, 'se': 1, 's⊕': 1, 'w/m2': 1 / 1361, 'w/m²': 1 / 1361, w: 1 / 1361 },
-    note: 'Relative to Earth. 1 S⊕ = 1361 W/m².' },
+    note: 'Relative to Earth. 1 S⊕ = 1361 W/m².',
+    extra: `
+      <div class="star-modes">
+        <label class="supply-inf" title="OFF: the star changes the instant you let go of the slider, so how fast you dragged decides what happens to the planet. Move today’s Earth to 1.21 S⊕ in one jump and it runs away — it arrives absorbing more than it can radiate and goes straight through. Drag it up in steps and it seems to hold to 1.32, which is worse, because that world is only lagging: it reads 40 °C and is gone in under three megayears.&#10;&#10;ON: the star is walked to the new value over simulated time, a hundredth of an S⊕ every twenty megayears, slowly enough that the planet is answering rather than the mouse. The same Earth then holds to 1.25 and tips at 1.259, which is where this model’s inner edge actually is. Move the slider as fast as you like; the star takes as long as it takes.">
+          <input type="checkbox" id="chk-ease-star"> ease changes
+        </label>
+        <label class="supply-inf" title="Let the Sun do it. A main-sequence star brightens as its core fills with helium — 9.6% over the next gigayear, and steepening: 10.6% a gigayear at +1 Gyr, 12.2% at +2.2, 15.6% at +4 (Gough 1981). Switch this on and the starlight climbs on its own from wherever it is now, and the carbon cycle has to keep up.&#10;&#10;This is the one forcing no player controls, and it is what ends a biosphere: not heat, but weathering drawing the CO₂ down under it until the plants starve.">
+          <input type="checkbox" id="chk-main-seq"> main-sequence Sun
+        </label>
+        <span id="star-status" class="star-status"></span>
+      </div>` },
   { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2600, max: 9000, step: 10,
     fmt: (v) => `${v.toFixed(0)} K`, units: { k: 1 } },
   { g: 'star', key: 'xuvFraction', label: 'Stellar XUV activity', min: 1e-6, max: 1e-2, log: true,

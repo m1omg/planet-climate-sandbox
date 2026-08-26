@@ -1,5 +1,5 @@
 import { NBANDS, X, lockFactor } from './climate.js';
-import { iceFraction } from './radiation.js';
+import { iceFraction, runawayLimit } from './radiation.js';
 import { clamp } from './constants.js';
 
 // Every state the game can recognise, with the real science behind it.
@@ -163,6 +163,10 @@ export function classify(w) {
 }
 
 // One-line "why" text shown live under the state name.
+// States where "past its runaway limit" would be telling you what the label
+// already says.
+const NO_MARGIN = new Set(['magma', 'dryRunaway', 'wetRunaway', 'moist']);
+
 export function reasonText(w, st) {
   const dg = w.diag, esc = w.escape ?? {};
   const bits = [];
@@ -181,6 +185,32 @@ export function reasonText(w, st) {
   if (esc.fStrat > 1e-4 && dg.totalWater > 0) {
     const perGyr = (w.escape.water * 1e9) / dg.d.eoColumn;
     if (perGyr > 1e-3) bits.push(`losing ${perGyr.toFixed(2)} oceans/Gyr`);
+  }
+  // Past the runaway limit and not there yet.
+  //
+  // A world dragged up the insolation slider faster than its ocean can warm sits
+  // cooler than its own equilibrium, so it reads temperate while its absorbed
+  // flux is already over the Simpson-Nakajima limit. Held at 1.30 S(+) it looks
+  // like a 38 C hothouse for a megayear and then goes; at 1.33 it goes inside
+  // one. The Runaway margin stat has said so all along, in red, but it is one
+  // tile among twenty and you have to already suspect something to look at it.
+  //
+  // Deliberately *not* worded as a point of no return, because it is not one:
+  // the limit itself depends on CO2, so a world whose thermostat is still
+  // drawing carbon down can raise its own limit back over the absorbed flux and
+  // survive. What this says is only what it can prove -- that right now, at this
+  // moment, the planet is over its line.
+  //
+  // Skipped once the label already says runaway or magma, where it would be
+  // telling you what you can plainly see.
+  // Mirrors the Runaway margin stat exactly -- same limit, same flux, same
+  // fifteen-watt amber band -- so the line people read and the tile they have to
+  // go looking for cannot disagree.
+  if (st && !NO_MARGIN.has(st.id) && dg.totalWater > 0) {
+    const lim = runawayLimit(dg.pCO2, dg.pN2 + dg.pCH4).flux;
+    const margin = lim - (dg.absorbed + (dg.Fint ?? 0));
+    if (margin < 0) bits.push(`${(-margin).toFixed(0)} W/m² past its runaway limit`);
+    else if (margin < 15) bits.push(`${margin.toFixed(0)} W/m² of runaway margin left`);
   }
   if (w.co2Frozen > 1e-3) {
     // Where it froze matters, and on a locked world the answer is not "here".
