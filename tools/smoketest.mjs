@@ -421,8 +421,16 @@ if (created < 20) {
   const keys = m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : [];
   const live = SLIDERS.filter((d) => d.live).map((d) => d.key);
   const missing = live.filter((k) => !keys.includes(k));
-  // and the write itself has to be there, not just the key in the set
-  const body = src.slice(src.indexOf('function applyParams'), src.indexOf('function applyParams') + 1600);
+  // and the write itself has to be there, not just the key in the set.
+  //
+  // Bounded by the *next top-level function*, not by a fixed slice. It used to
+  // read 1600 characters and that is a trap: adding anything at the top of
+  // applyParams -- a comment, an early return for a control with a mode on it --
+  // pushes the write-backs out of the window and this fails claiming the
+  // simulation never hears about water and hydrogen, which it does.
+  const from = src.indexOf('function applyParams');
+  const next = src.indexOf('\nfunction ', from + 1);
+  const body = src.slice(from, next > from ? next : src.length);
   const unwritten = live.filter((k) => !new RegExp(`key === '${k}'`).test(body) && k !== 'mass');
   if (missing.length || unwritten.length) {
     console.log(`\x1b[31mFAIL\x1b[0m  live sliders the world never hears about: ` +

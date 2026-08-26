@@ -264,6 +264,83 @@ weathering, photosynthesis, photochemistry, cold traps and escape to space all m
 touching them. Click any value to type it exactly, with units — `420ppm`, `0.5 bar`, `1 atm`,
 `2 days`, `30%`, `100x`.
 
+### The star can drive itself
+
+Two checkboxes sit under the starlight slider, and they exist because of a fact that took a while to
+believe: **near the inner edge, how fast you move that slider decides what happens to the planet.**
+Measured on a settled Earth at 1.00 S⊕ — 15.7 °C, 373 ppm — taken up by three routes:
+
+| route | survives to | tips at |
+|---|---|---|
+| one jump | 1.20 S⊕ | **1.21** |
+| stepped 0.02 at a time, 20 kyr each | 1.32 | **1.34** |
+| eased at 0.01 per 20 Myr | 1.25 | **1.259** |
+
+The jump tips early because the planet overshoots — it arrives absorbing far more than it can
+radiate and goes straight through the branch. The stepped ramp tips *late* for the opposite reason:
+the ocean lags, so the world sits cooler than its own equilibrium and looks perfectly well while it
+is already over the line. Those survivors are not survivors. Held where they arrived, the 1.32 world
+reads 39.8 °C and is gone in **2.65 Myr**, the 1.30 world reads 37.2 °C and is gone in 7.16, the
+1.28 world reads 35.3 °C and is gone in 8.65. The 1.24 world reads 32.8 °C and is still there after
+a hundred megayears.
+
+So only the slow answer belongs to the planet; the other two belong to the mouse.
+
+**`ease changes`** spreads any change to the star over simulated time, at a hundredth of an S⊕ every
+twenty megayears. That rate is not arbitrary — it reproduces `calibrate.mjs`'s quasi-static sweep to
+a thousandth, and it is *path-independent in the starting state*, which is the property that makes
+it worth having: eased at this rate, Earth tips at **1.259 starting from today, 1.259 starting
+pre-industrial, and 1.259 starting from the +2.2 Gyr preset already at 1.20 S⊕** — three different
+atmospheres, three different temperatures, one edge. Drag the slider as fast as you like; the star
+takes as long as it takes, and a status line under the checkbox says where it has got to and how
+long is left.
+
+**`main-sequence Sun`** hands the slider to Gough (1981) instead. A star brightens as its core fills
+with helium and has to run hotter and denser to hold itself up:
+
+    L(t)/L_now = 1 / (1 + 0.4 (1 − t/t_now)),  t_now = 4.57 Gyr
+
+which is about **9.6% per gigayear now**, steepening to 10.6% at +1 Gyr, 12.2% at +2.2 and 15.6% at
++4 as the denominator shrinks. Run backwards
+it gives 0.77 at 3.3 Ga, which is the number the Archean preset already carried; run forwards it is
+where **Earth +2.2 Gyr** comes from. The two modes are mutually exclusive — under the Sun the slider
+sets where the star *is*, and it goes on brightening from that age.
+
+The mode works out that age by reading the relation backwards from the one stellar number the game
+has, which is how much light the planet receives — so it has no memory of its own to fall out of
+step with. Switch the Sun off and on again after a gigayear and it picks up at 5.57 Gyr rather than
+resetting to today; load **Earth +2.2 Gyr** and switch it on and the star starts at 6.77 Gyr and
+brightens at that age's steeper 12.2% a gigayear, which is the whole reason the rate is a curve and
+not a constant. The inversion is only honest for a planet at something like one au of a Sun-like
+star, so it is refused rather than clamped outside 0.74–2.29 S⊕: TRAPPIST-1e's 0.646 S⊕ inverts to
+−1.7 Gyr, which is before the Sun existed, and that world keeps today's age instead. It is dim
+because of where it orbits, not because its star is young.
+
+Neither mode is world state. They are how the control behaves, so neither goes in the URL hash or
+the save file; what gets saved is wherever the star had actually got to, which is the honest thing
+to keep.
+
+Left to run, the Sun's own rate is quasi-static as far as this model is concerned — it lands on the
+same edge the eased slider does, from a completely different direction:
+
+| from now | starlight | mean surface | CO₂ |
+|---|---|---|---|
+| +0.5 Gyr | 1.046 S⊕ | 19.1 °C | 155 ppm |
+| +1.0 | 1.096 | 22.2 | 74 |
+| +1.5 | 1.151 | 25.5 | 33 |
+| +2.0 | 1.212 | 29.6 | 13 |
+| **+2.34** | **1.257** | runaway | — |
+
+1.257 against the eased slider's 1.259 and `calibrate.mjs`'s quasi-static 1.26. `EASE_PER_YEAR` is
+about twice as slow again as the real Sun, which is the direction that makes it safe to use.
+
+The right-hand column is the part worth stopping on. **The world does not cook — it starves first.**
+Every one of those temperatures is habitable, and the thermostat holds them by weathering the CO₂
+away underneath the brightening: past 155 ppm at half a gigayear the land plants are already
+failing, and by +2 Gyr there is not enough carbon in the air for anything on land at all. That is
+what **Earth +2.2 Gyr** is a snapshot of — 1.2385 S⊕, 8.5 ppm, 31.6 °C, ice-free, wet, and with 46%
+of today's primary production left, all of it marine.
+
 ### Climate states it recognises
 
 Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · **hot ocean world** ·
@@ -271,6 +348,28 @@ Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · **
 ice-free hothouse · temperate · waterbelt/slushball · hard snowball · eyeball · lobster ·
 twilight world · nightside-trapped desert · dune/desert world · waterworld · Mars-like collapse ·
 Titan-like · frozen desert · thin cold desert · baked desert · airless rock.
+
+Under the state name is a live "why" line, and one of the things it now says is **how much runaway
+margin is left** — under 15 W/m² it says so, and below zero it says the planet is *past its runaway
+limit*. That clause is there because of the table above: a world dragged up faster than its ocean
+can warm reads 37 °C and temperate for seven megayears while its absorbed flux is already over the
+Simpson–Nakajima limit. The margin has been on the stat tiles all along, in red, but it is one tile
+among twenty and you have to already suspect something to look at it. Measured on the same four
+worlds:
+
+| held at | reads | why line says | actually lasts |
+|---|---|---|---|
+| 1.24 S⊕ | 32.8 °C | 8 W/m² of runaway margin left | >100 Myr |
+| 1.28 | 35.3 °C | 2 W/m² of runaway margin left | 8.65 Myr |
+| 1.30 | 37.2 °C | **1 W/m² past its runaway limit** | 7.16 Myr |
+| 1.32 | 39.8 °C | **5 W/m² past its runaway limit** | 2.65 Myr |
+
+It is deliberately *not* worded as a point of no return, because it is not one: the limit itself
+depends on CO₂, so a world whose thermostat is still drawing carbon down can raise its own limit
+back over the absorbed flux and survive. What the line says is only what it can prove — that at this
+moment the planet is over its line. It is skipped where the label already says runaway, moist
+greenhouse or magma, and it mirrors the Runaway-margin stat exactly, same limit and same flux, so
+the line people read and the tile they have to go looking for cannot disagree.
 
 ### Frame-rate independence
 
@@ -1571,10 +1670,20 @@ different answers depending on one switch:
 |---|---|---|
 | CO₂ held at 400 ppm, walked up | — | 1.26 S⊕ |
 | carbon cycle running, walked up | *— none before the runaway* | **1.26 S⊕**, last stable 1.24 |
+| eased continuously at 0.01 per 20 Myr | *—* | **1.259** |
+| under the real solar brightening | *—* | **1.257**, at +2.34 Gyr |
 | *cold-started at each step* | *—* | *an overshoot, not an edge* |
+| *stepped up 0.02 at a time, 20 kyr each* | *—* | *1.34, and none of it holds* |
 | *Kopparapu 2013 (1-D)* | *1.015* | *1.066* |
 | *Leconte 2013 (3-D GCM)* | *— none before the runaway* | *~1.10* |
 | *Wolf & Toon 2015 (CAM4)* | *habitable to ~1.21, 350–360 K* | *above that* |
+
+The three roman rows agree to within 0.003 S⊕ by three unrelated routes — a 20 Myr-per-step sweep, a
+continuous ease, and Gough's luminosity law running the star itself — which is the strongest
+statement available that 1.26 is the model's number and not the measurement's. The two italic rows
+are the ways of asking that give a different answer, and [what fast and slow do to
+it](#the-star-can-drive-itself) is worth reading before trusting a number dragged out of the slider
+by hand.
 
 **How you ask matters more than it should, and getting that wrong hid the real
 number for a long time.** Every measurement of the inner edge in this repo used
@@ -1850,12 +1959,36 @@ Stated plainly, because a model that hides these is less useful:
   The longwave coefficient stops at 87% of the published forcing rather than 100% because Earth pays
   for the rest: it warms the pre-industrial world 0.14 K per 0.2 of coefficient, and that anchor was
   already 0.03 K over its ceiling. It is **0.26 K over now, at 14.49 °C against a 14.2 target**, and
-  that is the stated price. Titan does not move by a tenth of a kelvin either way — its greenhouse is
+  that is the stated price. That row is a reported gap rather than a failing anchor as of this
+  writing, which is the honest bookkeeping for a deviation that is deliberate and priced — it prints
+  the 0.79 K it is out by, in yellow, on every run, and drift in Earth's baseline is still caught by
+  Modern Earth, the albedo, the OLR and the ECS, none of which are gaps. Titan does not move by a tenth of a kelvin either way — its greenhouse is
   haze and collision-induced absorption, not the 7.7 µm band — so nothing that anchored this
   coefficient before had any grip on it.
 
   Six standing failures closed with it, including snowball deglaciation and duration, and Earth's
   inner edge came in a further 0.04 to **1.26 S⊕**.
+
+* **CO₂'s forcing per doubling falls off too fast, and it has been failing quietly for a long time.**
+  Etminan et al. (2016) give 3.80 W/m² for 280→560 ppm and **4.02 for 1120→2240** — the real forcing
+  per doubling gets *stronger* with concentration. This model gives 3.64 and **3.02**: seventeen per
+  cent weaker over two doublings, where reality is six per cent stronger.
+
+  The optical depths are not what is wrong. Band 2 gains a near-constant 0.150 per doubling across
+  that ladder (1.633, 1.783, 1.934, 2.087), which is exactly what a logarithm should do. What falls
+  off is the *flux* response: a band's transmission here is `1/(1 + 0.75τ)` and its slope goes as the
+  square of that, so the band saturates all at once — where the real 15 µm band saturates in its core
+  and goes on growing in the wings.
+
+  The obvious repair was tried and measured rather than assumed. Split each band's transmission into
+  a strong-line and a weak-line channel with the mean absorption held at 1, so the optically thin
+  limit is untouched: it moves the ratio the right way and nowhere near far enough — 0.829 to 0.839
+  with a 30% strong channel at three times the mean — and costs far more than it buys, because
+  `1/(1+x)` is convex and *any* split is more transparent at every τ above zero. Earth's OLR goes
+  235 → 241 W/m² and the Simpson–Nakajima limit 282 → 291, both out of range. Recovering them means
+  re-solving all eleven targets at once, which is the same fourth-band refit the snowball rows
+  describe as attempted and reverted twice. Not shipped, and now reported as a gap on every run
+  rather than sitting red where nobody read it.
 
 * **The Great Oxidation scenario could not be played, and now it can.** It booted at 0.08 bar of CO₂
   and 288 K, and at 0.77 S⊕ with a tenth of the surface as land that world has **no warm branch at

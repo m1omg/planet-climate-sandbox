@@ -4,7 +4,9 @@ import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
-import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, psatH2O, smoothstep } from './physics/constants.js';
+import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, psatH2O, smoothstep,
+         mainSequenceLuminosity, mainSequenceAge,
+         SUN_AGE_NOW, SUN_AGE_MIN, SUN_AGE_MAX } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
@@ -479,6 +481,71 @@ export function run() {
       hazeOpacity(1e-3, 0.02, 0, 1) === 0 && hazeOpacity(1e-2, 0.02, 0, 1) > 0.1,
       `CH₄/CO₂ 0.05 → clear, 0.5 → τ ${hazeOpacity(1e-2, 0.02, 0, 1).toFixed(2)}`);
     check('Modern Earth is far from hazy', hazeOpacity(1.9e-6, 427e-6, 0.21, 1) === 0);
+  }
+
+  // ---- 3i-1b. the Sun, which is the forcing nobody controls -----------------
+  // Gough (1981): L(t)/L_now = 1/(1 + 0.4(1 - t/t_now)) with t_now = 4.57 Gyr.
+  // Two presets were already built on it by hand and now share the function, so
+  // the "Earth +N Gyr" preset and the brightening mode cannot drift apart.
+  {
+    const rel = (age) => mainSequenceLuminosity(age) / mainSequenceLuminosity(SUN_AGE_NOW);
+    check('The main-sequence Sun reproduces the presets that were fitted to it by hand',
+      near(rel(SUN_AGE_NOW - 3.3e9), 0.776, 0.01) && near(rel(SUN_AGE_NOW + 1e9), 1.096, 0.01)
+      && near(rel(SUN_AGE_NOW), 1, 1e-12),
+      `Archean at 3.3 Ga ${rel(SUN_AGE_NOW - 3.3e9).toFixed(3)} against the preset's 0.77; ` +
+      `+1 Gyr ${rel(SUN_AGE_NOW + 1e9).toFixed(3)} against the 1.09 it used to ship`);
+
+    // "About ten per cent a gigayear" is right where we are and gets steeper,
+    // which is worth pinning because it is the number people quote flat: 9.6%
+    // over the next gigayear, 10.6% at +1, 12.2% at +2.2, 15.6% at +4. The
+    // band asks for the rate and for the steepening, and it is deliberately
+    // tight enough to catch a wrong t_now as well as a wrong exponent.
+    const per = (dt) => (rel(SUN_AGE_NOW + dt + 1e9) / rel(SUN_AGE_NOW + dt) - 1) * 100;
+    check('…and it steepens, because the denominator is shrinking',
+      per(0) > 9 && per(0) < 10 && per(2.2e9) > per(0) + 2 && per(4e9) > per(0) + 5,
+      `${per(0).toFixed(1)}% over the next Gyr, ${per(2.2e9).toFixed(1)}% a Gyr by +2.2, ` +
+      `${per(4e9).toFixed(1)}% by +4`);
+
+    // The relation read backwards, which is how the brightening mode works out
+    // where in its life a star is from the only stellar number the game has.
+    // It has to round-trip, and it has to *refuse* rather than clamp on a world
+    // that is dim because of where it orbits: inverting TRAPPIST-1e's 0.646 S(+)
+    // puts the Sun 1.7 Gyr before it existed.
+    {
+      const trip = (S) => rel(mainSequenceAge(S));
+      const inRange = (S) => { const a = mainSequenceAge(S);
+                               return a >= SUN_AGE_MIN && a <= SUN_AGE_MAX; };
+      check('…and reading it backwards recovers the age it came from',
+        near(trip(1), 1, 1e-9) && near(trip(1.2385), 1.2385, 1e-9)
+        && near(mainSequenceAge(1) - SUN_AGE_NOW, 0, 1)
+        && near(mainSequenceAge(1.2385) - (SUN_AGE_NOW + 2.2e9), 0, 2e6),
+        `1.2385 S⊕ → ${(mainSequenceAge(1.2385) / 1e9).toFixed(2)} Gyr, which is the +2.2 preset`);
+      check('…and refuses the worlds it has no business answering for',
+        inRange(1) && inRange(1.2385) && !inRange(0.646) && !inRange(3),
+        `0.646 S⊕ (TRAPPIST-1e) inverts to ${(mainSequenceAge(0.646) / 1e9).toFixed(1)} Gyr, ` +
+        `3 S⊕ to ${(mainSequenceAge(3) / 1e9).toFixed(1)} — both outside ` +
+        `${SUN_AGE_MIN / 1e9}–${SUN_AGE_MAX / 1e9} Gyr, so the caller keeps today's age`);
+    }
+
+    // And the preset it puts at the edge really does sit there. This world has
+    // to boot on its own branch: dropped in at Earth's 427 ppm it starts 290 K
+    // out of balance and is a 537 C runaway inside a hundred thousand years.
+    const fe = settle({ ...PRESETS.futureEarth.params }, 1e9).world;
+    check('Earth +2.2 Gyr sits on the branch it boots on, for a gigayear',
+      Math.abs(fe.diag.Tmean - PRESETS.futureEarth.params.startT) < 3 && fe.diag.iceMean < 0.02
+      && fe.diag.totalWater > 0.9,
+      `${(fe.diag.Tmean - 273.15).toFixed(1)} °C on ${(fe.diag.pCO2 * 1e6).toFixed(1)} ppm of CO₂, ` +
+      `${(fe.diag.iceMean * 100).toFixed(0)}% ice, ${fe.diag.totalWater.toFixed(3)} EO left`);
+
+    // The thing that makes it worth loading: it is ice-free, wet, 31 C and its
+    // forests are gone, because two gigayears of thermostat have weathered the
+    // CO2 down under them. Carbon starvation, not heat.
+    check('…with its land plants starved out by its own thermostat',
+      carbonLimit(fe.diag.pCO2, 0.30) < 0.55 && carbonLimit(fe.diag.pCO2, 0.30) > 0.35
+      && fe.diag.Tmean > 300,
+      `${(carbonLimit(fe.diag.pCO2, 0.30) * 100).toFixed(0)}% of Earth's production left at ` +
+      `${(fe.diag.pCO2 * 1e6).toFixed(1)} ppm — the marine half, on a world at ` +
+      `${(fe.diag.Tmean - 273.15).toFixed(0)} °C with no ice on it`);
   }
 
   // ---- 3i-2. carbon starvation, which is how a biosphere really ends --------

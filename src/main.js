@@ -9,7 +9,8 @@ import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
 import { NBANDS, lockFactor } from './physics/climate.js';
-import { clamp } from './physics/constants.js';
+import { clamp, mainSequenceLuminosity, mainSequenceAge,
+         SUN_AGE_NOW, SUN_AGE_MIN, SUN_AGE_MAX } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX,
@@ -240,6 +241,98 @@ function graphicsFromUrl() {
 }
 let activeScenario = null, scenarioResult = null, settling = false, activePreset = 'earth';
 
+// ---- the two star modes ---------------------------------------------------
+// Both are functions of *simulated* time and nothing else, which is the whole
+// point of them: the answer must not depend on the frame rate, on the clock
+// speed, or on how fast a mouse moved. `slew` and `starAge` therefore record a
+// starting point and a starting year, and every readout recomputes the value
+// from w.time rather than accumulating an increment.
+//
+// EASE_PER_YEAR is a hundredth of an S(+) every twenty megayears, and it is slow
+// enough that the answer stops being about the ramp. Eased at this rate Earth
+// tips at 1.259 S(+) starting from today, at 1.259 starting pre-industrial, and
+// at 1.259 starting from the +2.2 Gyr preset already at 1.20 -- three different
+// atmospheres, three different temperatures, one edge, matching calibrate.mjs'
+// quasi-static sweep to a thousandth. Move any faster and that stops being true:
+// in a single jump the same planet tips at 1.21, and stepped up at 20 kyr a step
+// it appears to hold to 1.32 while actually being gone in under three megayears.
+const EASE_PER_YEAR = 0.01 / 2e7;
+let easeStar = false, mainSeqStar = false;
+let slew = null;      // { from, to, startYear } while a change is being spread
+let starAge = null;   // { baseS, baseAge, startYear } while the Sun is running
+
+function starStatus(text) {
+  const el = $('#star-status');
+  if (el) el.textContent = text || '';
+}
+
+// Where in its life a star has to be to shine this brightly on this planet.
+//
+// Read off the insolation, which is the only stellar number the game has, and
+// only when the answer lands inside the Sun's own main sequence -- a world at
+// 0.3 S(+) is dim because of where it orbits, not because its star is young,
+// and inverting that would put the Sun before it existed. Outside the range the
+// star keeps whatever age it already had, so the mode still works on a planet
+// at any distance; it just stops pretending to know the star's age.
+//
+// The point of inferring it at all is that the mode then has no memory to get
+// out of step with. Switch the Sun off and on again after a gigayear and it
+// picks up at 5.57 Gyr rather than resetting to today; load Earth +2.2 Gyr and
+// switch it on and the star starts at 6.77 Gyr and brightens at that age's
+// steeper 12.2% per gigayear, which is the whole reason the rate is a curve.
+function sunAgeFor(S, fallback = SUN_AGE_NOW) {
+  const age = mainSequenceAge(S);
+  return age >= SUN_AGE_MIN && age <= SUN_AGE_MAX ? age : fallback;
+}
+
+// Advance whichever mode is on. Called from updateReadout, ten times a second,
+// and idempotent: it reads w.time and writes the value that time implies.
+function driveStar(w) {
+  if (mainSeqStar && starAge) {
+    const age = starAge.baseAge + (w.time - starAge.startYear);
+    const v = clamp(starAge.baseS * mainSequenceLuminosity(age)
+                  / mainSequenceLuminosity(starAge.baseAge), 0.05, 4);
+    setStarValue(v);
+    starStatus(`Sun at ${(age / 1e9).toFixed(2)} Gyr — ${v.toFixed(3)} S⊕, `
+             + `${((mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100).toFixed(1)}% brighter per Gyr from here`);
+    return;
+  }
+  if (!slew) { starStatus(''); return; }
+  const span = Math.abs(slew.to - slew.from);
+  const need = span / EASE_PER_YEAR;
+  const f = need > 0 ? clamp((w.time - slew.startYear) / need, 0, 1) : 1;
+  const v = slew.from + (slew.to - slew.from) * f;
+  setStarValue(v);
+  if (f >= 1) { slew = null; starStatus(''); return; }
+  starStatus(`star easing to ${slew.to.toFixed(3)} S⊕ — at ${v.toFixed(3)} now, `
+           + `${fmtTime(need * (1 - f))} to go`);
+}
+
+// A new world means a new clock, and both modes are anchored to w.time. A
+// preset, a scenario, a save or the reset button puts that clock back to zero
+// underneath them, and a startYear left over from the previous world would then
+// read as hundreds of megayears of brightening that never happened -- or, worse,
+// as negative time, which sends the star backwards. So re-anchor: the mode
+// stays on, an ease in flight is abandoned, and the Sun adopts the new world's
+// insolation and works out its age from that.
+//
+// Deliberately not called on a history scrub. That is the same world going back
+// into its own past, and there the anchoring is exactly right: the star is a
+// function of w.time, so rewinding the planet rewinds the star with it.
+function rebaseStar() {
+  slew = null;
+  const S = sim.world.params.insolation ?? params.insolation;
+  starAge = mainSeqStar ? { baseS: S, baseAge: sunAgeFor(S), startYear: sim.world.time } : null;
+  starStatus('');
+}
+
+// The world's insolation, without disturbing the slider. The slider holds where
+// you asked the star to go; this is where it actually is.
+function setStarValue(v) {
+  if (Math.abs((sim.world.params.insolation ?? 0) - v) < 1e-9) return;
+  sim.setParams({ insolation: v });
+}
+
 // The world as it was handed to you. Reset restores exactly this, because the
 // composition controls drift on their own as the simulation runs them and
 // "reset" that kept the drifted values would not put anything back.
@@ -410,6 +503,26 @@ function syncLiveControls() {
 const RESERVOIR_KEYS = new Set(['n2Bar', 'o2Bar', 'co2Bar', 'ch4Bar', 'h2Bar', 'water', 'mass']);
 function applyParams(key) {
   const w = sim.world;
+  // The star is special: with a mode running, the slider sets a *target* and
+  // driveStar() walks the world's value there over simulated time. Setting it
+  // here as well would defeat the point -- the jump would happen anyway and the
+  // ease would be cosmetic.
+  if (key === 'insolation' && (easeStar || mainSeqStar)) {
+    if (mainSeqStar) {
+      // Moving the slider under the Sun re-bases it: you have decided where the
+      // star is, and it goes on brightening from *that* age. The age carries --
+      // re-basing to SUN_AGE_NOW would put the Sun's clock back to today every
+      // time the slider was touched, and with it the per-gigayear rate, which
+      // steepens as the star ages and is half of what this mode is for.
+      const running = starAge ? starAge.baseAge + (w.time - starAge.startYear) : SUN_AGE_NOW;
+      starAge = { baseS: params.insolation, baseAge: sunAgeFor(params.insolation, running),
+                  startYear: w.time };
+      sim.setParams({ insolation: params.insolation });
+    } else if (Math.abs((w.params.insolation ?? 0) - params.insolation) > 1e-9) {
+      slew = { from: w.params.insolation ?? 0, to: params.insolation, startYear: w.time };
+    }
+    return;
+  }
   sim.setParams({ [key]: params[key] });
   if (RESERVOIR_KEYS.has(key)) {
     const d = derive(w.params);
@@ -496,6 +609,7 @@ function loadPreset(id) {
   // A real world keeps its own geography; only invented ones get a new seed.
   if (!BODY_MAPS[id]) renderState.seed = Math.random() * 100;
   sim.reset(params);
+  rebaseStar();
   applyBody(id);
   syncSliders(); setPresetActive(id); writeHash();
   // Picking a world off the shelf drops whatever the last one was called: the
@@ -525,6 +639,7 @@ function startScenario(id) {
   Object.assign(params, s.params);
   renderState.seed = Math.random() * 100;
   sim.reset(params);
+  rebaseStar();
   syncSliders(); setPresetActive(null);
   rememberStart(); markTouched();
   document.querySelectorAll('[data-scenario]').forEach((b) => b.classList.toggle('active', b.dataset.scenario === id));
@@ -623,7 +738,9 @@ function composition(dg) {
 function stat(k, v, cls = '') { return `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
 
 function updateReadout() {
-  const w = sim.world, dg = w.diag, d = dg.d;
+  const w = sim.world;
+  driveStar(w);
+  const dg = w.diag, d = dg.d;
   const st = classify(w);
 
   const banner = $('#state-banner');
@@ -881,6 +998,7 @@ function applyWorldState(s) {
 
 function restore(s) {
   applyWorldState(s);
+  rebaseStar();
   // The name came out of the slot with the rest of the world. setPresetActive
   // below clears the preset, so without this a loaded world would fall back to
   // "Custom world" and the name you saved it under would be gone.
@@ -1229,6 +1347,7 @@ function bindControls() {
     Object.assign(params, initialParams);
     renderState.seed = initialSeed;
     sim.reset(params);
+    rebaseStar();
     syncSliders();
     scenarioResult = null; endSettle(); sim.paused = resetPaused; syncPlay();
     writeHash(); markTouched();
@@ -1274,6 +1393,52 @@ function bindControls() {
     syncFossil();
     toast('Fossil carbon put back in the ground');
   });
+  // The two star modes. Neither is world state -- they are how the *control*
+  // behaves -- so neither goes in the hash or the save file; what does get saved
+  // is wherever the star had actually got to, which is the honest thing to keep.
+  $('#chk-ease-star').addEventListener('change', (e) => {
+    easeStar = e.target.checked;
+    // Hand over from the Sun first. Under the Sun the slider holds where you
+    // last put the star and the world has moved on without it, so working out a
+    // slew before adopting that would start easing the planet back to a stale
+    // number -- switching one mode on would quietly undo the other's gigayear.
+    if (easeStar && mainSeqStar) {
+      mainSeqStar = false; $('#chk-main-seq').checked = false; starAge = null;
+      params.insolation = sim.world.params.insolation ?? params.insolation;
+      syncSliders();
+    }
+    if (!easeStar) {
+      // Turning it off honours the slider immediately, which is what someone who
+      // just switched it off is asking for.
+      if (slew) { params.insolation = slew.to; sim.setParams({ insolation: slew.to }); slew = null; }
+      starStatus('');
+    } else if (Math.abs((sim.world.params.insolation ?? 0) - params.insolation) > 1e-9) {
+      slew = { from: sim.world.params.insolation ?? 0, to: params.insolation, startYear: sim.world.time };
+    }
+    updateReadout();
+  });
+  $('#chk-main-seq').addEventListener('change', (e) => {
+    mainSeqStar = e.target.checked;
+    if (mainSeqStar) {
+      // Starts from wherever the star is now, so switching it on does not move
+      // the planet -- it just stops holding it still. A slew in flight is
+      // abandoned where it stands rather than completed, for the same reason.
+      if (easeStar) { easeStar = false; $('#chk-ease-star').checked = false; slew = null; }
+      const S = sim.world.params.insolation ?? params.insolation;
+      const age = sunAgeFor(S);
+      starAge = { baseS: S, baseAge: age, startYear: sim.world.time };
+      params.insolation = S; syncSliders();
+      const rate = (mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100;
+      toast(`The Sun is running now — ${rate.toFixed(1)}% brighter over the next gigayear, `
+          + 'and steepening', 4600);
+    } else {
+      starAge = null; starStatus('');
+      params.insolation = sim.world.params.insolation ?? params.insolation;
+      syncSliders();
+    }
+    updateReadout();
+  });
+
   $('#chk-fossil-inf').addEventListener('change', (e) => {
     params.fossilInfinite = e.target.checked;
     sim.setParams({ fossilInfinite: params.fossilInfinite });

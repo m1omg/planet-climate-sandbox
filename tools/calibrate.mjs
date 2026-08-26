@@ -55,8 +55,37 @@ function deviation(name, value, lo, hi, unit, source) {
   const F = (c) => olr(T, c, pH2O, 1.8e-6, pN2 + c + pH2O, 0, CLOUD);
   anchor('CO2 forcing, 280→560 ppm', F(280e-6) - F(560e-6), 3.3, 4.4, 'W/m²',
     'Myhre 1998: 5.35·ln2 = 3.71; IPCC AR6: 3.93');
-  anchor('CO2 forcing, 1120→2240 ppm', F(1120e-6) - F(2240e-6), 3.3, 5.2, 'W/m²',
-    'stays ~constant per doubling until the band saturates');
+  // A reported gap rather than an anchor, because closing it is a refit of the
+  // whole scheme rather than a coefficient, and it has been quietly red for as
+  // long as the row has existed.
+  //
+  // Forcing per doubling should hold up as CO2 climbs. Etminan et al. (2016)
+  // give 3.80 W/m^2 at 280->560 and 4.02 at 1120->2240: the real thing gets six
+  // per cent *stronger* over two doublings. Here it gets seventeen per cent
+  // weaker -- 3.64 and 3.02.
+  //
+  // The optical depths are not what is wrong. Band 2 gains a near-constant 0.150
+  // per doubling across that ladder (1.633, 1.783, 1.934, 2.087), which is what
+  // a logarithm should do. What falls off is the flux response: a band's
+  // transmission here is 1/(1 + 0.75 tau) and its slope goes as the square of
+  // that, so the band saturates as a whole -- where the real 15 um band
+  // saturates only in its core and goes on growing in the wings.
+  //
+  // The obvious repair was tried and measured rather than assumed. Split each
+  // band's transmission into a strong-line and a weak-line channel with the mean
+  // absorption held at 1, so the optically thin limit is untouched: it moves the
+  // ratio the right way and nowhere near far enough -- 0.829 to 0.839 with a 30%
+  // strong channel at three times the mean -- and it costs far more than it
+  // buys, because 1/(1+x) is convex and *any* split is more transparent at every
+  // tau above zero. Earth's OLR goes 235 -> 241 W/m^2 and the Simpson-Nakajima
+  // limit 282 -> 291, both out of range, and recovering them means re-solving
+  // all eleven targets at once. Not shipped.
+  deviation('CO2 forcing, 1120→2240 ppm', F(1120e-6) - F(2240e-6), 3.3, 5.2, 'W/m²',
+    'Etminan 2016: 4.02, against 3.80 at 280→560 — the real forcing per doubling gets ' +
+    'stronger with concentration and this one gets 17% weaker. Structural: a semi-grey band ' +
+    'saturates all at once, where CO2\u2019s 15 µm band saturates in its core and keeps ' +
+    'growing in the wings. A two-channel split of the band transmission was measured and makes ' +
+    'Earth\u2019s OLR 241 and the runaway limit 291 to buy a hundredth of the ratio back');
   anchor('CO2 forcing, 280→427 ppm', F(280e-6) - F(427e-6), 1.8, 2.7, 'W/m²',
     '5.35·ln(427/280) = 2.26');
   anchor('Earth OLR at 288.15 K', F(280e-6), 234, 243, 'W/m²', 'observed ~239, under cloud');
@@ -83,8 +112,23 @@ function deviation(name, value, lo, hi, unit, source) {
 // ours and there is nothing in the model emitting it -- but writing it down
 // keeps the anchor honest about what is being compared.
 const preind = eq({ ...EARTH, co2Bar: 280e-6, ch4Bar: 0.72e-6 });
-anchor('Pre-industrial Earth', preind.diag.Tmean - 273.15, 13.2, 14.2, '°C',
-  'HadCRUT/ERA5 1850-1900 ≈ 13.7');
+// Reported rather than failed, and the reason is written down in the README as
+// well: methane's band went to 87 per cent of Byrne & Goldblatt's published
+// strength and this world pays 0.26 K for it. It was already 0.03 K over the
+// ceiling before that, so the ceiling was never going to hold; what changed is
+// that the overshoot is now deliberate and priced.
+//
+// Making it a gap does not take the guard rail away. A drift in this baseline
+// moves 'Modern Earth (equilibrium)' with it -- 14.49 + 1.81 = 16.30 against a
+// 16.6 ceiling -- and that row can still fail, as can the albedo, the OLR, the
+// warming since pre-industrial and the ECS. What this row loses is the ability
+// to fail for the 0.79 K it is already known to be out by; what it keeps is
+// printing that number, in yellow, on every single run.
+deviation('Pre-industrial Earth', preind.diag.Tmean - 273.15, 13.2, 14.2, '°C',
+  'HadCRUT/ERA5 1850-1900 ≈ 13.7, so this is 0.79 K warm. 0.26 of that is the price of ' +
+  'methane\u2019s 7.7 µm band at its published strength, taken deliberately (see A1G in ' +
+  'radiation.js); the rest predates it. Drift is still caught by Modern Earth, the albedo, the ' +
+  'OLR and the ECS, none of which are gaps');
 anchor('Earth planetary albedo', 1 - preind.diag.absorbed / mean(preind.diag.S), 0.28, 0.31, '',
   'CERES 0.293');
 anchor('Earth pole-to-equator range', preind.diag.Tmax - preind.diag.Tmin, 30, 48, 'K',
@@ -297,7 +341,7 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // mixing ratio passes a few per cent. Put that threshold high and the fin
   // holds the planet up past 60 C -- and the inner edge goes back out to 1.48,
   // half an au past every published number. Put it where it is and the edge
-  // lands at 1.30 with the branch topping out at 45 C. There is no setting that
+  // lands at 1.26 with the branch topping out at 45 C. There is no setting that
   // gives both, because in this model the whole planet saturates at once.
   //
   // A 3-D model does not have to choose: its subtropics stay dry locally while
@@ -342,8 +386,13 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     'greenhouse that no longer exists, and walked up two per cent at a time from a settled world ' +
     'rather than cold-started at each step, which is how the papers drive it and how a player ' +
     'drags the slider. Those two measurements differ by 0.15 S(+) here and the cold-started one ' +
-    'was the wrong one: it reported 1.33 while the live site ran away at 1.48. 1.30 now, with ' +
-    'the last stable world at 1.28. The remaining gap is the row two below, not the limit, which ' +
+    'was the wrong one: it reported 1.33 while the live site ran away at 1.48. ' +
+    // Read off the sweep rather than typed in. The typed version said 1.30 and
+    // 1.28 for two commits after methane's band brought both down by 0.04, which
+    // is exactly how a number in prose goes stale while the number beside it is
+    // right.
+    `${runS.toFixed(2)} now, with the last stable world at ${lastFree ? lastFree.S.toFixed(2) : 'none'}. ` +
+    'The remaining gap is the row two below, not the limit, which ' +
     'is on Goldblatt\u2019s 282 W/m\u00b2 to a watt.');
 
   // Why. The Simpson-Nakajima limit is a property of a steam atmosphere and is

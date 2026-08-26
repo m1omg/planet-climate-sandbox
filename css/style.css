@@ -456,3 +456,18 @@ body.software-render #planet{image-rendering:auto}
   padding:.25rem .45rem}
 .world-name input::placeholder{color:var(--fg-faint)}
 .world-name input:focus{outline:none;border-color:var(--accent)}
+
+/* The two star modes under the insolation slider. Same visual language as the
+   fossil-carbon block above -- these are options attached to a control, not
+   controls of their own -- but they wrap, because two labels and a status line
+   do not fit on one row in the sidebar. */
+.star-modes {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  margin-top: 7px; font-size: 11px;
+}
+.star-status {
+  flex: 1 0 100%;
+  color: #b08a5a; font-variant-numeric: tabular-nums;
+  min-height: 1.2em;
+}
+.star-status:empty { display: none; }

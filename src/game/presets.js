@@ -482,5 +482,26 @@ export const PRESETS = {
   // oxygen -- a thinner oxygen atmosphere than Earth's because its volcanism
   // eats most of what its biosphere makes.
   superEarth: { name: 'Super-Earth', icon: '🪐', params: { ...EARTH, mass: 3.5, water: 2, n2Bar: 3, co2Bar: 1e-3, insolation: 0.9, outgassing: 1.0, startT: 290 } },
-  futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, insolation: 1.09, startT: 292 } },
+  // Earth two point two gigayears from now, on Gough (1981)'s main-sequence
+  // relation -- the same one the brightening mode drives and the one this preset
+  // already used at +1 Gyr, where it gave 1.0959 against the 1.09 that shipped.
+  // At +2.2 it gives 1.2385, and 2.2 Gyr is chosen because that is where this
+  // model puts Earth at the last insolation it can hold: the walked-up edge is
+  // 1.26 and the last stable world sits at 1.24.
+  //
+  // It cannot boot at Earth's composition, and that is the preset, not a bug. A
+  // fresh world dropped in at 1.2385 with 427 ppm of CO2 starts 290 K below its
+  // own balance, overshoots on the way up and is a 537 C runaway inside a
+  // hundred thousand years. Walk a settled Earth up to the same insolation and
+  // there is a perfectly good state waiting: 31.6 C, ice-free, holding for a
+  // gigayear -- on 8.5 ppm of CO2, because the thermostat has spent two
+  // gigayears weathering it away to keep the temperature down. So that is where
+  // this boots, and it is the whole story of the world in three numbers.
+  //
+  // 8.5 ppm is also below where land plants can run. This world is ice-free,
+  // wet, 31 C and has lost its forests: what is left is the marine half of its
+  // biosphere, 46% of today's production. That is how a biosphere actually ends
+  // -- not cooked, starved -- and it is worth loading the preset to see.
+  futureEarth: { name: 'Earth +2.2 Gyr', icon: '☀️', params: { ...EARTH,
+    insolation: 1.2385, co2Bar: 8.482e-6, startT: 304.76 } },
 };
