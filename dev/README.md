@@ -13,7 +13,7 @@ node tools/builddev.mjs /path/to/main/checkout
 `../assets/` and borrows the surface maps at the site root, which is 668 KB
 instead of 23 MB.
 
-**This build is knowingly not green** — four-band radiation, CO₂ condensation, hydrogen and Hycean work in progress — 19 of 234 self-tests failing. Two of those failures are tests
+**This build is knowingly not green** — Goldblatt runaway limit, four-band radiation, CO₂ condensation, hydrogen and Hycean work in progress — 18 of 238 self-tests failing. Two of those failures are tests
 asserting the *old* deviation: snowball deglaciation now lands at 143 mbar
 against the literature's 100–300, where it used to be thirty times too low.
 

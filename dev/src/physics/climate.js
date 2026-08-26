@@ -471,10 +471,19 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // The CO2 reservoir is integrated semi-implicitly, so it needs only a loose
   // bound -- and that bound is measured against a floor, because a planet whose
   // CO2 has been weathered away to nothing must not drag the clock down with it.
+  //
+  // With the same exemption the oxygen bound below needs, and for the same
+  // reason: a reservoir pinned at exactly zero with the sink still beating the
+  // source is not going anywhere, and bounding on the imbalance there costs
+  // everything. A runaway greenhouse is where this bites -- weathering at 370 C
+  // outruns the volcanoes by two orders of magnitude for ever, the reservoir sits
+  // at zero, and the bound held a settled steam world at twenty-three-year steps
+  // through a million years of nothing happening.
   if (w.weathering) {
+    const pinned = w.co2 <= 0 && w.weathering.W > w.weathering.V;
     const net = Math.abs(w.weathering.V - w.weathering.W) / Math.max(w.weathering.kappa, 1);
     const floor = 0.02 * CO2_EARTH_COL;
-    if (net > 0) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
+    if (net > 0 && !pinned) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
   }
 
   // Oxygen, and this is the important one. Methane's lifetime pivots on pO2 from
