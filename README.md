@@ -91,10 +91,10 @@ three known gaps that are deliberately not fixed:
 | Stratospheric H₂O, modern Earth | ~4 ppm | 5 ppm, from psat(T_trap)/p_trap |
 | Venus | 737 K, ~161 W/m² at 92 bar | 733 K, 161 |
 | Mars | ~215 K | 211 K |
-| Hottest stable climate | 362.8 K (Wolf & Toon 2015); >330 (Popp 2016); ~335 (Leconte 2013) | **350 K** |
-| Moist greenhouse onset | stratospheric H₂O past 10⁻³ near 340 K (Kasting 1988) | **337 K** |
-| Ocean loss there, young star | gigayears at Kasting's criterion | 6.6×10⁹ yr |
-| Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **282 W/m² at 354 K** |
+| Hottest stable climate | ~335 K (Leconte 2013); >330 (Popp 2016); 362.8 (Wolf & Toon 2015) | **337 K** |
+| Moist greenhouse before the runaway | none (Leconte 2013); near 340 K (Kasting 1988) | **none — stratosphere dry at 2×10⁻⁴** |
+| Ocean loss in a runaway, young star | gigayears | 5.7×10⁸ yr |
+| Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **282 W/m²** |
 | Runaway from CO₂ alone | stable (Ramirez 2014); ~100× (Goldblatt 2013) | needs >500× pre-industrial |
 
 The runaway limit is not imposed anywhere in the code. Hold water at saturation and the fitted
@@ -124,6 +124,17 @@ Most worlds hold the full 150 Myr/s. A planet in a genuinely fast transition —
 tidally locked world still redistributing heat — advances more slowly, because those are the epochs
 that actually have to be resolved, and the rate readout turns amber and reports the speed it is
 really achieving rather than the one you asked for.
+
+"Genuinely" is doing real work in that sentence, and it has been wrong twice. Every slow reservoir is
+bounded in `maxStep` so none of them can jump discontinuously across a stride, and a bound reading a
+*rate* cannot tell a reservoir that is moving from one that is merely being pushed at while it sits
+empty. Oxygen has carried an exemption for that case since bounding on it took the Archean from
+19 000 Myr/s to a standstill: a reservoir pinned at zero with the sink still beating the source is
+not going anywhere. CO₂ did not, and a runaway is exactly where it bites — weathering at 370 °C
+outruns the volcanoes by two orders of magnitude for ever, the reservoir sits at zero, and the world
+was held to **23.6-year steps through a million years of nothing happening**. 189 125 steps became
+979. Anything that reads a rate to choose a step needs to ask whether the thing it is reading can
+actually move.
 
 ### Two ways to draw a planet
 
@@ -530,9 +541,11 @@ it is worth writing down because no single part of it was a bug in the physics. 
    years**.
 2. **A frozen planet does not weather.** With the only CO₂ sink switched off, volcanism piled it up
    with nothing to take it out: 0.1 bar to 10 bar over two hundred megayears.
-3. **This model's runaway limit falls with total pressure.** Simpson–Nakajima goes 259 W/m² at 0.1
-   bar → 158 at 10 → **113 at 20**, because pressure broadening goes as `pTot^0.3`. This world absorbs
-   185 W/m². Somewhere past five bar the runaway simply stopped being escapable.
+3. **This model's runaway limit falls with total pressure.** Simpson–Nakajima goes 328 W/m² at 0.1
+   bar → 232 at 10 → **220 at 20**, because pressure broadening goes as `pTot^0.3`. This world absorbs
+   185 W/m². Somewhere past ten bar the runaway simply stopped being escapable. (Those figures were
+   written here as 259 / 158 / 113 and had gone stale; `calibrate.mjs` measures the six-bar value
+   every run now so they cannot drift again.)
 
 Only the first is fixed here. The preset now boots at **0.336 bar with a +10 °C branch and twenty
 kelvin of margin** instead of six, and 0.336 bar is where weathering and volcanism balance on this
@@ -629,8 +642,10 @@ It costs eighteen additions per step and no extra radiative transfer.
 | — | **>347** | past this the interior boils an ocean with no help from the star |
 
 Barr's runaway thresholds for the TRAPPIST-1 planets — 258, 262, 277, 283, 308 W/m² — bracket this
-model's own emergent Simpson–Nakajima limit of **282**, which is a pleasing independent check on a
-number nothing here was tuned to produce.
+model's Simpson–Nakajima limit of **282**. That used to be an independent check, and is not one any
+more: the band-0 water self-continuum is now fitted to put the limit on Goldblatt's 282 exactly, so
+the agreement is an input rather than a result. It is recorded here because deleting the claim would
+hide that the number moved from emergent to imposed.
 
 **Heat drives volcanism too.** Outgassing is melt production times the CO₂ dissolved in the melt —
 ocean-island primary melts run about 4 wt% CO₂ — and melt production is driven by the heat leaving
@@ -1335,7 +1350,7 @@ needs snowfall to exist at all. In a hard snowball the water cycle collapses, so
 up frosted but largely unglaciated — as on the real Snowball Earth, and in the Antarctic Dry Valleys
 today — which makes such a planet darker, and easier to escape, than one buried in ice.
 
-### The hot branch, and the moist greenhouse that ends it
+### The hot branch, and the runaway that ends it
 
 A planet pushed toward its star used to step off a cliff here. At 1.24 S⊕ an Earth-like world sat at
 64.8 °C; at 1.25 it was at 560 °C and its ocean was in the air. Nothing in between.
@@ -1362,14 +1377,22 @@ Earth's cloud albedo is observed and the anchors pin it; AR6's +0.42 W/m²/K clo
 0.05 bar of vapour, where the modern tropics reach 0.028.
 
 The result is a branch instead of a cliff. Albedo now falls to 0.258 and then turns and climbs to
-0.269, and the world tracks up it:
+0.269, and the world tracks up it. With the CO₂ held still, which is how the papers drive it:
 
-| S⊕ | 1.24 | 1.26 | 1.28 | 1.30 | 1.32 | 1.33 | 1.34 |
-|---|---|---|---|---|---|---|---|
-| mean surface | 63.5 °C | 68.3 | 72.4 | 76.0 | 79.4 | **81.2** | runaway |
+| S⊕ | 1.24 | 1.26 | 1.28 | 1.30 | 1.31 | 1.32 |
+|---|---|---|---|---|---|---|
+| mean surface | 49.0 °C | 52.5 | 56.5 | 62.7 | **91.1** | runaway |
 
-The inner edge barely moved — 1.245 S⊕ before, 1.33 after, against Wolf & Toon's 1.21 — because the
-ceiling on absorbed flux is still the OLR peak, and all the cloud term does is let the planet reach it.
+**With the thermostat running it is a different and shorter branch**, because weathering strips the
+CO₂ as the star brightens and the world runs cooler for it:
+
+| S⊕ | 1.20 | 1.26 | 1.30 | 1.32 | 1.33 |
+|---|---|---|---|---|---|
+| mean surface | 28.8 °C | 33.0 | 36.1 | **37.8** | runaway |
+| stratospheric H₂O | 3.6×10⁻⁵ | 6.3×10⁻⁵ | 1.4×10⁻⁴ | 2.5×10⁻⁴ | 1 |
+
+The difference between those two tables is the open gap two sections down, and it is the reason the
+inner edge sits where it does.
 
 **The cold trap is now the textbook relation.** What gets past a cold trap is the saturation vapour
 pressure at the trap over the pressure there, `f = psat(T_ct)/p_ct`. It used to be a power law fitted
@@ -1385,9 +1408,20 @@ One number is fitted, the e-folding of that second effect, and it is fitted to a
 — Kasting's 10⁻³ criterion at a 340 K surface — rather than to anything downstream. Modern Earth then
 falls out instead of being imposed: a 190 K trap at 0.1 bar gives **5 ppm** against an observed ~4.
 
-So the branch now ends the way the papers say it does. Kasting's criterion is crossed at **337 K**,
-while the world is still sitting there with liquid water, and the ocean leaves in gigayears rather
-than in tens of them.
+So on a **pinned-CO₂** branch it ends the way Kasting says it does: his criterion is crossed at
+337 K, while the world is still sitting there with liquid water, and the ocean leaves in gigayears
+rather than in tens of them.
+
+**Let the thermostat run and it does not end that way at all**, and that is deliberate. The section
+two down describes the change: the band-0 water self-continuum is now fitted so the Simpson–Nakajima
+limit lands on Goldblatt et al. (2013)'s 282 W/m² exactly, and with the CO₂ weathered away the
+absorbed flux crosses that limit at 1.33 S⊕ while the stratosphere is still at 2.5×10⁻⁴ — a quarter
+of Kasting's criterion. The planet goes straight into a runaway with a dry stratosphere. That is
+Leconte et al. (2013)'s result, in a GCM, and the price of matching it is that **the moist greenhouse
+stops existing as a state a player can be in** on a world whose carbon cycle is running. It survives
+only where the CO₂ is held. The cost was weighed and accepted; `calibrate.mjs` now carries a row
+asserting the stratosphere stays dry, which fails if a moist greenhouse ever reappears ahead of the
+runaway.
 
 **The 10⁸ years everyone quotes is the runaway, not this.** Two limits govern escape — diffusion and
 the XUV energy supply — and under the present Sun the second one binds hard: 3.4×10⁻⁶ of bolometric in
@@ -1396,10 +1430,12 @@ XUV cannot lift an ocean off in 10⁸ years however wet the stratosphere gets, a
 roughly the first half-gigayear — the diffusion limit takes over and the ocean goes in 6.6 Gyr. The
 first version of this anchor asked it under the modern Sun and was measuring the wrong thing.
 
-**What is still short.** The branch tops out at 350 K cold-started, 354 K if you walk the insolation up
-from a settled world, against Wolf & Toon's 362.8 K. That is 9–13 K, and the model sits between their
-number and Leconte's 335 K — which is to say inside the spread of a literature that disagrees with
-itself by 30 K. Pushing the cloud term harder would close it and would be tuning to one paper.
+**What is still short.** Nothing, on this row, and it is worth being clear that it got there by
+accident rather than by aim. Walking the insolation up from a settled world at fixed CO₂ now tops the
+branch out at **364 K** against Wolf & Toon's 362.8 — it was 344 K before this change, and the
+continuum that was raised to fix the limit lifted it. The model sits at the top of a literature that
+disagrees with itself by 30 K rather than at the bottom of it. The number that is short instead is
+the *free-thermostat* branch top, 311 K, which is the same gap as the inner edge below.
 
 ### Hot ocean worlds
 
@@ -1420,11 +1456,17 @@ Two published routes reach it. The model used to do both; **on this branch it do
   habitable zone appearing where Kasting (1993) says it should, and it is arguably the model getting
   *better* — but it means the dense-CO₂ hot ocean is now reached by adding hydrogen, not CO₂, and the
   shipped preset does exactly that. See the preset section below.
-* **Earth-like air close to a bright star.** That is the hot branch above: 81 °C at 1.33 S⊕. This one
-  is intact, and it is what the **Sunbaked Ocean** preset rides — stable across 10 Gyr and every step
-  size tested, 54–68 °C, with the classifier crossing between Hot Ocean and Moist Greenhouse inside
-  that band because Kasting's 10⁻³ criterion falls inside it. That crossing is a label boundary, not
-  an instability.
+* **Earth-like air close to a bright star.** That is the hot branch above: 91 °C at 1.31 S⊕ with the
+  CO₂ held. This one is intact, and it is what the **Sunbaked Ocean** preset rides — **and the ledge
+  it rides moved when the inner edge did.** The preset sat at 1.20 S⊕ under four bars of nitrogen;
+  adopting Goldblatt's limit brought the edge for that configuration in to 1.18, and 1.20 became a
+  510 °C wet runaway that had lost a quarter of its water. It ships at **1.15 S⊕** now: 54 °C, ocean
+  over every square metre, holding 2.96 of its 3 Earth oceans across ten gigayears, with about two
+  and a half per cent of margin. The nitrogen still does both of the things it is there for — 1 bar
+  gives 44.6 °C, 2 bar 49.2, 4 bar 53.9, and the stratosphere goes from 9.6×10⁻⁴ at 1 bar to
+  9.2×10⁻⁵ at 4 — so the physics of the preset is unchanged and only its place on the slider moved.
+  The classifier no longer crosses into Moist Greenhouse anywhere on it, because under the Goldblatt
+  framing there is nothing there to cross into.
 
 The two differ in the thing that matters, and not because they were made to. What escapes past a cold
 trap is a **ratio**, and ten bars of background gas is a very large denominator: the dense-CO₂ world
@@ -1494,10 +1536,14 @@ reductant flux and took Earth's oxygen, its surface pressure and its carbon cycl
   and 0.28 S⊕ this model gives 153 °C where von Paris gives 84. Same root cause as the outer-edge `GAP`
   row.
 * Thick atmospheres run away too easily. The Simpson–Nakajima limit falls from 282 W/m² at 1 bar to
-  156 at 6 bar here, because pressure broadening goes as `pTot^0.3` across every optical depth, so a
-  4 bar N₂ + 2 bar CO₂ world tips into a runaway at 0.9 S⊕. That is why the genuinely thick end of this
-  parameter space — Orion's Arm's 10–218 bar — is mostly out of reach, and it is a good place for a
-  fourth spectral-band attempt to look.
+  242 at 6 bar here, because pressure broadening goes as `pTot^0.3` across every optical depth, so a
+  4 bar N₂ + 2 bar CO₂ world sits at 194 W/m² and tips into a runaway at 0.9 S⊕. That is why the
+  genuinely thick end of this parameter space — Orion's Arm's 10–218 bar — is mostly out of reach,
+  and it is a good place for a fourth spectral-band attempt to look. It is a `calibrate.mjs` row now
+  rather than a paragraph: the figure quoted here was 156 W/m² and was stale, which is exactly the
+  failure mode a measured row exists to prevent. Raising the band-0 continuum for the Goldblatt
+  limit did **not** move it — 245 W/m² before, 242 after — because the continuum is the one term in
+  the scheme carrying no pressure broadening at all.
 
 ### Earth's inner edge is too far out, and the carbon cycle is why
 
@@ -1506,17 +1552,19 @@ different answers depending on one switch:
 
 | | moist greenhouse | runaway |
 |---|---|---|
-| CO₂ held at 400 ppm | **1.24 S⊕** | 1.42 S⊕ |
-| carbon cycle running | **1.38 S⊕** | 1.42 S⊕ |
+| CO₂ held at 400 ppm | **1.21 S⊕** | 1.32 S⊕ |
+| carbon cycle running | *— none before the runaway* | **1.33 S⊕** |
 | *Kopparapu 2013 (1-D)* | *1.015* | *1.066* |
 | *Leconte 2013 (3-D GCM)* | *— none before the runaway* | *~1.10* |
 | *Wolf & Toon 2015 (CAM4)* | *habitable to ~1.21, 350–360 K* | *above that* |
 
-Held at 400 ppm the model is defensible: 1.24 sits just past Wolf & Toon's 1.21,
-which is the most generous published number. **Let the thermostat run and it goes
-to 1.38**, which is past everything. So an Earth at 1.28 S⊕ reads here as a
-comfortable 34 °C hothouse with an eleven-watt margin, where the literature has
-it losing its ocean.
+Held at 400 ppm the model is now defensible on both halves: the moist greenhouse
+begins at 1.21, which is Wolf & Toon's number, and the runaway follows at 1.32.
+**Let the thermostat run and there is no moist greenhouse at all** — weathering
+strips the CO₂, the branch runs 25 K cooler, and the world crosses the radiation
+limit at 1.33 with a stratosphere at 2.5×10⁻⁴. Row two agrees with Leconte's GCM
+in *shape* and is 0.23 out in *place*. An Earth at 1.28 S⊕ still reads here as a
+comfortable 34 °C hothouse where the literature has it losing its ocean.
 
 **The mechanism is a feedback that should not exist.** The Simpson–Nakajima limit
 is a property of a steam atmosphere and is very nearly independent of CO₂: at the
@@ -1526,21 +1574,36 @@ not. CO₂'s optical depth is *added* to water's in each band rather than
 overlapping it, and at the peak the window band still has a water opacity of only
 0.8 — the self-continuum that should be closing it goes as `pH₂O²` with a
 coefficient fitted at Earth's 0.011 bar, where it is worth 4×10⁻⁵. So stripping
-CO₂ buys a transparency a steam atmosphere does not have, and the limit moves
+CO₂ buys a transparency a steam atmosphere does not have, and the limit moved
 **43 W/m²** across the span a brightening Earth walks through as weathering
-empties its air. The thermostat stops being a thermostat and starts moving the
-edge of the map.
+empties its air. The thermostat stopped being a thermostat and started moving the
+edge of the map. It is **36 W/m²** now, which is better and is still the gap.
 
 Both rows are reported by `calibrate.mjs` every run.
 
-**Two fixes were tried and neither shipped.** Raising the continuum coefficient to
-20 puts the Simpson–Nakajima limit on Goldblatt's 282 W/m² exactly and brings the
-runaway to 1.32 — and destroys the stable moist-greenhouse branch, which Kasting
-(1988), Popp (2016) and Wolf & Toon (2015) all support and which this model was
-deliberately built to have. Flooring the CO₂ drawdown instead moves the moist
-onset to 1.26–1.32 and leaves the runaway at 1.42, because the runaway is set by
-the limit and not by the CO₂. The honest fix is band overlap and a refit — the
-same fourth-band work the snowball rows describe as attempted and reverted twice.
+**One of the two fixes shipped, deliberately and at a stated price.** Raising the
+band-0 water self-continuum coefficient to 20 puts the Simpson–Nakajima limit on
+Goldblatt's 282 W/m² exactly and brings the free-thermostat runaway from 1.38 to
+1.33 — and destroys the moist-greenhouse branch on a world whose carbon cycle is
+running, which Kasting (1988), Popp (2016) and Wolf & Toon (2015) all support and
+which this model was deliberately built to have. That was tried, rejected, and
+then chosen: Goldblatt (2013) and Leconte (2013) both end the branch on radiation
+rather than on the cold trap, Leconte's GCM finds no moist greenhouse before the
+runaway at all, and a model cannot sit on both sides of that disagreement. The
+moist greenhouse survives at fixed CO₂, which is where the papers that find it
+drive their models.
+
+The coefficients were not simply raised. `A1WC` at 20 on its own takes Earth's own
+OLR and its 288 K slope out of their anchors, so `A1L`, `A1WL` and `A3L` were
+re-solved by Newton against three targets at once — Earth's all-sky OLR at
+235.71 W/m², dOLR/dT at 288 K and fixed RH at 1.803, and the saturated limit at
+282. Earth's pre-industrial moved 14.21 → 14.23 °C and its ECS 2.85 → 2.84 K.
+
+Flooring the CO₂ drawdown was the other candidate and is still not shipped: it
+moves the moist onset without touching the runaway, because the runaway is set by
+the limit and not by the CO₂. The remaining 36 W/m² needs band overlap and a
+refit — the same fourth-band work the snowball rows describe as attempted and
+reverted twice.
 
 Rotation is *not* part of this gap and is handled: `slowness` is zero for a
 24-hour day, so Earth gets none of the substellar cloud deck that lets a slow
@@ -1678,23 +1741,65 @@ Stated plainly, because a model that hides these is less useful:
   — neither the scattering greenhouse (Forget & Pierrehumbert 1997, revised sharply down by
   Kitzmann 2016) nor their albedo — so this is the maximum greenhouse alone.
 
-* **A 1.32 S⊕ ocean world with its CO₂ weathered away runs a 64 K limit cycle instead of sitting
-  still.** Reported by a player from the live site and reproduced exactly. The world sits near
-  36 °C for a megayear or so, drifts down, the ice-albedo feedback catches it around 27 °C, it
-  crashes to −6 °C with two fifths of the planet frozen, and comes back past 58 °C. Period about
-  1.3 Myr. It is step-independent — identical from a 50 kyr cap up to no cap at all — so it is the
-  model rather than the integrator, and it predates the work described below.
+* **A 1.32 S⊕ ocean world with its CO₂ weathered away ran a 64 K limit cycle instead of sitting
+  still. Fixed.** Reported by a player from the live site and reproduced exactly. The world sat near
+  36 °C for a megayear or so, drifted down, the ice-albedo feedback caught it around 27 °C, it
+  crashed to −6 °C with two fifths of the planet frozen, and came back past 58 °C. Period about
+  1.3 Myr. It was step-independent — identical from a 50 kyr cap up to no cap at all — so it was the
+  model rather than the integrator.
 
-  It should not happen. That far inside the inner edge an ocean world has no business reaching an
-  ice edge at all, and the one-dimensional energy balance for the same atmosphere has a clean
-  stable equilibrium at 44 °C. The eighteen-band version does not. What starts the slide is not ice
-  but the albedo: it climbs from 0.369 to 0.381 while the world cools from 28 °C to 27 °C **with no
-  ice on it**, which is the water-vapour darkening term running backwards — cooler, drier,
-  brighter, cooler, with nothing damping it. Only then does sea ice take over and finish the job.
+  It should not have happened, and the reason it did is that the world had **two** places to be. What
+  started the slide was not ice but the albedo: it climbed from 0.369 to 0.381 while the world cooled
+  from 28 °C to 27 °C **with no ice on it**, the water-vapour darkening term running backwards —
+  cooler, drier, brighter, cooler, with nothing damping it. Sea ice then took over and finished the
+  job, and the cool state it landed in was reachable because the inner edge was at 1.38 S⊕: at 1.32
+  the world was still *inside* the habitable zone and had a cool branch to fall onto.
 
-  Not fixed. `calibrate.mjs` reports the peak-to-peak swing every run, and there is a guard in
-  `selftest.js` on its amplitude, because the refit below doubled it and reached a complete
-  snowball while passing every other check in the suite.
+  Adopting Goldblatt's radiation limit removed the cool branch. The inner edge is 1.33 now, so a
+  world at 1.32 with no CO₂ is past it: it runs away once and holds at 556–559 °C, a 3.7 K swing
+  over three megayears in 494 steps where it used to take 40 000. `calibrate.mjs` carries the
+  peak-to-peak swing as an anchor rather than a reported gap now, and `selftest.js` asks for
+  stillness rather than for bounded amplitude. **The underlying albedo defect is not fixed** — it is
+  out of reach on this world, not repaired — and would still bite a world that sits at a comparable
+  temperature inside the edge.
+
+* **The moist greenhouse no longer exists on a world whose carbon cycle is running.** Deliberate,
+  asked for, and the price of putting the inner edge where Goldblatt (2013) and Leconte (2013) put
+  it. Raising the band-0 water self-continuum to 20 sets the Simpson–Nakajima limit to 282 W/m²
+  exactly and brings the free-thermostat runaway from 1.38 S⊕ to 1.33; at that crossing the
+  stratosphere is at 2.5×10⁻⁴, a quarter of Kasting's 10⁻³ criterion, so the planet goes straight
+  into a runaway with a dry stratosphere. That is Leconte's GCM result and this model now reproduces
+  it. Kasting's moist greenhouse survives only where the CO₂ is pinned, which is how the papers that
+  find it drive their models: pinned at 400 ppm it begins at 1.21 S⊕ and the runaway follows at 1.32.
+  `calibrate.mjs` asserts the stratosphere stays dry at the runaway and fails if a moist greenhouse
+  ever reappears ahead of it.
+
+  Two things had to be paid for and were. **A settled runaway used to be unaffordable to watch**:
+  band 0's continuum goes as `pH₂O²` with no pressure broadening, so left unbounded it blacks out
+  0–8 µm entirely in steam — a range that is physically clear at those temperatures, because the
+  surface radiates most of it below 3 µm where the continuum does not act. The world climbed to the
+  model's own 4000 K clamp three years at a time. The term is capped at an optical depth of 50 now,
+  which leaves the limit at 282 and the runaway threshold at 344 W/m² near 334 K untouched and puts
+  a settled runaway at 580 °C, where the previous scheme put it. Below about 20 the ceiling invents
+  an equilibrium instead: at 10 a world at 1.6 S⊕ sits at 410 °C holding an eighth of its water as
+  liquid three hundred kelvin above the critical point, and never boils.
+
+  And **two ledges moved with the edge, neither of them lost.** The Sunbaked Ocean preset goes from
+  1.20 S⊕ to 1.15 — see the hot-ocean section above. The Twilight World is the other: a tidally
+  locked land planet with 0.08 Earth oceans under 0.3 bar of air holds about a bar of steam over its
+  eye at 100 °C, which is enough vapour for the raised continuum to close band 0 there, so at 1.0 S⊕
+  the eye now runs away and takes the night side with it at every water fraction from 0.04 up. The
+  state is intact one per cent of a star's output further in: at **0.93 S⊕** the eye sits at 69 °C
+  with a temperate two-band ring and a −111 °C night side. A bar of background air instead of 0.3
+  also holds it at 1.0 S⊕, which is the same cold-trap ratio the Sunbaked preset runs on.
+
+  That these all moved the same way is the change doing what it was asked to do. The inner edge came
+  in by 0.05 S⊕, and every state that was sitting within 0.05 of it had to move with it.
+
+  The one thing that got worse: a 0.30 S⊕ world at a thousand times Earth's volcanism now builds
+  421 bar and runs away to 2278 K, where the previous coefficients froze its CO₂ onto the ground at
+  142 K. Everything up to 600× still collapses. That is not the pressure dependence of the limit,
+  which the continuum barely touched — 245 W/m² at six bar before, 242 after.
 
 * **A band-overlap refit closed four more gaps and was reverted, because it broke the hot branch.**
   Recorded in full, because what it got right is worth keeping and how it got past every check is

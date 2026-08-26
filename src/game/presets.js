@@ -340,26 +340,30 @@ export const PRESETS = {
   // The other way to a hot ocean, and the contrast is the point.
   //
   // The world above is hot because of what is in its air. This one is hot because
-  // of where it sits: 1.2 times Earth's sunlight, ordinary CO2, and no greenhouse
+  // of where it sits: 1.15 times Earth's sunlight, ordinary CO2, and no greenhouse
   // worth the name. What keeps it liquid rather than boiling is that it has no
   // continents -- so no continental weathering, and the carbon thermostat is left
   // with only the slow seafloor sink -- and four bars of nitrogen over it.
   //
   // The nitrogen does two things at once, and both are in the literature. It
-  // warms, by pressure-broadening everything else's absorption lines: 2 bar gives
-  // 52.8 C here and 4 bar gives 58.5. And it keeps the water, because what gets
-  // past a cold trap is the *ratio* pH2O/pTot, so raising the denominator holds
-  // the stratosphere dry -- 2.4e-4 here, below Kasting's 1e-3, where the same
-  // world under 1 bar is already a moist greenhouse. Vladilo et al. (2013) find
-  // the same direction, the inner edge moving from 0.87 to 0.77 au as pressure
-  // goes from a third of a bar to three.
+  // warms, by pressure-broadening everything else's absorption lines: at this
+  // insolation 1 bar gives 44.6 C, 2 bar 49.2 and 4 bar 53.9. And it keeps the
+  // water, because what gets past a cold trap is the *ratio* pH2O/pTot, so raising
+  // the denominator holds the stratosphere dry -- 9.2e-5 here, an order of
+  // magnitude below Kasting's 1e-3, where the same world under 1 bar is at 9.6e-4
+  // and on the edge of being a moist greenhouse. Vladilo et al. (2013) find the
+  // same direction, the inner edge moving from 0.87 to 0.77 au as pressure goes
+  // from a third of a bar to three.
   //
-  // It is a narrow ledge. At 1.25 S(+) with the same four bars this world is at
-  // 222 C with its ocean in the air, so the margin is about four per cent in
-  // insolation -- which is roughly what Zhang & Yang (2020) mean when they call
-  // the inner edge a non-monotonic function of background pressure.
+  // It is a narrow ledge, and it moved. This preset sat at 1.20 S(+) while the
+  // inner edge was set by the cold trap; adopting Goldblatt's radiation limit
+  // brought the edge in to 1.18 for this configuration and 1.20 became a 510 C
+  // wet runaway. At 1.15 it is a 54 C ocean world holding 2.96 of its 3 Earth
+  // oceans across ten gigayears, with about two and a half per cent of margin --
+  // which is roughly what Zhang & Yang (2020) mean when they call the inner edge
+  // a non-monotonic function of background pressure.
   sunbakedOcean: { name: 'Sunbaked Ocean', icon: '🌞', params: { ...EARTH, o2Bar: 0, biosphere: 0,
-    insolation: 1.20, co2Bar: 280e-6, n2Bar: 4.0, water: 3, landFraction: 0,
+    insolation: 1.15, co2Bar: 280e-6, n2Bar: 4.0, water: 3, landFraction: 0,
     ch4Bar: 0, outgassing: 1.0, internalHeat: 0.092, startT: 330 } },
 
   // ---- three planets that actually exist ----------------------------------

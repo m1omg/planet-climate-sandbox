@@ -229,17 +229,27 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   if (last) console.log(`   (warmest non-runaway sampled: ${last.mult}× → ${last.T.toFixed(1)} °C)`);
 }
 
-// ---- the hot stable branch, and the moist greenhouse that ends it ---------
+// ---- the hot stable branch, and the runaway that ends it -------------------
 // A planet pushed toward its inner edge does not step off a cliff. Three
 // independent 3-D models find a *stable* hot branch first: Wolf & Toon (2015)
 // hold an ocean-covered Earth at up to 362.8 K, Popp et al. (2016) get a stable
-// state above 330 K, Leconte et al. (2013) reach about 335 K. What ends it is
-// not radiation but water: the cold trap fails, the stratosphere wets, and the
-// ocean leaves over 10^8-10^9 years (Kasting 1988).
+// state above 330 K, Leconte et al. (2013) reach about 335 K.
 //
-// This model used to run temperate straight into a 560 °C steam greenhouse with
-// nothing in between, which is the one thing all three papers agree does not
-// happen.
+// What ends it is the question these rows changed their mind about. Kasting
+// (1988) ends it with water: the cold trap fails, the stratosphere wets, and the
+// ocean leaves over 10^8-10^9 years -- the moist greenhouse, a distinct state
+// with its own temperature. Goldblatt et al. (2013) and Leconte et al. (2013)
+// end it with radiation instead: the absorbed flux crosses the Simpson-Nakajima
+// limit (282 W/m^2 saturated, runaway near 294 absorbed) and the planet goes
+// straight into a runaway, with the stratosphere still dry when it does. In
+// Leconte's GCM there is no moist greenhouse before the runaway at all.
+//
+// This model follows Goldblatt. The band-0 water self-continuum sets the limit
+// to 282 W/m^2 exactly, and the cost -- accepted deliberately -- is that the
+// moist greenhouse ceases to exist here as a state a player can be in: the
+// stratospheric mixing ratio at the last stable point is 2e-4, never 1e-3. The
+// row that used to measure its onset now measures that it does not happen, and
+// the inner edge below is measured at the runaway.
 {
   let hottest = null, hotS = 1.20;
   for (let S = 1.20; S <= 1.70; S += 0.01) {
@@ -248,36 +258,52 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     hottest = w; hotS = S;
   }
   const Ttop = hottest ? hottest.diag.Tmean : 0;
-  anchor('hottest stable climate', Ttop, 345, 375, 'K',
-    'Wolf & Toon 2015: 362.8 K; Popp 2016: >330 K; Leconte 2013: ~335 K');
+  // Ranged on Leconte and Popp rather than on Wolf & Toon. Ending the branch at
+  // the radiation limit rather than at the cold trap necessarily ends it cooler
+  // than a model that lets the cold trap fail first, so 362.8 K is the wrong
+  // number to hold this to; ~335 K is the right one.
+  anchor('hottest stable climate', Ttop, 330, 375, 'K',
+    'Leconte 2013: ~335 K; Popp 2016: >330 K; Wolf & Toon 2015: 362.8 K, which ends the ' +
+    'branch on the cold trap rather than on the radiation limit and so sits above this');
 
-  // Kasting's moist greenhouse is a definition, not a temperature: the
+  // Walk the same sweep looking for both endings at once: the runaway (the world
+  // stops having an equilibrium) and Kasting's moist greenhouse (the
   // stratospheric water mixing ratio passing 1e-3, at which point hydrogen
-  // escapes fast enough to matter. Find the surface temperature where the
-  // model crosses it.
-  let onset = 0, onsetS = 0;
+  // escapes fast enough to matter). Which one comes first is the whole question.
+  //
+  // pin:false -- the carbon cycle running, which is what a player has. The
+  // pinned sweep and the free one disagree, and the difference between them is
+  // the finding recorded two rows below.
+  let runS = 0, fStratTop = 0, moistFirst = 0;
   for (let S = 1.00; S <= 1.70; S += 0.01) {
-    // pin:false -- the carbon cycle running, which is what a player has. The
-    // pinned sweep says 1.22 and the free one says something else entirely, and
-    // the difference between those two numbers is the whole finding below.
     const w = eq({ ...EARTH, insolation: S }, { years: 3e5, pin: false });
-    if (w.diag.Tmean > 400) break;
-    if ((w.escape?.fStrat ?? 0) > 1e-3) { onset = w.diag.Tmean; onsetS = S; break; }
+    if (w.diag.Tmean > 400) { runS = S; break; }
+    fStratTop = w.escape?.fStrat ?? 0;
+    if (!moistFirst && fStratTop > 1e-3) moistFirst = S;
   }
-  anchor('moist greenhouse onset', onset, 320, 355, 'K',
-    'Kasting 1988: stratospheric H2O passes 1e-3 near 340 K');
+  // Not a temperature any more, because there is no longer a state to take the
+  // temperature of. What this asks is Leconte's result: the stratosphere is
+  // still dry when the runaway starts. It fails if a moist greenhouse reappears
+  // ahead of the runaway, which would mean the limit had drifted back up.
+  anchor('stratosphere still dry at the runaway', fStratTop * 1e6, 0, 1000, 'ppm H\u2082O',
+    'Leconte 2013 (3-D GCM): no moist greenhouse before the runaway. Kasting 1988 has the ' +
+    'mixing ratio passing 1e-3 near 340 K and the ocean leaving over 1e8-1e9 yr; under the ' +
+    'Goldblatt framing adopted here that state does not occur, and this is the row that says so, ' +
+    'in parts per million against Kasting\u2019s thousand' +
+    (moistFirst ? ` \u2014 but it just did, at ${moistFirst.toFixed(2)} S\u2295` : ''));
 
-  // The same crossing said in the units a player is actually looking at. The
-  // temperature anchor above can sit inside its range while the *insolation* it
-  // happens at is half an au out, and the insolation is the slider.
-  deviation('Earth\u2019s inner edge', onsetS, 1.05, 1.25, 'S\u2295',
+  // The edge said in the units a player is actually looking at. The temperature
+  // anchor above can sit inside its range while the *insolation* it happens at
+  // is half an au out, and the insolation is the slider.
+  deviation('Earth\u2019s inner edge', runS, 1.05, 1.25, 'S\u2295',
     'Kopparapu 2013 (1-D): moist greenhouse 1.015, runaway 1.066. Leconte 2013 (3-D GCM): ' +
-    'runaway near 1.10, and no moist greenhouse before it. Wolf & Toon 2015 (CAM4): habitable ' +
-    'to about 1.21 at 350-360 K. Every published threshold is below 1.25 and this model puts the ' +
-    'crossing well outside them, so an Earth at 1.28 S(+) reads as a comfortable hothouse here ' +
-    'where the literature has it losing its ocean. The cause is the row below. Holding CO2 at ' +
-    '400 ppm instead of letting the thermostat run brings this to 1.24, which is inside the ' +
-    'range -- the radiation is not far off, the *interaction* is.');
+    'runaway near 1.10. Wolf & Toon 2015 (CAM4): habitable to about 1.21 at 350-360 K. Every ' +
+    'published threshold is below 1.25. Measured at the runaway now rather than at a moist ' +
+    'greenhouse that no longer exists, which moved it from 1.38 to 1.33 \u2014 closer, and still ' +
+    'outside. The remaining gap is the row below, not the limit: the limit itself is on ' +
+    'Goldblatt\u2019s 282 W/m\u00b2 to a watt. Holding CO2 at 400 ppm instead of letting the ' +
+    'thermostat run brings this inside the range \u2014 the radiation is not far off, the ' +
+    '*interaction* is.');
 
   // Why. The Simpson-Nakajima limit is a property of a steam atmosphere and is
   // very nearly independent of CO2: at the peak the surface is near 330 K, the
@@ -327,6 +353,24 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
       'by the Huronian: past ~3.7× the carbon cycle wants enough CO2 that losing all the methane ' +
       'no longer freezes the planet, and past ~4.2× the oxygen never crosses at all.');
   }
+
+  // The other half of the same complaint, and the one this row exists to keep
+  // honest. Broadening goes as pTot^0.3 across every optical depth here, so the
+  // runaway limit falls with total pressure where the literature has it very
+  // nearly unchanged: at the peak the atmosphere is steam, and water is already
+  // carrying the opacity at one bar. This was written down in the README as
+  // "156 W/m^2 at 6 bar" and was stale by a wide margin; measuring it every run
+  // is the point.
+  //
+  // The Goldblatt continuum did not cause it and barely touched it -- 245 W/m^2
+  // before, 242 after -- which is itself worth knowing, because the continuum is
+  // the one term in the scheme with no pressure broadening at all.
+  const thick = runawayLimit(280e-6, 6.0).flux;
+  deviation('runaway limit under six bar of air', thick, 250, 300, 'W/m²',
+    'should be close to the 282 W/m² it is at 1 bar, because at the peak the atmosphere is steam ' +
+    'and water already carries the opacity. Pressure broadening as pTot^0.3 across every band ' +
+    'takes it down instead — 328 W/m² at 0.1 bar, 282 at 1, 242 at 6, 220 at 20 — which is what ' +
+    'puts the thick end of this parameter space, Orion’s Arm’s 10-218 bar, mostly out of reach');
 
   const snSpread = runawayLimit(4e-7, 0.78).flux - runawayLimit(280e-6, 1.0).flux;
   deviation('runaway limit moved by CO2 alone', snSpread, 0, 10, 'W/m²',
@@ -423,10 +467,15 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     s.stepOnce(maxStep(s.world));
     if (s.world.time > 2e6) { lo = Math.min(lo, s.world.diag.Tmean); hi = Math.max(hi, s.world.diag.Tmean); }
   }
-  deviation('1.32 S(+) ocean world, peak-to-peak', hi - lo, 0, 5, 'K',
-    'it should sit still. A world that far inside the inner edge with an ocean and no CO2 has ' +
-    'a stable hot equilibrium in the 1-D balance (44 C) and a 64 K limit cycle in the 18-band ' +
-    'model. Reported from the live site; see the README');
+  // Fixed, and promoted from a reported gap to an anchor that can fail. It sat
+  // at 64.49 K -- a 1.3 Myr limit cycle through 40% ice -- for as long as this
+  // row existed. What removed it was the runaway: under the Goldblatt limit this
+  // world has no cool equilibrium to fall back to, so it goes hot and stays
+  // there. It now holds 371.6 C to within 0.2 K.
+  anchor('1.32 S(+) ocean world, peak-to-peak', hi - lo, 0, 5, 'K',
+    'it should sit still, and now does. A world that far inside the inner edge with an ocean ' +
+    'and no CO2 ran a 64 K limit cycle here for as long as the moist-greenhouse framing did. ' +
+    'Reported from the live site; see the README');
 }
 
 // ---- report ---------------------------------------------------------------

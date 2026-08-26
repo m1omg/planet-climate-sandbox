@@ -101,10 +101,30 @@ export function bandFractions(T, out = FR) {
 // is saturated for any coefficient above about ten, so the fit is free to leave
 // it at thousands -- identical on Venus, catastrophic on a world carrying one
 // bar of CO2. Every coefficient here is bounded for that reason.
-const A1L = 0.303521, A1U = 0.993371, A1W = 0.0446001, A1WL = 0.263935,
-      A1WC = 0.00122251, A1G = 0.417371;
+const A1L = 0.292930, A1U = 0.993371, A1W = 0.0446001, A1WL = 0.271230,
+      A1WC = 20.0000, A1G = 0.417371;
+// Ceiling on the band-0 water self-continuum. That term goes as pH2O^2 with no
+// pressure broadening -- 1.5e-7 at Earth's vapour, thousands in steam -- and its
+// quadratic growth is what sets the runaway threshold. But band 0 spans 0-8 um,
+// and a surface hot enough to be in a runaway radiates most of band 0 below 3 um
+// where the continuum does not act at all. Left unbounded the term blacks out a
+// spectral range that is physically clear, and the model climbs to its 4000 K
+// clamp and integrates at a few years a step. The saturating form below leaves
+// the term alone where it matters -- the saturated limit stays at 282 W/m^2 and
+// the runaway threshold at 344 W/m^2 near 334 K, both to within 0.2 W/m^2 -- and
+// gives band 0 a residual transmission once it is deep, so a runaway settles on
+// a hot steam branch instead of pinning at the clamp.
+//
+// The value is set by two things it must not break, not by taste. Too low and
+// the ceiling invents an equilibrium while the ocean is still there: at 10 a
+// world at 1.6 S(+) settles at 410 C holding thirteen per cent of its water as
+// liquid, three hundred kelvin above the critical point, and never boils. Any
+// value from about 20 up boils it on schedule; 50 is chosen because it puts a
+// settled runaway at 580 C, which is where the scheme this replaced put it, so
+// nothing downstream of a runaway world moved.
+const CONT_MAX = 50;
 const A2W = 4.22658, A2C = 0.00260231;
-const A3L = 0.213948, A3U = 13.5626, A3W = 6.72949, A3WC = 0.226336;
+const A3L = 0.217910, A3U = 13.5626, A3W = 6.72949, A3WC = 0.226336;
 const A4W = 9.70414, A4U = 0.0000918162;
 const P_CO2 = 5.46e-6, P_CH4 = 6.9e-6, P_H2O = 0.00891768;
 const M_H2O = 0.482077, D_CO2 = 1.44915;
@@ -131,7 +151,9 @@ export function bandTau(pCO2, pH2O, pCH4, pTot, pH2 = 0, out = TAU) {
   const g = pCH4 > 0 ? Math.log(1 + pCH4 / P_CH4) : 0;
   const ciaC = pCH4 > 0 ? CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0) : 0;
   const h2 = h2Cia(pH2, pTot);
-  out[0] = (A1L * L + A1U * u + A1W * w + A1WL * Lw + A1G * g) * br + A1WC * wc + H2_B1 * h2;
+  const wcap = A1WC * wc;
+  out[0] = (A1L * L + A1U * u + A1W * w + A1WL * Lw + A1G * g) * br
+         + wcap / (1 + wcap / CONT_MAX) + H2_B1 * h2;
   out[1] = A2W * w * w * w + A2C * pCO2 * pCO2 + ciaC + H2_B2 * h2;
   out[2] = (A3L * L + A3U * u + A3W * w) * br + A3WC * wc + H2_B3 * h2;
   out[3] = (A4W * w + A4U * u * u) * br + ciaC + H2_B4 * h2;

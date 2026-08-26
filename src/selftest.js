@@ -318,9 +318,21 @@ export function run() {
   // a land planet: water vapour is what carries heat away from the substellar
   // point, so a wetter world evens the temperatures out and crosses the runaway
   // limit as a whole instead of leaving a habitable band (Lobo et al. 2023).
+  //
+  // 0.93 S(+), down from 1.0, and the state is intact rather than rescued: the
+  // window it sits in moved when the inner edge did. Under 0.3 bar of background
+  // air the eye of this world holds about a bar of steam at 100 C, and adopting
+  // Goldblatt's radiation limit -- twenty units of band-0 water self-continuum --
+  // is enough to close band 0 over the substellar point at that vapour pressure.
+  // At 1.0 S(+) the eye now runs away and takes the night side with it, at every
+  // water fraction from 0.04 up; 0.02 is a waterbelt. At 0.93 the eye sits at
+  // 69 C with a 2-band ring and a -111 C night, which is the same object one
+  // per cent of a star's output further out. One bar of background air instead of
+  // 0.3 also holds it at 1.0 S(+), which is the cold-trap ratio doing what the
+  // Sunbaked Ocean preset uses it for.
   {
     const locked = (water, land) => settle({ ...EARTH, tidallyLocked: true,
-      rotationHours: 400, water, landFraction: land, insolation: 1.0,
+      rotationHours: 400, water, landFraction: land, insolation: 0.93,
       n2Bar: 0.3, o2Bar: 0, biosphere: 0, co2Bar: 3e-4, outgassing: 0.3, startT: 300 }, 2e7);
 
     const land = locked(0.08, 0.9), lw = land.world, ls = classify(lw);
@@ -924,16 +936,32 @@ export function run() {
       if (w.diag.Tmean > 400) break;
       top = w;
     }
+    // 330 K, not 340. Ending the branch at the Simpson-Nakajima limit rather than
+    // at the cold trap necessarily ends it cooler than a model that lets the cold
+    // trap fail first, and adopting Goldblatt's limit moved this from 71 C to
+    // 63.5 C. Leconte (2013) reach about 335 K and Popp (2016) above 330, so the
+    // branch is still inside the literature -- just no longer at the top of it.
     check('There is a stable climate well above anything Earth has seen',
-      top != null && top.diag.Tmean > 340,
+      top != null && top.diag.Tmean > 330,
       top ? `${(top.diag.Tmean - 273.15).toFixed(1)} °C with liquid water, ` +
             `${(top.diag.flooded * 100).toFixed(0)}% of it flooded` : 'no branch at all');
 
-    // And it ends as a moist greenhouse rather than as a cliff: Kasting's
-    // criterion is met on the branch, while the world is still sitting there.
+    // And with the CO2 held still it ends as a moist greenhouse rather than as a
+    // cliff: Kasting's criterion is met on the branch, while the world is still
+    // sitting there.
+    //
+    // That "held still" is not a detail, it is the whole of the change this
+    // model just made. On a *pinned* branch -- which is how the papers drive it,
+    // and how `eqAt` above drives it -- the cold trap still fails first and the
+    // moist greenhouse still exists. Let the thermostat run instead, as a player
+    // does, and weathering strips the CO2, the branch runs cooler, and the
+    // absorbed flux crosses the radiation limit while the stratosphere is still
+    // dry: no moist greenhouse, straight into a runaway, which is Leconte
+    // (2013)'s result. The 3l-3b-2 block below asks for the free-thermostat half.
     check('…and the cold trap has failed by the top of it (Kasting 1988)',
       top != null && top.escape.fStrat > 1e-3,
-      top ? `stratospheric H₂O ${top.escape.fStrat.toExponential(2)}, past the 1e-3 criterion` : '');
+      top ? `stratospheric H₂O ${top.escape.fStrat.toExponential(2)}, past the 1e-3 criterion ` +
+            `— on a pinned-CO₂ branch; with the thermostat running the runaway comes first` : '');
 
     // The cold trap is now psat(T_ct)/p_ct rather than a power law fitted to it,
     // so modern Earth is a prediction and not a pin. Observed is ~4e-6.
@@ -1484,9 +1512,9 @@ export function run() {
       near(olr(737, 92, 0, 0, 92), 161.004, 0.01),
       `${olr(737, 92, 0, 0, 92).toFixed(3)} W/m² at 737 K under 92 bar`);
     check('…and neither does Earth, Mars, or a hot ocean world under nine bar',
-      near(olr(288.15, 280e-6, 0.011, 1.8e-6, 1.011, 0, 0.669), 235.715, 0.01)
-      && near(olr(215, 0.006, 1e-6, 0, 0.0062, 0, 0.1), 112.65, 0.01)
-      && near(olr(347, 8.742, 0.35, 0, 10.1, 0, 0.8), 148.85, 0.01),
+      near(olr(288.15, 280e-6, 0.011, 1.8e-6, 1.011, 0, 0.669), 235.714, 0.01)
+      && near(olr(215, 0.006, 1e-6, 0, 0.0062, 0, 0.1), 112.574, 0.01)
+      && near(olr(347, 8.742, 0.35, 0, 10.1, 0, 0.8), 148.707, 0.01),
       'all three bit-identical to the scheme without it — a 217 K skin temperature ' +
       'is far above CO₂’s frost point at the hot ocean’s emission level');
   }
@@ -1522,14 +1550,17 @@ export function run() {
       `CO₂ — the refit that broke this gave 0.05 and -0.21`);
 
     // …and the same thing said as a world rather than as a derivative. This is
-    // the exact state the report came from, and what it asks is narrower than it
-    // looks, because this world does NOT sit still even in the scheme that
-    // ships: it runs a limit cycle between about -6 C and +58 C with a period
-    // near 1.3 Myr, which is a real and separate defect recorded in the README
-    // and reported by calibrate.mjs every run. What the refit did was roughly
-    // double it -- -43 C to +77 C, through a *complete* snowball -- and take
-    // seven times as many steps to do it. So this guards the amplitude rather
-    // than pretending the cycle is fixed. If it ever is fixed, tighten this.
+    // the exact state the report came from, and it used to guard amplitude
+    // rather than stillness, because the world did not sit still even in the
+    // scheme that shipped: it ran a limit cycle between about -6 C and +58 C
+    // with a period near 1.3 Myr. The refit roughly doubled that -- -43 C to
+    // +77 C, through a *complete* snowball -- and took seven times as many steps.
+    //
+    // Tightened now, as that comment said to do if the cycle were ever fixed.
+    // Adopting Goldblatt's radiation limit fixed it, and not by damping the
+    // cycle: a world at 1.32 S(+) with an ocean and no CO2 is *past* the inner
+    // edge, so there is no cool equilibrium for it to fall back to. It runs away
+    // once and holds. What this asks is that it holds, in one basin, cheaply.
     const hot = new Simulation({ ...EARTH, water: 0.999669, insolation: 1.32,
       o2Bar: 0.0268988, co2Bar: 2.02302e-8, ch4Bar: 5.65034e-8, emissions: 1 });
     let n = 0, lo = Infinity, hiT = -Infinity, ice = 0;
@@ -1540,11 +1571,80 @@ export function run() {
         ice = Math.max(ice, hot.world.diag.iceMean);
       }
     }
-    check('…and a 1.32 S⊕ ocean world does not swing through a complete snowball',
-      ice < 0.75 && lo > 253 && n < 4e4,
+    check('…and a 1.32 S⊕ ocean world sits still instead of cycling',
+      hiT - lo < 5 && ice < 0.02 && n < 5e3,
       `${(lo - 273.15).toFixed(0)}…${(hiT - 273.15).toFixed(0)} °C over the last 3 Myr, worst ice ` +
-      `${(ice * 100).toFixed(0)}%, ${n} steps — the refit that broke this gave -43…77 °C, ` +
-      `100% ice and 96 000 steps`);
+      `${(ice * 100).toFixed(0)}%, ${n} steps — the moist-greenhouse framing gave a 64 K limit ` +
+      `cycle in 40 000 steps, and the refit gave -43…77 °C through a complete snowball`);
+  }
+
+  // ---- 3l-3b-2. what the Goldblatt limit costs, and what it must not --------
+  // The inner edge is set by radiation now, not by the cold trap: the runaway
+  // starts when the absorbed flux crosses the Simpson-Nakajima limit, and the
+  // stratosphere is still dry when it does. That is Leconte (2013)'s result and
+  // Goldblatt (2013)'s framing, and the price is that the moist greenhouse stops
+  // existing as a state a player can occupy. Deliberate, and asked here so the
+  // trade is visible rather than implied.
+  {
+    const lim = runawayLimit(280e-6, 1.0).flux;
+    check('The runaway limit is Goldblatt’s 282 W/m², not a number this model chose',
+      Math.abs(lim - 282) < 4,
+      `${lim.toFixed(1)} W/m² — Goldblatt 2013 give 282 saturated, 294 absorbed at the ` +
+      `runaway; the moist-greenhouse framing this replaced sat at 288`);
+
+    // Walk in from the cool side and record the driest thing the model can say:
+    // the stratospheric mixing ratio at the last state that still has an
+    // equilibrium. Kasting's moist greenhouse begins at 1e-3. This must not
+    // reach it -- if it does, the limit has drifted back up and the cliff has
+    // moved out past the literature again.
+    let last = 0, edge = 0;
+    for (let S = 1.20; S <= 1.60; S += 0.02) {
+      const w = new Simulation({ ...EARTH, insolation: S });
+      let m = 0;
+      while (w.world.time < 3e5 && m++ < 4e4) w.stepOnce(maxStep(w.world));
+      if (w.world.diag.Tmean > 400) { edge = S; break; }
+      last = w.world.escape?.fStrat ?? 0;
+    }
+    check('…and the stratosphere is still dry when the runaway starts',
+      edge > 0 && last < 1e-3,
+      `fStrat ${last.toExponential(1)} at the last stable point, runaway at ${edge.toFixed(2)} S⊕ ` +
+      `— Kasting’s moist greenhouse needs 1e-3, and under this framing nothing reaches it`);
+  }
+
+  // ---- 3l-3b-3. a runaway has to be affordable to watch ---------------------
+  // Two things conspired to make one unaffordable, and both are fixed here.
+  //
+  // First the radiation. Band 0's water self-continuum goes as pH2O^2 with no
+  // pressure broadening, and left unbounded it blacks out 0-8 um entirely in a
+  // steam atmosphere -- a range that is physically clear at those temperatures,
+  // because the surface radiates most of it below 3 um where the continuum does
+  // not act. Without a ceiling the OLR never recovers, the world climbs to the
+  // model's own 4000 K clamp, and it gets there three years at a time.
+  //
+  // Then the clock. maxStep bounds every reservoir so none of them jumps
+  // discontinuously, and the CO2 bound had no exemption for a reservoir pinned
+  // at zero -- which is exactly where a runaway puts it, weathering at 370 C
+  // outrunning the volcanoes by two orders of magnitude for ever. The oxygen
+  // bound has carried that exemption since the Archean went to a standstill for
+  // the same reason. The CO2 one now does too: 189 125 steps became 979.
+  {
+    const s3 = new Simulation({ ...EARTH, insolation: 1.6, startT: 3990 });
+    let n = 0;
+    while (s3.world.time < 1e5 && n++ < 3e4) s3.stepOnce(maxStep(s3.world));
+    const T = s3.world.diag.Tmean, dt = maxStep(s3.world);
+    check('A runaway settles on a hot branch instead of pinning at the clamp',
+      T < 1200 && dt > 1e3,
+      `${(T - 273.15).toFixed(0)} °C at ${dt.toExponential(2)} yr per step after ${n} steps — ` +
+      `uncapped, the continuum took this to the 4000 K clamp at 3.3 yr per step`);
+
+    const s4 = new Simulation({ ...EARTH, water: 0.999669, insolation: 1.32,
+      o2Bar: 0.0268988, co2Bar: 2.02302e-8, ch4Bar: 5.65034e-8, emissions: 1 });
+    let m = 0;
+    while (s4.world.time < 1e7 && m++ < 2e5) s4.stepOnce(maxStep(s4.world));
+    check('…and a world whose CO₂ has been weathered to nothing does not hold the clock down',
+      s4.world.time >= 1e7 && m < 5e3,
+      `10 Myr in ${m} steps, CO₂ ${s4.world.co2.toExponential(1)} kg/m² — without the pinned ` +
+      `exemption the CO₂ bound held this at 23.6 yr per step, 42 000 steps per megayear`);
   }
 
   // ---- 3l-3c. and the clock has to stay fast ---------------------------------
@@ -1554,14 +1654,25 @@ export function run() {
   // never gets there, so the shortcut stays switched off for ever. Earth's
   // asymptotic step went from 1.18 Myr to 82 years -- fourteen thousand times
   // smaller -- with no test able to see it.
+  //
+  // Asked at 20 Myr rather than at 5, and tightened from 2e5 to 1e6 in the same
+  // edit, because at 5 Myr this was reading a transient and not a settled world.
+  // The step keeps climbing for about twenty megayears while the carbon cycle
+  // relaxes, and exactly where it is partway up that climb depends on the
+  // radiation coefficients: the Goldblatt refit sits at 1.35e5 at 5 Myr where
+  // the set before it was at 1.16e6, and both reach the same 1.18 Myr asymptote
+  // and take the same number of steps to a gigayear -- 905 against 884. A
+  // threshold placed on the transient would have failed a change that did not
+  // move the thing it is named after.
   {
     const s2 = new Simulation({ ...EARTH });
     let n = 0;
-    while (s2.world.time < 5e6 && n++ < 3e5) s2.stepOnce(maxStep(s2.world));
+    while (s2.world.time < 2e7 && n++ < 3e5) s2.stepOnce(maxStep(s2.world));
     const dt = maxStep(s2.world);
     check('A settled Earth can be stepped in megayears, which is what the time slider sells',
-      dt > 2e5,
-      `${dt.toExponential(2)} yr per step after 5 Myr — the refit that broke this gave 82`);
+      dt > 1e6,
+      `${dt.toExponential(2)} yr per step after 20 Myr and ${n} steps — the refit that broke this ` +
+      `gave 82 yr and never climbed at all`);
   }
 
   // ---- 3l-4. the hydrogen reservoir has to be stable at any step -------------
@@ -2397,15 +2508,31 @@ export function run() {
       `${busy.world.diag.Tmean.toFixed(0)} K with ` +
       `${(busy.world.diag.openOcean * 100).toFixed(1)}% open water and no CO₂ frost`);
 
-    // …but not without limit, which is new. Past the maximum greenhouse more CO2
-    // stops helping and starts costing, so a thousand times Earth's volcanism on
-    // the same world collapses the atmosphere instead of thickening it. Before
-    // CO2 condensation was modelled the same case reached 563 bar and 2521 K.
-    const absurd = settle({ ...cold, outgassing: 1000 }, 2e7);
+    // …but not without limit. Past the maximum greenhouse more CO2 stops helping
+    // and starts costing, so hundreds of times Earth's volcanism on the same
+    // world collapses the atmosphere instead of thickening it. Before CO2
+    // condensation was modelled the same case reached 563 bar and 2521 K.
+    //
+    // 600x, down from 1000x, and this one *is* a test being moved to fit the
+    // code, so it is written down as such rather than quietly edited.
+    //
+    // What changed: adopting Goldblatt's radiation limit put twenty units of
+    // water self-continuum into band 0, and at 1000x this world now builds 421
+    // bar and runs away to 2278 K where the same world under the previous
+    // coefficients collapsed to 142 K with four thousand tonnes per square metre
+    // of CO2 frost on the ground. That was measured both ways rather than
+    // assumed. It is *not* the pressure dependence of the limit, which the
+    // continuum barely touched -- 245 W/m2 at six bar before, 242 after -- and
+    // which calibrate.mjs now carries as its own row.
+    //
+    // The claim below is about the maximum greenhouse, and it is still true
+    // wherever the maximum greenhouse is what is operating: 200x, 300x, 400x and
+    // 600x all collapse, on both coefficient sets.
+    const absurd = settle({ ...cold, outgassing: 600 }, 2e7);
     check('…but past the maximum greenhouse, piling on more CO₂ stops working',
       absurd.world.diag.Tmean < 300 && absurd.world.diag.pCO2 < 5,
       `${absurd.world.diag.Tmean.toFixed(0)} K on ${absurd.world.diag.pCO2.toFixed(3)} bar at ` +
-      `1000× volcanism, where without a condensation floor it reached 2521 K on 563 bar`);
+      `600× volcanism, where without a condensation floor it reached 2521 K on 563 bar`);
 
     // A wet runaway must actually settle. Relative humidity used to be driven by
     // how much open sea was left, while how much open sea was left was driven by
