@@ -348,6 +348,33 @@ const H2_OXIDISED_LIFETIME = 2;   // years, in air like today's
 // hydrogen -- true at Earth's 0.55 ppm, false the moment there is a bar of it.
 const O2_PER_H2 = 31.998 / (2 * 2.016);    // 7.94 kg of O2 per kg of H2
 const H2O_PER_H2 = 18.015 / 2.016;         // 8.94 kg of H2O per kg of H2
+// Four hydrogens per methane, weighed as the H2 that carries the same hydrogen.
+const H2_PER_CH4 = 2 * 2.016 / 16.043;     // 0.251 kg of H2 per kg of CH4
+// Kump & Barley (2007): where a volcano erupts changes what comes out of it.
+// Submarine eruptions degas under kilometres of water, at pressures that keep
+// sulfur as H2S and leave the mixture reducing; subaerial eruptions degas at one
+// bar and their sulfur leaves as SO2, which is not (Gaillard, Scaillet & Arndt
+// 2011). The Archean was almost all submarine, and the switch to subaerial
+// volcanism as the continents emerged cut the reducing flux the biosphere had to
+// outrun. It is one of the standard explanations for why the Great Oxidation
+// happened when it did rather than when oxygenic photosynthesis started, and it
+// is why a low-land world is a harder place to oxygenate than the same world
+// with continents. Land reached the oxygen budget only through weathering
+// before this, so an ocean world and a continental one delivered identical
+// reducing power per unit volcanism.
+//
+// The size of it is derived rather than fitted, because fitting it would have
+// meant choosing the answer. Volcanic reducing power is H2, CO and H2S. The
+// first two are set by mantle fO2 and do not care what pressure the eruption
+// happens at; only the sulfur does. Holland (2002) and Catling & Kasting put
+// volcanic H2S within a factor of two of H2+CO either way, so a third of the
+// budget is the middle of the published range -- and flipping that third from
+// reducing to not is a factor of 1/(1-1/3) on the rest.
+//
+// Modern Earth's land fraction is the unit, so nothing in the present-day
+// calibration moves at all: delivery is exactly 1 at 0.29.
+const S_SHARE = 1 / 3;
+const SUBMARINE_REDOX = 1 / (1 - S_SHARE), LAND_MODERN = 0.29;
 const TRAP_FAIL_LO = 1e-4, TRAP_FAIL_HI = 2e-3;
 
 export function escapeRates(w) {
@@ -453,9 +480,28 @@ export function escapeRates(w) {
   // Mars-sized one cannot hold a thick one at all -- and before this, a small
   // anoxic planet sat on the diffusion limit and held far more hydrogen than it
   // has any business holding.
-  const h2Diff = xH2 * H2_DIFFUSION * (dg.g / G_EARTH) / Math.max(1 - xH2, 0.02);
+  //
+  // And the limit is on *hydrogen*, not on any particular molecule carrying it.
+  // What crosses the homopause is atoms, and methane brings four where H2 brings
+  // two. Leaving methane out of this was not a small omission: it is half of
+  // Catling, Zahnle & McKay (2001), and on their account the larger half. Their
+  // early Earth oxidises because biogenic methane rises, is photolysed, and its
+  // hydrogen leaves -- carbon stays behind, oxygen stays behind, and the planet
+  // ratchets one way. Modern Earth is the same story in miniature: at 1.8 ppm of
+  // methane against 0.55 ppm of H2, methane already carries about six times the
+  // escaping hydrogen. The model had none of it.
+  const xCH4 = clamp((dg.pCH4 ?? 0) / pDryBg, 0, 1);
+  const xHeq = clamp(xH2 + 2 * xCH4, 0, 1);      // as the H2 that would carry it
+  const h2Diff = xHeq * H2_DIFFUSION * (dg.g / G_EARTH) / Math.max(1 - xHeq, 0.02);
   const h2Energy = 0.15 * xuv * Math.pow(inflate, 3) / (dg.g * d.R) * YEAR * 9;
-  const h2 = (dg.pH2 ?? 0) > 0 ? Math.min(h2Diff, h2Energy) : 0;
+  // One channel, two carriers, shared in proportion to the hydrogen each brings.
+  const hTotal = Math.min(h2Diff, h2Energy);
+  const ch4Share = xHeq > 0 ? 2 * xCH4 / xHeq : 0;
+  const h2 = (dg.pH2 ?? 0) > 0 ? hTotal * (1 - ch4Share) : 0;
+  // What methane could supply if photolysis kept up. It usually cannot, so the
+  // actual flux is settled where the methane is destroyed -- hydrogen does not
+  // leave until something has broken the molecule -- and this is the ceiling.
+  const ch4H2Cap = hTotal * ch4Share;
 
   // Background gas loss. Gated on the cosmic shoreline: XUV irradiation has to
   // overcome gravitational binding (~ v_esc^4) before N2/CO2 go anywhere.
@@ -464,7 +510,7 @@ export function escapeRates(w) {
   const gate = smoothstep(0.3, 3, xuv / Math.max(fCrit, 1e-12));
   const background = 0.005 * xuv / (dg.g * d.R) * YEAR * gate;
 
-  return { water, background, h2, fStrat, Tct, diffusion, energy, xSteam };
+  return { water, background, h2, ch4H2Cap, fStrat, Tct, diffusion, energy, xSteam };
 }
 
 // ---------------------------------------------------------------------------
@@ -815,8 +861,20 @@ export function stepVolatiles(w, dtYears) {
     //
     // Earth's present mantle is the unit, so `mantleRedox` of 1 leaves every
     // number here exactly where it was.
+    //
+    // And *where* it erupts, which used to be missing entirely: land fraction
+    // reached the oxygen budget only through weathering, so an ocean world and a
+    // continental one delivered identical reducing power per unit volcanism.
+    // SUBMARINE_REDOX above is why they should not.
+    // Continent, not ice-free continent: a volcano under a kilometre of ice is
+    // still degassing into air at one bar, and it is the sea that changes what
+    // comes out. So this reads p.landFraction rather than landExposed, and
+    // modern Earth's 0.29 leaves the present-day oxygen budget exactly where it
+    // was.
+    const emerged = clamp((p.landFraction ?? LAND_MODERN) / LAND_MODERN, 0, 1);
+    const delivery = SUBMARINE_REDOX + (1 - SUBMARINE_REDOX) * emerged;
     const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing * meltBoost(p)
-                    * Math.max(p.mantleRedox ?? 1, 0);
+                    * Math.max(p.mantleRedox ?? 1, 0) * delivery;
 
     // Hydrogen that leaves the planet never consumes anything on it.
     //
@@ -840,7 +898,12 @@ export function stepVolatiles(w, dtYears) {
     // anoxic world out of nothing, which is exactly the error this is fixing,
     // pointed the other way. Floored at zero: you cannot un-charge more than you
     // were charged, however much hydrogen a Hycean envelope is shedding.
-    const escapedReducing = Math.max(esc.h2 ?? 0, 0) * O2_PER_H2;
+    //
+    // Both carriers count. Hydrogen that left as H2 and hydrogen that left as
+    // the four atoms of a photolysed methane are the same reducing power gone to
+    // space, and on an anoxic world the second is the larger stream -- which is
+    // precisely Catling's argument and not a detail of it.
+    const escapedReducing = (Math.max(esc.h2 ?? 0, 0) + Math.max(w.ch4Escape ?? 0, 0)) * O2_PER_H2;
     const reductantNet = Math.max(0, reductant - escapedReducing);
 
     // Oxidative weathering of the crust: first order in how much oxygen there
@@ -858,7 +921,9 @@ export function stepVolatiles(w, dtYears) {
     const o2Before = w.o2;
     w.o2 = Math.max(0, (w.o2 + (source - reductantNet) * dtYears) / (1 + weathering * dtYears));
     w.o2Flux = { source, reductant: reductantNet, gross: reductant,
-                 escaped: escapedReducing, weathering: w.o2 * weathering };
+                 escaped: escapedReducing, weathering: w.o2 * weathering,
+                 delivery, escapedH2: Math.max(esc.h2 ?? 0, 0) * O2_PER_H2,
+                 escapedCH4: Math.max(w.ch4Escape ?? 0, 0) * O2_PER_H2 };
 
     // --- methane -----------------------------------------------------------
     // Deliberately *after* the oxygen, and this ordering is load-bearing.
@@ -981,6 +1046,18 @@ export function stepVolatiles(w, dtYears) {
       w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * dtYears) / (1 + dtYears / tau));
       const destroyed = Math.max(0, ch4Before + w.ch4Source * dtYears - w.ch4);
 
+      // Where the hydrogen goes. Photolysis frees four hydrogens per methane,
+      // and on an anoxic world they go to space rather than finding their way
+      // back into water: that is the irreversible oxidation of Catling, Zahnle &
+      // McKay (2001), and it is credited against the volcanic reductant charge
+      // in the oxygen block above, on the next step. Two ceilings bind it --
+      // what escapeRates says can cross the homopause, and what photolysis is
+      // actually breaking up here, because hydrogen cannot leave a molecule that
+      // is still intact.
+      w.ch4Escape = dtYears > 0
+        ? Math.min(destroyed * H2_PER_CH4 / dtYears, Math.max(esc.ch4H2Cap ?? 0, 0))
+        : 0;
+
       // Destroyed methane hands its carbon back to the surface pool, whatever
       // destroyed it, so the cycle closes where it opened.
       //
@@ -1051,12 +1128,36 @@ export function stepVolatiles(w, dtYears) {
     const redox = Math.max(p.mantleRedox ?? 1, 0);
     const src = H2_OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0)
               * meltBoost(p) * redox;
-    w.h2 = Math.max(0, w.h2 + (src - (esc.h2 ?? 0)) * dtYears);
+    // Semi-implicit, like every other reservoir here, and for a sharper reason
+    // than the others. Escape is very nearly first order in the amount present,
+    // and on an anoxic world the reservoir turns over in about half a megayear
+    // -- shorter than the steps this model is designed to take. Integrated
+    // explicitly, as it was, any step past twice that e-folding time made it
+    // oscillate instead of settle: at a fixed five-megayear step the Archean's
+    // steady 17.65 kg/m2 became a sawtooth between zero and 184. Nothing
+    // downstream noticed while escaping hydrogen was merely lost; it matters now
+    // that the same flux credits the oxygen budget, because the sawtooth drove a
+    // Great Oxidation that the physics does not have. Hydrogen was the one
+    // reservoir with neither an implicit form nor a bound in maxStep and it now
+    // has both. This form is exact at steady state and cannot overshoot past
+    // zero at any step, in either the diffusion-limited or the energy-limited
+    // regime.
+    const kEsc = w.h2 > 0 ? Math.max(esc.h2 ?? 0, 0) / w.h2 : 0;
+    const h2Before = w.h2;
+    w.h2 = Math.max(0, (w.h2 + src * dtYears) / (1 + kEsc * dtYears));
     // And free oxygen takes it straight back out. Escape alone left modern Earth
     // holding 134 ppm of hydrogen against an observed 0.55, because on an
     // oxygenated world escape is not what limits it -- reaction is. H2 lasts
     // about two years in today's air and geological ages in anoxic air, which is
     // the same redox switch that governs methane, for the same reason.
+    //
+    // It lands at 2 ppb rather than 0.55, and the shortfall is in the *source*
+    // rather than in this sink: the only H2 source here is volcanic, where most
+    // of the real Earth's comes from methane photolysis, biomass burning and the
+    // ocean. Nothing downstream depends on it -- Earth's hydrogen escape is
+    // carried by methane, not by H2, and comes out at 8e7 atoms/cm2/s against an
+    // observed ~1e8 -- but the number is wrong and saying so is cheaper than
+    // letting the sentence above imply otherwise.
     //
     // The kinetics set the rate and the oxygen sets the budget, and it used to
     // be only the first of those: a bare exponential that consumed no oxygen
@@ -1094,6 +1195,13 @@ export function stepVolatiles(w, dtYears) {
         w.water.ocean += excess * H2O_PER_H2 / Math.max(d.eoColumn, 1e-9);
       }
     }
+    // The rate maxStep bounds on is the one the reservoir *realised*, source
+    // and escape and oxidation together. Bounding on source-minus-escape alone
+    // looks at modern Earth -- where hydrogen is in a two-year chemical steady
+    // state and escape is a rounding error -- and sees a reservoir turning over
+    // in four centuries, which held the clock to 376-year steps and cost a
+    // factor of forty on a world where nothing is happening.
+    w.h2Rate = dtYears > 0 ? (w.h2 - h2Before) / dtYears : 0;
   }
 
   // --- a molten surface degasses hard -------------------------------------

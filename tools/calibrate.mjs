@@ -159,21 +159,15 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     if (thaw.world.diag.iceMean < 0.5) { tThaw = thaw.world.time; co2AtThaw = thaw.world.diag.pCO2; break; }
     thaw.runYears(2e4);
   }
-  deviation('snowball deglaciation CO2', co2AtThaw, 0.08, 0.40, 'bar',
-    'Pierrehumbert 2004, Le Hir 2008, Abbot & Pierrehumbert 2010: 0.1-0.3 bar. ' +
-    'The semi-grey scheme has no atmospheric window, so piling on CO2 always works ' +
-    'and works too well; deglaciation comes thirty times too easily. Building the ' +
-    'window has been tried twice; the second attempt hit every anchor and still ' +
-    'only reached 0.013 bar, because one optical depth sets how well CO2 works at ' +
-    '230 K and at 288 K at once. A third attempt with four spectral bands DOES ' +
-    'break that -- 0.022 bar, and it closes the outer-edge row below outright -- ' +
-    'but it moves the habitable zone inner edge from 1.25 to 1.4 S(+) and puts the ' +
-    'LGM 4% outside its anchor, so it has not shipped. See the README.');
-  deviation('snowball duration', (tThaw ?? 3e8) / 1e6, 3, 60, 'Myr',
-    'Marinoan 4-15 (Bao 2008), Sturtian ~56 (Rooney 2015). Short by exactly the ' +
-    'factor the threshold above is low by, because duration is threshold over ' +
-    'outgassing flux and the flux is now on its measured value instead of being ' +
-    'tuned to cancel.');
+  // Both of these were gaps for the whole life of this model and both closed
+  // with the band-overlap refit, so they are anchors now and can fail again.
+  // What fixed them was giving water its own opacity exponent in every band
+  // instead of one shared one: CO2's grip at 230 K and at 288 K stopped being a
+  // single number, which is the thing a semi-grey scheme provably cannot do.
+  anchor('snowball deglaciation CO2', co2AtThaw, 0.08, 0.40, 'bar',
+    'Pierrehumbert 2004, Le Hir 2008, Abbot & Pierrehumbert 2010: 0.1-0.3 bar');
+  anchor('snowball duration', (tThaw ?? 3e8) / 1e6, 3, 60, 'Myr',
+    'Marinoan 4-15 (Bao 2008), Sturtian ~56 (Rooney 2015)');
 }
 
 // ---- the outer edge of the habitable zone ---------------------------------
@@ -199,15 +193,15 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // maximum greenhouse it should be impossible to lift it above 0 C at all.
   let warmest = -999;
   for (const c of [1, 4, 8, 15, 30]) warmest = Math.max(warmest, outer(c));
-  deviation('warmest a 0.35 S(+) world can be forced', warmest, -100, 0, 'C',
-    'Kasting 1993: 0.36 S(+) IS the outer edge, set by the maximum greenhouse -- ' +
-    'CO2 Rayleigh scattering (2.5x air) overtaking the greenhouse past a few bar. ' +
-    'No amount of CO2 should get this world above freezing, and here it is forced ' +
-    'well past it -- so the outer edge of the habitable zone effectively does not ' +
-    'exist. Hold the CO2 fixed instead of letting the cycle move it and 30 bar ' +
-    'reaches +323 C. No CO2 clouds are modelled either, neither the scattering ' +
-    'greenhouse of CO2 ice (Forget & Pierrehumbert 1997, revised down by ' +
-    'Kitzmann 2016) nor their albedo.');
+  anchor('warmest a 0.35 S(+) world can be forced', warmest, -100, 0, 'C',
+    'Kasting 1993: 0.36 S(+) IS the outer edge, set by the maximum greenhouse. Closed by '  +
+    'giving CO2 a condensation floor: above the level where a thick CO2 atmosphere '  +
+    'saturates the profile follows CO2\u2019s own vapour-pressure curve rather than a dry '  +
+    'adiabat, so the emission level stops getting colder however much CO2 is added and the '  +
+    'outgoing flux stops falling with it. This row read +15 C for the whole life of the '  +
+    'model and +18 after the band refit; it is -95 now. CO2 ice clouds are still not '  +
+    'modelled, neither their scattering greenhouse (Forget & Pierrehumbert 1997, revised '  +
+    'down by Kitzmann 2016) nor their albedo, so this is the maximum greenhouse alone.');
 }
 
 // ---- how hard is it to force a runaway with CO2 alone? ---------------------
@@ -258,7 +252,11 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // escapes fast enough to matter. Find the surface temperature where the
   // model crosses it.
   let onset = 0, onsetS = 0;
-  for (let S = 1.00; S <= 1.70; S += 0.01) {
+  // Stepped on an integer counter rather than by adding 0.01 seventy times:
+  // the accumulated float error put the crossing at 1.2500000000000002 and the
+  // inner-edge anchor's upper bound is 1.25, which is a silly way to fail.
+  for (let k = 0; k <= 70; k++) {
+    const S = Math.round((1.00 + k * 0.01) * 100) / 100;
     // pin:false -- the carbon cycle running, which is what a player has. The
     // pinned sweep says 1.22 and the free one says something else entirely, and
     // the difference between those two numbers is the whole finding below.
@@ -266,43 +264,49 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     if (w.diag.Tmean > 400) break;
     if ((w.escape?.fStrat ?? 0) > 1e-3) { onset = w.diag.Tmean; onsetS = S; break; }
   }
+  // This row and the inner-edge row below are the same crossing in two units,
+  // and the model cannot put both inside their literature ranges: they move
+  // together. The crossing is at 1.25 S(+) and 312 K; Kasting's 340 K would need
+  // it at 1.30 S(+) or beyond, which puts the inner edge back outside every
+  // published threshold. Widening PCT_TAU was tried and is a weak lever -- 36 to
+  // 65 moves the pinned-CO2 crossing only from 317 to 324 K -- because past
+  // 1.2 S(+) the temperature climbs so steeply with insolation that the climate
+  // curve, not the cold-trap constant, decides where the criterion is met. The
+  // insolation is the slider a player actually holds, so that is the row kept
+  // inside its range, and this one is left reporting the discrepancy.
   anchor('moist greenhouse onset', onset, 320, 355, 'K',
-    'Kasting 1988: stratospheric H2O passes 1e-3 near 340 K');
+    'Kasting 1988: stratospheric H2O passes 1e-3 near 340 K. Same crossing as the inner-edge ' +
+    'row below, which is inside its range; the two cannot both be, and the insolation is the ' +
+    'one a player can see');
 
   // The same crossing said in the units a player is actually looking at. The
   // temperature anchor above can sit inside its range while the *insolation* it
   // happens at is half an au out, and the insolation is the slider.
-  deviation('Earth\u2019s inner edge', onsetS, 1.05, 1.25, 'S\u2295',
-    'Kopparapu 2013 (1-D): moist greenhouse 1.015, runaway 1.066. Leconte 2013 (3-D GCM): ' +
-    'runaway near 1.10, and no moist greenhouse before it. Wolf & Toon 2015 (CAM4): habitable ' +
-    'to about 1.21 at 350-360 K. Every published threshold is below 1.25 and this model puts the ' +
-    'crossing well outside them, so an Earth at 1.28 S(+) reads as a comfortable hothouse here ' +
-    'where the literature has it losing its ocean. The cause is the row below. Holding CO2 at ' +
-    '400 ppm instead of letting the thermostat run brings this to 1.24, which is inside the ' +
-    'range -- the radiation is not far off, the *interaction* is.');
+  anchor('Earth\u2019s inner edge', onsetS, 1.05, 1.25, 'S\u2295',
+    'Kopparapu 2013 (1-D): moist greenhouse 1.015, runaway 1.066. Leconte 2013 (3-D GCM): '  +
+    'runaway near 1.10. Wolf & Toon 2015 (CAM4): habitable to about 1.21 at 350-360 K. Was '  +
+    '1.38 and outside every published threshold; the cause was the row below and fixing '  +
+    'that fixed this. It sits at the top of the range rather than in the middle of it.');
 
   // Why. The Simpson-Nakajima limit is a property of a steam atmosphere and is
   // very nearly independent of CO2: at the peak the surface is near 330 K, the
   // air holds 0.18 bar of water, and a few hundred ppm of CO2 is a rounding
   // error beside it (Goldblatt 2013; Kopparapu 2013).
   //
-  // Here it is not. CO2's optical depth is *added* to water's in each band
-  // rather than overlapping it, and at the peak this scheme's window band still
-  // has a water opacity of only 0.8 -- the self-continuum, which should be
-  // closing it, goes as pH2O^2 with a coefficient fitted at Earth's 0.011 bar
-  // and is worth 4e-5 at 0.18. So stripping CO2 buys real transparency that a
-  // steam atmosphere does not have.
+  // Here it was not. CO2's optical depth was *added* to water's in each band
+  // rather than overlapping it, and at the peak this scheme's band-2 water
+  // opacity grew only as pH2O^0.48 -- a factor of two while the column grows by
+  // seventy -- so stripping CO2 out bought real transparency that a steam
+  // atmosphere does not have. The consequence was a feedback that should not
+  // exist: brighten the star, the planet warms, weathering draws CO2 down, and
+  // that also *raised the cliff*, by more than forty watts. The thermostat
+  // stopped being a thermostat and started moving the edge of the map.
   //
-  // The consequence is a feedback that should not exist. Brighten the star, the
-  // planet warms, weathering draws CO2 down -- and in this model that also
-  // *raises the cliff*, by more than forty watts. The thermostat stops being a
-  // thermostat and starts moving the edge of the map.
+  // Fixed by giving water its own exponent in every band and refitting the whole
+  // scheme against every anchor here at once. It took a refit rather than a
+  // coefficient, exactly as the note that used to sit here predicted, and four
+  // rows above this one moved with it.
   //
-  // Not fixed, and not fixable by moving a coefficient: raising the continuum
-  // lowers the whole curve without narrowing the spread, and enough of it to
-  // matter takes Earth's OLR out of its own anchor. It needs band overlap and a
-  // refit -- the fourth-band work the snowball rows above already describe as
-  // attempted and reverted twice.
   // Archean volcanism, against the one measurement of it.
   //
   // Avice, Marty & Burgess (2017) date Archean atmospheric xenon at 3.3 Ga and
@@ -312,29 +316,30 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // lower-than-modern early outgassing is unlikely.
   //
   // This preset ran at exactly 1.00x for its whole life -- modern Earth's
-  // interior on a planet three and a half billion years old -- and is at 3.5x
-  // now. It is not at 8.1 because two real events cap it: the Great Oxidation
-  // has to be able to happen (which fails past ~4.2x, after hydrogen escape is
-  // credited) and the Huronian has to follow it (which fails past ~3.7x,
-  // because the CO2 the carbon cycle wants at that volcanism drowns the methane
-  // whose loss is supposed to cause the freeze). Both ceilings trace to the
-  // semi-grey cold bias forcing too much CO2; fix that and they lift.
+  // interior on a planet three and a half billion years old -- then 3.5x, and it
+  // is at 4.20x now, which is the bottom of Avice's range. What moved it was not
+  // a bigger ceiling but a better question. The old ceiling asked whether the
+  // Great Oxidation could happen at this volcanism; it happened nine hundred
+  // megayears after the date the xenon fixes, once volcanism had declined, so a
+  // preset standing at 3.3 Ga should be a world whose volcanoes still beat its
+  // biosphere. It needs a biosphere 1.23x the modern one to cross where it
+  // stands, and the crossing is something a player reaches by turning volcanism
+  // down -- which is what the Earth did.
   {
     const p = PRESETS.earlyEarth.params;
     const total = Math.pow(p.mass, 0.7) * p.outgassing
                 * Math.sqrt((p.internalHeat ?? 0.092) / 0.092);
-    deviation('Archean outgassing', total, 4.2, 12.0, '× modern',
-      'Avice et al. 2017 (Archean Xe, 3.3 Ga): 8.1 ± 3.9× the present mantle degassing rate, ' +
-      '9.5 ± 4.5 by the 3He route; Kipp et al. 2020 use the same constraint. Capped here at 3.5 ' +
-      'by the Huronian: past ~3.7× the carbon cycle wants enough CO2 that losing all the methane ' +
-      'no longer freezes the planet, and past ~4.2× the oxygen never crosses at all.');
+    anchor('Archean outgassing', total, 4.2, 12.0, '\u00d7 modern',
+      'Avice et al. 2017 (Archean Xe, 3.3 Ga): 8.1 \u00b1 3.9\u00d7 the present mantle degassing ' +
+      'rate, 9.5 \u00b1 4.5 by the 3He route; Kipp et al. 2020 use the same constraint');
   }
 
   const snSpread = runawayLimit(4e-7, 0.78).flux - runawayLimit(280e-6, 1.0).flux;
-  deviation('runaway limit moved by CO2 alone', snSpread, 0, 10, 'W/m²',
-    'should be near zero: at the peak the atmosphere is steam and water carries the opacity. ' +
-    '0.4 ppm over 0.78 bar against 280 ppm over 1 bar — the whole span a brightening Earth ' +
-    'walks through as its carbon cycle empties.');
+  anchor('runaway limit moved by CO2 alone', snSpread, 0, 10, 'W/m²',
+    'should be near zero: at the peak the atmosphere is steam and water carries the opacity ' +
+    '(Goldblatt 2013; Kopparapu 2013). 0.4 ppm over 0.78 bar against 280 ppm over 1 bar — ' +
+    'the whole span a brightening Earth walks through as its carbon cycle empties. Was 43.2, ' +
+    'of which 37 was the CO2 and 6 the thinner air; the CO2 part is under 1 now.');
 
   // And once it is there, the ocean has to actually go somewhere.
   //
@@ -358,6 +363,47 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // point of the state. The model lands at 6.6 Gyr.
   anchor('ocean lost at the branch top', Math.min(oceanMyr, 1e6), 100, 10000, 'Myr',
     'Kasting 1988: gigayears at the moist-greenhouse criterion; 10^8 belongs to the runaway above it');
+}
+
+// ---- hydrogen leaving the planet, and what it costs the climate later ------
+// The escape flux is a measured quantity and the model had no anchor on it,
+// which is how methane could be missing from it entirely. Hunten's diffusion
+// limit is a statement about hydrogen and not about H2: what crosses the
+// homopause is atoms, and methane brings four where H2 brings two. Catling,
+// Zahnle & McKay (2001) rest their account of the Great Oxidation on methane
+// being the larger carrier -- on Earth it is, by three orders of magnitude.
+{
+  const s = new Simulation({ ...EARTH, co2Bar: 427e-6, ch4Bar: 1.9e-6 });
+  s.runYears(3000, 0.25);
+  const w = s.world;
+  const perYr = (w.escape?.h2 ?? 0) + (w.ch4Escape ?? 0);      // kg/m2/yr of H2
+  const atoms = perYr / 2.016e-3 * 2 * 6.02214e23 / 3.1557e7 / 1e4;
+  anchor('Earth\u2019s hydrogen escape', atoms, 3e7, 5e8, 'H/cm\u00b2/s',
+    'observed ~1e8 (Hunten & Strobel 1974; Catling & Kasting Ch. 5). Nothing is fitted ' +
+    'to it: it falls out of the diffusion limit applied to the hydrogen methane carries');
+}
+
+// ---- the Huronian, which used to work and does not any more ----------------
+// The Great Oxidation kills methane in a decade; the carbon cycle cannot answer
+// for a megayear. So the test is the fast transient -- take the methane away
+// with the CO2 held where it stood and see how far the planet falls.
+{
+  const p = PRESETS.earlyEarth.params;
+  const warm = eq(p, { pin: true, years: 3e7 });
+  const cold = eq({ ...p, outgassing: 0, co2Bar: warm.diag.pCO2, ch4Bar: 0, biosphere: 0,
+    h2Bar: warm.diag.pH2, startT: warm.diag.Tmean }, { pin: true, years: 2e5 });
+  deviation('Huronian: kelvins lost when the methane goes',
+    warm.diag.Tmean - cold.diag.Tmean, 20, 60, 'K',
+    'the Great Oxidation was followed by a global glaciation, and losing the methane ' +
+    'greenhouse is the standard explanation for it (Kopp et al. 2005). This model used to ' +
+    'do it -- thirty kelvin and a snowball -- and does not now. The band-overlap refit ' +
+    'leaves the Archean with 0.52 bar of CO2 against 40 Pa of methane, and at that ratio ' +
+    'the whole methane inventory is worth two and a half kelvin: the CO2 carries the ' +
+    'climate without it. Two things would move it and neither is a coefficient. The CO2 ' +
+    'is high because the carbon cycle wants it there at 4.2x volcanism under a faint young ' +
+    'Sun, against paleosol estimates of 0.01-0.1 bar; and the methane is low, ~270 ppm ' +
+    'against Pavlov et al.\u2019s 100-1000 ppm, because its source is a biosphere term rather ' +
+    'than a methanogen ecology.');
 }
 
 // ---- report ---------------------------------------------------------------

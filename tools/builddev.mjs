@@ -28,7 +28,7 @@ const out = process.argv[2];
 if (!out) { console.error('usage: node tools/builddev.mjs <path-to-main-checkout>'); process.exit(1); }
 const dev = join(out, 'dev');
 
-const NOTE = 'four-band radiation, hydrogen and Hycean work in progress — 19 of 219 self-tests failing';
+const NOTE = 'four-band radiation with spectral overlap, CO\u2082 condensation, hydrogen and Hycean work in progress \u2014 15 of 231 self-tests failing';
 
 // Which branch this copy came from. Asked of git rather than written down here,
 // because the written-down one went stale the moment the work moved to another
@@ -97,8 +97,10 @@ node tools/builddev.mjs /path/to/main/checkout
 \`../assets/\` and borrows the surface maps at the site root, which is 668 KB
 instead of 23 MB.
 
-**This build is knowingly not green** — ${NOTE}. Two of those failures are tests
-asserting the *old* deviation: snowball deglaciation now lands at 143 mbar
-against the literature's 100–300, where it used to be thirty times too low.
+**This build is knowingly not green** — ${NOTE}, against 19 of 219 before this
+round. Every remaining failure is one the branch inherited; the calibration is
+at 2 anchors off out of 31, from 4 of 24 with six known gaps. Five of those gaps
+closed: the outer edge of the habitable zone, the snowball threshold and its
+duration, Earth's inner edge, and the runaway limit's sensitivity to CO₂.
 `);
 console.log(`built ${dev}`);
