@@ -303,6 +303,33 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // matter takes Earth's OLR out of its own anchor. It needs band overlap and a
   // refit -- the fourth-band work the snowball rows above already describe as
   // attempted and reverted twice.
+  // Archean volcanism, against the one measurement of it.
+  //
+  // Avice, Marty & Burgess (2017) date Archean atmospheric xenon at 3.3 Ga and
+  // get a mantle degassing rate 8.1 +/- 3.9 times the present one; 9.5 +/- 4.5
+  // by the 3He route, and up to 14x is consistent with convection models. Kipp
+  // et al. (2020) take that same figure as their constraint and conclude
+  // lower-than-modern early outgassing is unlikely.
+  //
+  // This preset ran at exactly 1.00x for its whole life -- modern Earth's
+  // interior on a planet three and a half billion years old -- and is at 3.5x
+  // now. It is not at 8.1 because two real events cap it: the Great Oxidation
+  // has to be able to happen (which fails past ~4.2x, after hydrogen escape is
+  // credited) and the Huronian has to follow it (which fails past ~3.7x,
+  // because the CO2 the carbon cycle wants at that volcanism drowns the methane
+  // whose loss is supposed to cause the freeze). Both ceilings trace to the
+  // semi-grey cold bias forcing too much CO2; fix that and they lift.
+  {
+    const p = PRESETS.earlyEarth.params;
+    const total = Math.pow(p.mass, 0.7) * p.outgassing
+                * Math.sqrt((p.internalHeat ?? 0.092) / 0.092);
+    deviation('Archean outgassing', total, 4.2, 12.0, '× modern',
+      'Avice et al. 2017 (Archean Xe, 3.3 Ga): 8.1 ± 3.9× the present mantle degassing rate, ' +
+      '9.5 ± 4.5 by the 3He route; Kipp et al. 2020 use the same constraint. Capped here at 3.5 ' +
+      'by the Huronian: past ~3.7× the carbon cycle wants enough CO2 that losing all the methane ' +
+      'no longer freezes the planet, and past ~4.2× the oxygen never crosses at all.');
+  }
+
   const snSpread = runawayLimit(4e-7, 0.78).flux - runawayLimit(280e-6, 1.0).flux;
   deviation('runaway limit moved by CO2 alone', snSpread, 0, 10, 'W/m²',
     'should be near zero: at the peak the atmosphere is steam and water carries the opacity. ' +
