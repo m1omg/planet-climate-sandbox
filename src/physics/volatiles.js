@@ -804,7 +804,19 @@ export function stepVolatiles(w, dtYears) {
     // stayed anoxic for a billion years with photosynthesis already running
     // (Catling & Zahnle 2020). The Great Oxidation is that threshold being
     // crossed, and here it falls out of the arithmetic rather than being staged.
-    const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing * meltBoost(p);
+    //
+    // How *reduced* those gases are is a separate question from how much gas
+    // there is, and this term used to answer only the second. `mantleRedox`
+    // already scales the hydrogen a world outgasses; it was ignored here, so
+    // the model could not say "the same volcanism, delivering less reducing
+    // power" -- which is the thing the Great Oxidation actually needs. A world
+    // whose mantle is more reduced puts more H2, CO and H2S into the air per
+    // unit melt, and each of those consumes oxygen.
+    //
+    // Earth's present mantle is the unit, so `mantleRedox` of 1 leaves every
+    // number here exactly where it was.
+    const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing * meltBoost(p)
+                    * Math.max(p.mantleRedox ?? 1, 0);
 
     // Oxidative weathering of the crust: first order in how much oxygen there
     // is, which is what makes the level settle instead of climbing for ever.
