@@ -631,8 +631,14 @@ export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1, col = 0, insol = 1
 //     bacteria have been recovered photosynthesising in the Black Sea on about
 //     a ten-thousandth of full sunlight, so a fraction of a watt is generous
 //     even by the standards of this function.
-//   carbon       cyanobacteria run carbon-concentrating mechanisms and draw CO2
-//     down to a few ppm. C3 plants give up nearer 50.
+//   carbon       two constituencies with very different limits, and lumping them
+//     was wrong at the starvation end. Marine phytoplankton and cyanobacteria run
+//     carbon-concentrating mechanisms and manage on a few ppm. Vascular land
+//     plants do not: C3 photosynthesis has a compensation point near 50 ppm, most
+//     of it is severely carbon-limited below about 150, and nothing vascular runs
+//     below 10 -- which is the CO2-starvation bound on the far end of a
+//     biosphere's life, and the reason a brightening star ends one by weathering
+//     rather than by heat. See PLANT_HI/PLANT_LO.
 //   water        liquid, and enough of it to be a habitat.
 //
 // Taken band by band rather than from the global mean, because that is how the
@@ -640,11 +646,34 @@ export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1, col = 0, insol = 1
 // warm equatorial belt doing the whole planet's photosynthesis, and a tidally
 // locked world has a night side where the light term is zero however warm the
 // air is.
+// Where land plants give out, and where the microbes that are not plants do not.
+//
+// 150 ppm is where most vascular plants are already carbon-starved and 10 ppm is
+// where the last of them stop; C3's compensation point sits near 50 in between.
+// Marine phytoplankton keep going to a few ppm on their carbon-concentrating
+// mechanisms, so a world does not lose its whole biosphere at 10 ppm -- it loses
+// the land half of it, and how big that half is depends on how much land there
+// is.
+const PLANT_HI = 150e-6, PLANT_LO = 10e-6;      // bar
+const MICROBE_HI = 8e-6, MICROBE_LO = 1e-6;     // bar
+// Land is about 2.7 times as productive per square metre as open ocean, which is
+// what puts 54% of Earth's net primary production on 30% of its surface (Field
+// et al. 1998: 56.4 Pg C/yr terrestrial against 48.5 marine). Anchored there and
+// then let to run: a landless world is all plankton, a desert world all plants.
+const LAND_NPP = 2.7;
+export function carbonLimit(pCO2, landFraction) {
+  const L = clamp(landFraction, 0, 1);
+  const landShare = LAND_NPP * L / Math.max(LAND_NPP * L + (1 - L), 1e-12);
+  const plants = smoothstep(PLANT_LO, PLANT_HI, pCO2);
+  const microbes = smoothstep(MICROBE_LO, MICROBE_HI, pCO2);
+  return landShare * plants + (1 - landShare) * microbes;
+}
+
 export function photosynthesis(w) {
   const dg = w.diag;
   const water = smoothstep(0, 0.015, w.water.ocean);
   if (water <= 0) return 0;
-  const carbon = smoothstep(1e-6, 8e-6, dg.pCO2 ?? 0);
+  const carbon = carbonLimit(dg.pCO2 ?? 0, w.params.landFraction ?? 0.3);
   if (carbon <= 0) return 0;
   // How much of the planet can actually photosynthesise -- and, crucially, out
   // of how much.
@@ -1045,17 +1074,35 @@ export function stepVolatiles(w, dtYears) {
       // so an exhausted pool stops the source rather than going negative.
       const CH4_AS_CO2 = 44 / 16;    // the same carbon, weighed as CO2
       let bioRate = bio * makes, geoRate = geo * makes;
-      if (dtYears > 0) {
-        if (!p.mantleInfinite) {
-          geoRate = Math.min(geoRate, Math.max(w.carbonDeep, 0) / CH4_AS_CO2 / dtYears);
-        }
-        bioRate = Math.min(bioRate, Math.max(w.co2, 0) * kappa / CH4_AS_CO2 / dtYears);
+      // The geological source is a *drain*: its carbon comes out of the mantle
+      // and is debited below, so capping its rate at what is left over the step
+      // is right and keeps the reservoir from going negative.
+      if (dtYears > 0 && !p.mantleInfinite) {
+        geoRate = Math.min(geoRate, Math.max(w.carbonDeep, 0) / CH4_AS_CO2 / dtYears);
       }
-      // Semi-implicit, so an arbitrarily long step still lands on the right
-      // answer instead of overshooting past zero.
+      // The biological source is a *loop*, and treating it as a drain was a bug
+      // with teeth. Methanogens recycle carbon that is already at the surface:
+      // what they emit is CO2 again within a methane lifetime, and nothing is
+      // debited for it anywhere in this function. Capping that rate at
+      // (surface carbon)/dt therefore said a longer step may make less methane
+      // per year than a short one -- so a half-megayear stride allowed a sixth
+      // of the source a millennial one did, and Earth's methane collapsed from
+      // 800 to 126 ppb on every long step and climbed back over the short ones
+      // after it. A clean period-five limit cycle in the step controller, worth
+      // 0.4 K and a tenfold slowdown, and invisible until methane's 7.7 um band
+      // was strong enough for anyone to feel it.
+      //
+      // What the carbon really limits is the *standing stock*: the air cannot
+      // hold more carbon as methane than the surface system has. That is a cap
+      // on the reservoir, applied after the step, and it does not care how long
+      // the step was.
       w.ch4Source = bioRate + geoRate;
       const ch4Before = w.ch4;
+      // Semi-implicit, so an arbitrarily long step still lands on the right
+      // answer instead of overshooting past zero.
       w.ch4 = Math.max(0, (w.ch4 + w.ch4Source * dtYears) / (1 + dtYears / tau));
+      w.ch4 = Math.min(w.ch4, Math.max(w.co2, 0) * kappa / CH4_AS_CO2
+                            + Math.max(w.carbonDeep, 0) / CH4_AS_CO2);
       const destroyed = Math.max(0, ch4Before + w.ch4Source * dtYears - w.ch4);
 
       // Where the hydrogen goes. Photolysis frees four hydrogens per methane,

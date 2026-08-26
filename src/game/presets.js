@@ -247,8 +247,8 @@ export const PRESETS = {
   // above describes having fixed.
   earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2,
     insolation: 0.77, landFraction: 0.1, internalHeat: 0.2, outgassing: 2.374,
-    co2Bar: 0.4566, ch4Bar: 3.921e-4, h2Bar: 1.730e-3,
-    startT: 286.64 } },
+    co2Bar: 0.4022, ch4Bar: 3.780e-4, h2Bar: 1.660e-3,
+    startT: 286.99 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },

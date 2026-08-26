@@ -13,7 +13,7 @@ import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/tim
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
-import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
+import { methaneLifetime, photosynthesis, carbonLimit, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B } from './render/terrain.js';
 import { bakeTerrain } from './render/cpushade.js';
@@ -479,6 +479,48 @@ export function run() {
       hazeOpacity(1e-3, 0.02, 0, 1) === 0 && hazeOpacity(1e-2, 0.02, 0, 1) > 0.1,
       `CH₄/CO₂ 0.05 → clear, 0.5 → τ ${hazeOpacity(1e-2, 0.02, 0, 1).toFixed(2)}`);
     check('Modern Earth is far from hazy', hazeOpacity(1.9e-6, 427e-6, 0.21, 1) === 0);
+  }
+
+  // ---- 3i-2. carbon starvation, which is how a biosphere really ends --------
+  // A brightening star does not cook a biosphere off a planet; it weathers the
+  // CO2 out from under it first. That end used to arrive at 1 ppm here, because
+  // the carbon term was one curve fitted to cyanobacteria -- which run
+  // carbon-concentrating mechanisms and genuinely manage on a few ppm -- and
+  // vascular plants were lumped in with them. They are not the same organism.
+  // C3 photosynthesis has a compensation point near 50 ppm, most land plants are
+  // severely carbon-limited below about 150, and nothing vascular runs below 10.
+  //
+  // So the two constituencies are split, weighted by how much of a planet's
+  // production each can plausibly hold: land is about 2.7 times as productive per
+  // square metre as open ocean, which is what puts 54% of Earth's net primary
+  // production on 30% of its surface (Field et al. 1998). A world losing its CO2
+  // loses its forests long before its plankton, and a landless one never had the
+  // forests to lose.
+  {
+    const E = 0.30, OCEAN = 0.0, DESERT = 0.9;
+    check('Land plants are unbothered above 150 ppm and gone below 10',
+      carbonLimit(200e-6, E) > 0.99 && carbonLimit(150e-6, E) > 0.99
+      && carbonLimit(10e-6, DESERT) < 0.05,
+      `${(carbonLimit(150e-6, E) * 100).toFixed(0)}% of Earth’s production at 150 ppm, ` +
+      `${(carbonLimit(100e-6, E) * 100).toFixed(0)}% at 100, ` +
+      `${(carbonLimit(50e-6, E) * 100).toFixed(0)}% at 50, ` +
+      `${(carbonLimit(10e-6, E) * 100).toFixed(0)}% at 10 — and ` +
+      `${(carbonLimit(10e-6, DESERT) * 100).toFixed(0)}% at 10 on a world that is 90% land`);
+
+    // The half that is not plants keeps going, which is the whole reason the
+    // split exists: at 10 ppm Earth has lost its forests and kept its ocean.
+    check('…while the plankton carry on, so a waterworld does not notice',
+      carbonLimit(10e-6, OCEAN) > 0.99 && carbonLimit(10e-6, E) > 0.3
+      && carbonLimit(1e-6, OCEAN) < 0.01,
+      `a landless world is at ${(carbonLimit(10e-6, OCEAN) * 100).toFixed(0)}% at 10 ppm and ` +
+      `${(carbonLimit(1e-6, OCEAN) * 100).toFixed(0)}% at 1, where its cyanobacteria give out too`);
+
+    // Nothing on the present-day calibration moves: every Earth anchor in this
+    // file sits at 190 ppm or above, and the Archean at four hundred times that.
+    check('…and nothing Earth has actually been through is anywhere near it',
+      carbonLimit(190e-6, E) > 0.999 && carbonLimit(280e-6, E) > 0.999
+      && carbonLimit(427e-6, E) > 0.999 && carbonLimit(0.40, 0.1) > 0.999,
+      `LGM 190 ppm, pre-industrial 280, today 427 and the Archean’s 0.4 bar all at 100%`);
 
     // The Archean thermostat, which turns over TWICE and for two different
     // reasons. It used to be attributed entirely to the haze; most of it is not.
@@ -810,8 +852,13 @@ export function run() {
     // The imbalance is what Settle stops on. Leave the interior out of it and a
     // heated world sits at a permanent false imbalance and Settle never returns.
     const heated = settle({ ...EARTH, internalHeat: 80, outgassing: 0 }, 5e6).world;
+    // 0.08 W/m^2, up from 0.05, and it is a threshold moving rather than a
+    // finding: refitting methane's band makes Earth's 0.8 ppm climatically active,
+    // so a settled world carries a slightly larger residual, and this one came out
+    // at 0.0502. Against 80 W/m^2 of interior that is six parts in a hundred
+    // thousand, which is what "settled" has to mean here.
     check('…and a settled world with internal heat reads as settled',
-      Math.abs(heated.diag.imbalance) < 0.05,
+      Math.abs(heated.diag.imbalance) < 0.08,
       `imbalance ${heated.diag.imbalance.toFixed(4)} W/m² at 80 W/m² internal`);
 
     // The Tidal Venus. Insolation alone leaves this world temperate; the
@@ -1552,7 +1599,7 @@ export function run() {
       near(olr(737, 92, 0, 0, 92), 161.004, 0.01),
       `${olr(737, 92, 0, 0, 92).toFixed(3)} W/m² at 737 K under 92 bar`);
     check('…and neither does Earth, Mars, or a hot ocean world under nine bar',
-      near(olr(288.15, 280e-6, 0.011, 1.8e-6, 1.011, 0, 0.669), 235.714, 0.01)
+      near(olr(288.15, 280e-6, 0.011, 1.8e-6, 1.011, 0, 0.669), 235.143, 0.01)
       && near(olr(215, 0.006, 1e-6, 0, 0.0062, 0, 0.1), 112.574, 0.01)
       && near(olr(347, 8.742, 0.35, 0, 10.1, 0, 0.8), 148.707, 0.01),
       'all three bit-identical to the scheme without it — a 217 K skin temperature ' +
@@ -1773,8 +1820,16 @@ export function run() {
     let n = 0;
     while (s2.world.time < 2e7 && n++ < 3e5) s2.stepOnce(maxStep(s2.world));
     const dt = maxStep(s2.world);
+    // 4e5, down from 1e6, and the reason is worth recording because it is a real
+    // cost paid on purpose. Refitting methane's 7.7 um band to the published
+    // forcing makes Earth's 0.8 ppm of methane climatically active, so maxStep's
+    // methane bound -- which exists to resolve the oxygen crossover, where a
+    // single stride at the wrong lifetime invents a Great Oxidation -- now binds
+    // where it used to be slack. Earth holds 6e5 yr a step against 1.2 Myr, and
+    // takes 1358 steps to a gigayear against 905. That is a tenth of a second of
+    // wall clock, not the five-thousandfold collapse this row was written for.
     check('A settled Earth can be stepped in megayears, which is what the time slider sells',
-      dt > 1e6,
+      dt > 4e5,
       `${dt.toExponential(2)} yr per step after 20 Myr and ${n} steps — the refit that broke this ` +
       `gave 82 yr and never climbed at all`);
   }
@@ -2137,68 +2192,115 @@ export function run() {
   // The whole chain, measured rather than asserted: oxygen crosses the volcanic
   // reductant flux, methane's lifetime collapses, the methane goes with it, and
   // the greenhouse it was providing goes too.
+  //
+  // Rebuilt, and it is worth saying why rather than quietly moving it, because
+  // this block used to pass its headline assertion for the exact opposite of the
+  // reason its name gives. It ran on the Archean preset, where at 3.5x modern
+  // volcanism a biosphere at 1.5 does not oxygenate at all: oxygen spiked to
+  // 1.5e-5 and fell straight back, and *methane went up*, 404 ppm to 3295. The
+  // planet then froze -- and the freeze was read as "losing that greenhouse
+  // freezes the planet" when what actually happened is that 330 Pa of methane
+  // froze it by absorbing sunlight three scale heights up, which is the
+  // anti-greenhouse defect the shortwave term in radiation.js used to have. The
+  // greenhouse was never lost. The test was reading the bug as the physics, and
+  // the sibling assertion that the methane collapses was failing the whole time.
+  //
+  // Fixing that shortwave term took the false pass away, so the chain moves to a
+  // world where the real mechanism runs: the Great Oxidation scenario's own,
+  // which is at Earth's volcanism rather than 3.5x it. That the Archean preset
+  // cannot oxygenate is not swept up with it -- it is the `Archean outgassing`
+  // gap calibrate.mjs reports every run, which caps that preset at 3.5x against a
+  // measured 8.1 precisely because past ~4.2x the oxygen never crosses.
+  //
+  // Running the shipped scenario also means this guards the thing a player
+  // actually loads, on its own evolve() curve, rather than a hand-set biosphere.
   {
-    const s = new Simulation({ ...PRESETS.earlyEarth.params });
+    const sc = SCENARIOS.find((x) => x.id === 'oxidation');
+    const s = new Simulation({ ...sc.params });
     const w = s.world;
-    const to = (yr) => { while (w.time < yr) s.stepOnce(Math.min(maxStep(w), yr - w.time, 5e3)); };
-    to(2e6);
-    const before = { T: w.diag.Tmean, ch4: w.diag.pCH4, o2: w.diag.pO2 };
+    // Capped at two kiloyears, and that is not caution -- it is the converged
+    // answer. This world's outcome still depends on the step size at the coarse
+    // end: left to stride it snowballs pole to pole, capped at 5 kyr or below it
+    // dips to a third of the planet under ice and the thermostat pulls it back
+    // out. 1 kyr and 5 kyr agree with each other, so the dip is the physics and
+    // the snowball is the integrator. The gap is recorded in the README; what
+    // this block asks for is the answer that converges.
+    let n = 0, peakIce = 0, dipT = 1e9;
+    const to = (yr) => { while (w.time < yr && n++ < 4e5) {
+      s.setParams({ biosphere: sc.evolve(w) });
+      s.stepOnce(Math.min(maxStep(w), yr - w.time, 2e3));
+      if (w.diag.iceMean > peakIce) peakIce = w.diag.iceMean;
+      dipT = Math.min(dipT, w.diag.Tmean);
+    } };
+    to(1e6);
+    const before = { T: w.diag.Tmean, ch4: w.diag.pCH4, o2: w.diag.pO2, tau: w.ch4Tau };
     check('An Archean world sits anoxic and warm on its methane',
       before.o2 < 1e-6 && before.T > 273,
-      `${(before.T - 273.15).toFixed(1)} °C, ${(before.ch4 * 1e6).toFixed(0)} ppm CH₄, no oxygen`);
+      `${(before.T - 273.15).toFixed(1)} °C, ${(before.ch4 * 1e6).toFixed(0)} ppm CH₄, no oxygen, ` +
+      `and a ${(before.tau / 1000).toFixed(1)} kyr methane lifetime`);
 
-    w.params.biosphere = 1.5;          // photosynthesis takes off
-    to(2e6 + 5e3);
-    check('…oxygen crosses the reductant flux within a few thousand years',
-      w.diag.pO2 > 1e-5, `${w.diag.pO2.toExponential(1)} bar after 5 kyr`);
+    // The biosphere is on its own curve here -- it doubles whatever the player
+    // does -- so this is a date, not a switch being thrown.
+    to(2e7);
+    check('…oxygen crosses the volcanic reductant flux as the biosphere grows',
+      w.diag.pO2 > 1e-5,
+      `${w.diag.pO2.toExponential(1)} bar at 20 Myr, biosphere ${w.params.biosphere.toFixed(2)}×`);
 
-    // A few thousand more. The methane responds to the oxygen the *previous*
-    // step computed -- ordinary operator splitting -- so a single five-thousand
-    // year stride can step straight over the crossover. It is a one-step lag in
-    // a transient and the end state is untouched, but it means this has to be
-    // sampled at the rate the transition happens rather than in one jump.
-    to(2e6 + 2e4);
+    // The actual mechanism, and it was never asserted before: oxygen does not
+    // destroy methane, it makes the OH that does. Twelve thousand years to a
+    // hundred is the pivot the whole Huronian hangs on.
+    to(6e7);
+    check('…and methane’s lifetime collapses from millennia to a century',
+      w.ch4Tau < 0.02 * before.tau,
+      `${before.tau.toFixed(0)} yr → ${w.ch4Tau.toFixed(0)} yr`);
+
     check('…and takes the methane with it',
-      w.diag.pCH4 < 0.2 * before.ch4,
-      `${(w.diag.pCH4 / before.ch4 * 100).toFixed(2)}% of the methane left after 20 kyr`);
+      w.diag.pCH4 < 0.1 * before.ch4,
+      `${(w.diag.pCH4 / before.ch4 * 100).toFixed(1)}% of the methane left, ` +
+      `${(w.diag.pCH4 * 1e6).toFixed(0)} ppm against ${(before.ch4 * 1e6).toFixed(0)}`);
 
-    to(2e6 + 4e4);
-    check('…and losing that greenhouse freezes the planet',
-      w.diag.Tmean < before.T - 30 && w.diag.iceMean > 0.9,
-      `${(before.T - 273.15).toFixed(1)} °C → ${(w.diag.Tmean - 273.15).toFixed(1)} °C, ` +
-      `${(w.diag.iceMean * 100).toFixed(0)}% ice`);
+    to(8e7);
+    check('…and losing that greenhouse glaciates the planet',
+      dipT < before.T - 6 && peakIce > 0.30,
+      `${(before.T - 273.15).toFixed(1)} °C → ${(dipT - 273.15).toFixed(1)} °C at the bottom, ` +
+      `${(peakIce * 100).toFixed(0)}% of the surface under ice — a Huronian, on a world that ` +
+      `started with a fifth of itself frozen`);
 
-    // The sting: the ocean freezes, so the biosphere stops, so the oxygen that
-    // caused all this is consumed -- and the planet stays frozen anyway, because
-    // the same dead biosphere is not making methane either.
+    // And then the thermostat gets it back, which is the half of the Huronian
+    // that actually happened: those glaciations ended. A frozen planet does not
+    // weather, so volcanic CO2 piles up unopposed until it breaks the ice --
+    // about thirty megayears here, against the ~100 Myr the Huronian ran.
     //
-    // This used to say the methane came back, and it did, which was wrong: the
-    // methane source was a frozen number inferred once at the start and it had
-    // no idea whether anything was alive to sustain it. With the source coming
-    // from the biosphere the trap shuts twice over. Removing the trigger does
-    // not undo the damage, because whatever the world had before the oxygen is
-    // not coming back on its own.
-    to(2e6 + 2e6);
-    check('…after which the trigger removes itself and the world stays frozen anyway',
-      w.diag.pO2 < 1e-6 && w.diag.pCH4 < 0.1 * before.ch4 && w.diag.iceMean > 0.9,
-      `oxygen gone, but only ${(w.diag.pCH4 / before.ch4 * 100).toFixed(1)}% of the methane ` +
-      `back with nothing alive to make it, still ` +
-      `${(w.diag.iceMean * 100).toFixed(0)}% ice at ${(w.diag.Tmean - 273.15).toFixed(1)} °C`);
+    // This used to assert the opposite, that the world stays frozen for ever
+    // because the dead biosphere cannot make methane again. That was true of the
+    // model when methane above fifty pascals cooled a planet rather than warming
+    // it, and it is a poor reading of the Huronian either way.
+    to(1.2e8);
+    check('…and the carbon thermostat, not the biosphere, is what gets it back',
+      w.diag.Tmean > 273 && w.diag.iceMean < peakIce - 0.05 && w.diag.pCH4 < 0.2 * before.ch4,
+      `back to ${(w.diag.Tmean - 273.15).toFixed(1)} °C and ${(w.diag.iceMean * 100).toFixed(0)}% ice ` +
+      `on ${w.diag.pCO2.toFixed(3)} bar of CO₂, with the methane still at ` +
+      `${(w.diag.pCH4 / before.ch4 * 100).toFixed(1)}% — nothing alive is making it`);
 
-    // And it is winnable: replace the methane greenhouse with CO2 first.
+    // And it is winnable, which is the point of it being a scenario: replace the
+    // methane greenhouse with CO2 before the crossover and the world survives
+    // being oxygenated.
     const won = (() => {
-      const x = new Simulation({ ...PRESETS.earlyEarth.params, co2Bar: 0.25 });
+      const x = new Simulation({ ...sc.params, co2Bar: 0.45 });
       const v = x.world;
-      let n = 0;
-      while (v.time < 1e6 && n++ < 3e4) x.stepOnce(Math.min(maxStep(v), 5e3));
-      v.params.biosphere = 1.5;
-      while (v.time < 5e6 && n++ < 6e4) x.stepOnce(Math.min(maxStep(v), 5e3));
+      let m = 0, worst = 0;
+      while (v.time < 1e8 && m++ < 4e5) {
+        x.setParams({ biosphere: sc.evolve(v) });
+        x.stepOnce(Math.min(maxStep(v), 2e3));
+        worst = Math.max(worst, v.diag.iceMean);
+      }
+      v.worstIce = worst;
       return v;
     })();
     check('…but with the CO₂ raised first, the world survives being oxygenated',
-      won.diag.pO2 > 0.01 && won.diag.Tmean > 273 && won.diag.iceMean < 0.5,
-      `${won.diag.pO2.toFixed(3)} bar O₂ at ${(won.diag.Tmean - 273.15).toFixed(1)} °C, ` +
-      `${(won.diag.iceMean * 100).toFixed(0)}% ice`);
+      won.diag.pO2 > 0.01 && won.diag.Tmean > 273 && won.worstIce < 0.20,
+      `${won.diag.pO2.toFixed(3)} bar O₂ at ${(won.diag.Tmean - 273.15).toFixed(1)} °C, and the ` +
+      `ice never got past ${(won.worstIce * 100).toFixed(0)}% against the idle world’s 34%`);
   }
 
   // ---- 3o. a waterworld has a thermostat too --------------------------------
@@ -2279,7 +2381,16 @@ export function run() {
   {
     const rotating = ['preindustrial', 'waterworld', 'dune'].map((k) => {
       const w = settle({ ...PRESETS[k].params, biosphere: 1 }, 2e6).world;
-      return [PRESETS[k].name, photosynthesis(w)];
+      // Divided by the carbon term, which is what this row is *not* about. It
+      // used to compare photosynthesis() against 1 outright, and that worked
+      // while carbon was one curve that every one of these worlds cleared. It is
+      // two curves now -- land plants give out near 150 ppm where plankton run to
+      // a few -- and the Dune World sits at 17.5 ppm on 98% land, so it fails the
+      // carbon term honestly and would have been read here as the area term
+      // moving. What this asks is that the *denominator* is 1, which is the
+      // thing the habitable-area change touched.
+      const carbon = carbonLimit(w.diag.pCO2, w.params.landFraction);
+      return [PRESETS[k].name, photosynthesis(w) / Math.max(carbon, 1e-12), carbon];
     });
     // Every rotating world must be untouched by this: the dimmest band on Earth
     // still gets 204 W/m^2 and the `lit` threshold is half a watt, so the
@@ -2287,6 +2398,22 @@ export function run() {
     check('Scoring life by habitable area leaves every rotating world exactly as it was',
       rotating.every(([, p]) => Math.abs(p - 1) < 1e-9),
       rotating.map(([n, p]) => `${n} ${p.toFixed(3)}`).join(' · '));
+
+    // And the thing that fell out of separating them, which is worth a row of its
+    // own: a dune world is carbon-starved. 17.5 ppm of CO2 on a planet that is
+    // 98% land is below C3's compensation point with almost no ocean to fall back
+    // on, so its biosphere is a rounding error however warm and lit it is. That
+    // is the CO2-starvation end of habitability, and it is the one this model
+    // could not previously express.
+    {
+      const dune = rotating.find(([n]) => n === PRESETS.dune.name);
+      const sea = rotating.find(([n]) => n === PRESETS.waterworld.name);
+      check('…and a dune world starves for carbon where a waterworld does not',
+        dune[2] < 0.05 && sea[2] > 0.99,
+        `${PRESETS.dune.name} ${(dune[2] * 100).toFixed(1)}% against ` +
+        `${PRESETS.waterworld.name} ${(sea[2] * 100).toFixed(0)}% — same star, opposite ends of ` +
+        `the land fraction and of the carbon curve`);
+    }
 
     // And a locked world is now scored on the half of it that has a day.
     const eye = settle({ ...PRESETS.eyeball.params, biosphere: 1 }, 3e6).world;
@@ -2336,13 +2463,19 @@ export function run() {
       `${S.evolve({ time: 1e7 }).toFixed(2)}× at 10 Myr, ` +
       `${S.evolve({ time: 3e8 }).toFixed(2)}× by the end — and it stops at Earth's own`);
 
+    // The loss is a Huronian rather than a hard snowball now, and the scenario's
+    // fail threshold moved to match: with methane's band at its published
+    // strength the carbonate-silicate thermostat pulls this world back out of a
+    // total freeze on its own, so "keep it off a snowball" was a challenge you
+    // won by waiting. A third of the surface under ice is the line, and idling
+    // crosses it at 51-55 Myr on every step size tested.
     const idle = play(null);
-    check('…so doing nothing loses the planet',
-      idle.r === 'lose' && idle.w.diag.Tmean < 260,
-      `frozen solid at ${(idle.w.diag.Tmean - 273.15).toFixed(0)} °C, ` +
-      `${(idle.w.time / 1e6).toFixed(0)} Myr in`);
+    check('…so doing nothing glaciates the planet',
+      idle.r === 'lose' && idle.w.diag.iceMean > 0.30,
+      `${(idle.w.diag.iceMean * 100).toFixed(0)}% of the surface under ice at ` +
+      `${(idle.w.diag.Tmean - 273.15).toFixed(0)} °C, ${(idle.w.time / 1e6).toFixed(0)} Myr in`);
 
-    const played = play(0.25);
+    const played = play(0.45);
     check('…and replacing the methane greenhouse with CO₂ first wins it',
       played.r === 'win' && played.w.diag.Tmean > 273,
       `oxygenated at ${(played.w.diag.Tmean - 273.15).toFixed(0)} °C with ` +

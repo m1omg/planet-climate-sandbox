@@ -96,20 +96,22 @@ export function bandFractions(T, out = FR) {
 // and their tolerances are the ones calibrate.mjs checks, plus the shape
 // constraints that a stable hot branch and a real runaway limit both require.
 //
-// A1G, methane's 7.7 um band in band 0, is a known gap rather than a fit and is
-// worth naming here because nothing that anchored it ever had any grip on it.
-// The *net* methane forcing -- longwave less the shortwave absorbed aloft -- peaks
-// at 5.1 W/m^2 here against Eager-Nash et al. (2023)'s 8.5 and Byrne & Goldblatt
-// (2014)'s ~9 for the longwave alone. That is not academic: it makes methane worth
-// about one kelvin on an Archean world, so the Great Oxidation cannot freeze a
-// planet by taking it away, which is the one thing that scenario is about.
+// A1G is the exception to "fitted simultaneously": it is methane's 7.7 um band
+// in band 0, and it is set on its own against Byrne & Goldblatt (2014) and
+// Eager-Nash et al. (2023) rather than left where the joint fit put it. At 0.417
+// the *net* methane forcing -- longwave less the shortwave absorbed aloft --
+// peaked at 5.1 W/m^2 against their 8.5, which made methane worth about one
+// kelvin on an Archean world. At 0.75 the peak is 7.4 W/m^2 near 100 Pa.
 //
-// The fix was measured: A1G at 0.75 brings the net peak to 7.4 W/m^2, and Titan
-// does not move by a tenth of a kelvin across the whole range -- its greenhouse is
-// haze and collision-induced absorption, not this band. It is not shipped because
-// this term warms the pre-industrial world 0.14 K per 0.2 of coefficient and that
-// anchor is already over its ceiling, so it needs the Archean preset rebooted and
-// the Huronian chain in selftest.js recalibrated with it. See the README.
+// It stops at 87 per cent of the published forcing rather than 100 because Earth
+// pays for the rest: this term warms the pre-industrial world 0.14 K per 0.2 of
+// coefficient, and that anchor was already 0.03 K over its ceiling. 0.75 costs it
+// 0.26 K; 1.00 would buy the last 13 per cent for another 0.17, and Earth is the
+// anchor that matters more.
+//
+// Titan does not move by a tenth of a kelvin across the whole range -- its
+// greenhouse is haze and collision-induced absorption, not this band -- so
+// nothing that anchored this coefficient before had any grip on it.
 //
 // A degeneracy worth recording, because it cost the third attempt an afternoon:
 // Venus cannot tell "opaque" from "absurdly opaque". At 92 bar the band-3 term
@@ -117,7 +119,7 @@ export function bandFractions(T, out = FR) {
 // it at thousands -- identical on Venus, catastrophic on a world carrying one
 // bar of CO2. Every coefficient here is bounded for that reason.
 const A1L = 0.292930, A1U = 0.993371, A1W = 0.0446001, A1WL = 0.271230,
-      A1WC = 20.0000, A1G = 0.417371;
+      A1WC = 20.0000, A1G = 0.75;
 // Ceiling on the band-0 water self-continuum. That term goes as pH2O^2 with no
 // pressure broadening -- 1.5e-7 at Earth's vapour, thousands in steam -- and its
 // quadratic growth is what sets the runaway threshold. But band 0 spans 0-8 um,
@@ -357,21 +359,25 @@ export function opticalDepth(pCO2, pH2O, pCH4, pTot, pH2 = 0) {
 // Weak-line absorption is linear in the column and saturates once the bands
 // fill, so a plain exponential approach to a ceiling is the right shape. The
 // ceiling is the share of the solar spectrum those bands can reach at all.
-// SW_MAX and P_SW are the other half of the same gap, and this one is wrong in
-// *shape* rather than in size. At 2.9e-3 bar the shortwave term becomes
-// significant at 3 Pa, where Eager-Nash put it at 10, and it takes the net forcing
+// SW_MAX and P_SW put the *turnover* where Eager-Nash put it, and the scale used
+// to be seven times smaller than that. At 2.9e-3 bar the shortwave term became
+// significant at 3 Pa, where the paper says 10, and it took the net forcing
 // negative at 50 Pa -- inside the 30-300 Pa window where the same paper has the
-// net forcing at its maximum. So on an Archean world methane is an anti-greenhouse
-// gas above about fifty pascals: 300 Pa freezes a world that 39 Pa holds at +13 C,
-// and a millibar of it -- which is what the Great Oxidation scenario starts with --
-// makes a planet colder rather than warmer.
+// net forcing at its maximum. So methane was an anti-greenhouse gas across the
+// whole Archean range: 300 Pa froze a world that 39 Pa held at +13 C.
 //
-// P_SW_CH4 at 2.0e-2 puts the turnover where the paper puts it and was measured
-// alongside the A1G change above; the two go together and neither is shipped yet.
+// That was not a quiet error. The Great Oxidation self-tests passed their
+// headline assertion -- "losing that greenhouse freezes the planet" -- for the
+// exact opposite of the stated reason: the greenhouse was never lost, the
+// biosphere drove methane from 404 to 3295 ppm, and 330 Pa of it froze the world
+// by absorbing sunlight three scale heights up. The test was reading the bug as
+// the physics. At 2.0e-2 the peak warming is +3.5 K near 100 Pa and methane is
+// still warming at a millibar, which is the published shape, and that chain had
+// to be rebuilt around a mechanism the model actually has.
 //
-// At modern Earth's 1.8 ppm the term is worth 4 mW/m^2 either way, so nothing in
-// the present-day calibration turns on it.
-const SW_CH4_MAX = 0.081, P_SW_CH4 = 2.9e-3;   // bar
+// At modern Earth's 1.8 ppm the term is worth 0.4 mW/m^2, so nothing in the
+// present-day calibration turns on it.
+const SW_CH4_MAX = 0.081, P_SW_CH4 = 2.0e-2;   // bar
 
 // The share of incoming sunlight methane absorbs before it reaches the ground.
 export function ch4Shortwave(pCH4) {

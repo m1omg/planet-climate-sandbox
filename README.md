@@ -95,6 +95,8 @@ three known gaps that are deliberately not fixed:
 | Moist greenhouse before the runaway | none (Leconte 2013); near 340 K (Kasting 1988) | **none — stratosphere dry at 2×10⁻⁴** |
 | Ocean loss in a runaway, young star | gigayears | 5.7×10⁸ yr |
 | Simpson–Nakajima limit | 282 W/m² (Goldblatt 2013) | **282 W/m²** |
+| Methane net forcing, peak | 8.5 W/m² at 30–300 Pa (Eager-Nash 2023) | **7.4 W/m² at 100 Pa** |
+| Land plants give out | ~150 ppm CO₂ stressed, ~10 ppm gone | **150 / 10 ppm, marine to ~1** |
 | Runaway from CO₂ alone | stable (Ramirez 2014); ~100× (Goldblatt 2013) | needs >500× pre-industrial |
 
 The runaway limit is not imposed anywhere in the code. Hold water at saturation and the fitted
@@ -136,17 +138,17 @@ was held to **23.6-year steps through a million years of nothing happening**. 18
 979. Anything that reads a rate to choose a step needs to ask whether the thing it is reading can
 actually move.
 
-The other half of the same lesson is a cap that reads the wrong quantity, and it is still there. The
-biological methane source is limited to *(surface carbon) / dt* — which says a longer step may make
-less methane per year than a short one. Methanogens recycle carbon that is already at the surface:
-what they emit is CO₂ again within a methane lifetime, and nothing is debited for it anywhere. What
-the carbon really limits is the standing **stock**, which does not care how long the step was. It is
-invisible today because methane's band is too weak for anyone to feel it; raise that band to the
+The other half of the same lesson is a cap that read the wrong quantity. The biological methane source
+was limited to *(surface carbon) / dt* — which says a longer step may make less methane per year than
+a short one. Methanogens recycle carbon that is already at the surface: what they emit is CO₂ again
+within a methane lifetime, and nothing was debited for it anywhere. What the carbon really limits is
+the standing **stock**, which does not care how long the step was.
+
+It was invisible while methane's band was too weak for anyone to feel it. Refit that band to the
 published forcing and Earth's methane collapses from 800 to 126 ppb on every long stride and climbs
 back over the short ones after it — a clean period-five limit cycle in the step controller, worth
-0.4 K and a tenfold slowdown. It belongs with the methane round below, because the obvious repair
-(cap the stock instead of the flux) lets methane draw on the whole mantle budget and unleashes the
-high-pressure end of the same band, which is its own unfixed defect.
+0.4 K and a tenfold slowdown. Capped on the stock instead, a 630 kyr step lands on the same 800 ppb a
+two-kiloyear step does, and there is a self-test that asks for exactly that.
 
 ### Two ways to draw a planet
 
@@ -1399,10 +1401,10 @@ The result is a branch instead of a cliff. Albedo now falls to 0.258 and then tu
 **With the thermostat running it is a different and shorter branch**, because weathering strips the
 CO₂ as the star brightens and the world runs cooler for it:
 
-| S⊕ | 1.20 | 1.26 | 1.30 | 1.32 | 1.33 |
+| S⊕ | 1.16 | 1.20 | 1.22 | 1.24 | 1.26 |
 |---|---|---|---|---|---|
-| mean surface | 28.8 °C | 33.0 | 36.1 | **37.8** | runaway |
-| stratospheric H₂O | 3.6×10⁻⁵ | 6.3×10⁻⁵ | 1.4×10⁻⁴ | 2.5×10⁻⁴ | 1 |
+| mean surface | 26.1 °C | 28.7 | 30.2 | **31.7** | runaway |
+| stratospheric H₂O | 3.5×10⁻⁵ | 5.1×10⁻⁵ | 7.2×10⁻⁵ | 1.1×10⁻⁴ | 1 |
 
 The difference between those two tables is the open gap two sections down, and it is the reason the
 inner edge sits where it does.
@@ -1428,7 +1430,7 @@ rather than in tens of them.
 **Let the thermostat run and it does not end that way at all**, and that is deliberate. The section
 two down describes the change: the band-0 water self-continuum is now fitted so the Simpson–Nakajima
 limit lands on Goldblatt et al. (2013)'s 282 W/m² exactly, and with the CO₂ weathered away the
-absorbed flux crosses that limit at 1.33 S⊕ while the stratosphere is still at 2.5×10⁻⁴ — a quarter
+absorbed flux crosses that limit at 1.26 S⊕ while the stratosphere is still at 1.1×10⁻⁴ — a ninth
 of Kasting's criterion. The planet goes straight into a runaway with a dry stratosphere. That is
 Leconte et al. (2013)'s result, in a GCM, and the price of matching it is that **the moist greenhouse
 stops existing as a state a player can be in** on a world whose carbon cycle is running. It survives
@@ -1567,9 +1569,9 @@ different answers depending on one switch:
 
 | | moist greenhouse | runaway |
 |---|---|---|
-| CO₂ held at 400 ppm, walked up | — | 1.30 S⊕ |
-| carbon cycle running, walked up | *— none before the runaway* | **1.30 S⊕**, last stable 1.28 |
-| *cold-started at each step* | *—* | *1.20 — an overshoot, not an edge* |
+| CO₂ held at 400 ppm, walked up | — | 1.26 S⊕ |
+| carbon cycle running, walked up | *— none before the runaway* | **1.26 S⊕**, last stable 1.24 |
+| *cold-started at each step* | *—* | *an overshoot, not an edge* |
 | *Kopparapu 2013 (1-D)* | *1.015* | *1.066* |
 | *Leconte 2013 (3-D GCM)* | *— none before the runaway* | *~1.10* |
 | *Wolf & Toon 2015 (CAM4)* | *habitable to ~1.21, 350–360 K* | *above that* |
@@ -1596,8 +1598,9 @@ Ocean preset at 3.5% under ten bar and the Sunbaked Ocean at 3.6% under four,
 while an Earth at the top of its hot branch is at 11.7%. A thick background keeps
 a hot ocean's air ordinary; it is being mostly steam that closes the fin.
 
-The edge came in from 1.48 to **1.30, with the last stable world at 1.28** — the
-number the player asked for, and within 0.05 of Wolf & Toon's 1.21.
+The edge came in from 1.48 to **1.30**, and refitting methane's band took it a
+further 0.04 to **1.26, with the last stable world at 1.24** — the number the
+player asked for, and within 0.05 of Wolf & Toon's 1.21.
 
 **The mechanism is a feedback that should not exist.** The Simpson–Nakajima limit
 is a property of a steam atmosphere and is very nearly independent of CO₂: at the
@@ -1823,56 +1826,81 @@ Stated plainly, because a model that hides these is less useful:
   with a warm day side is a known outcome for planets on the outer edge of an M dwarf's habitable
   zone (Joshi et al. 1997; Turbet et al. 2018).
 
-* **Methane's greenhouse is about half the published one, and above fifty pascals it is an
-  anti-greenhouse.** Two separate errors in the same gas, diagnosed here and **not yet fixed**. The
-  shortwave term — methane's own near-infrared bands absorbing sunlight aloft, which is what puts a
-  ceiling on the methane greenhouse — has a scale seven times too small, so it becomes significant at
-  3 Pa where Eager-Nash et al. (2023) put it at 10, and it takes the *net* forcing negative at 50 Pa,
-  inside the 30–300 Pa window where the same paper has the net forcing at its **maximum**. And the
-  longwave term, methane's 7.7 µm band, gives 5.8 W/m² at 100 Pa where Byrne & Goldblatt (2014) have
+* **Methane's greenhouse was about half the published one, and above fifty pascals it was an
+  anti-greenhouse.** Two errors in the same gas, and the second one was quietly holding up a test.
+  The shortwave term — methane's own near-infrared bands absorbing sunlight aloft, which is what puts
+  a ceiling on the methane greenhouse — had a scale seven times too small, so it became significant
+  at 3 Pa where Eager-Nash et al. (2023) put it at 10, and it took the **net** forcing negative at
+  50 Pa, inside the 30–300 Pa window where the same paper has that forcing at its *maximum*. And the
+  longwave term, methane's 7.7 µm band, gave 5.8 W/m² at 100 Pa where Byrne & Goldblatt (2014) have
   about 9.
 
-  Together they make methane worth **+1 K at best** on an Archean world and −64 K at 300 Pa: three
-  hundred pascals freeze a world that thirty-nine holds at +13 °C. The net peak is 5.1 W/m² against
-  the literature's 8.5.
+  Together they made methane worth **+1 K at best** on an Archean world and −64 K at 300 Pa: three
+  hundred pascals froze a world that thirty-nine held at +13 °C. The net peak is **7.4 W/m²** now
+  against the literature's 8.5, and methane is still warming at a millibar. `calibrate.mjs` carries
+  the peak as an anchor.
 
-  The fix is known and was measured: `P_SW_CH4` at 2.0e-2 puts the turnover where the paper puts it,
-  and `A1G` at 0.75 brings the net peak to 7.4 W/m². Titan does not move by a tenth of a kelvin
-  either way — its greenhouse is haze and collision-induced absorption, not the 7.7 µm band. It is
-  **not shipped**, because it cascades: Earth's pre-industrial goes 14.23 → 14.49 °C against a
-  14.2 ceiling, the Archean preset needs rebooting at 0.402 bar rather than 0.457, the Huronian chain
-  in `selftest.js` stops firing because oxygen no longer crosses the reductant flux at that preset's
-  volcanism, and the maximum-greenhouse threshold moves again. That is a calibration round, not a
-  coefficient change, and shipping it half-done is the thing this file keeps saying not to do.
+  **What it was propping up.** The Great Oxidation self-tests passed their headline assertion —
+  "losing that greenhouse freezes the planet" — for the exact opposite of the reason its name gives.
+  The greenhouse was never lost: the biosphere drove methane from 404 to 3295 ppm and 330 Pa of it
+  froze the world by absorbing sunlight three scale heights up. The test was reading the bug as the
+  physics, and its sibling assertion that the methane collapses was failing the whole time. Fixing
+  the shortwave term took the false pass away, which is how this was found.
 
-* **The Great Oxidation scenario cannot be played.** It boots at 0.08 bar of CO₂ and 288 K, and at
-  0.77 S⊕ with a tenth of the surface as land that world has **no warm branch at all** — the only
-  equilibrium is a snowball, and it reaches one inside twenty thousand years, before the player has
-  done anything. Then, frozen, it piles CO₂ for three hundred megayears and finishes as a 758 °C
-  runaway. Reported from the live site, and reproduced exactly.
+  The longwave coefficient stops at 87% of the published forcing rather than 100% because Earth pays
+  for the rest: it warms the pre-industrial world 0.14 K per 0.2 of coefficient, and that anchor was
+  already 0.03 K over its ceiling. It is **0.26 K over now, at 14.49 °C against a 14.2 target**, and
+  that is the stated price. Titan does not move by a tenth of a kelvin either way — its greenhouse is
+  haze and collision-induced absorption, not the 7.7 µm band — so nothing that anchored this
+  coefficient before had any grip on it.
 
-  Three things are wrong with it and all three are measured:
+  Six standing failures closed with it, including snowball deglaciation and duration, and Earth's
+  inner edge came in a further 0.04 to **1.26 S⊕**.
 
-  1. **It has no branch to sit on.** 0.30 bar is where weathering and volcanism balance on that
-     world; 0.08 is a third of it.
-  2. **Its premise is not in the model.** The scenario is written around a millibar of methane
-     holding a planet above freezing. A millibar of methane in this model makes a planet *colder* —
-     see the row above. Rebuilt at 0.30 bar with the methane fix in place it works exactly as
-     designed: +4 °C, oxygen crosses, the methane goes, and the world is a hard snowball by 80 Myr.
-     Without that fix there is no configuration where losing the methane costs anything.
-  3. **Its outcome depends on the step size.** Capped at 5 kyr it ends temperate at +3.6 °C; at
-     20 kyr it snowballs and runs away. 1 kyr and 5 kyr agree with each other, so the converged
-     answer is the temperate one and the runaway is a coarse-step artefact — and the runaway it
-     produces is the pressure-broadening gap in one number: a frozen world at 0.77 S⊕ piles 17.7 bar
-     of CO₂, and at that pressure this model's Simpson–Nakajima limit is **123 W/m²** against the
-     144–183 the deglaciated world absorbs, so the runaway is forced. Goldblatt has the limit very
-     nearly CO₂-independent; at 282 there would be no runaway and the world would settle as a
-     hothouse.
+* **The Great Oxidation scenario could not be played, and now it can.** It booted at 0.08 bar of CO₂
+  and 288 K, and at 0.77 S⊕ with a tenth of the surface as land that world has **no warm branch at
+  all** — the only equilibrium is a snowball, and it reached one inside twenty thousand years, before
+  the player had done anything. Then, frozen, it piled CO₂ for three hundred megayears and finished
+  as a 758 °C runaway. Reported from the live site and reproduced exactly.
 
-  So the scenario is fixable and the fix is written down, but it needs the methane round above to
-  land first.
+  Every number in it is measured now rather than chosen: **0.30 bar** is where weathering and
+  volcanism balance on that world, **+4 °C** is the branch it sits on, and taking the methane away at
+  that CO₂ drops it to −51 °C. The chain runs end to end — oxygen crosses the volcanic reductant flux
+  around 20 Myr, **methane's lifetime collapses from 15 400 years to 104**, the methane goes 417 → 9
+  ppm, and the world slides to −3.5 °C with a third of its surface under ice by 70 Myr.
 
-* **The moist greenhouse no longer exists on a world whose carbon cycle is running.** Deliberate,
+  **The failure condition moved from a total snowball to a Huronian**, and that is a finding rather
+  than a softening: with methane's band at its published strength the carbonate–silicate thermostat
+  is strong enough to pull this world back out of a hard freeze on its own, so "keep it off a
+  snowball" was a challenge you won by waiting. 30% ice discriminates cleanly and step-independently
+  — idling peaks at 34%, raising the CO₂ to 0.40 bar peaks at 24%, to 0.45 bar at 8% — so there is a
+  gradient to play on and a half-measure survives.
+
+* **That scenario's outcome still depends on the step size at the coarse end, and the runaway it
+  produces there is the pressure gap.** Capped at 5 kyr or below it dips and recovers; left to stride
+  it snowballs, piles 17.7 bar of CO₂ over two hundred megayears and finishes at 758 °C. 1 kyr and
+  5 kyr agree with each other, so the dip is the physics and the snowball is the integrator. And the
+  runaway is forced by a limit that should not fall: at 17.7 bar this model's Simpson–Nakajima limit
+  is **123 W/m²** against the 144–183 the deglaciated world absorbs. Goldblatt has it very nearly
+  CO₂-independent; at 282 the world settles as a hothouse and there is no runaway at all. The
+  self-tests ask for the converged answer and `calibrate.mjs` measures the limit at six bar every run.
+
+* **Land plants starved at 1 ppm of CO₂, which is a cyanobacterium's limit and not a plant's.** The
+  carbon term in `photosynthesis()` was one curve fitted to organisms that run carbon-concentrating
+  mechanisms and genuinely manage on a few ppm. Vascular plants do not: C3 photosynthesis has a
+  compensation point near 50 ppm, most land plants are severely carbon-limited below about **150**,
+  and nothing vascular runs below **10**. That matters because carbon starvation, not heat, is how a
+  biosphere really ends — a brightening star weathers the CO₂ out from under it first.
+
+  The two constituencies are split now and weighted by how much of a planet's production each can
+  hold: land is about 2.7× as productive per square metre as open ocean, which is what puts 54% of
+  Earth's net primary production on 30% of its surface (Field et al. 1998). So Earth keeps 84% of its
+  production at 100 ppm, 57% at 50 and 46% at 10 — the marine half — while a world that is 90% land
+  is down to 4% at 10 ppm and a landless one does not notice until its plankton give out near 1.
+  Nothing Earth has been through comes near it: the LGM's 190 ppm, pre-industrial 280 and today's 427
+  are all at 100%.
+
+* **The moist greenhouse no longer exists on a world whose carbon cycle is running.*** **The moist greenhouse no longer exists on a world whose carbon cycle is running.** Deliberate,
   asked for, and the price of putting the inner edge where Goldblatt (2013) and Leconte (2013) put
   it. Raising the band-0 water self-continuum to 20 sets the Simpson–Nakajima limit to 282 W/m²
   exactly and brings the free-thermostat runaway from 1.38 S⊕ to 1.33; at that crossing the

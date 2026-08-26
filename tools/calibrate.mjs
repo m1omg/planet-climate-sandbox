@@ -407,14 +407,16 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // before, 242 after -- which is itself worth knowing, because the continuum is
   // the one term in the scheme with no pressure broadening at all.
   // Methane's net radiative forcing at its peak: longwave trapped less shortwave
-  // absorbed aloft, which is the number Eager-Nash et al. report and the one
-  // that decides whether losing a methane greenhouse can freeze a planet. It was
-  // 5.08 W/m^2 here against their 8.5 -- and worse than the shortfall suggests,
-  // because the shortwave scale was seven times too small, so the net went
-  // *negative* above about fifty pascals and methane became an anti-greenhouse
-  // gas across the whole Archean range. The Great Oxidation scenario, which is
-  // written around a millibar of it holding a world above freezing, could not be
-  // played at all.
+  // absorbed aloft, which is the number Eager-Nash et al. report and the one that
+  // decides whether losing a methane greenhouse can freeze a planet.
+  //
+  // This row exists because the model was wrong here in *shape* as well as size.
+  // At 5.08 W/m^2 against their 8.5 the shortfall was bad enough; worse, the
+  // shortwave scale was seven times too small, so the net went negative above
+  // about fifty pascals and methane became an anti-greenhouse gas across the
+  // whole Archean range -- 300 Pa froze a world that 39 Pa held at +13 C. The
+  // Great Oxidation self-tests passed their headline assertion because of it,
+  // reading that freeze as the loss of a greenhouse that had never gone away.
   {
     const ABS = 1361 / 4 * 0.77 * 0.70;         // absorbed on an Archean world
     const T = 288, q = 0.011, C = 0.669, co2 = 0.01;
@@ -428,14 +430,11 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     // finds that defect rather than the forcing this row is about. The selftest
     // rows that ask for a turnover at 30-300 Pa are the ones that watch it.
     for (let pa = 1; pa <= 1000; pa *= 1.2) { const v = net(pa); if (v > peak) { peak = v; peakAt = pa; } }
-    deviation('methane net forcing, peak', peak, 6, 10, 'W/m²',
+    anchor('methane net forcing, peak', peak, 6, 10, 'W/m²',
       `Eager-Nash et al. 2023: 8.5 W/m² peak, between 30 and 300 Pa; Byrne & Goldblatt 2014 have ` +
-      `about 9 for the longwave alone. Peaks here at ${peakAt.toFixed(0)} Pa, and the shape is ` +
-      `wrong as well as the size: the shortwave scale is seven times too small, so the net goes ` +
-      `negative above about 50 Pa and methane becomes an anti-greenhouse gas across the whole ` +
-      `Archean range — 300 Pa freezes a world that 39 Pa holds at +13 °C. P_SW_CH4 at 2.0e-2 and ` +
-      `A1G at 0.75 fix both and were measured; they are not shipped because they cost Earth's ` +
-      `pre-industrial 0.26 K and need the Archean preset and the Huronian chain recalibrated`);
+      `about 9 for the longwave alone. Peaks here at ${peakAt.toFixed(0)} Pa. It was 5.1 with a ` +
+      `shortwave scale seven times too small, which put the net *negative* above 50 Pa and made ` +
+      `methane an anti-greenhouse gas across the whole Archean range`);
   }
 
   const thick = runawayLimit(280e-6, 6.0).flux;
