@@ -192,24 +192,47 @@ export const PRESETS = {
   //
   // Radiogenic heat production was about twice today's at 3.5 Ga and the mantle
   // ran 150-250 K hotter (Herzberg et al. 2010), which puts surface heat flow
-  // near 2-3x modern; 0.2 W/m^2 is the middle of that. meltBoost turns it into
-  // 1.47x the melt, and the specific-activity dial is left at Earth's because
-  // meltBoost is already the "hotter interior makes more melt" term and raising
-  // both would charge for it twice.
+  // near 2-3x modern; 0.2 W/m^2 is the middle of that, and meltBoost turns it
+  // into 1.47x the melt. The specific-activity dial then carries the rest, to
+  // 3.5x modern in total, and that number is the interesting one.
   //
-  // It is bounded above by its own biology, which is the interesting part. The
-  // reductant flux the biosphere has to outrun scales with exactly this
-  // volcanism, so past about 2.5x total the Great Oxidation stops being
-  // winnable at all: 2.2x still oxygenates, 2.5x does not. A hotter Archean is
-  // a harder one to oxygenate, and there is a ceiling on how hot it can be and
-  // still have the Huronian happen.
+  // The empirical constraint is the xenon record. Avice, Marty & Burgess (2017)
+  // date Archean atmospheric Xe at 3.3 Ga and get a mantle degassing rate of
+  // 8.1 +/- 3.9 times the present one -- 9.5 +/- 4.5 by the 3He route, up to
+  // 14x consistent with convection models -- and Kipp et al. (2020) take that
+  // same figure as their constraint and conclude lower-than-modern early
+  // outgassing is unlikely. This preset ran at 1.00x for its whole life.
   //
-  // Worth 4 K: the world rests at +3.9 C under 19% ice where it used to sit at
-  // -0.3 C under 27%, and the composition below is that new fixed point.
+  // It is bounded above by its own biology, and the bound is what makes 4.0
+  // rather than 8.1 the number here. The reductant flux the biosphere has to
+  // outrun scales with this same volcanism, so a hotter Archean is a harder one
+  // to oxygenate and there is a ceiling on how hot it can be and still have the
+  // Huronian happen. That ceiling was 2.5x, which was *below* the xenon range
+  // and therefore flatly inconsistent with it. Crediting hydrogen escape --
+  // Catling, Zahnle & McKay (2001), see volatiles.js -- moved it to about 4.2x,
+  // which is where 8.1 - 3.9 lands. The two now touch instead of contradicting.
+  //
+  // A second real event binds tighter, though, and it is what sets 3.5. The
+  // Huronian followed the Great Oxidation: methane collapses, its greenhouse
+  // goes, and the planet freezes. More volcanism means more CO2 at the carbon
+  // cycle's fixed point, and past 0.5 bar the CO2 simply carries the climate
+  // without the methane -- at 4.0x, losing every molecule of it costs 7 K and
+  // the world stays temperate at 7.5 C. The freeze survives to 3.5x and dies at
+  // 4.0x, so the ceiling is the Huronian's and not the oxygen's.
+  //
+  // Both bounds trace to the same place. The CO2 is high because this scheme
+  // runs cold under a faint young Sun -- 0.46 bar against paleosol estimates of
+  // 0.01-0.1 -- and it is that excess CO2 which drowns the methane and caps the
+  // volcanism. Fix the semi-grey gap and this ceiling lifts on its own.
+  //
+  // Worth 13 K against where this started: +13.4 C under one per cent of ice,
+  // where it sat at -0.3 C under 27% before any of this, and quiet with it --
+  // 0.2 K of drift across three gigayears. The methane it settles on, ~390 ppm,
+  // is squarely in the published Archean range.
   earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2,
-    insolation: 0.77, landFraction: 0.1, internalHeat: 0.2,
-    co2Bar: 0.3429, ch4Bar: 3.742e-4, h2Bar: 7.395e-4,
-    startT: 283.56 } },
+    insolation: 0.77, landFraction: 0.1, internalHeat: 0.2, outgassing: 2.374,
+    co2Bar: 0.4566, ch4Bar: 3.921e-4, h2Bar: 1.730e-3,
+    startT: 286.64 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },

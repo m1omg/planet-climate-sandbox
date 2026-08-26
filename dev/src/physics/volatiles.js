@@ -818,6 +818,31 @@ export function stepVolatiles(w, dtYears) {
     const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing * meltBoost(p)
                     * Math.max(p.mantleRedox ?? 1, 0);
 
+    // Hydrogen that leaves the planet never consumes anything on it.
+    //
+    // The charge above bills the oxygen budget for volcanic reducing power as
+    // though all of it is delivered, which is right for modern Earth: H2 lasts
+    // two years in this air and is oxidised, not lost. On an anoxic world it is
+    // not right at all. There, H2 accumulates until escape balances the source,
+    // and what goes to space is reducing power the atmosphere never has to
+    // answer for. The budget had the charge and no credit, so a world was billed
+    // eightfold for its volcanism and refunded nothing when eight times as much
+    // of it left the planet -- a one-sided error, pointing the way it hurts.
+    //
+    // This is Catling, Zahnle & McKay (2001): hydrogen escape irreversibly
+    // oxidising the early Earth, and the reason an Archean can set up its own
+    // oxygenation rather than needing a biosphere five times Earth's.
+    //
+    // Netted off the charge rather than added as free O2, and that distinction
+    // is the whole of it. Escaping hydrogen does not *make* oxygen -- it fails
+    // to consume it, and the oxidation it leaves behind goes mostly into the
+    // crust as ferric iron and sulfate. Adding it as O2 would oxygenate an
+    // anoxic world out of nothing, which is exactly the error this is fixing,
+    // pointed the other way. Floored at zero: you cannot un-charge more than you
+    // were charged, however much hydrogen a Hycean envelope is shedding.
+    const escapedReducing = Math.max(esc.h2 ?? 0, 0) * O2_PER_H2;
+    const reductantNet = Math.max(0, reductant - escapedReducing);
+
     // Oxidative weathering of the crust: first order in how much oxygen there
     // is, which is what makes the level settle instead of climbing for ever.
     // It needs liquid water, so a planet that has boiled dry keeps whatever its
@@ -827,12 +852,13 @@ export function stepVolatiles(w, dtYears) {
     const weathering = (0.25 + 0.75 * landExposed) * liquid / O2_TAU_OX;
 
     // Kept for maxStep: how fast the reservoir is moving right now.
-    w.o2Rate = (source - reductant) - w.o2 * weathering;
+    w.o2Rate = (source - reductantNet) - w.o2 * weathering;
     // Semi-implicit in the part that depends on w.o2, so a long step cannot
     // overshoot past zero.
     const o2Before = w.o2;
-    w.o2 = Math.max(0, (w.o2 + (source - reductant) * dtYears) / (1 + weathering * dtYears));
-    w.o2Flux = { source, reductant, weathering: w.o2 * weathering };
+    w.o2 = Math.max(0, (w.o2 + (source - reductantNet) * dtYears) / (1 + weathering * dtYears));
+    w.o2Flux = { source, reductant: reductantNet, gross: reductant,
+                 escaped: escapedReducing, weathering: w.o2 * weathering };
 
     // --- methane -----------------------------------------------------------
     // Deliberately *after* the oxygen, and this ordering is load-bearing.
