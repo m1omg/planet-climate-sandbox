@@ -80,10 +80,24 @@ export const SCENARIOS = [
     id: 'oxidation',
     name: 'The Great Oxidation',
     icon: '🫧',
-    brief: 'An Archean world, anoxic, kept warm above freezing by a millibar of methane. Your cyanobacteria have just worked out oxygenic photosynthesis and are spreading on their own — and oxygen and methane cannot coexist. Keep this planet from freezing solid while it oxygenates.',
-    hint: 'The biosphere is not yours to hold back: it doubles every few million years whatever you do, and it crosses the volcanic reductant flux at about 0.4× Earth. From there oxygen cuts methane’s life from ten thousand years to ten, and a millibar of methane is worth some fifteen watts per square metre. Replace that greenhouse with CO₂ *before* the crossover, or you will watch the ice-albedo feedback take the whole planet — and the methane coming back afterwards will not melt it.',
+    brief: 'An Archean world, anoxic, kept warm above freezing by a millibar of methane. Your cyanobacteria have just worked out oxygenic photosynthesis and are spreading on their own — and oxygen and methane cannot coexist. Keep the ice off this planet while it oxygenates.',
+    hint: 'The biosphere is not yours to hold back: it doubles every few million years whatever you do, and it crosses the volcanic reductant flux at about 0.4× Earth. From there oxygen cuts methane’s life from ten thousand years to ten, and the hundred pascals of it in this air are worth about nine watts per square metre — nine kelvin, on a world whose ice edge is nine kelvin away. Replace that greenhouse with CO₂ *before* the crossover, or you will watch the ice-albedo feedback take a third of the planet while you do it. The thermostat will pull the world back out eventually \u2014 it always does \u2014 but a Huronian you sat through is still a Huronian.',
+    // Rebuilt, because it could not be played. It used to boot at 0.08 bar of
+    // CO2 and 288 K, and at 0.77 S(+) with a tenth of the surface as land that
+    // world has no warm branch at all -- the only equilibrium is a snowball, and
+    // it reached one inside twenty thousand years, before the player had done
+    // anything. Every number below is measured rather than chosen: 0.30 bar is
+    // where weathering and volcanism balance on this world, +9.0 C is the branch
+    // it sits on, and taking the methane away at that CO2 drops it to -51 C and
+    // a hard snowball. The margin is the whole scenario.
+    //
+    // It also needed methane to be worth something. At 100 Pa the net forcing
+    // here used to be 5.1 W/m^2 against Eager-Nash et al.'s 8.5, and above about
+    // fifty pascals methane went to being an anti-greenhouse gas -- so a
+    // millibar of it, which is what this scenario used to start with, made a
+    // planet *colder*. Both halves of that are fixed in radiation.js.
     params: { ...EARTH, o2Bar: 0, biosphere: 0.2, insolation: 0.77, landFraction: 0.1,
-              co2Bar: 0.08, ch4Bar: 1e-3, startT: 288 },
+              internalHeat: 0.2, co2Bar: 0.30, ch4Bar: 1e-3, h2Bar: 0, startT: 282 },
     // Life takes off by itself, which is the whole point of the scenario and was
     // missing from it: the biosphere sat at 0.2x for ever, below the 0.385x where
     // oxygen starts outrunning the volcanoes, so the Great Oxidation simply never
@@ -98,8 +112,20 @@ export const SCENARIOS = [
     // none, not life becoming something a planet has never supported.
     evolve: (w) => 0.2 + 0.8 * (1 - Math.exp(-w.time / 3e7)),
     limit: 3e8,
-    check: (w) => w.diag.pO2 > 0.01 && w.diag.Tmean > 273 && w.diag.iceMean < 0.5,
-    fail: (w) => w.diag.iceMean > 0.95,
+    // A third of the planet under ice, not a total snowball, and that is the
+    // Huronian rather than a softening. With the methane greenhouse at its
+    // published strength the carbonate-silicate thermostat is strong enough to
+    // pull this world back out of a hard snowball on its own -- doing nothing
+    // dips it to -3.5 C and 34% ice around 70 Myr and then recovers it, which
+    // makes "keep it off a total snowball" a challenge you win by waiting, and
+    // that is the exact thing this scenario was rebuilt to stop being.
+    //
+    // 30% discriminates cleanly and step-independently: idling peaks at 34% on
+    // 2 kyr steps and 37% on 20 kyr, raising the CO2 to 0.40 bar peaks at 24%,
+    // and to 0.45 bar at 8%. So there is a gradient to play on rather than a
+    // cliff, and a half-measure survives while doing nothing does not.
+    check: (w) => w.diag.pO2 > 0.01 && w.diag.Tmean > 273 && w.diag.iceMean < 0.30,
+    fail: (w) => w.diag.iceMean > 0.30,
   },
   {
     id: 'venus',
