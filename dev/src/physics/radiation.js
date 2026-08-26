@@ -1,4 +1,4 @@
-import { SIGMA, psatH2O, clamp, smoothstep } from './constants.js';
+import { SIGMA, psatH2O, frostPointCO2, clamp, smoothstep } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // Four-band longwave radiative transfer.
@@ -171,6 +171,105 @@ export function h2Cia(pH2, pTot) {
   return K_H2 * pH2 * Math.max(pTot, 0);
 }
 
+// ---------------------------------------------------------------------------
+// CO2 condensation, and the maximum greenhouse it creates.
+//
+// Kasting et al. (1993) put the outer edge of the habitable zone at 0.36 S(+),
+// and what sets it is not a shortage of greenhouse gas but a ceiling on how much
+// good any amount of it can do. Pile CO2 onto a cold world and the upper
+// atmosphere saturates: above the condensation level the profile follows CO2's
+// own vapour-pressure curve rather than a dry adiabat, and along that curve
+// temperature falls only logarithmically with pressure. The level the planet
+// radiates from therefore stops getting colder however much CO2 is added, and
+// the outgoing flux stops falling with it. Past that point more CO2 buys nothing
+// and its Rayleigh scattering keeps costing, so the planet cools.
+//
+// Without this the greenhouse grew without limit and the outer edge did not
+// exist: a world at 0.35 S(+) could be forced to +15 C under thirty bar of CO2,
+// where every published treatment says no amount of CO2 gets such a world above
+// freezing. The old note here blamed Rayleigh scattering, and that turned out to
+// be wrong -- measured against tau_R proportional to column with CO2's 2.2x
+// cross-section, this model's CO2 Rayleigh is close to right (0.19 at 8 bar,
+// 0.72 at 92, against ~0.22 and ~0.76). Condensation is what was missing.
+//
+// The saturation curve is the one already in constants.js -- sublimation below
+// the triple point, a two-point Clausius-Clapeyron fit over liquid above it,
+// good to better than a per cent from Mars's 610 Pa frost point to the 73.77 bar
+// critical point.
+// ---------------------------------------------------------------------------
+
+// CO2's own optical depth in each band. The floor is about where *CO2* goes
+// opaque, not where the atmosphere as a whole does: a world whose far infrared
+// is closed by hydrogen has no CO2 emission level there to pin.
+const TAU_C = new Float64Array(4);
+function bandTauCO2(pCO2, pTot, out = TAU_C) {
+  if (!(pCO2 > 0)) { out[0] = out[1] = out[2] = out[3] = 0; return out; }
+  const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
+  const u = Math.pow(pCO2, D_CO2);
+  const L = Math.log(1 + pCO2 / P_CO2);
+  out[0] = (A1L * L + A1U * u) * br;
+  out[1] = A2C * pCO2 * pCO2;
+  out[2] = (A3L * L + A3U * u) * br;
+  out[3] = A4U * u * u * br;
+  return out;
+}
+
+// Below this there is no CO2 emission level worth speaking of and the floor is
+// skipped outright, which keeps it off Earth, Mars and everything Earth-like.
+const CO2_COND_MIN = 0.05;                   // bar
+// R/cp: 0.286 for air, 0.223 for CO2. All this adiabat has to decide is whether
+// the level gets *below* the frost point, so the blend is enough.
+const KAPPA_AIR = 0.286, KAPPA_CO2 = 0.223;
+// Kelvins of supersaturation over which the floor comes fully on. A hard switch
+// would put a kink in OLR(T) and the implicit solver differentiates through it.
+const COND_BLEND = 12;
+const FR_C = new Float64Array(4);
+
+// How much of the outgoing flux is held up by CO2 condensing aloft.
+//
+// Applied band by band and *additively*. It was written as a ratio first --
+// work out the clear-sky flux with and without the floor and scale the all-sky
+// flux by it -- and that is fine until the surface emission goes to nothing, at
+// which point the ratio goes to infinity. A world at 0.30 S(+) under a thousand
+// times Earth's volcanism found it: the ratio drove the outgoing flux up without
+// bound, the planet cooled without bound with it, and it settled at two kelvin
+// with three tonnes per square metre of CO2 frost on the ground. Additively
+// there is nothing to blow up, and each band's floor is capped at that band's
+// own blackbody flux at the surface temperature, so the atmosphere can never be
+// made to radiate more than the ground it sits on.
+function condensationFloor(T, pCO2, pTot, tau, fr, sT4, dry, C) {
+  // The skin temperature: an atmosphere in radiative equilibrium does not get
+  // colder than this, however far a dry adiabat extrapolated from the ground
+  // says it should. Leaving it out had CO2 condensing in the stratosphere of a
+  // 350 K hot-ocean world, which has a 217 K skin and condenses nothing.
+  const Tskin = Math.pow(Math.max(dry, 1e-6) / SIGMA, 0.25) * 0.840896;
+  // Nothing condenses anywhere if even the coldest level the atmosphere reaches
+  // is above the frost point at the *highest* pressure in the column. One
+  // closed-form call, and it is what keeps this off every warm thick-CO2 world
+  // without walking the bands.
+  if (Tskin >= frostPointCO2(pCO2 * 1e5)) return dry;
+  const kappa = KAPPA_AIR + (KAPPA_CO2 - KAPPA_AIR) * clamp(pCO2 / Math.max(pTot, 1e-9), 0, 1);
+  const tc = bandTauCO2(pCO2, pTot);
+  let total = 0;
+  for (let i = 0; i < 4; i++) {
+    const t = tau[i];
+    const band = fr[i] * sT4 * ((1 - C) / (1 + 0.75 * t) + C / (1 + 0.75 * (t + TAU_CLOUD)));
+    const opaque = 1 - 1 / (1 + 0.75 * tc[i]);
+    if (opaque < 0.02) { total += band; continue; }
+    // Where CO2's own column reaches unit optical depth. Pressure broadening
+    // makes tau grow as p^(1+n) down the column, so the level is p*tau^-1/(1+n).
+    const pEmit = pCO2 * Math.pow(Math.max(tc[i], 1), -1 / (1 + N_BROADEN));
+    const Tad = Math.max(T * Math.pow(pEmit / Math.max(pTot, 1e-9), kappa), Tskin);
+    const Tcond = frostPointCO2(pEmit * 1e5);
+    const sat = smoothstep(0, COND_BLEND, Tcond - Tad);
+    if (sat <= 0) { total += band; continue; }
+    const frc = bandFractions(Tcond, FR_C);
+    const floor = Math.min(frc[i] * SIGMA * Tcond * Tcond * Tcond * Tcond * opaque, fr[i] * sT4);
+    total += band + sat * Math.max(0, floor - band);
+  }
+  return total;
+}
+
 export function olr(T, pCO2, pH2O, pCH4, pTot, pH2 = 0, cloud = 0) {
   const tau = bandTau(pCO2, pH2O, pCH4, pTot, pH2);
   const fr = bandFractions(T);
@@ -181,7 +280,9 @@ export function olr(T, pCO2, pH2O, pCH4, pTot, pH2 = 0, cloud = 0) {
     const t = tau[i];
     s += fr[i] * ((1 - C) / (1 + 0.75 * t) + C / (1 + 0.75 * (t + TAU_CLOUD)));
   }
-  return sT4 * s;
+  const F = sT4 * s;
+  if (!(pCO2 > CO2_COND_MIN)) return F;
+  return condensationFloor(T, pCO2, pTot, tau, fr, sT4, F, C);
 }
 
 // Total band-averaged optical depth, for readouts only. The physics never uses

@@ -212,6 +212,15 @@ export const PRESETS = {
   // Catling, Zahnle & McKay (2001), see volatiles.js -- moved it to about 4.2x,
   // which is where 8.1 - 3.9 lands. The two now touch instead of contradicting.
   //
+  // Two later corrections move that ceiling in opposite directions and very
+  // nearly cancel. Crediting the hydrogen methane carries as well as the H2 --
+  // which is the larger half of Catling's flux, not a detail of it -- lifts it;
+  // charging a world with a tenth of Earth's land the extra reducing power a
+  // submarine volcano delivers (Kump & Barley 2007, also in volatiles.js) puts
+  // it back. Net, the ceiling is 3.55x and this preset sits at 3.50, which needs
+  // a biosphere 0.97x the modern one to cross where it stands. It is a tighter
+  // fit than it was, not a looser one.
+  //
   // A second real event binds tighter, though, and it is what sets 3.5. The
   // Huronian followed the Great Oxidation: methane collapses, its greenhouse
   // goes, and the planet freezes. More volcanism means more CO2 at the carbon

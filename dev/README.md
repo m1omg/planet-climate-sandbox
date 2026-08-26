@@ -13,6 +13,12 @@ node tools/builddev.mjs /path/to/main/checkout
 `../assets/` and borrows the surface maps at the site root, which is 668 KB
 instead of 23 MB.
 
-**This build is knowingly not green** — four-band radiation, hydrogen and Hycean work in progress — 19 of 219 self-tests failing. Two of those failures are tests
+**This build is knowingly not green** — four-band radiation, CO₂ condensation, hydrogen and Hycean work in progress — 19 of 234 self-tests failing. Two of those failures are tests
 asserting the *old* deviation: snowball deglaciation now lands at 143 mbar
 against the literature's 100–300, where it used to be thirty times too low.
+
+A band-overlap refit that closed four more gaps was reverted from this build: it
+left a 1.32 S⊕ ocean world with no energy balance at any temperature, which shows
+up as cycling in and out of glaciation, and cost fourteen thousand times the
+step size on a settled Earth. The README has the full account and there are
+three new guards that fail on it.

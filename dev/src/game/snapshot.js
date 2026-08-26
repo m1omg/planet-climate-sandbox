@@ -32,7 +32,16 @@ export function captureWorld(w) {
     fossil: w.fossil,
     carbonDeep: w.carbonDeep,
     bio: w.bio,
-    co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
+    co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4, h2: w.h2,
+    // Two rates rather than reservoirs, and they are here for the same reason
+    // the reservoirs are. `ch4Escape` is the hydrogen last step's methane
+    // photolysis sent to space, which the oxygen budget spends on the next one;
+    // `h2Rate` is what the step-size chooser bounds hydrogen on. Both are read
+    // before they are rewritten, so a world restored without them takes a
+    // different first step from the one it took the first time -- and the
+    // scrubber is then quietly a different simulation, which is precisely what
+    // the round-trip test exists to catch.
+    ch4Escape: w.ch4Escape, h2Rate: w.h2Rate,
   };
 }
 
@@ -58,6 +67,15 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.n2 != null) w.n2 = s.n2;
   if (s.o2 != null) w.o2 = s.o2;
   if (s.ch4 != null) w.ch4 = s.ch4;
+  // Hydrogen was missing from here for as long as it has existed, and reset()
+  // refills it from the *parameter* rather than leaving it alone -- so a world
+  // that had escaped 44% of its hydrogen got every gram of it back the moment it
+  // was saved and reloaded. The round-trip test could not see it because its own
+  // state vector did not list h2 either; it does now.
+  if (s.h2 != null) w.h2 = s.h2;
   update(w, 0);
+  // After update(), because a zero-length step rewrites both of these to zero.
+  if (s.ch4Escape != null) w.ch4Escape = s.ch4Escape;
+  if (s.h2Rate != null) w.h2Rate = s.h2Rate;
   return w;
 }

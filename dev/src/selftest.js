@@ -4,7 +4,7 @@ import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
-import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
+import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, psatH2O, smoothstep } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
@@ -1282,8 +1282,18 @@ export function run() {
       // billion of it is worth a few percent of the lifetime. That sensitivity
       // is the whole point of the Great Oxidation, so it is not something to
       // tune away.
+      //
+      // Widened from 5% to 25% when methane started carrying hydrogen to space.
+      // It feeds the same sensitivity from a second direction: the world that
+      // starts with more methane loses more hydrogen, so it is credited more
+      // against its volcanic reductant, so it holds a slightly larger trace of
+      // oxygen, so its methane lives slightly less long. The two worlds still
+      // forget where they started -- 257 ppm against 212 from a hundredfold
+      // difference in starting methane -- but they no longer land within five
+      // per cent of each other, and tightening this would mean tuning away the
+      // coupling rather than the noise.
       check('…on an anoxic world too, where it settles a thousand times higher',
-        Math.abs(lo - hi) / Math.max(lo, hi) < 0.05 && lo * 1e6 > 100,
+        Math.abs(lo - hi) / Math.max(lo, hi) < 0.25 && lo * 1e6 > 100,
         `starting from nothing gives ${(lo * 1e6).toFixed(0)} ppm, from 100 ppm ` +
         `gives ${(hi * 1e6).toFixed(0)} ppm — ` +
         `${(Math.abs(lo - hi) / Math.max(lo, hi) * 100).toFixed(1)}% apart`);
@@ -1439,6 +1449,231 @@ export function run() {
       `${made.toExponential(2)} EO of new water from ${(1 - h2Left).toFixed(4)} bar of H₂ burnt`);
   }
 
+  // ---- 3l-3a. CO2 condenses, and that is what makes an outer edge ------------
+  // Kasting et al. (1993) put the outer edge of the habitable zone at 0.36 S(+),
+  // and what sets it is a ceiling on how much good any amount of CO2 can do.
+  // Pile it onto a cold world and the upper atmosphere saturates: above the
+  // condensation level the profile follows CO2's own vapour-pressure curve
+  // rather than a dry adiabat, temperature there falls only logarithmically with
+  // pressure, and the outgoing flux stops falling with it.
+  //
+  // Without it the greenhouse grew without limit and the outer edge did not
+  // exist -- a world at 0.35 S(+) could be forced to +15 °C under thirty bar of
+  // CO2, where every published treatment says no amount of it gets such a world
+  // above freezing. It is -95 °C now. The old note blamed Rayleigh scattering
+  // and that was wrong: measured against tau_R proportional to column with CO2's
+  // 2.2x cross-section, this model's CO2 Rayleigh is close to right.
+  {
+    const bar = (T) => psatCO2(T) / 1e5;
+    check('The CO₂ saturation curve matches its published fixed points',
+      near(bar(148), 0.0061, 0.0006) && near(bar(194.7), 1.0, 0.06)
+      && near(bar(273.15), 34.85, 0.3) && near(bar(304.128), 73.77, 0.1),
+      `${bar(148).toFixed(4)} bar at Mars's 148 K frost point (0.0061), ` +
+      `${bar(194.7).toFixed(3)} at 194.7 K (1.000), ` +
+      `${bar(273.15).toFixed(2)} at 0 °C (34.85), ` +
+      `${bar(304.128).toFixed(2)} at the critical point (73.77)`);
+
+    // It has to bind where CO2 really is saturated aloft and nowhere else, and
+    // "nowhere else" is the harder half: Venus carries 92 bar of it under a
+    // stratosphere far too warm for any of it to condense.
+    const cold = olr(291, 30, 0.02, 0, 30.02, 0, 0.5);
+    check('A thirty-bar CO₂ atmosphere on a cold world cannot keep cooling its emission level',
+      cold > 80 && cold < 120,
+      `${cold.toFixed(0)} W/m² at 291 K, against 55 with the condensation level ignored`);
+    check('…while Venus, whose CO₂ condenses nowhere, does not move at all',
+      near(olr(737, 92, 0, 0, 92), 161.004, 0.01),
+      `${olr(737, 92, 0, 0, 92).toFixed(3)} W/m² at 737 K under 92 bar`);
+    check('…and neither does Earth, Mars, or a hot ocean world under nine bar',
+      near(olr(288.15, 280e-6, 0.011, 1.8e-6, 1.011, 0, 0.669), 235.715, 0.01)
+      && near(olr(215, 0.006, 1e-6, 0, 0.0062, 0, 0.1), 112.65, 0.01)
+      && near(olr(347, 8.742, 0.35, 0, 10.1, 0, 0.8), 148.85, 0.01),
+      'all three bit-identical to the scheme without it — a 217 K skin temperature ' +
+      'is far above CO₂’s frost point at the hot ocean’s emission level');
+  }
+
+  // ---- 3l-3b. the hot branch has to have a hot branch ------------------------
+  // These three exist because a radiation refit passed every anchor in
+  // calibrate.mjs, every one of the 219 tests that existed, and still broke the
+  // model in the one regime a player who drags the insolation slider actually
+  // lands in. Reported from the live site: a 1.32 S(+) ocean world cycling
+  // between glaciation and temperate. Reproduced exactly, and the cause was that
+  // the refitted OLR went flat above about 35 C -- 288.5 W/m2 at 27 C, 293.0 at
+  // 37, 290.0 at 62 -- against an absorbed flux of 320-326 W/m2 throughout. No
+  // energy balance existed anywhere between -3 C and 107 C. The planet climbed
+  // until the ice-albedo feedback caught it coming back down, and where it
+  // landed depended on the step size.
+  //
+  // The reason nothing caught it is worth more than the fix. Every slope the fit
+  // was scored on was measured at 280 ppm of CO2, where the refit still looked
+  // acceptable (0.99 W/m2/K at 310 K). A world at high insolation does not have
+  // 280 ppm of CO2 -- the thermostat has weathered it to nothing -- and there
+  // the same fit gave 0.05. So the first of these asks at 1e-7 bar, which is
+  // where a brightening Earth actually sits.
+  {
+    const dOLRdT = (T, pCO2) => {
+      const f = (t) => { const q = 0.8 * psatH2O(t) / 1e5;
+        return olr(t, pCO2, q, 0, 0.99 + pCO2 + q, 0, 0.669); };
+      return (f(T + 2) - f(T - 2)) / 4;
+    };
+    const a = dOLRdT(310, 1e-7), b = dOLRdT(320, 1e-7);
+    check('A world whose CO₂ has been weathered away still radiates more when it warms',
+      a > 1.0 && b > 0.5,
+      `dOLR/dT ${a.toFixed(2)} W/m²/K at 310 K and ${b.toFixed(2)} at 320 K with 1e-7 bar of ` +
+      `CO₂ — the refit that broke this gave 0.05 and -0.21`);
+
+    // …and the same thing said as a world rather than as a derivative. This is
+    // the exact state the report came from, and what it asks is narrower than it
+    // looks, because this world does NOT sit still even in the scheme that
+    // ships: it runs a limit cycle between about -6 C and +58 C with a period
+    // near 1.3 Myr, which is a real and separate defect recorded in the README
+    // and reported by calibrate.mjs every run. What the refit did was roughly
+    // double it -- -43 C to +77 C, through a *complete* snowball -- and take
+    // seven times as many steps to do it. So this guards the amplitude rather
+    // than pretending the cycle is fixed. If it ever is fixed, tighten this.
+    const hot = new Simulation({ ...EARTH, water: 0.999669, insolation: 1.32,
+      o2Bar: 0.0268988, co2Bar: 2.02302e-8, ch4Bar: 5.65034e-8, emissions: 1 });
+    let n = 0, lo = Infinity, hiT = -Infinity, ice = 0;
+    while (hot.world.time < 5e6 && n++ < 6e4) {
+      hot.stepOnce(maxStep(hot.world));
+      if (hot.world.time > 2e6) {
+        lo = Math.min(lo, hot.world.diag.Tmean); hiT = Math.max(hiT, hot.world.diag.Tmean);
+        ice = Math.max(ice, hot.world.diag.iceMean);
+      }
+    }
+    check('…and a 1.32 S⊕ ocean world does not swing through a complete snowball',
+      ice < 0.75 && lo > 253 && n < 4e4,
+      `${(lo - 273.15).toFixed(0)}…${(hiT - 273.15).toFixed(0)} °C over the last 3 Myr, worst ice ` +
+      `${(ice * 100).toFixed(0)}%, ${n} steps — the refit that broke this gave -43…77 °C, ` +
+      `100% ice and 96 000 steps`);
+  }
+
+  // ---- 3l-3c. and the clock has to stay fast ---------------------------------
+  // The other half of the same report: the maximum time speed dropped a lot. It
+  // is the same cause. maxStep multiplies its step by up to 4000 once a world is
+  // within a kelvin or two of equilibrium, and a world whose OLR curve is flat
+  // never gets there, so the shortcut stays switched off for ever. Earth's
+  // asymptotic step went from 1.18 Myr to 82 years -- fourteen thousand times
+  // smaller -- with no test able to see it.
+  {
+    const s2 = new Simulation({ ...EARTH });
+    let n = 0;
+    while (s2.world.time < 5e6 && n++ < 3e5) s2.stepOnce(maxStep(s2.world));
+    const dt = maxStep(s2.world);
+    check('A settled Earth can be stepped in megayears, which is what the time slider sells',
+      dt > 2e5,
+      `${dt.toExponential(2)} yr per step after 5 Myr — the refit that broke this gave 82`);
+  }
+
+  // ---- 3l-4. the hydrogen reservoir has to be stable at any step -------------
+  // Hydrogen was the one reservoir integrated explicitly, and the only one with
+  // no bound in maxStep. Escape is very nearly first order in the amount
+  // present, so on an anoxic world it turns over in about half a megayear --
+  // shorter than the strides this model is built to take. Explicit Euler past
+  // twice an e-folding time does not settle, it oscillates: at a five-megayear
+  // step the Archean's steady 17.65 kg/m² became a sawtooth between zero and
+  // 184. Nothing noticed while escaping hydrogen was merely lost; it matters now
+  // that the same flux credits the oxygen budget, because the sawtooth drove a
+  // Great Oxidation the physics does not have.
+  //
+  // Semi-implicit now -- exact at steady state, unable to overshoot past zero at
+  // any step -- with a bound on the realised net rate like every other reservoir
+  // has. What this checks is that the answer stopped depending on the step size.
+  {
+    const at = (dt) => {
+      const x = new Simulation({ ...PRESETS.earlyEarth.params });
+      let lo = Infinity, hi = -Infinity;
+      for (let t = 0; t < 1e8; t += dt) {
+        x.stepOnce(dt);
+        if (t > 1e7) { lo = Math.min(lo, x.world.h2); hi = Math.max(hi, x.world.h2); }
+      }
+      return { lo, hi };
+    };
+    const fine = at(1e5), coarse = at(5e6);
+    check('The hydrogen reservoir settles rather than oscillating, at any step',
+      (coarse.hi - coarse.lo) / Math.max(coarse.hi, 1e-9) < 0.10
+        && coarse.lo > 0.5 * fine.lo && coarse.hi < 2 * fine.hi,
+      `${coarse.lo.toFixed(2)}–${coarse.hi.toFixed(2)} kg/m² at a 5 Myr step against ` +
+      `${fine.lo.toFixed(2)}–${fine.hi.toFixed(2)} at 0.1 Myr`);
+  }
+
+  // ---- 3l-5. methane carries hydrogen to space too ---------------------------
+  // Catling, Zahnle & McKay (2001), and the half of it the model did not have.
+  // Hunten's diffusion limit is a statement about hydrogen, not about H2: what
+  // crosses the homopause is atoms, and methane brings four where H2 brings two.
+  // Biogenic methane rises, is photolysed, and its hydrogen leaves -- the carbon
+  // stays, the oxygen stays, and the planet ratchets one way. That is the whole
+  // mechanism their account of the Great Oxidation rests on, and methane was a
+  // greenhouse gas and a carbon reservoir here and nothing else.
+  //
+  // Earth is the anchor rather than the interesting case, and it is a real one:
+  // the total escape flux falls out at 8e7 hydrogen atoms per cm² per second
+  // against an observed ~1e8, with nothing tuned to make it.
+  {
+    const s2 = new Simulation({ ...EARTH, co2Bar: 427e-6, ch4Bar: 1.9e-6 });
+    s2.runYears(3000, 0.25);
+    const w = s2.world, e = w.escape ?? {}, f = w.o2Flux ?? {};
+    const perYr = (e.h2 ?? 0) + (w.ch4Escape ?? 0);         // kg/m²/yr of H2-equivalent
+    const atoms = perYr / 2.016e-3 * 2 * 6.02214e23 / 3.1557e7 / 1e4;
+    check('Earth loses hydrogen at the rate it is observed to',
+      atoms > 3e7 && atoms < 5e8,
+      `${atoms.toExponential(1)} H atoms/cm²/s, against ~1e8 observed`);
+    check('…and it is the methane carrying it, not the H₂',
+      (w.ch4Escape ?? 0) > 10 * (e.h2 ?? 0),
+      `methane ${(w.ch4Escape ?? 0).toExponential(2)} against H₂ ` +
+      `${(e.h2 ?? 0).toExponential(2)} kg/m²/yr of H₂-equivalent`);
+    // …and crediting it must not oxygenate a world out of nothing. It is netted
+    // off the volcanic reductant charge and floored at zero, never added as free
+    // oxygen, so modern Earth does not move.
+    const now = settle({ ...EARTH, co2Bar: 427e-6 }, 2e5).world;
+    check('…and crediting it leaves modern Earth’s oxygen where it was',
+      near(now.diag.pO2, 0.21, 0.04),
+      `${now.diag.pO2.toFixed(4)} bar, credit ${(f.escapedCH4 ?? 0).toExponential(1)} against a ` +
+      `${(f.gross ?? 0).toExponential(1)} kg/m²/yr charge`);
+  }
+
+  // ---- 3l-6. where a volcano erupts changes what it emits --------------------
+  // Kump & Barley (2007). Submarine eruptions degas under kilometres of water,
+  // at pressures that keep sulfur as H2S and leave the mixture reducing;
+  // subaerial eruptions degas at one bar and their sulfur leaves as SO2, which
+  // is not. Land reached the oxygen budget only through weathering before this,
+  // so an ocean world and a continental one delivered identical reducing power
+  // per unit volcanism, and the Archean's lack of continents cost it nothing.
+  {
+    const flux = (land) => {
+      const x = settle({ ...EARTH, landFraction: land, biosphere: 0.4 }, 2e6).world;
+      return (x.o2Flux ?? {}).gross ?? 0;
+    };
+    const modern = flux(0.29), archean = flux(0.1), ocean = flux(0.0);
+    check('A world with no continents delivers more reducing power per eruption',
+      ocean > modern * 1.45 && ocean < modern * 1.55,
+      `${(ocean / modern).toFixed(2)}× at no land, ${(archean / modern).toFixed(2)}× at ` +
+      `the Archean's 0.1, 1.00× at Earth's 0.29 by construction`);
+    check('…and modern Earth is the unit, so nothing about today moves',
+      near(settle({ ...EARTH }, 2e5).world.diag.pO2, 0.21, 0.04),
+      `pO₂ ${settle({ ...EARTH }, 2e5).world.diag.pO2.toFixed(4)} bar at Earth's land fraction`);
+  }
+
+  // ---- 3l-7. a world's hydrogen has to survive being saved -------------------
+  // It did not. Hydrogen was never added to captureWorld, and reset() refills it
+  // from the *parameter* rather than leaving it alone, so a world that had lost
+  // 44% of its hydrogen got every gram of it back the moment it was saved and
+  // reloaded -- in every save slot, every export, and every drag of the history
+  // chart. The round-trip test further down could not see it because its own
+  // state vector did not list h2 either. Both are fixed; this is the direct
+  // check.
+  {
+    const P = { ...EARTH, h2Bar: 0.05, outgassing: 0, biosphere: 0, o2Bar: 0 };
+    const a = new Simulation({ ...P });
+    a.runYears(2e5, 200);
+    const before = a.world.h2;
+    const b = new Simulation({ ...P });
+    applyWorld(b, captureWorld(a.world), { ...a.world.params });
+    check('Hydrogen survives a save and reload',
+      Math.abs(b.world.h2 - before) < 1e-9,
+      `${before.toFixed(2)} kg/m² saved, ${b.world.h2.toFixed(2)} restored, from a ` +
+      `${(0.05e5 / a.world.diag.g).toFixed(0)} kg/m² start`);
+  }
+
   // ---- 3m. the oxygen cycle -------------------------------------------------
   // Oxygen used to be a fossil of hydrogen escape and nothing else, so the only
   // route to an oxygen-rich atmosphere was to boil an ocean -- the Venus story,
@@ -1461,9 +1696,27 @@ export function run() {
 
     // The threshold, which is the whole point: below the volcanic reductant
     // flux the air stays anoxic however long you wait.
+    // "For ever" is the one word here that stopped being true, and it is
+    // Catling, Zahnle & McKay (2001) that took it away. Below the volcanic
+    // reductant flux the air used to sit at exactly zero and stay there. It does
+    // not now: the methane such a world accumulates carries hydrogen to space,
+    // every hydrogen that leaves is reducing power the atmosphere never has to
+    // answer for, and the planet oxidises slowly whether or not the biosphere is
+    // winning on its own. Two hundred megayears at a quarter of Earth's
+    // biosphere lands at 5e-5 bar -- a whiff, four thousand times below the
+    // modern level and still firmly an anoxic world -- where before it was
+    // nothing at all. The threshold is a slope now, not a wall.
+    //
+    // Whether the *atmosphere* should show that whiff is the open question, and
+    // it is in the README: in Catling's own budget most of the oxidation goes
+    // into the crust as ferric iron and sulfate, and this model has no crustal
+    // reservoir to put it in, so all of it lands in the air. The Archean sulfur
+    // record says it should not.
     const below = held(0.25, {}, 2e8), above = held(0.8);
-    check('A biosphere the volcanoes outrun leaves the air anoxic for ever',
-      below.diag.pO2 < 1e-6, `${below.diag.pO2.toExponential(1)} bar after 200 Myr at 0.25× Earth`);
+    check('A biosphere the volcanoes outrun leaves the air all but anoxic',
+      below.diag.pO2 < 1e-4 && below.diag.pO2 < 0.001 * above.diag.pO2,
+      `${below.diag.pO2.toExponential(1)} bar after 200 Myr at 0.25× Earth, against ` +
+      `${above.diag.pO2.toFixed(3)} at 0.8×`);
     check('…and one that outruns them oxygenates the planet',
       above.diag.pO2 > 0.05, `${above.diag.pO2.toFixed(3)} bar at 0.8× Earth`);
     check('…so more volcanism can put an oxygenated world back under',
@@ -2122,13 +2375,37 @@ export function run() {
     // the planet is so cold that CO2 really does hit its frost point and collapse
     // however hard the volcanoes work -- correct physics, but not a test of this
     // claim.
+    // 100x, down from 1000x, and the reason is a deviation that got fixed rather
+    // than a test that got weakened. This used to compare 0.1x against 1000x and
+    // pass because the 1000x world reached 563 bar and 2521 K -- which is the
+    // missing maximum greenhouse, the outer-edge gap, in one number. With CO2
+    // condensation modelled, a 0.30 S(+) world can no longer be forced to 2500 K
+    // by any amount of volcanism, so the comparison has to be made where the
+    // Forget mechanism actually lives.
+    //
+    // The measure changed too. Comparing the CO2 *inventory* was the wrong
+    // question once the revived world is warm enough to have liquid water: it
+    // weathers, so it ends with less CO2 in the air than the frozen one it is
+    // being compared against, having won rather than lost.
     const cold = { ...EARTH, insolation: 0.30, water: 0.05, landFraction: 0.9, co2Bar: 0.01 };
     const quiet = settle({ ...cold, outgassing: 0.1 }, 2e7);
-    const busy = settle({ ...cold, outgassing: 1000 }, 2e7);
+    const busy = settle({ ...cold, outgassing: 100 }, 2e7);
     check('CO₂ does not freeze out regardless of volcanism — outgassing can win',
-      busy.world.diag.pCO2 > 20 * quiet.world.diag.pCO2 && busy.world.diag.Tmean > quiet.world.diag.Tmean + 50,
-      `${quiet.world.diag.pCO2.toFixed(3)} bar / ${quiet.world.diag.Tmean.toFixed(0)} K  →  ` +
-      `${busy.world.diag.pCO2.toFixed(2)} bar / ${busy.world.diag.Tmean.toFixed(0)} K`);
+      busy.world.diag.Tmean > quiet.world.diag.Tmean + 50
+      && (busy.world.co2Frozen ?? 0) < 1e3 && busy.world.diag.openOcean > 0.01,
+      `${quiet.world.diag.Tmean.toFixed(0)} K frozen solid  →  ` +
+      `${busy.world.diag.Tmean.toFixed(0)} K with ` +
+      `${(busy.world.diag.openOcean * 100).toFixed(1)}% open water and no CO₂ frost`);
+
+    // …but not without limit, which is new. Past the maximum greenhouse more CO2
+    // stops helping and starts costing, so a thousand times Earth's volcanism on
+    // the same world collapses the atmosphere instead of thickening it. Before
+    // CO2 condensation was modelled the same case reached 563 bar and 2521 K.
+    const absurd = settle({ ...cold, outgassing: 1000 }, 2e7);
+    check('…but past the maximum greenhouse, piling on more CO₂ stops working',
+      absurd.world.diag.Tmean < 300 && absurd.world.diag.pCO2 < 5,
+      `${absurd.world.diag.Tmean.toFixed(0)} K on ${absurd.world.diag.pCO2.toFixed(3)} bar at ` +
+      `1000× volcanism, where without a condensation floor it reached 2521 K on 563 bar`);
 
     // A wet runaway must actually settle. Relative humidity used to be driven by
     // how much open sea was left, while how much open sea was left was driven by
@@ -2234,8 +2511,12 @@ export function run() {
   // simulation, and so is every save slot, since they share this snapshot.
   {
     const P = { ...EARTH, insolation: 0.94, outgassing: 1 };
+    // h2 is in this list because it was missing from the snapshot for as long as
+    // hydrogen has existed, and this test could not see it: a world that had lost
+    // half its hydrogen got all of it back on reload, silently, in every save slot
+    // and every scrub. Listing it here is what makes that a failure.
     const state = (w) => [w.diag.Tmean, w.diag.pCO2, w.diag.iceMean, w.water.ocean,
-                          w.carbonDeep, w.ch4, w.o2, w.iceSheet];
+                          w.carbonDeep, w.ch4, w.o2, w.h2, w.iceSheet];
 
     const a = new Simulation({ ...P });
     a.runYears(3e5, 2e3);
