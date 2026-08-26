@@ -1657,93 +1657,233 @@ Stated plainly, because a model that hides these is less useful:
   as a side effect of unrelated work deserves more suspicion than one that is fixed on purpose, and
   the table above is what to re-run if it comes back.
 
-* **The outer edge, the snowball threshold, the inner edge and the runaway limit's CO₂ sensitivity
-  were four separate deviations here, and one refit plus one piece of missing physics closed all
-  four.** The entries they replace are kept in outline because what did *not* work is the useful
-  part.
+* **The outer edge of the habitable zone now exists, and what closed it was not what the old
+  entry here blamed.** Kasting et al. (1993) put it at 0.36 S⊕, set by a *maximum greenhouse*. The
+  entry this replaces blamed CO₂ Rayleigh scattering, and that was wrong: measured against
+  τ_R ∝ column with CO₂'s 2.2× cross-section, this model's CO₂ Rayleigh is close to right — 0.19 at
+  8 bar and 0.72 at 92, against ~0.22 and ~0.76 computed.
 
-  For three attempts the diagnosis was "a semi-grey scheme has no atmospheric window". Building one
-  was tried twice and reverted twice; four spectral bands then worked and shipped. What the bands
-  did not fix was the thing the calibration file had been complaining about all along: **CO₂'s
-  optical depth was added to water's in each band rather than overlapping it.** The symptom was a
-  Simpson–Nakajima limit that moved by **43 W/m²** between 0.4 ppm of CO₂ and 280 ppm, where the
-  literature has it very nearly CO₂-independent (Goldblatt 2013; Kopparapu 2013) — because at the
-  peak the atmosphere is steam and water is supposed to carry the opacity. Here it did not: water's
-  grip in the 12–18 µm band grew only as `pH2O^0.48`, a factor of two while the column grows by
-  seventy, so stripping the CO₂ out bought real transparency that a steam atmosphere does not have.
-
-  That made the carbon thermostat into a machine for moving the edge of the map. Brighten the star,
-  the planet warms, weathering draws CO₂ down — and that *raised the cliff* by forty watts, so
-  Earth's inner edge sat at **1.38 S⊕** against a literature that puts every threshold below 1.25.
-
-  **The fix was a refit, not a coefficient**, exactly as the old note predicted. Water now has its
-  own opacity exponent in every band instead of one shared one, and the whole scheme — twenty-four
-  free numbers — was refitted by Nelder–Mead against every anchor at once, with each coefficient
-  bounded and regularised toward the previous fit. Results:
-
-  | | before | after | target |
-  |---|---|---|---|
-  | runaway limit moved by CO₂ alone | 43.2 W/m² | **6.2** | 0–10 |
-  | Earth's inner edge | 1.38 S⊕ | **1.25** | 1.05–1.25 |
-  | snowball deglaciation CO₂ | 0.143 bar | **0.228** | 0.08–0.40 |
-  | snowball duration | 2.74 Myr | **4.30** | 3–60 |
-  | hottest stable climate | 344 K | **354** | 345–375 |
-  | pre-industrial Earth | 14.21 °C | **13.37** | 13.2–14.2 |
-
-  A second structural change was offered to the fit and mostly declined, which is worth recording
-  because it sounds more promising than it is. A band model that gives a gas one optical depth
-  across a whole band says its lines are spread evenly over it, and for a narrow line complex that
-  is wrong in a specific direction: a feature occupying a twentieth of a band can black out all of
-  it. `tauEff()` is a one-point k-distribution — a fraction φ of the band carries all the opacity,
-  the rest is clear — written as an *effective optical depth* so that gases still sum (which is what
-  random overlap says uncorrelated line spectra should do) and so that φ = 1 gives back the previous
-  scheme unchanged. It was offered for every line term in every band. The fit kept three: CO₂'s
-  15 µm band (0.92), water's 6.3 µm band (0.62), methane's 7.7 µm band (0.71). **Pinning every
-  coverage at 1 and refitting reaches almost the same score — 2.9 against 2.5 on the same
-  objective.** Coverage is not what fixed the runaway limit; water's exponents are.
-
-  **The outer edge needed different physics again, and it was named in the old entry: CO₂ clouds.**
-  Kasting et al. (1993) put the edge at 0.36 S⊕, set by a maximum greenhouse. The old entry blamed
-  Rayleigh scattering, and that turned out to be wrong — the model's CO₂ Rayleigh is close to right
-  (0.19 at 8 bar, 0.72 at 92, against ~0.22 and ~0.76 computed from τ_R ∝ column with CO₂'s 2.2×
-  cross-section). What was missing is **condensation**. Pile CO₂ onto a cold world and the upper
-  atmosphere saturates; above the condensation level the profile follows CO₂'s own vapour-pressure
-  curve rather than a dry adiabat, temperature there falls only logarithmically with pressure, the
-  emission level stops getting colder however much CO₂ is added, and the outgoing flux stops falling
-  with it.
+  What was missing is **condensation**. Pile CO₂ onto a cold world and the upper atmosphere
+  saturates; above the condensation level the profile follows CO₂'s own vapour-pressure curve
+  rather than a dry adiabat, temperature there falls only logarithmically with pressure, the
+  emission level stops getting colder however much CO₂ is added, and the outgoing flux stops
+  falling with it. A world at 0.35 S⊕ under 30 bar of CO₂ went from **+15 °C to −95 °C**.
 
   Implemented as a per-band emission floor, gated three ways so it binds where CO₂ really is
   saturated aloft and nowhere else: on CO₂'s *own* optical depth in that band (a world whose far
   infrared is closed by hydrogen has no CO₂ emission level there to pin), on a dry adiabat from the
-  surface, and on the skin temperature — because without that last one CO₂ condensed in the
-  stratosphere of a 350 K hot-ocean world, which has a 217 K skin and condenses nothing. A world at
-  0.35 S⊕ under 30 bar of CO₂ went from **+18 °C to −95 °C**; Venus does not move by 0.01 W/m², and
-  neither does the hot ocean. CO₂ *ice clouds* are still not modelled — neither the scattering
-  greenhouse (Forget & Pierrehumbert 1997, revised sharply down by Kitzmann 2016) nor their albedo —
-  so this is the maximum greenhouse alone.
+  surface, and on the skin temperature — without that last one CO₂ condensed in the stratosphere of
+  a 350 K hot-ocean world, which has a 217 K skin and condenses nothing. Earth, Venus, Mars and the
+  hot ocean are all bit-identical to the scheme without it. CO₂ *ice clouds* are still not modelled
+  — neither the scattering greenhouse (Forget & Pierrehumbert 1997, revised sharply down by
+  Kitzmann 2016) nor their albedo — so this is the maximum greenhouse alone.
 
-  What it cost: `olr()` is 24% slower on an Earth-like call and 4× slower on a thick-CO₂ one, which
-  is the condensation floor and only fires above 0.05 bar of CO₂. Whole-simulation throughput is
-  *better* than before on every preset measured, because the refit made the OLR curve better behaved
-  near the tipping points the step controller has to crawl through.
+* **A 1.32 S⊕ ocean world with its CO₂ weathered away runs a 64 K limit cycle instead of sitting
+  still.** Reported by a player from the live site and reproduced exactly. The world sits near
+  36 °C for a megayear or so, drifts down, the ice-albedo feedback catches it around 27 °C, it
+  crashes to −6 °C with two fifths of the planet frozen, and comes back past 58 °C. Period about
+  1.3 Myr. It is step-independent — identical from a 50 kyr cap up to no cap at all — so it is the
+  model rather than the integrator, and it predates the work described below.
 
-* **The Huronian glaciation no longer happens, and that is a new gap opened by the work above.** The
-  Great Oxidation kills methane in a decade and the carbon cycle cannot answer for a megayear, so
-  losing the methane greenhouse should drop the planet thirty kelvin into a snowball (Kopp et al.
-  2005). This model used to do exactly that. It does not now: the refit leaves the Archean with
-  0.52 bar of CO₂ against 40 Pa of methane, and at that ratio the entire methane inventory is worth
-  **2.5 K** — the CO₂ carries the climate without it. Two things would move it and neither is a
-  coefficient. The CO₂ is high because the carbon cycle wants it there at 4.2× volcanism under a
-  faint young Sun, against paleosol estimates of 0.01–0.1 bar; and the methane is low, ~270 ppm
-  against Pavlov et al.'s 100–1000, because its source is a biosphere term rather than a methanogen
-  ecology. Reported by `calibrate.mjs` on every run.
+  It should not happen. That far inside the inner edge an ocean world has no business reaching an
+  ice edge at all, and the one-dimensional energy balance for the same atmosphere has a clean
+  stable equilibrium at 44 °C. The eighteen-band version does not. What starts the slide is not ice
+  but the albedo: it climbs from 0.369 to 0.381 while the world cools from 28 °C to 27 °C **with no
+  ice on it**, which is the water-vapour darkening term running backwards — cooler, drier,
+  brighter, cooler, with nothing damping it. Only then does sea ice take over and finish the job.
 
-  What replaces it is a real and different outcome, and it has its own test: a biosphere that grows
-  enough to flood the air with methane but *not* enough to outrun the volcanoes freezes the planet
-  anyway, with no oxygen involved at any point. Methane's own near-infrared bands take the sunlight
-  aloft, and past a few hundred pascals more of it makes a planet colder rather than warmer (Byrne &
-  Goldblatt 2015; Eager-Nash et al. 2023).
+  Not fixed. `calibrate.mjs` reports the peak-to-peak swing every run, and there is a guard in
+  `selftest.js` on its amplitude, because the refit below doubled it and reached a complete
+  snowball while passing every other check in the suite.
 
+* **A band-overlap refit closed four more gaps and was reverted, because it broke the hot branch.**
+  Recorded in full, because what it got right is worth keeping and how it got past every check is
+  worth more.
+
+  The complaint it was aimed at was real and is still open: **CO₂'s optical depth is added to
+  water's in each band rather than overlapping it.** The symptom is the `runaway limit moved by CO₂
+  alone` row — 43 W/m² between 0.4 ppm of CO₂ and 280 ppm, where the literature has the
+  Simpson–Nakajima limit very nearly CO₂-independent, because at the peak the atmosphere is steam
+  and water carries the opacity. Here water's grip in the 12–18 µm band grows only as `pH2O^0.48`,
+  a factor of two while the column grows by seventy, so stripping the CO₂ out buys transparency a
+  steam atmosphere does not have. That in turn is why Earth's inner edge sits at 1.38 S⊕: the
+  thermostat draws CO₂ down as a star brightens and *raises the cliff* by forty watts.
+
+  Giving water its own opacity exponent in every band and refitting all 24 coefficients by
+  Nelder–Mead against every anchor at once fixed all of that, and more:
+
+  | | shipped | refit | target |
+  |---|---|---|---|
+  | runaway limit moved by CO₂ | 43.2 W/m² | 6.2 | 0–10 |
+  | Earth's inner edge | 1.38 S⊕ | 1.25 | 1.05–1.25 |
+  | snowball duration | 2.74 Myr | 4.30 | 3–60 |
+  | hottest stable climate | 344 K | 354 | 345–375 |
+  | pre-industrial Earth | 14.21 °C | 13.37 | 13.2–14.2 |
+
+  216 self-tests passed against 200, with no new failures, and the calibration went from 4 anchors
+  off out of 24 to 2 of 31.
+
+  **And it roughly doubled the limit cycle described above.** The cycling itself is not the
+  refit's doing — the shipped scheme runs −6 °C to +58 °C on that world — but the refit takes it to
+  −43 °C to +77 °C, through a *complete* snowball, in seven times as many steps. With the refitted
+  coefficients the OLR curve goes flat above about 35 °C — 288.5 W/m² at 27 °C, 293.0 at 37, 290.0
+  at 62 — while the absorbed flux is 320–326 W/m² throughout. Between −3 °C and +107 °C there is
+  **no energy balance at any temperature**. The planet climbs until the ice-albedo feedback catches
+  it on the way back down, and where it lands depends on the step size. The shipped scheme has OLR
+  rising 233 → 343 W/m² across the same span with a clean equilibrium at 44 °C.
+
+  The same flat curve costs the clock. `maxStep` multiplies its step by up to 4000× once a world is
+  within a kelvin or two of equilibrium; a world that never gets there keeps that shortcut switched
+  off for ever, and Earth's asymptotic step fell from **1.18 Myr to 82 years** — fourteen thousand
+  times smaller, which is most of the maximum time speed.
+
+  **How it got past everything.** Every slope the fit was scored on was measured at 280 ppm of CO₂,
+  where the refit still looked acceptable — 0.99 W/m²/K at 310 K. A world at high insolation does
+  not have 280 ppm; its thermostat has weathered the CO₂ to nothing, and there the same fit gives
+  **0.05**. The objective, the anchors and all 219 existing tests were blind to the one regime the
+  report came from. Three guards now cover it and all three fail on the reverted fit: the OLR slope
+  at 310 K and 320 K with CO₂ at 10⁻⁷ bar (`calibrate.mjs`), that exact 1.32 S⊕ world having to
+  settle rather than cycle, and a settled Earth having to be steppable in megayears.
+
+  Spectral coverage was built for the same refit and is also reverted. It is a one-point
+  k-distribution per line term — a fraction φ of the band carries all the opacity, so a feature
+  occupying a twentieth of a band cannot black out all of it — written as an effective optical
+  depth so gases still sum. Offered for every line term it was kept for three, and **pinning every
+  coverage at 1 and refitting reaches almost the same score (2.9 against 2.5)**. It was not what
+  fixed anything, and it is recorded here rather than shipped.
+
+  A fourth attempt should start from the refit's own diagnosis — water needs a per-band exponent —
+  with the hot-branch slope at weathered CO₂ in the objective from the first iteration rather than
+  bolted on afterwards. The reason to write this down at all is that the refit looked like an
+  unambiguous win on every number anyone was watching.
+
+* **Snowball deglaciation happens at ~10 mbar of CO₂**, against the 0.1–0.3 bar of published snowball
+  studies, and snowballs therefore last **~0.2 Myr** rather than the observed few. Those are the same
+  error twice: duration is threshold ÷ outgassing flux.
+
+  It is worth spelling out how this hid for so long. `OUTGAS_EARTH` used to be set to 4×10⁻⁶ kg/m²/yr,
+  some **130× below Earth's measured degassing rate**, tuned — the comment said so — to put the snowball
+  *duration* back in the literature range. Two errors dividing out, one anchor green, and as a side
+  effect nothing was watching, **the entire carbon cycle ran 100× too slow**: a CO₂ pulse took 90 Myr
+  to clear instead of ~1. The duration anchor could not see it, because duration was the one thing the
+  two errors conspired to get right.
+
+  Outgassing is now on its measured value (5.2×10⁻⁴ kg/m²/yr, ~6×10¹² mol/yr), which costs nothing —
+  the constant appears in both the source and the weathering sink, so it cancels out of every
+  equilibrium and only sets rates. Earth's equilibrium moves by 0.01 °C. What it buys is a carbon
+  thermostat that responds on the right timescale, and the price is that the threshold error is now
+  visible in the duration instead of being cancelled. Both halves are reported every run as `GAP` rows
+  in `tools/calibrate.mjs`.
+
+  The root cause is that a semi-grey scheme has **no atmospheric window**: every watt leaving the
+  ground is funnelled through one optical depth, so piling on CO₂ always works and eventually works
+  arbitrarily well. Real snowballs are hard to leave because the 8–12 µm window keeps radiating no
+  matter how much CO₂ you add.
+
+  Adding that window has been tried twice and reverted twice. Both attempts are worth recording,
+  because the second one answers a question the first only raised.
+
+  **The first attempt** landed the threshold at 0.13–0.22 bar and improved the LGM from −4.5 K to
+  −5.7 K against an observed −6.1, with all anchors passing. What it also did was make cold, dry,
+  cloudless states far too stable: *colder → drier → window opens → colder* is a positive feedback
+  with nothing to damp it. The Archean froze solid in 10 kyr and Titan fell to 71 K. Fixing the
+  Archean did not save Titan, and fixing Titan needed a third continuum term.
+
+  **The second attempt** fixed both of those, and failed for a better reason.
+
+  Two things solve the first attempt's collapse. The share of a blackbody's emission that falls in
+  the 8–12 µm window is *not a free parameter* — it is Planck, and it is strongly temperature
+  dependent: 25.3 % at Earth's 288 K but **0.13 % at Titan's 95 K**. A constant window fraction hands
+  a frigid world a window it has no business having; a Planck-weighted one closes itself as a world
+  cools. Titan came through untouched at −182 °C. And clouds are the missing damper: `cloudCover()`
+  saturates at 0.750 from 273 K up, so it holds the window shut by a fixed amount across the whole
+  liquid-water range, then falls away below freezing where the window is actually wanted. Without the
+  cloud term, Earth with CO₂ pinned at 427 ppm froze to **−42.6 °C and 100 % ice**; with it, the
+  fixed-humidity OLR slope came to 1.63 W/m²/K against the old scheme's 1.73, and Earth stayed put.
+
+  All 21 anchors could then be hit — Earth 238 W/m², Venus 161, Simpson–Nakajima 282 — with the
+  window CO₂-blind on a snowball and shut on Venus, using the physically right quadratic
+  (CO₂–CO₂ collision-induced) closure.
+
+  **And the snowball threshold still only moved from 0.010 bar to 0.013.** That is the useful result,
+  because it is not a tuning failure. Ask the fit to reduce CO₂'s leverage on a snowball — the OLR
+  drop from 0.001 to 0.2 bar at 230 K, which is 26.5 W/m² in the shipped scheme — and driving it to
+  13.2 W/m² drags the 280→560 ppm forcing from 3.82 W/m² down to **3.00, below its 3.3 floor**. One
+  optical depth sets how well CO₂ works at 230 K and at 288 K *simultaneously*; a semi-grey scheme
+  cannot decouple them. Nor can the window make up the difference, because at 230 K the 8–12 µm band
+  carries at most 17.5 % of the emission. Deglaciation is not fixable here without spectral
+  resolution, and no amount of refitting will change that.
+
+  What the window did buy: the outer edge went from +67 °C to **+16 °C** at 0.35 S⊕ — the maximum
+  greenhouse starting to work, though still not an edge. Against that, six downstream tests broke,
+  including the methane-haze turnover, and the LGM moved *away* from observation (−4.45 → −3.42 K
+  against −6.1). Not enough, so it went back again.
+
+  **The third attempt did what the second said was needed: four spectral bands.** It is recorded in
+  full because it *works*, and because it is where a fourth attempt should start.
+
+  Bands at 0–8, 8–12 (the window), 12–18 (CO₂'s 15 µm band) and >18 µm (water's rotation band), each
+  with its own optical depth, weighted by the true Planck share — one tabulated cumulative Planck
+  function, so a band fraction is a difference of two lookups. The shares are the whole point:
+
+  | | 0–8 | 8–12 | 12–18 | >18 |
+  |---|---|---|---|---|
+  | Titan 95 K | 0.0 | 0.1 | 2.8 | **97.0** |
+  | snowball 230 K | 4.4 | 17.5 | 28.7 | **49.4** |
+  | Earth 288 K | 12.1 | 25.3 | 28.2 | 34.4 |
+  | Venus 737 K | **72.9** | 15.7 | 7.2 | 4.3 |
+
+  On a snowball two thirds of the emission is in the window and the far infrared, where there is no
+  water vapour and CO₂ has almost no grip; on Earth water closes the far infrared so CO₂'s own band
+  carries proportionally more. **The structural limit breaks:** CO₂'s snowball leverage fell from
+  39 K to 12 K per ten millibars *while* the 280→560 ppm forcing held at 3.71 W/m². The grey scheme
+  provably could not do both.
+
+  It costs **1.57×** the single-band scheme, not 4×, because the exponents are shared — one `pow` of
+  the water amount and one of the CO₂ amount serve all four bands (band 2's water goes as `w³`,
+  band 4's CO₂ as `u²`). Before that trick it was 2.9×, and `Math.pow` was all of it.
+
+  Results: **the outer-edge gap closes outright** — a 0.35 S⊕ world goes from +67 °C to **−89 °C**,
+  inside Kasting's maximum greenhouse, which no previous attempt approached. Snowball deglaciation
+  0.010 → 0.022 bar and duration 0.20 → 0.46 Myr. Earth pre-industrial 13.96 °C, modern 16.2, ECS
+  3.24 K, albedo 0.294 against CERES 0.293; Venus 705 K, Mars 210 K, Titan −181 °C, the Archean
+  liquid, the runaway terminating properly.
+
+  Two things sent it back:
+
+  * **LGM −5.17 K against the anchor's −5 bound.** Not a tuning failure — *every* fit with
+    pre-industrial inside 13.2–14.2 °C gives ≈ −5.2, because the LGM here is ice-albedo amplified
+    rather than forcing-limited. It is 4% outside the anchor and closer to the observed −6.1 than the
+    −4.45 that ships, which is worth knowing but is not the same as passing.
+  * **The habitable zone's inner edge moved from ~1.25 to ~1.4 S⊕**, against a literature ~1.2
+    (Wolf & Toon 2015). A steam atmosphere radiates too well through band 1 at 300–400 K, so the
+    runaway starts too late, and the runaway-transient test fails on it. That is the one thing left
+    to solve, and it is a band-1 water-opacity problem, not a structural one.
+
+  The working fit, so a fourth attempt starts here rather than from scratch. Bands as above; each
+  band's optical depth is multiplied by `pTot^0.30` except the window, which is pure continuum. With
+  `w = pH2O^0.482077`, `u = pCO2^1.44915`, `L = ln(1 + pCO2/5.46e-6)`, `g = ln(1 + pCH4/6.9e-6)` and
+  `cia = 1329.45·pCH4²·pTot`:
+
+  ```
+  tau1 = (0.531307·L + 0.689546·u + 0.479466·w + 0.00510601·g) · br
+  tau2 =  5.2073·w³ + 0.00258412·pCO2² + cia
+  tau3 = (0.104864·L + 200·u + 3.96754·w) · br
+  tau4 = (13.85·w + 0.000054481·u²) · br + cia
+  OLR  = Σ f_i(T)·σT⁴·[ (1−C)/(1+0.75·tau_i) + C/(1+0.75·(tau_i+0.1)) ]
+  ```
+
+  `C` is cloud fraction and 0.1 is the extra optical depth under cloud. `f_i(T)` are the Planck band
+  shares. Every olr() call site must pass the cloud fraction, or the window is left spuriously wide
+  open — `climate.js` has it as `a.cloud`, and the anchors in `calibrate.mjs` and `selftest.js` have
+  to ask under Earth's actual two-thirds cover rather than clear sky.
+
+  A degeneracy worth recording, because it cost an afternoon: **Venus cannot tell "opaque" from
+  "absurdly opaque".** The fit happily left band 1's CO₂ continuum coefficient at 5059 where 0.7 was
+  right — identical at 92 bar, both radiating nothing. On a hot world carrying 1.1 bar of CO₂ that
+  blacked out the band holding 99% of the emission, dropped OLR by a factor of 590, and drove the
+  runaway into the integrator's 4000 K clamp where it thrashed. Any fit against a saturated anchor
+  needs an explicit bound on how opaque it is allowed to get.
 * **The runaway transient is fast when the planet is pushed hard**, which is not a deviation but is
   worth stating plainly, because the ~10⁵ yr figure from Turbet et al. (2023) gets quoted as though
   it were universal. It is not: boiling an ocean is an energy problem. Vaporising an Earth ocean
@@ -1817,20 +1957,15 @@ Stated plainly, because a model that hides these is less useful:
   lifetime is right and is tested; the source is not. The only H₂ source here is volcanic, and on
   the real Earth most of the H₂ in the air comes from methane photolysis, biomass burning and the
   ocean. It costs nothing downstream — the escape flux is carried by methane, not by H₂, and comes
-  out right (see below) — but the number itself is 275× low and the comment that used to imply
-  otherwise has been corrected.
+  out at 8×10⁷ atoms/cm²/s against an observed ~10⁸ — but the number itself is 275× low.
 
 * **The Great Oxidation is no longer a wall, and that is Catling's doing rather than a bug.** Below
   the volcanic reductant flux the air used to sit at exactly zero for ever. It does not now: a world
   with a methane-making biosphere accumulates methane, methane carries hydrogen to space, and every
-  hydrogen that leaves is reducing power the atmosphere never has to answer for. Two hundred
-  megayears at a quarter of Earth's biosphere lands at 3.6×10⁻⁵ bar of O₂ — a whiff, four thousand
-  times below the modern level and still firmly an anoxic world, where before it was nothing at all.
-  The threshold is a slope now rather than a wall. Whether the *atmosphere* should show that whiff
-  is the open question: in Catling, Zahnle & McKay's own budget most of the oxidation goes into the
-  crust as ferric iron and sulfate, and this model has no crustal reservoir to put it in, so it all
-  lands in the air. The Archean sulfur record says it should not — mass-independent fractionation
-  caps Archean pO₂ near 10⁻⁵ of the present level, and 3.6×10⁻⁵ bar is above that.
+  hydrogen that leaves is reducing power the atmosphere never has to answer for. Whether the
+  *atmosphere* should show the resulting whiff is the open question: in Catling, Zahnle & McKay's
+  own budget most of the oxidation goes into the crust as ferric iron and sulfate, and this model
+  has no crustal reservoir to put it in, so it all lands in the air.
 
 Three bugs were found by the tests written for the work above rather than by looking for them, and
 all three are fixed:
@@ -1840,9 +1975,9 @@ all three are fixed:
   over in about half a megayear, shorter than the strides this model is built to take. Past twice an
   e-folding time explicit Euler does not settle, it oscillates: at a fixed 5 Myr step the Archean's
   steady 17.65 kg/m² became a sawtooth between zero and 184. Nothing noticed while escaping hydrogen
-  was merely lost; it mattered the moment the same flux started crediting the oxygen budget, because
-  the sawtooth drove a Great Oxidation the physics does not have. Semi-implicit now, exact at steady
-  state and unable to overshoot past zero at any step, with a bound on the realised net rate.
+  was merely lost; it mattered the moment the same flux started crediting the oxygen budget.
+  Semi-implicit now, exact at steady state and unable to overshoot past zero at any step, with a
+  bound on the realised net rate.
 
 * **Hydrogen was never in the snapshot.** `captureWorld` did not list it and `reset()` refills it
   from the *parameter*, so a world that had escaped 44% of its hydrogen got every gram of it back
@@ -1850,15 +1985,13 @@ all three are fixed:
   history chart. The round-trip test could not see it because its own state vector did not list `h2`
   either. Both are fixed, and there is now a direct check as well.
 
-* **Two calibration rows asserted the broken values.** The snowball deglaciation and duration checks
-  in `selftest.js` pinned 4–30 mbar and 0.05–1 Myr, which is what the model did and was the only way
-  to notice when it changed. It changed; they now assert the literature's ranges, which means they
-  can fail again.
+* **The snowball deglaciation row could not fail.** It has been inside its literature range since
+  the four-band scheme went in, and its note still described the semi-grey scheme it replaced. It
+  is an anchor now. The duration below it is still short, on its own account rather than as a
+  restatement of the threshold.
 
-Deviations recorded in earlier versions and since **fixed** rather than excused: the outer edge,
-the snowball threshold and duration, the inner edge and the runaway limit's CO₂ sensitivity, all
-described above; the
-runaway inner edge now falls at 1.25 S⊕ (literature 1.05–1.25), and a dune world stays habitable
+Two deviations recorded in earlier versions have since been **fixed** rather than excused: the
+runaway inner edge now falls at 1.3–1.4 S⊕ (literature 1.2–1.4), and a dune world stays habitable
 about 0.35 S⊕ further in than an ocean world, which is the Abe et al. (2011) result. Both were
 symptoms of an integrator bug — the implicit step damped the global mean with the diffusion
 coefficient, which only moves heat between latitudes and cannot slow uniform warming — that made

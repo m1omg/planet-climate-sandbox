@@ -1,7 +1,7 @@
 import { SIGMA, psatH2O, frostPointCO2, clamp, smoothstep } from './constants.js';
 
 // ---------------------------------------------------------------------------
-// Four-band longwave radiative transfer, with spectral overlap.
+// Four-band longwave radiative transfer.
 //
 // Each band is a two-stream semi-grey problem in its own right, and what is
 // emitted into it is the true Planck share of that band at the surface
@@ -24,52 +24,32 @@ import { SIGMA, psatH2O, frostPointCO2, clamp, smoothstep } from './constants.js
 // water closes the far infrared so CO2's own band carries proportionally more.
 // That is what a single grey optical depth provably cannot do: it has to decide
 // how well CO2 works at 230 K and at 288 K with one number, and the two answers
-// differ by a factor of three.
+// differ by a factor of three. The semi-grey scheme this replaces put snowball
+// deglaciation thirty times too low for exactly that reason, and no refit could
+// move it -- driving CO2's snowball leverage down to the published value dragged
+// the 280->560 ppm forcing below its floor at the same time.
 //
-// Two things are new here and they are the reason four separate known gaps
-// closed at once.
+// This is the fourth attempt at spectral bands here. The first two were
+// atmospheric-window schemes and were reverted; the third worked and was not
+// shipped, because a steam atmosphere radiated too freely through band 1 and
+// pushed the habitable zone's inner edge out to 1.4 S(+). That was diagnosed at
+// the time as a band-1 water-opacity problem and it was: band 1 had water as a
+// single weak power law, w^0.48, which grows by a factor of two while the column
+// grows by a factor of seventy. Two things were missing from it, and both are
+// ordinary spectroscopy --
 //
-// FIRST: water's opacity now has its own exponent in every band, fitted rather
-// than shared. What that buys is *overlap*. The complaint the calibration file
-// had been carrying was exact -- "CO2's optical depth is added to water's in
-// each band rather than overlapping it" -- and its symptom was that the
-// Simpson-Nakajima limit moved by 43 W/m^2 between 0.4 ppm of CO2 and 280,
-// where the literature has it very nearly independent of CO2. At the runaway
-// peak the atmosphere is steam and water is supposed to carry the opacity; here
-// water's grip in band 2 grew only as pH2O^0.48, so stripping the CO2 out
-// bought real transparency that a steam atmosphere does not have. Fixing that
-// meant a full refit, because the exponent that closes band 2 in a steam
-// atmosphere is not the one that leaves it open on a snowball. The spread is
-// 6.2 W/m^2 now, inside its 0-10 target, and Earth's inner edge came in from
-// 1.38 to 1.25 S(+) with it -- because a thermostat that draws CO2 down as a
-// star brightens was also, absurdly, raising the cliff the planet was walking
-// towards.
+//   * the 6.3 um vibration-rotation band sits inside band 1 and saturates, so it
+//     belongs in a logarithm, exactly like CO2's 15 um band; and
+//   * the self-broadened continuum, which goes as the square of the vapour
+//     pressure and is what actually closes the near infrared in a steam
+//     atmosphere. Without it the dry subsiding fin kept radiating through band 1
+//     at 450 K and the effective OLR curve never turned over at all -- no
+//     runaway limit, just a hotter equilibrium.
 //
-// SECOND: spectral coverage. A band model that gives a gas one optical depth
-// across a whole band is saying its lines are spread evenly over it, and for a
-// narrow line complex in a wide band that is badly wrong in a specific
-// direction: it lets a feature that occupies a twentieth of the band black out
-// all of it. `tauEff` below is a one-point k-distribution -- a fraction phi of
-// the band carries all the opacity and the rest is clear -- which puts a
-// ceiling on what a line complex can do, exactly as saturation does in reality.
-// The fit was offered it for every line term in every band and kept three:
-// CO2's 15 um band, water's 6.3 um band, and methane's 7.7 um band. It is
-// written as an effective optical depth rather than a transmission so that
-// gases still *sum*, which is what random overlap says uncorrelated line
-// spectra should do, and so that phi = 1 gives back the previous scheme
-// unchanged.
-//
-// Worth recording what did NOT pay for itself: pinning every coverage at 1 and
-// refitting reaches almost the same score (2.9 against 2.5 on the same
-// objective). Coverage is not what fixed the runaway limit -- water's exponents
-// are -- and the honest reading is that it earns its place on three line bands
-// and nowhere else.
-//
-// A degeneracy worth recording too, because it cost an earlier attempt an
-// afternoon: Venus cannot tell "opaque" from "absurdly opaque". At 92 bar the
-// band-2 term is saturated for any coefficient above about ten, so the fit is
-// free to leave it at thousands -- identical on Venus, catastrophic on a world
-// carrying one bar of CO2. Every coefficient here is bounded for that reason.
+// Band assignment is enforced rather than fitted: CO2's logarithmic term is
+// large in band 3 and small in band 1 (where CO2 has only the weak 2.7 and
+// 4.3 um pair), methane's 7.7 um band is in band 1, water's rotation band is in
+// band 4, and band 2 is the window where only continua live.
 // ---------------------------------------------------------------------------
 
 // ---- the cumulative Planck function ---------------------------------------
@@ -110,77 +90,51 @@ export function bandFractions(T, out = FR) {
 }
 
 // ---- band optical depths ---------------------------------------------------
-// Fitted by Nelder-Mead against every literature target calibrate.mjs checks
-// plus the shape constraints a stable hot branch, a real runaway limit and a
-// snowball that is hard to leave all require, with each coefficient bounded and
-// regularised toward the previous fit so the change is the smallest one that
-// works. Twenty-four free numbers against twenty-two targets; the ones that
-// moved most are water's four band exponents, which is the whole point.
-const A1L = 0.101699, A1U = 0.999601, A1W = 14.3337, A1WL = 7.44879,
-      A1WC = 0.000885543, A1G = 1.99995;
-const A2W = 0.500001, A2C = 0.00259381;
-const A3L = 0.257460, A3U = 10.1459, A3W = 59.8579, A3WC = 0.412834;
-const A4W = 11.6448, A4U = 0.000100859;
-const P_CO2 = 0.00000546000, P_CH4 = 0.00000690000, P_H2O = 0.00891768;
-const D_CO2 = 1.44915;
-const N_BROADEN = 0.300000;
-// One exponent per band per gas. Water's four are the reason the runaway limit
-// stopped moving with CO2: its opacity now grows steeply enough with vapour that
-// a steam atmosphere closes CO2's own bands from underneath.
-const EW0 = 0.922385, EW1 = 1.20380, EW2 = 1.35370, EW3 = 0.495225;
-const EC0 = 1.80009, EC2 = 1.93957;
-// Spectral coverage: the fraction of a band a line complex actually occupies.
-const FC2 = 0.922333, FW0 = 0.620161, FG0 = 0.711622, QC = 0.205908;
+// Fitted simultaneously to eleven published targets by Nelder-Mead, regularised
+// toward the third attempt's coefficients so the fit makes the smallest change
+// that fixes band 1 rather than wandering off to a different corner. The targets
+// and their tolerances are the ones calibrate.mjs checks, plus the shape
+// constraints that a stable hot branch and a real runaway limit both require.
+//
+// A degeneracy worth recording, because it cost the third attempt an afternoon:
+// Venus cannot tell "opaque" from "absurdly opaque". At 92 bar the band-3 term
+// is saturated for any coefficient above about ten, so the fit is free to leave
+// it at thousands -- identical on Venus, catastrophic on a world carrying one
+// bar of CO2. Every coefficient here is bounded for that reason.
+const A1L = 0.303521, A1U = 0.993371, A1W = 0.0446001, A1WL = 0.263935,
+      A1WC = 0.00122251, A1G = 0.417371;
+const A2W = 4.22658, A2C = 0.00260231;
+const A3L = 0.213948, A3U = 13.5626, A3W = 6.72949, A3WC = 0.226336;
+const A4W = 9.70414, A4U = 0.0000918162;
+const P_CO2 = 5.46e-6, P_CH4 = 6.9e-6, P_H2O = 0.00891768;
+const M_H2O = 0.482077, D_CO2 = 1.44915;
+const N_BROADEN = 0.30;
+// Methane collision-induced absorption, in the window and the far infrared.
+// Refitted for the band scheme against Titan, which is the one world with a
+// measured anti-greenhouse and the only thing anchoring it.
 const CIA_CH4 = 232.873;
+// Extra optical depth under cloud, and the reason every caller has to pass a
+// cloud fraction: leave it out and the window sits spuriously wide open.
 export const TAU_CLOUD = 0.1;
-
-// The effective grey optical depth of a band whose absorber occupies only a
-// fraction phi of it. phi = 1 returns tau unchanged and everything adds as
-// before; phi < 1 imposes a ceiling, because a line complex cannot black out
-// more of a band than it covers however much gas you pile on. Re-expressed as an
-// optical depth rather than a transmission so that gases still sum, which is
-// what random overlap says they should do.
-function tauEff(tau, phi) {
-  if (!(tau > 0)) return 0;
-  if (phi >= 1) return tau;
-  const t = (1 - phi) + phi / (1 + 0.75 * tau / phi);
-  return (1 / t - 1) / 0.75;
-}
 
 const TAU = new Float64Array(4);
 
+// Optical depth in each band. `pH2` is the hydrogen partial pressure; its
+// collision-induced absorption is handled in h2Cia() below.
 export function bandTau(pCO2, pH2O, pCH4, pTot, pH2 = 0, out = TAU) {
   const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
-  const pw = pH2O > 0 ? pH2O : 0;
-  // One logarithm, six powers. Math.pow with a fractional exponent is a log and
-  // an exp underneath, and water alone needs six exponents here; doing it this
-  // way is worth a third of the cost of this function, on the hot path of an
-  // eighteen-band solve.
-  const lw = pw > 0 ? Math.log(pw) : 0;
-  const pw0 = pw > 0 ? Math.exp(EW0 * lw) : 0;
-  const pw1 = pw > 0 ? Math.exp(EW1 * lw) : 0;
-  const pw2 = pw > 0 ? Math.exp(EW2 * lw) : 0;
-  const pw3 = pw > 0 ? Math.exp(EW3 * lw) : 0;
-  const pwc0 = pw > 0 ? Math.exp(EC0 * lw) : 0;
-  const pwc2 = pw > 0 ? Math.exp(EC2 * lw) : 0;
+  const w = pH2O > 0 ? Math.pow(pH2O, M_H2O) : 0;
+  const wc = pH2O > 0 ? pH2O * pH2O : 0;
   const u = pCO2 > 0 ? Math.pow(pCO2, D_CO2) : 0;
   const L = pCO2 > 0 ? Math.log(1 + pCO2 / P_CO2) : 0;
-  const Lw = pw > 0 ? Math.log(1 + pw / P_H2O) : 0;
+  const Lw = pH2O > 0 ? Math.log(1 + pH2O / P_H2O) : 0;
   const g = pCH4 > 0 ? Math.log(1 + pCH4 / P_CH4) : 0;
   const ciaC = pCH4 > 0 ? CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0) : 0;
   const h2 = h2Cia(pH2, pTot);
-  // Line bands broaden with pressure, so what they cover grows with it. CO2's
-  // 15 um band and methane's 7.7 um band share one exponent; water's 6.3 um band
-  // came out pressure-independent, which is what a band whose width is set by
-  // its rotational envelope rather than by collisions should do.
-  const qc = Math.pow(Math.max(pTot, 1e-6), QC);
-  out[0] = A1L * L * br + A1U * u * br
-         + tauEff(A1WL * Lw * br, FW0) + A1W * pw0 * br + A1WC * pwc0
-         + tauEff(A1G * g * br, Math.min(1, FG0 * qc)) + H2_B1 * h2;
-  out[1] = A2C * pCO2 * pCO2 + A2W * pw1 + ciaC + H2_B2 * h2;
-  out[2] = tauEff(A3L * L * br, Math.min(1, FC2 * qc)) + A3U * u * br
-         + A3W * pw2 * br + A3WC * pwc2 + H2_B3 * h2;
-  out[3] = A4U * u * u * br + A4W * pw3 * br + ciaC + H2_B4 * h2;
+  out[0] = (A1L * L + A1U * u + A1W * w + A1WL * Lw + A1G * g) * br + A1WC * wc + H2_B1 * h2;
+  out[1] = A2W * w * w * w + A2C * pCO2 * pCO2 + ciaC + H2_B2 * h2;
+  out[2] = (A3L * L + A3U * u + A3W * w) * br + A3WC * wc + H2_B3 * h2;
+  out[3] = (A4W * w + A4U * u * u) * br + ciaC + H2_B4 * h2;
   return out;
 }
 
@@ -231,32 +185,31 @@ export function h2Cia(pH2, pTot) {
 // and its Rayleigh scattering keeps costing, so the planet cools.
 //
 // Without this the greenhouse grew without limit and the outer edge did not
-// exist: a world at 0.35 S(+) could be forced to +18 C under thirty bar of CO2,
-// where every published treatment says no amount of CO2 gets it above freezing.
+// exist: a world at 0.35 S(+) could be forced to +15 C under thirty bar of CO2,
+// where every published treatment says no amount of CO2 gets such a world above
+// freezing. The old note here blamed Rayleigh scattering, and that turned out to
+// be wrong -- measured against tau_R proportional to column with CO2's 2.2x
+// cross-section, this model's CO2 Rayleigh is close to right (0.19 at 8 bar,
+// 0.72 at 92, against ~0.22 and ~0.76). Condensation is what was missing.
 //
 // The saturation curve is the one already in constants.js -- sublimation below
 // the triple point, a two-point Clausius-Clapeyron fit over liquid above it,
 // good to better than a per cent from Mars's 610 Pa frost point to the 73.77 bar
 // critical point.
 // ---------------------------------------------------------------------------
-// The saturation curve itself already existed, in constants.js, accurate to
-// better than a per cent from Mars's frost point to the critical point. Building
-// a second one here was a waste and it is not here any more; frostPointCO2 takes
-// pascals and is closed-form on both branches.
 
-// CO2's own optical depth in each band -- the condensation floor is about where
-// *CO2* goes opaque, not where the atmosphere as a whole does. A world whose far
-// infrared is closed by hydrogen has no CO2 emission level there to pin.
+// CO2's own optical depth in each band. The floor is about where *CO2* goes
+// opaque, not where the atmosphere as a whole does: a world whose far infrared
+// is closed by hydrogen has no CO2 emission level there to pin.
 const TAU_C = new Float64Array(4);
 function bandTauCO2(pCO2, pTot, out = TAU_C) {
   if (!(pCO2 > 0)) { out[0] = out[1] = out[2] = out[3] = 0; return out; }
   const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
   const u = Math.pow(pCO2, D_CO2);
   const L = Math.log(1 + pCO2 / P_CO2);
-  const qc = Math.pow(Math.max(pTot, 1e-6), QC);
-  out[0] = A1L * L * br + A1U * u * br;
+  out[0] = (A1L * L + A1U * u) * br;
   out[1] = A2C * pCO2 * pCO2;
-  out[2] = tauEff(A3L * L * br, Math.min(1, FC2 * qc)) + A3U * u * br;
+  out[2] = (A3L * L + A3U * u) * br;
   out[3] = A4U * u * u * br;
   return out;
 }
@@ -264,8 +217,8 @@ function bandTauCO2(pCO2, pTot, out = TAU_C) {
 // Below this there is no CO2 emission level worth speaking of and the floor is
 // skipped outright, which keeps it off Earth, Mars and everything Earth-like.
 const CO2_COND_MIN = 0.05;                   // bar
-// R/cp: 0.286 for air, 0.223 for CO2. What the dry adiabat is worth here is only
-// whether it gets *below* the frost point, so the blend is enough.
+// R/cp: 0.286 for air, 0.223 for CO2. All this adiabat has to decide is whether
+// the level gets *below* the frost point, so the blend is enough.
 const KAPPA_AIR = 0.286, KAPPA_CO2 = 0.223;
 // Kelvins of supersaturation over which the floor comes fully on. A hard switch
 // would put a kink in OLR(T) and the implicit solver differentiates through it.
@@ -273,23 +226,35 @@ const COND_BLEND = 12;
 const FR_C = new Float64Array(4);
 
 // How much of the outgoing flux is held up by CO2 condensing aloft.
-function condensationFloor(T, pCO2, pTot, tau, fr, sT4, dry) {
+//
+// Applied band by band and *additively*. It was written as a ratio first --
+// work out the clear-sky flux with and without the floor and scale the all-sky
+// flux by it -- and that is fine until the surface emission goes to nothing, at
+// which point the ratio goes to infinity. A world at 0.30 S(+) under a thousand
+// times Earth's volcanism found it: the ratio drove the outgoing flux up without
+// bound, the planet cooled without bound with it, and it settled at two kelvin
+// with three tonnes per square metre of CO2 frost on the ground. Additively
+// there is nothing to blow up, and each band's floor is capped at that band's
+// own blackbody flux at the surface temperature, so the atmosphere can never be
+// made to radiate more than the ground it sits on.
+function condensationFloor(T, pCO2, pTot, tau, fr, sT4, dry, C) {
   // The skin temperature: an atmosphere in radiative equilibrium does not get
   // colder than this, however far a dry adiabat extrapolated from the ground
   // says it should. Leaving it out had CO2 condensing in the stratosphere of a
   // 350 K hot-ocean world, which has a 217 K skin and condenses nothing.
   const Tskin = Math.pow(Math.max(dry, 1e-6) / SIGMA, 0.25) * 0.840896;
-  // Nothing can condense anywhere if even the coldest level the atmosphere
-  // reaches is above the frost point at the *highest* pressure in the column.
-  // One closed-form call, and it is what keeps this off every warm thick-CO2
-  // world without walking the bands.
+  // Nothing condenses anywhere if even the coldest level the atmosphere reaches
+  // is above the frost point at the *highest* pressure in the column. One
+  // closed-form call, and it is what keeps this off every warm thick-CO2 world
+  // without walking the bands.
   if (Tskin >= frostPointCO2(pCO2 * 1e5)) return dry;
   const kappa = KAPPA_AIR + (KAPPA_CO2 - KAPPA_AIR) * clamp(pCO2 / Math.max(pTot, 1e-9), 0, 1);
   const tc = bandTauCO2(pCO2, pTot);
   let total = 0;
   for (let i = 0; i < 4; i++) {
+    const t = tau[i];
+    const band = fr[i] * sT4 * ((1 - C) / (1 + 0.75 * t) + C / (1 + 0.75 * (t + TAU_CLOUD)));
     const opaque = 1 - 1 / (1 + 0.75 * tc[i]);
-    const band = fr[i] * sT4 * ((1 - 0) / (1 + 0.75 * tau[i]));
     if (opaque < 0.02) { total += band; continue; }
     // Where CO2's own column reaches unit optical depth. Pressure broadening
     // makes tau grow as p^(1+n) down the column, so the level is p*tau^-1/(1+n).
@@ -299,7 +264,7 @@ function condensationFloor(T, pCO2, pTot, tau, fr, sT4, dry) {
     const sat = smoothstep(0, COND_BLEND, Tcond - Tad);
     if (sat <= 0) { total += band; continue; }
     const frc = bandFractions(Tcond, FR_C);
-    const floor = frc[i] * SIGMA * Tcond * Tcond * Tcond * Tcond * opaque;
+    const floor = Math.min(frc[i] * SIGMA * Tcond * Tcond * Tcond * Tcond * opaque, fr[i] * sT4);
     total += band + sat * Math.max(0, floor - band);
   }
   return total;
@@ -317,13 +282,7 @@ export function olr(T, pCO2, pH2O, pCH4, pTot, pH2 = 0, cloud = 0) {
   }
   const F = sT4 * s;
   if (!(pCO2 > CO2_COND_MIN)) return F;
-  // Clear-sky flux is what the floor is compared against; the cloud channel is
-  // then scaled by the same ratio, because a cloud deck sits far below CO2's
-  // emission level and does not change where that level is.
-  let clear = 0;
-  for (let i = 0; i < 4; i++) clear += fr[i] * sT4 / (1 + 0.75 * tau[i]);
-  const lifted = condensationFloor(T, pCO2, pTot, tau, fr, sT4, clear);
-  return lifted > clear ? F * (lifted / clear) : F;
+  return condensationFloor(T, pCO2, pTot, tau, fr, sT4, F, C);
 }
 
 // Total band-averaged optical depth, for readouts only. The physics never uses
