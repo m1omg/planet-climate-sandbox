@@ -297,8 +297,8 @@ takes as long as it takes.
 **The slider follows the star**, the way the five reservoir sliders follow the planet — a mode whose
 whole job is to move the star used to leave the one number naming the star sitting still, which
 looked exactly like nothing happening. What you asked for is kept in the status line underneath
-instead, along with how long the star has been moving since: *Sun at 6.08 Gyr — 11.2% brighter per
-Gyr from here · 1.51 Gyr since you set 1.000 S⊕*, or *easing to 1.350 S⊕ — 87.2 Myr to go · 309 Myr
+instead, along with how long the star has been moving since: *brightening 11.2% per Gyr from
+here · 1.51 Gyr, +15.2% since you set 1.000 S⊕*, or *easing to 1.350 S⊕ — 85.8 Myr to go · 310 Myr
 since you set 1.350 S⊕*.
 
 **`main-sequence Sun`** hands the slider to Gough (1981) instead. A star brightens as its core fills
@@ -312,15 +312,21 @@ it gives 0.77 at 3.3 Ga, which is the number the Archean preset already carried;
 where **Earth +2.2 Gyr** comes from. The two modes are mutually exclusive — under the Sun the slider
 sets where the star *is*, and it goes on brightening from that age.
 
-The mode works out that age by reading the relation backwards from the one stellar number the game
-has, which is how much light the planet receives — so it has no memory of its own to fall out of
-step with. Switch the Sun off and on again after a gigayear and it picks up at 5.57 Gyr rather than
-resetting to today; load **Earth +2.2 Gyr** and switch it on and the star starts at 6.77 Gyr and
-brightens at that age's steeper 12.2% a gigayear, which is the whole reason the rate is a curve and
-not a constant. The inversion is only honest for a planet at something like one au of a Sun-like
-star, so it is refused rather than clamped outside 0.74–2.29 S⊕: TRAPPIST-1e's 0.646 S⊕ inverts to
-−1.7 Gyr, which is before the Sun existed, and that world keeps today's age instead. It is dim
-because of where it orbits, not because its star is young.
+The mode works out the *rate* by reading the relation backwards from the one stellar number the game
+has, which is how much light the planet receives — so it has no memory of its own to fall out of step
+with. Switch the Sun off and on again after a gigayear and it carries on at 10.6% a gigayear rather
+than dropping back to today's 9.6%; load **Earth +2.2 Gyr** and switch it on and it starts at that
+world's 12.2%, which is the whole reason the rate is a curve and not a constant. The inversion is
+only honest for a planet at something like one au of a Sun-like star, so it is refused rather than
+clamped outside 0.74–2.29 S⊕: TRAPPIST-1e's 0.646 S⊕ inverts to −1.7 Gyr, which is before the Sun
+existed, and that world keeps today's rate instead. It is dim because of where it orbits, not because
+its star is young.
+
+**The age itself stays internal, and everything the status line says is relative.** It used to open
+with "Sun at 7.85 Gyr", which is a claim this model has no business making — Venus and Mars are not
+at one au, nothing here simulates a red giant, and an absolute main-sequence age has nowhere to go.
+What it says now is what it can stand behind: *brightening 11.2% per Gyr from here · 1.51 Gyr, +15.2%
+since you set 1.000 S⊕*.
 
 Neither mode is world state. They are how the control behaves, so neither goes in the URL hash or
 the save file; what gets saved is wherever the star had actually got to, which is the honest thing
@@ -400,6 +406,24 @@ different reasons you might not.
 **The planet is stiff.** A step is sized for accuracy from the state, so a world in a hurry gets
 small steps: a settled Earth takes 736 kyr at a time, the Great Oxidation about 1.9 kyr. No budget
 fixes that — the only levers are bigger steps, which is an accuracy question, or cheaper steps.
+
+**Or the planet only *looks* stiff, which is worse.** Reported from the live site: a 1006 °C wet
+runaway crawling at **2.2 kyr/s** with the throttle indicator lit, on a world where nothing was
+happening at all. Earth at 1.4 S⊕ took **300,001 steps** to cross 500 Myr; it takes **884** now, and
+nothing about the physics changed.
+
+`w.o2Rate` exists for one reader — the step controller, which allows a tenth of the oxygen reservoir
+per step because methane's lifetime pivots three orders of magnitude across four decades of pO₂. It
+was missing a term. Oxygen left behind by escaping hydrogen is credited a few hundred lines earlier,
+where the water is lost, and on a world losing an ocean that is the largest term by far. It very
+nearly cancels the reductant sink, so the reservoir sits in a steady balance at a few thousandths of
+a kg/m² and goes nowhere for hundreds of megayears — while the rate reported it emptying in thirty
+seconds' worth of simulated years. The bound believed it, because believing it is that number's job,
+and clamped the clock to **five-year steps, for ever**.
+
+It is a diagnostic the integrator reads, and it was wrong about a quantity the integrator then had to
+respect. Everything else is untouched by the correction: Earth over a gigayear still 1358 steps, a
+1.1 S⊕ Earth still 2268, Venus still 154, the Archean still 729, the Great Oxidation unchanged.
 
 **Cheaper steps.** A step was 240 µs; it is 154 µs now, and nothing about the physics changed to get
 there. `psatH2O` was **28% of the whole model's CPU time** — every band asks for it several times a
@@ -961,6 +985,23 @@ the clock, the band temperatures, where the water is, how far the ice sheet has 
 the fossil reserve and the carbon below. Saving only the sliders would have given back a world that
 looked right and had forgotten everything it had been through, which for a model whose subject is
 history is the wrong thing to keep.
+
+**Saving moves the reset button.** Reset comes back to the world you were handed, and what counts as
+"handed to you" is now: the preset or scenario you loaded, the save you loaded — *or the save you
+wrote*. Save at four hundred megayears and reset takes you back to that world at t = 0, without your
+having to load it back first. The **autosave deliberately does not** do this: it fires every thirty
+seconds on a running clock, and a reset button whose meaning quietly moved every thirty seconds would
+be worse than no reset button.
+
+The baseline is read off the *world's* parameters rather than the live slider object the two share.
+They agree everywhere except in the one place that matters here — the five live controls are outputs
+as well as inputs, so the slider object follows the reservoirs as they drift, while the world's
+parameters only move when something is actually set. Reading the drifting one would have made
+save-then-reset and load-then-reset land in two different places, since a save carries the world's
+parameters and nothing else. Verified in a browser: set 2000 ppm at 1.05 S⊕, run 2.3 Gyr until the
+thermostat has drawn the CO₂ down to 144 ppm, save, run another 4 Gyr with an autosave firing in the
+middle — reset gives 2000 ppm at 1.05 S⊕ and a zeroed clock, and so does loading that slot and
+resetting.
 
 **Worlds have names.** Type one into the field under the preset row and it travels with the world —
 into the slot, into the export file, and back out of both. Leave it empty and the preset's own name

@@ -343,6 +343,49 @@ if (app && app.graphicsFromUrl) {
   }
 }
 
+// What the reset button comes back to. A preset, a scenario, a save loaded and
+// a save *written* all set it; the autosave must not, because it fires every
+// thirty seconds on a running clock and a reset point that moved every thirty
+// seconds would be worse than no reset point at all.
+//
+// Source-level, because the DOM stub here does not dispatch events and the
+// whole thing lives in a click handler. Checked in a browser as well.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const fn = (name) => {
+    const from = src.indexOf(`function ${name}`);
+    if (from < 0) return '';
+    const next = src.indexOf('\nfunction ', from + 1);
+    return src.slice(from, next > from ? next : src.length);
+  };
+  // The save path is a click handler inside buildSlots, so take that whole body.
+  const slots = fn('buildSlots');
+  const wants = [['buildSlots (saving to a slot)', slots],
+                 ['loadPreset', fn('loadPreset')],
+                 ['startScenario', fn('startScenario')],
+                 ['restore', fn('restore')]];
+  const missing = wants.filter(([, body]) => !/rememberStart\(\)/.test(body)).map(([n]) => n);
+  const autosaveSetsIt = /rememberStart\(\)/.test(fn('autosave'));
+  if (missing.length || autosaveSetsIt) {
+    console.log('\x1b[31mFAIL\x1b[0m  the reset baseline is wrong' +
+      (missing.length ? ` — not set by ${missing.join(', ')}` : '') +
+      (autosaveSetsIt ? ' — and the autosave moves it' : ''));
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  reset comes back to the last preset, scenario or save — ' +
+      'and the autosave does not move it');
+  }
+  // ...and it has to record the world's parameters, not the live slider object,
+  // or saving and loading the same world would reset to two different places.
+  if (!/initialParams = \{ \.\.\.sim\.world\.params \}/.test(fn('rememberStart'))) {
+    console.log('\x1b[31mFAIL\x1b[0m  the reset baseline reads the drifting slider values');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  …from the world\u2019s own parameters, so a save and a load agree');
+  }
+}
+
 // Winning a scenario stops the clock once, on the frame it is won. When that
 // lived in the banner branch -- which runs ten times a second for as long as
 // the win stands -- pressing play un-paused the world for a single frame and

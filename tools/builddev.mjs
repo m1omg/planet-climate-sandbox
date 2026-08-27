@@ -112,6 +112,12 @@ and CO₂'s forcing per doubling at high concentration, which falls off where th
 real thing strengthens because a semi-grey band saturates all at once. Both
 print their numbers on every run.
 
+A wet runaway used to crawl at a couple of kiloyears a second with nothing
+happening on it: \`o2Rate\` was missing the oxygen that escaping hydrogen leaves
+behind, so the step controller clamped the clock to five-year steps on a world
+in a steady balance. Earth at 1.4 S\u2295 crossed 500 Myr in 300 001 steps and
+now does it in 884.
+
 The Great Oxidation scenario no longer depends on how fast the clock was
 running. It used to snowball pole-to-pole at any step cap above about 20 kyr and
 deglaciate into a 128 \u00b0C hothouse on eleven bar of CO\u2082; the quasi-static
