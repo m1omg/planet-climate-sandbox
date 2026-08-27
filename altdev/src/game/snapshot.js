@@ -1,0 +1,63 @@
+// The whole of a world, and putting it back.
+//
+// One definition, used by three things that must not disagree: the save slots,
+// the export file, and going back along a world's own history. Saving only the
+// sliders would give you a planet that looked right and had forgotten
+// everything it had been through, which for a model whose whole subject is
+// history is the wrong thing to keep -- so this is the clock, the band
+// temperatures, where the water is, how much of the ice sheet has grown, what
+// is left of the fossil reserve and of the carbon below.
+//
+// It lives in its own module rather than inside main.js because the property
+// worth testing is that it is COMPLETE, and that test needs to build a world,
+// capture it, put it back, and run both forward to see whether they agree. A
+// field added to the world and forgotten here would not throw; it would quietly
+// make every save and every rewind slightly wrong.
+import { update } from '../physics/climate.js';
+
+// Everything about a world that is not derived from the rest of it.
+//
+// Deliberately absent: `history`, which is the run rather than the world and is
+// megabytes of it; `diag`, which update() rebuilds from this; and `dtPrev`,
+// which is a hint to the step-size chooser and is re-derived within one step.
+export function captureWorld(w) {
+  return {
+    params: { ...w.params },
+    time: w.time,
+    T: Array.from(w.T),
+    water: { ...w.water },
+    waterInitial: w.waterInitial,
+    iceSheet: w.iceSheet,
+    co2Frozen: w.co2Frozen,
+    fossil: w.fossil,
+    carbonDeep: w.carbonDeep,
+    bio: w.bio,
+    co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
+  };
+}
+
+// Put one back. The reset is what rebuilds the arrays and the derived planet;
+// everything after it overwrites the fresh world with the saved one.
+//
+// `params` is passed separately because the caller owns it: main.js keeps a
+// live object the sliders read from and write to, and handing that same object
+// to reset is how a change made afterwards reaches the simulation at all.
+export function applyWorld(sim, s, params = s.params) {
+  sim.reset(params);
+  const w = sim.world;
+  w.time = s.time ?? 0;
+  if (Array.isArray(s.T)) for (let i = 0; i < w.T.length && i < s.T.length; i++) w.T[i] = s.T[i];
+  if (s.water) Object.assign(w.water, s.water);
+  w.waterInitial = s.waterInitial ?? w.waterInitial;
+  w.iceSheet = s.iceSheet ?? null;
+  w.co2Frozen = s.co2Frozen ?? 0;
+  w.fossil = s.fossil ?? null;
+  w.carbonDeep = s.carbonDeep ?? null;
+  w.bio = s.bio ?? null;
+  if (s.co2 != null) w.co2 = s.co2;
+  if (s.n2 != null) w.n2 = s.n2;
+  if (s.o2 != null) w.o2 = s.o2;
+  if (s.ch4 != null) w.ch4 = s.ch4;
+  update(w, 0);
+  return w;
+}
