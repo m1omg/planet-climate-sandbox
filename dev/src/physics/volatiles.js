@@ -5,6 +5,7 @@ import {
 import { iceFraction } from './radiation.js';
 import { outgassingScale, radiusFromMass } from './planet.js';
 import { NBANDS } from './climate.js';
+import { habitat, photosynthesis, stepBiology, BIO_DIE, BIO_GROW } from './biology.js';
 
 // ---------------------------------------------------------------------------
 // Where the water sits: ocean / sea ice / land ice / vapour / lost to space.
@@ -639,116 +640,10 @@ export function methaneLifetime(pO2, hazeTau = 0, xuvRel = 1, col = 0, insol = 1
   return Math.exp(Math.log(tauUv) * (1 - oxidising) + Math.log(tauOx) * oxidising);
 }
 
-// Where oxygenic photosynthesis can actually run, as a fraction of the surface.
-//
-// The bounds are deliberately optimistic: the question is where it is
-// *possible*, not where it is comfortable, so each one is the record rather
-// than the median.
-//
-//   temperature  -20 to +73 C. The top is a hard and well-measured limit --
-//     oxygenic photosynthesis stops around 73 C, where Synechococcus lividus
-//     gives out in the Yellowstone springs, and no phototroph on Earth passes
-//     75. The bottom is set by liquid water in brine films rather than by the
-//     chemistry: Antarctic cryptoendoliths and snow algae fix carbon at -10 to
-//     -20 C.
-//   light        the compensation point is astonishingly low. Green sulphur
-//     bacteria have been recovered photosynthesising in the Black Sea on about
-//     a ten-thousandth of full sunlight, so a fraction of a watt is generous
-//     even by the standards of this function.
-//   carbon       two constituencies with very different limits, and lumping them
-//     was wrong at the starvation end. Marine phytoplankton and cyanobacteria run
-//     carbon-concentrating mechanisms and manage on a few ppm. Vascular land
-//     plants do not: C3 photosynthesis has a compensation point near 50 ppm, most
-//     of it is severely carbon-limited below about 150, and nothing vascular runs
-//     below 10 -- which is the CO2-starvation bound on the far end of a
-//     biosphere's life, and the reason a brightening star ends one by weathering
-//     rather than by heat. See PLANT_HI/PLANT_LO.
-//   water        liquid, and enough of it to be a habitat.
-//
-// Taken band by band rather than from the global mean, because that is how the
-// condition actually works. A world whose average is -30 C can still have a
-// warm equatorial belt doing the whole planet's photosynthesis, and a tidally
-// locked world has a night side where the light term is zero however warm the
-// air is.
-// Where land plants give out, and where the microbes that are not plants do not.
-//
-// 150 ppm is where most vascular plants are already carbon-starved and 10 ppm is
-// where the last of them stop; C3's compensation point sits near 50 in between.
-// Marine phytoplankton keep going to a few ppm on their carbon-concentrating
-// mechanisms, so a world does not lose its whole biosphere at 10 ppm -- it loses
-// the land half of it, and how big that half is depends on how much land there
-// is.
-const PLANT_HI = 150e-6, PLANT_LO = 10e-6;      // bar
-const MICROBE_HI = 8e-6, MICROBE_LO = 1e-6;     // bar
-// Land is about 2.7 times as productive per square metre as open ocean, which is
-// what puts 54% of Earth's net primary production on 30% of its surface (Field
-// et al. 1998: 56.4 Pg C/yr terrestrial against 48.5 marine). Anchored there and
-// then let to run: a landless world is all plankton, a desert world all plants.
-const LAND_NPP = 2.7;
-export function carbonLimit(pCO2, landFraction) {
-  const L = clamp(landFraction, 0, 1);
-  const landShare = LAND_NPP * L / Math.max(LAND_NPP * L + (1 - L), 1e-12);
-  const plants = smoothstep(PLANT_LO, PLANT_HI, pCO2);
-  const microbes = smoothstep(MICROBE_LO, MICROBE_HI, pCO2);
-  return landShare * plants + (1 - landShare) * microbes;
-}
-
-export function photosynthesis(w) {
-  const dg = w.diag;
-  const water = smoothstep(0, 0.015, w.water.ocean);
-  if (water <= 0) return 0;
-  const carbon = carbonLimit(dg.pCO2 ?? 0, w.params.landFraction ?? 0.3);
-  if (carbon <= 0) return 0;
-  // How much of the planet can actually photosynthesise -- and, crucially, out
-  // of how much.
-  //
-  // Summing habitable bands over the whole globe is the right question for a
-  // rotating world and the wrong one for a locked world, because the two get
-  // their insolation in different currencies. insolationProfile() hands a
-  // rotating planet the *diurnal mean*: every band is lit, and the fact that
-  // each one is dark half the time is already averaged in. A locked planet gets
-  // the instantaneous value, so half its bands sit at exactly zero for ever.
-  // Score both against the whole globe and a locked world is charged twice for
-  // its night -- once in the model's own physics, and again in a denominator
-  // that counts ground the star can never reach as ground life failed to use.
-  //
-  // Integrate properly and the two come out level. A locked world lights half
-  // its area continuously; Earth lights all of its area half the time. Same
-  // starlight intercepted, pi R^2 F either way, and since photosynthesis is
-  // light-saturated well below full sunlight -- the `lit` threshold below is
-  // half a watt, and green sulphur bacteria manage on a ten-thousandth of
-  // Earth's -- what limits production is habitable area, not flux. So a locked
-  // world whose entire day side is temperate and wet should read the same as
-  // Earth, and one with a habitable ring should read as the share of its day
-  // that ring covers.
-  //
-  // Hence: the denominator is the part of the planet the star ever reaches.
-  // `litArea` is exactly 1 on every rotating world -- the dimmest band on Earth
-  // still gets 204 W/m^2, and even a 90-degree obliquity leaves 17 -- so this
-  // changes nothing anywhere except where a permanent night side exists, which
-  // is the only place it was wrong.
-  let share = 0, litArea = 0;
-  for (let i = 0; i < NBANDS; i++) {
-    const warm = smoothstep(248, 258, w.T[i]);          // -25 to -15 C
-    const cool = 1 - smoothstep(341, 351, w.T[i]);      // +68 to +78 C
-    const lit = smoothstep(0.05, 0.5, dg.S ? dg.S[i] : 1361);
-    share += (warm * cool * lit) / NBANDS;
-    litArea += lit / NBANDS;
-  }
-  if (litArea <= 0) return 0;      // a world its star never reaches at all
-  return water * carbon * (share / litArea);
-}
-
-// How fast a biosphere dies, and how slowly it comes back.
-//
-// Dying is the quick one: past 73 C the photosystems come apart and a forest is
-// gone in a season, so a couple of centuries is already generous for a whole
-// planet's worth. Coming back is the slow one -- somewhere has to have survived
-// and spread. Neither timescale is visible above about a kiloyear a second, but
-// they are the right way round, and it means a world that dips over the edge and
-// comes back does not simply flicker.
-const BIO_DIE = 200;      // yr
-const BIO_GROW = 5000;    // yr
+// Where photosynthesis can run, and which of the two kinds of life runs it,
+// both live in biology.js now. Re-exported because the tests and the tools
+// have imported them from here since before there was a biology.js.
+export { carbonLimit, photosynthesis, habitat } from './biology.js';
 
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
@@ -910,12 +805,19 @@ export function stepVolatiles(w, dtYears) {
   // much not on a cooked one -- which used to be invisible, because nothing
   // displayed it and the ground stayed green at 800 C.
   {
-    const target = Math.max(p.biosphere ?? 0, 0) * photosynthesis(w);
+    // The band loop is asked once and handed to both: photosynthesis wants the
+    // habitable share of the planet, and the prokaryote/eukaryote split wants
+    // the part of that share warm-blooded life -- so to speak -- is shut out of.
+    const hab = habitat(w);
+    const target = Math.max(p.biosphere ?? 0, 0) * photosynthesis(w, hab);
     if (w.bio == null) w.bio = target;
     else {
       const tau = target < w.bio ? BIO_DIE : BIO_GROW;
       w.bio += (target - w.bio) * (1 - Math.exp(-Math.max(dtYears, 0) / tau));
     }
+    // Which of the two kinds of life that is. Reads w.bio and reports; see the
+    // head of biology.js for why it deliberately does not feed back.
+    stepBiology(w, dtYears, hab);
   }
 
   // --- the oxygen cycle ----------------------------------------------------

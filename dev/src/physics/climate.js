@@ -97,6 +97,8 @@ export function resetWorld(w, params) {
   w.fossil = null;     // a fresh world has its fossil carbon still in the ground
   w.carbonDeep = null; // rebuilt from the planet's mass on the first step
   w.bio = null;        // the living biosphere, grown from the conditions
+  w.euk = null;        // how much of it has a nucleus
+  w.eukReady = null;   // whether this world has evolved one at all yet
   update(w, 0);
 }
 
@@ -407,6 +409,11 @@ export function update(w, dt) {
     flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
     exposedBasin, effLandAlbedo, liquidAllowed, pSurfPa,
     bio: w.bio ?? 0,
+    // The two kinds of life, in the same "x Earth" currency as bio. Derived
+    // rather than stored on the prokaryote side: what is not eukaryotic is what
+    // is left, and storing both would let them drift out of agreeing with bio.
+    euk: w.euk ?? 0, prok: Math.max((w.bio ?? 0) - (w.euk ?? 0), 0),
+    eukReady: w.eukReady ?? 0,
     landFrac: clamp(1 - flooded, 0, 1),
     landIceFrac: clamp((1 - flooded) * glaciatedShare, 0, 1),
     iceSheetTarget,

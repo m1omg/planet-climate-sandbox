@@ -11,6 +11,8 @@ import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
+import { eukaryoteOxygen, eukaryoteCarbon, O2_PAL } from './physics/biology.js';
+import { scopeFor, key, storageScope } from './game/storage.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
@@ -2498,6 +2500,112 @@ export function run() {
       `after it cleared`);
   }
 
+  // ---- 3o3. which of the two kinds of life it is -----------------------------
+  // Standing biomass, split between the domains, against Bar-On, Phillips &
+  // Milo 2018: Earth carries about 550 Gt C, of which plants 450, bacteria 70,
+  // archaea 7, fungi 12, protists 4, animals 2 — 85% eukaryote, 14% prokaryote.
+  {
+    const split = (w) => { const d = w.diag; const t = d.bio || 1e-30;
+      return { tot: d.bio, e: d.euk / t, p: d.prok / t }; };
+
+    const earth = split(settle({ ...EARTH }, 2e5).world);
+    check('A living Earth is the biosphere Bar-On et al. measured',
+      near(earth.e, 0.85, 0.03) && near(earth.p, 0.14, 0.03),
+      `${(earth.e * 100).toFixed(0)}% eukaryote / ${(earth.p * 100).toFixed(0)}% prokaryote ` +
+      `against their 85 / 14`);
+
+    // An anoxic world is a bacterial world, and this is the sharpest of the
+    // three gates: the mitochondrion is an oxygen-respiring endosymbiont, so
+    // there is no such thing as a eukaryote on a planet with no oxygen.
+    const archean = split(settle({ ...PRESETS.earlyEarth.params }, 2e5).world);
+    check('…an anoxic world is entirely prokaryotic',
+      archean.tot > 0.05 && archean.p > 0.999,
+      `${archean.tot.toFixed(2)}× alive, ${(archean.p * 100).toFixed(1)}% of it without a nucleus`);
+
+    // The Proterozoic. Oxygen sat near 1% PAL for a billion years and the
+    // biosphere stayed mostly bacterial with eukaryotes present but minor. The
+    // ramp is in log10(PAL) and this number falls out of it rather than being
+    // fitted: nothing else in the model reads it.
+    check('…and 1% PAL puts a world in the middle, which is where the Proterozoic sat',
+      near(eukaryoteOxygen(0.01 * O2_PAL), 0.40, 0.06)
+      && eukaryoteOxygen(1e-5 * O2_PAL) < 0.001 && eukaryoteOxygen(O2_PAL) > 0.999,
+      `${(eukaryoteOxygen(0.01 * O2_PAL) * 100).toFixed(0)}% of the way at 1% PAL, ` +
+      `${(eukaryoteOxygen(0.1 * O2_PAL) * 100).toFixed(0)}% at 10%`);
+
+    // Sixty degrees of margin between the domains: no eukaryote is known above
+    // about 60 C, prokaryotes run to 122. So a world hot enough to shut the
+    // eukaryotes out of half its bands must report a bacterial majority there
+    // even with a full atmosphere of oxygen.
+    {
+      const hot = split(settle({ ...EARTH, insolation: 1.14 }, 2e5).world);
+      const mild = split(settle({ ...EARTH, insolation: 1.0 }, 2e5).world);
+      check('…heat moves the split towards the domain that tolerates it',
+        hot.tot > 0.05 && hot.p > mild.p * 1.05,
+        `${(mild.p * 100).toFixed(0)}% prokaryote at 1.00 S⊕, ` +
+        `${(hot.p * 100).toFixed(0)}% at 1.14`);
+    }
+
+    // Becoming a eukaryote happened once and took time. Earth's oxygen is 2.4 Ga
+    // and its crown-group eukaryotes 1.7-1.6, so a world that oxygenates must
+    // NOT get a nucleus in the same breath.
+    //
+    // Run on the Great Oxidation scenario's own world and its own driver,
+    // because that is the only trajectory here that actually crosses. The first
+    // version of this injected oxygen into the Archean preset instead, and the
+    // volcanic reductants had eaten it again inside two hundred thousand years
+    // — so it measured a world that had been anoxic almost the whole time and
+    // proved nothing. Pinning the biosphere at 1.0 from the start does not work
+    // either: that is the scenario's own trap, the methane greenhouse goes with
+    // the first oxygen and the world freezes before it can be anything.
+    {
+      const sc = Object.values(SCENARIOS).find((x) => /Oxidation/.test(x.name));
+      const s = new Simulation({ ...sc.params });
+      s.drive = (w) => { w.params.biosphere = sc.evolve(w); };
+      s.runYears(1.5e8, 5e5);
+      const o2 = s.world.diag.pO2 / O2_PAL;
+      const soon = s.world.diag.euk / (s.world.diag.bio || 1e-30);
+      s.runYears(8.5e8, 2e6);
+      const later = s.world.diag.euk / (s.world.diag.bio || 1e-30);
+      check('…and oxygenating a world does not hand it a nucleus in the same breath',
+        o2 > 0.1 && soon < 0.3 && later > 0.6,
+        `${(o2 * 100).toFixed(0)}% PAL and still only ${(soon * 100).toFixed(0)}% eukaryote at ` +
+        `150 Myr, ${(later * 100).toFixed(0)}% a gigayear later`);
+    }
+
+    // Carbon starvation takes the eukaryotes first, and that is the actual end
+    // of Earth's biosphere as it is usually reconstructed: the star brightens,
+    // weathering draws the CO2 down, the vascular plants go, and a microbial
+    // world keeps running for a long time afterwards. carbonLimit() already
+    // parts those two constituencies; this is the same split read as a ratio.
+    {
+      const E = 0.30;
+      const future = split(settle({ ...PRESETS.futureEarth.params }, 2e5).world);
+      check('…and a world whose CO₂ has been weathered away loses the plants first',
+        eukaryoteCarbon(280e-6, E) > 0.99 && eukaryoteCarbon(10e-6, E) < 0.01
+        && future.tot > 0.2 && future.p > 0.999,
+        `${(eukaryoteCarbon(50e-6, E) * 100).toFixed(0)}% of production still eukaryotic at ` +
+        `50 ppm, ${(eukaryoteCarbon(10e-6, E) * 100).toFixed(0)}% at 10 — and Earth +2.2 Gyr ` +
+        `is ${future.tot.toFixed(2)}× alive and ${(future.p * 100).toFixed(0)}% of it microbial`);
+    }
+
+    // Neither half can go out of agreement with the whole. w.bio can fall faster
+    // than the eukaryote fraction relaxes, and a negative prokaryote count is
+    // not a thing that exists.
+    {
+      const w = new Simulation({ ...EARTH });
+      w.runYears(3e5, 2e3);
+      let worst = 0;
+      w.world.params.insolation = 1.6;              // cook it, fast
+      for (let i = 0; i < 400; i++) {
+        w.runYears(500, 250);
+        const d = w.world.diag;
+        worst = Math.max(worst, Math.max(0, d.euk - d.bio), Math.max(0, -d.prok));
+      }
+      check('…and the two halves never come apart from the whole',
+        worst < 1e-12, `worst disagreement ${worst.toExponential(1)}× Earth while the world cooked`);
+    }
+  }
+
   // ---- 3o2b. a locked world is not charged twice for its night ---------------
   // The biosphere is scored on habitable area, which is right, but it used to
   // be scored against the whole globe -- and a tidally locked world has half a
@@ -3013,6 +3121,62 @@ export function run() {
       'array form and single-world form both parse');
   }
 
+  // ---- 7d2. saves that stay in the build that wrote them --------------------
+  // localStorage is keyed by ORIGIN and not by path, so /, /dev/ and /altdev/
+  // are one storage area shared three ways. Slot 1 is the autosave and fires
+  // every thirty seconds, so a minute in one build wrote over a world saved in
+  // another; and since a slot holds full physics state with no build tag on it,
+  // it then loaded without complaint and simulated differently.
+  {
+    const dev = (p) => scopeFor({ assetBase: '../assets/', pathname: p });
+    const root = (p) => scopeFor({ pathname: p });
+
+    check('Each build names its own corner of storage',
+      root('/planet-climate-sandbox/') === '' && dev('/planet-climate-sandbox/dev/') === 'dev'
+      && dev('/planet-climate-sandbox/altdev/') === 'altdev',
+      "root '', dev 'dev', altdev 'altdev'");
+
+    // The filename is part of the path and has to come off it, or /dev/index.html
+    // and /dev/ are two different builds.
+    check('…whether or not the URL names index.html',
+      dev('/planet-climate-sandbox/dev/index.html') === 'dev'
+      && root('/planet-climate-sandbox/index.html') === '',
+      'the file is stripped, the directory is what counts');
+
+    // The one that actually matters: three builds, three disjoint key sets.
+    {
+      const keysFor = (sc) => ['slot1.v1', 'discovered.v1', 'quality.v1']
+        .map((n) => (sc ? `planetclimate.${sc}.${n}` : `planetclimate.${n}`));
+      const all = ['', 'dev', 'altdev'].flatMap(keysFor);
+      check('…and no key is written by two of them',
+        new Set(all).size === all.length,
+        `${all.length} keys across three builds, ${new Set(all).size} distinct`);
+    }
+
+    // The site root keeps the bare keys it has always used. This is the whole
+    // reason the scope is read off the path instead of being a constant in the
+    // source: this source is the dev build AND, once it merges, the root, and a
+    // constant saying 'dev' would follow it there and orphan every saved world.
+    check('The stable site keeps the keys it already had',
+      key('slot1.v1') === 'planetclimate.slot1.v1' && storageScope === '',
+      `${key('slot1.v1')} — unchanged, so nobody's saves move`);
+
+    // /altdev/ namespaced itself by hand before this existed. Deriving the same
+    // strings is what lets it adopt this without losing what it has stored.
+    check('…and /altdev/ finds the worlds it stored by hand',
+      scopeFor({ forced: 'altdev' }) === 'altdev'
+      && `planetclimate.altdev.slot3.v1` === 'planetclimate.' + scopeFor({ forced: 'altdev' }) + '.slot3.v1',
+      'same key strings its hardcoded namespace already writes');
+
+    // A scope reaches a storage key and the banner's markup. It is a directory
+    // name off the address bar, so it is reduced rather than trusted.
+    check('A build name is reduced to something safe to concatenate',
+      scopeFor({ forced: '../<script>' }) === 'script'
+      && scopeFor({ forced: 'DEV' }) === 'dev'
+      && scopeFor({ forced: 'x'.repeat(80) }).length === 24,
+      'punctuation dropped, folded to lower case, bounded at 24');
+  }
+
   // ---- 7e. standing in a world\u2019s own past -------------------------------
   // Dragging the temperature chart puts the simulation back into a state it was
   // actually in, so that a slider moved from there sends it somewhere else.
@@ -3028,7 +3192,12 @@ export function run() {
     // half its hydrogen got all of it back on reload, silently, in every save slot
     // and every scrub. Listing it here is what makes that a failure.
     const state = (w) => [w.diag.Tmean, w.diag.pCO2, w.diag.iceMean, w.water.ocean,
-                          w.carbonDeep, w.ch4, w.o2, w.h2, w.iceSheet];
+                          w.carbonDeep, w.ch4, w.o2, w.h2, w.iceSheet,
+                          // euk and eukReady for the same reason h2 is here.
+                          // eukReady is a ratchet on a 300 Myr timescale, so a
+                          // world restored without it forgets that it ever
+                          // evolved a nucleus and spends the time again.
+                          w.euk, w.eukReady];
 
     const a = new Simulation({ ...P });
     a.runYears(3e5, 2e3);

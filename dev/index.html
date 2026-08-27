@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div id="devbar"><span class="devbar-tag">DEV</span><span class="devbar-msg">Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes and Hycean work in progress — known gaps reported by calibrate.mjs</span><a class="devbar-link" href="../">stable site</a><button type="button" class="devbar-x" aria-label="Dismiss">×</button></div>
+<div id="devbar"><span class="devbar-tag">DEV</span><span class="devbar-msg">Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes, the prokaryote/eukaryote split and Hycean work in progress — known gaps reported by calibrate.mjs</span><a class="devbar-link" href="../">stable site</a><button type="button" class="devbar-x" aria-label="Dismiss">×</button></div>
 <style>
 #devbar{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;gap:.5rem;
   padding:.15rem .5rem;background:rgba(122,47,22,.94);color:#ffe9d6;
@@ -27,10 +27,11 @@
 <script>
 (function(){
   var bar=document.getElementById('devbar');
-  try{ if(localStorage.getItem('devbar.dismissed')==='1') bar.classList.add('gone'); }catch(e){}
+  var k='planetclimate.dev.devbar.v1';
+  try{ if(localStorage.getItem(k)==='1') bar.classList.add('gone'); }catch(e){}
   bar.querySelector('.devbar-x').addEventListener('click',function(){
     bar.classList.add('gone');
-    try{ localStorage.setItem('devbar.dismissed','1'); }catch(e){}
+    try{ localStorage.setItem(k,'1'); }catch(e){}
   });
 })();
 </script>
@@ -228,7 +229,7 @@
     </button>
     <div id="panel-scrim" hidden></div>
 
-<script>window.__assetBase = "../assets/";</script>
+<script>window.__assetBase = "../assets/"; window.__storageScope = "dev";</script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

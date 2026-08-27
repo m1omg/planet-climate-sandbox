@@ -13,7 +13,18 @@ node tools/builddev.mjs /path/to/main/checkout
 `../assets/` and borrows the surface maps at the site root, which is 668 KB
 instead of 23 MB.
 
-**This build is knowingly not green** — Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes and Hycean work in progress — known gaps reported by calibrate.mjs. `selftest.js` has seventeen
+Its saves, preferences and discovery log are its own. `localStorage` is keyed by
+origin and not by path, so this copy, the stable site and `/altdev/` shared one
+set of keys until `src/game/storage.js` split them — and slot 1 is the autosave,
+firing every thirty seconds, so a minute here wrote over a world saved there.
+Keys are `planetclimate.dev.*`; the site root keeps the bare ones it has
+always used. A namespace opened for the first time copies what was in the shared
+keys, so nothing looks lost; it is a copy, and the stable site keeps everything.
+
+Worlds still cross between builds the way they should — the URL hash and the
+export file carry parameters rather than physics state.
+
+**This build is knowingly not green** — Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes, the prokaryote/eukaryote split and Hycean work in progress — known gaps reported by calibrate.mjs. `selftest.js` has seventeen
 standing failures, every one of them a test asserting a deviation the README
 names and explains; two of them assert the *old* deviation, since snowball
 deglaciation now lands at 140 mbar against the literature's 100–300 where it
@@ -26,6 +37,20 @@ rather than fixed: Earth's pre-industrial temperature, which is 0.79 K warm and
 and CO₂'s forcing per doubling at high concentration, which falls off where the
 real thing strengthens because a semi-grey band saturates all at once. Both
 print their numbers on every run.
+
+The biosphere is split between prokaryotes and eukaryotes, in the readout's
+**Life** bar. Three conditions decide it, each a fact rather than a knob: oxygen
+(the mitochondrion is an oxygen-respiring endosymbiont, so an anoxic world has
+no eukaryotes at all), heat (none is known above 60 °C where prokaryotes reach
+122), and CO₂ (vascular plants starve at 150 ppm where cyanobacteria manage on a
+few). Plus one about history: eukaryogenesis happened once and trailed Earth's
+oxygen by ~700 Myr, so oxygenating a world here does not hand it a nucleus in
+the same breath. A living Earth reads 86/14 against Bar-On et al. 2018's 85/14,
+an Archean one 100% prokaryote, and Earth +2.2 Gyr 100% prokaryote again — the
+star has brightened, weathering has taken the CO₂, and the plants are gone.
+
+It reports and does not steer: every preset is bit-identical to seventeen
+significant figures with it in.
 
 The brightening mode is a flat 10% a gigayear now. It used to drive Gough
 (1981) forwards from an age inferred by inverting it, and that relation has a
