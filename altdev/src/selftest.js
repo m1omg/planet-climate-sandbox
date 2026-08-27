@@ -1865,6 +1865,90 @@ export function run() {
         least > 1e4, `smallest step ${least.toExponential(1)} yr`);
     }
 
+    // ...and so must a tidally locked world that is not doing anything.
+    //
+    // FAILING, and left failing deliberately. What follows is the whole of an
+    // attempt on it, so that the next one starts where this stopped instead of
+    // rediscovering the same four dead ends.
+    //
+    // THE CRAWL. The night side of a locked planet is frozen for ever and sea
+    // ice insulates the water beneath it, so those bands run on land's heat
+    // capacity -- about 1.1e7 J/m^2/K, shed in under two months. A band a fifth
+    // of a kelvin from its equilibrium reports four and a half kelvin a year,
+    // and the accuracy bound, which reads the rate and not the distance, cut
+    // the step to half a year for it. What came out was a period-twelve limit
+    // cycle in the *solver* on a planet standing still: five steps of two to
+    // five years, one quasi-static stride of about a thousand, the stride
+    // nudging the night side two tenths of a kelvin, then five more small steps
+    // walking it back. Two hundred and forty years a step against Earth's
+    // hundred and seventy thousand.
+    //
+    // WHY THE OBVIOUS FIX IS RIGHT, AND STILL NO GOOD. maxStep divides the
+    // distance-from-equilibrium by the RADIATIVE damping alone. A band is also
+    // held by transport from its neighbours, and on a locked world -- thick air,
+    // no rotation to speak of -- D is 2.63 against Earth's 0.44 and the edge
+    // conductances run 45 to 423 W/m^2/K, up to 180x the 2.4 of radiation.
+    // Every band sits within a seventh of a kelvin of where it is going and the
+    // estimate called the substellar band 118 K away: wrong by three orders of
+    // magnitude, in the direction that makes the clock crawl. Using the solver's
+    // own diagonal instead -- max(k, -0.4*wsum - 0.05) + wsum -- is correct on
+    // its face and takes this world to 5e9 simulated years a second.
+    //
+    // It also takes the volcanism ladder off a cliff: 2.8x, 3.5x and 8x Earth's
+    // outgassing all land in a 531 C steam greenhouse that a two-thousand-year
+    // cap does not find. tools/convergence.mjs is what measures this, and its
+    // criterion is the grid-refinement one -- do the three FINEST caps agree --
+    // because judging the full spread calls a world unconverged for a wobble at
+    // a five-million-year cap and hides the failures that are hundreds of
+    // kelvin wide.
+    //
+    // WHAT IS ACTUALLY UNDERNEATH IT. Water vapour is the strongest and fastest
+    // greenhouse reservoir in the model and it is the only one with no bound at
+    // all -- the column is diagnostic, set by saturation, so it was never
+    // treated as a reservoir that could outrun a step. It moves anyway:
+    // Clausius-Clapeyron is about seven percent per kelvin near 288 K, so the
+    // 2.5 K the accuracy bound allows is an eighteen percent swing in it, taken
+    // with the radiative transfer treating it as fixed throughout. At eight
+    // times Earth's volcanism the anoxic transition was being crossed in steps
+    // that moved the temperature 5.2 K when the bound had called them 2.5, with
+    // the vapour column moving 27% at a time -- and, once the accuracy bound was
+    // relaxed, 9.8 K and 85% in single five-million-year strides.
+    //
+    // A bound on it (a tenth of the column per step, weighted by the column that
+    // is really there, and only where the air is saturated -- where every drop
+    // is already airborne the column is mass-limited and cannot respond at all,
+    // the same distinction radiativeDamping draws) restores convergence
+    // completely: 0.01 K across the whole ladder, better than this model has
+    // ever measured. It costs a factor of 35. The knife-edge is between a
+    // coefficient of 0.3, which converges, and 1.0, which does not.
+    //
+    // THE RESULT, WHICH IS THE PART WORTH KEEPING. Measured from t = 0, the way
+    // a player meets it, the SHIPPED code runs this world at 1.31e7 simulated
+    // years a second and every fixed version of it at 3.7e5. The crawl is load
+    // bearing. It is not protecting nothing -- it is holding the step short
+    // enough that an unbounded water-vapour column cannot outrun it, and every
+    // way found to remove the crawl costs more than the crawl does. Two traps
+    // on the way, both worth naming: gating the quasi-static shortcut on how
+    // much ice there is (rather than whether the edge is moving) keeps it
+    // permanently off on a locked world, whose night side is permanently
+    // frozen; and the early return when `worst` is zero jumps the queue past
+    // every reservoir bound below it, which is worth 522 K on its own and makes
+    // every other bound look as though it does nothing.
+    //
+    // So: the thing to fix first is that water vapour is unbounded. The speed
+    // is downstream of it and is not buyable on its own.
+    {
+      const locked = settle({ ...EARTH, mass: 1.3, landFraction: 0.25, water: 0.412506,
+        insolation: 1.122, xuvFraction: 5e-4, rotationHours: 264, tidallyLocked: true,
+        n2Bar: 0, o2Bar: 0.224973, co2Bar: 0.0476703, ch4Bar: 1.23e-7, startT: 270 }, 1.4e6);
+      const lw = locked.world;
+      const t0 = lw.time;
+      for (let i = 0; i < 240; i++) locked.stepOnce(Math.min(maxStep(lw), 5e6));
+      const per = (lw.time - t0) / 240;
+      check('A settled tidally locked world does not crawl',
+        per > 5e3, `${per.toExponential(1)} yr per step`);
+    }
+
     // A hot dry world must not be called frozen.
     const baked = settle({ ...EARTH, tidallyLocked: true, rotationHours: 2000, insolation: 1.6,
                            water: 0.005, landFraction: 0.9, n2Bar: 0.3 }, 1e6);
