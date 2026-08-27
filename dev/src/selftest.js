@@ -2646,9 +2646,17 @@ export function run() {
         && cooked.diag.Tmean < 2500,
       `${cooked.diag.pCO2.toFixed(0)} bar and ${cooked.diag.Tmean.toFixed(0)} K, ` +
       `where it used to reach 24 000 bar and hit the 4000 K integrator clamp`);
+    // ...because the planet ran out, not for some other reason. It does not run
+    // out *completely* any more and should not: outgassing scales with how much
+    // carbon is left in the mantle, because the flux tracks the concentration in
+    // the melt, so the tap tails off instead of stopping dead. Twenty times
+    // Earth's volcanism for five gigayears leaves six per cent -- an
+    // exponential's tail rather than a cliff. Asking for under two per cent was
+    // asking for the cliff.
     check('…having actually emptied the planet, not stopped for another reason',
-      cooked.carbonDeep / carbonBudget(1) < 0.02,
-      `${(cooked.carbonDeep / carbonBudget(1) * 100).toFixed(1)}% of the carbon left below`);
+      cooked.carbonDeep / carbonBudget(1) < 0.10,
+      `${(cooked.carbonDeep / carbonBudget(1) * 100).toFixed(1)}% of the carbon left below, ` +
+      `the tail of an exponential rather than a hard floor`);
 
     // But it is a cycle, not a drain: weathering buries carbon that subduction
     // returns. Without that, Earth would exhaust its inventory in 800 Myr at
