@@ -1182,6 +1182,47 @@ export function run() {
       hottest < 373,
       ladder.map((r) => `${r.og}× ${(r.w.diag.Tmean - 273.15).toFixed(0)}°`).join('  '));
 
+    // The same ladder, integrated at a hundred times the step.
+    //
+    // This is a regression guard rather than a bug's headstone, and it is worth
+    // being exact about which: on the step controller as it ships, this passes
+    // both with the trust region in stepTemperature and without it, because the
+    // controller as it ships does not take strides long enough to reach the
+    // failure. What it guards against is the failure being reachable again.
+    //
+    // It is reachable. Loosening the quasi-static stride -- an obvious thing to
+    // try, and it was tried, because it is worth two orders of magnitude on a
+    // tidally locked world -- put three of these seven rungs on 530 C or on 20 C
+    // according to nothing but where the step boundaries fell, by way of single
+    // steps of 3349 kelvin out of states whose linearised prediction was under
+    // three. That is what "the volcanism bistability" turned out to be, and the
+    // trust region is what makes it not happen; measured on the same loosened
+    // controller, the largest single step went from 3349 K to 25.
+    //
+    // The two caps are 5 Myr and 50 kyr because those are the two that
+    // disagreed then. tools/convergence.mjs sweeps six caps down to 2 kyr and is
+    // the thorough version; this is the cheap one that has to hold every run,
+    // including in the browser.
+    {
+      const atCap = (og, cap) => {
+        const sim = new Simulation({ ...EARTH, outgassing: og });
+        const w = sim.world;
+        let g = 0;
+        while (w.time < 3e7 && g++ < 1e5) {
+          sim.stepOnce(Math.min(maxStep(w), cap, 3e7 - w.time));
+        }
+        return w.diag.Tmean;
+      };
+      let worstGap = 0, at = 0;
+      for (const { og } of ladder) {
+        const gap = Math.abs(atCap(og, 5e6) - atCap(og, 5e4));
+        if (gap > worstGap) { worstGap = gap; at = og; }
+      }
+      check('\u2026and the same ladder integrated 100\u00d7 finer lands in the same place',
+        worstGap < 2,
+        `worst disagreement ${worstGap.toFixed(2)} K, at ${at}\u00d7 volcanism`);
+    }
+
     const below = ladder.find((r) => r.og === 2.6).w;
     const above = ladder.find((r) => r.og === 2.8).w;
     check('\u2026and losing the oxygen cools it by a few kelvin, not by hundreds',
