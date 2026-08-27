@@ -1,7 +1,7 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
          P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O } from './constants.js';
 import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED,
-         hazeOpacity, hazeShortwave, ch4Shortwave } from './radiation.js';
+         hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
 
@@ -268,6 +268,10 @@ export function update(w, dt) {
   const S = insolationProfile(p);
   const lam = lockFactor(p);
   const slowness = clamp(smoothstep(24, 1500, p.rotationHours), 0, 1) * 0.5 + slowRotation(p) * 0.5;
+  // How well cloud reflects this particular star's light. 1 for a G star, and
+  // about half that for TRAPPIST-1, whose output is mostly in the near infrared
+  // that water absorbs rather than scatters.
+  const cloudWhite = cloudWhiteness(p.starTemp);
 
   const alb = new Float64Array(NBANDS), out = new Float64Array(NBANDS);
   const cloud = new Float64Array(NBANDS), pTotArr = new Float64Array(NBANDS);
@@ -282,7 +286,7 @@ export function update(w, dt) {
     const a = planetaryAlbedo(w.T[i], {
       oceanFrac: flooded, landAlbedo: effLandAlbedo, hasWater, waterCap,
       glaciated: glaciatedShare,
-      pH2O: pH2O[i], pTot, slowness, subStellar,
+      pH2O: pH2O[i], pTot, slowness, subStellar, cloudWhite,
     });
     alb[i] = a.albedo; cloud[i] = a.cloud;
     const moistOLR = olr(w.T[i], pCO2, pH2O[i], pCH4, pTot);
@@ -373,7 +377,7 @@ export function update(w, dt) {
     // reaches zero, so leaving the interior out of it would park a tidally
     // heated world at a permanent false imbalance it could never settle out of.
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted,
-    hasWater, vapourCol: vapCol, lam, slowness, totalWater, superFrac,
+    hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, totalWater, superFrac,
     hazeTau, hazeSW, ch4SW, swTrans,
     Tmax: Math.max(...w.T), Tmin: Math.min(...w.T),
   };
@@ -589,7 +593,7 @@ export function radiativeDamping(w) {
     const albAt = (t, pwx, ptx) => planetaryAlbedo(t, {
       oceanFrac: dg.flooded, landAlbedo: dg.effLandAlbedo, hasWater: dg.hasWater,
       waterCap: dg.waterCap, glaciated: dg.glaciatedShare * iceFraction(t),
-      pH2O: pwx, pTot: ptx, slowness: dg.slowness,
+      pH2O: pwx, pTot: ptx, slowness: dg.slowness, cloudWhite: dg.cloudWhite,
       subStellar: dg.lam > 0.01 ? clamp(X[i], 0, 1) : 0.35,
     }).albedo;
     const dABS = dg.S[i] * dg.swTrans * (albAt(T - h, pwLo, ptLo) - albAt(T + h, pwHi, ptHi)) / (2 * h);

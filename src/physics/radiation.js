@@ -212,6 +212,59 @@ export function hazeShortwave(tau) {
 // Shortwave: surface + cloud + Rayleigh, tuned to Earth's 0.30 planetary albedo
 // ---------------------------------------------------------------------------
 export const ALB_OCEAN = 0.07, ALB_ICE = 0.60, ALB_SNOW = 0.68, ALB_CLOUD = 0.310;
+// Cloud on a slow rotator is not the same cloud. 0.310 is Earth's mixture --
+// mostly thin stratus and cirrus, spread about by a fast circulation that never
+// lets convection sit still. A world whose solar day is months long parks its
+// convection over the substellar point instead, and what grows there is a deep
+// tower with an anvil on top: optically thick, and far brighter than the
+// planetary average this model was tuned to.
+//
+// That is the mechanism behind Yang, Boue, Fabrycky & Abbot (2014), who found
+// slowly rotating planets stay habitable out to nearly twice Earth's flux, and
+// behind Way et al. (2016), whose paleo-Venus sits at 11 C under 1.40 S(+) with
+// a 243-day rotation and whose dayside is at 100% high cloud in individual
+// cells. Spin the same planet up to a 16-day day and it is 45 K hotter.
+export const ALB_CLOUD_DEEP = 0.62;
+
+// How white a cloud is depends on what colour the star is.
+//
+// Cloud droplets and water ice are excellent reflectors in the visible and
+// poor ones past about 1.4 um, where water absorbs. A G star puts 88% of its
+// flux shortward of that; TRAPPIST-1, at 2566 K, puts 46% there and the rest
+// into a near infrared that clouds and snow largely swallow. This is the same
+// reason the ice-albedo feedback is weak around M dwarfs (Joshi & Haberle 2012;
+// Shields et al. 2013) -- a planet round a red star is simply darker than the
+// same planet round the Sun, whatever it is made of.
+//
+// Returned relative to the Sun, so a solar-type star is 1 by construction and
+// nothing calibrated against Earth moves.
+//
+// NOT applied to the ice and snow albedos, which is where Joshi and Shields put
+// most of the effect. Doing that proprly means refitting ALB_ICE and ALB_SNOW,
+// which Earth's calibration is resting on; this term covers only the deep-cloud
+// enhancement below, which is new here and has nothing resting on it yet.
+const WIEN_C2 = 1.4388e-2;          // m*K
+const CLOUD_CUTOFF = 1.4e-6;        // m, where water stops reflecting
+
+// Fraction of a blackbody's radiant flux shortward of `lambda`. The standard
+// series for the fractional emissive power; six terms is far past convergence
+// for the range of x that matters here.
+export function fluxBelow(lambda, T) {
+  if (!(T > 0)) return 0;
+  const x = WIEN_C2 / (lambda * T);
+  let sum = 0;
+  for (let n = 1; n <= 6; n++) {
+    sum += Math.exp(-n * x) * (x * x * x / n + 3 * x * x / (n * n)
+         + 6 * x / (n * n * n) + 6 / (n * n * n * n));
+  }
+  return clamp(15 / Math.pow(Math.PI, 4) * sum, 0, 1);
+}
+
+const SOLAR_WHITE = fluxBelow(CLOUD_CUTOFF, 5772);
+export function cloudWhiteness(starTemp) {
+  const T = starTemp > 0 ? starTemp : 5772;
+  return clamp(fluxBelow(CLOUD_CUTOFF, T) / SOLAR_WHITE, 0, 1.15);
+}
 // Frozen ground that carries no ice sheet is still frosted, and nothing like as
 // dark as the same rock in summer -- but only if the world has water to frost
 // it with. Mars is frozen solid and still reflects like dust.
@@ -289,7 +342,23 @@ export function cloudCover(pH2O, slowness, subStellar) {
 export function planetaryAlbedo(T, o) {
   const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated, o.waterCap);
   const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * (o.cloudBoost ?? 1), 0, 0.9);
-  const withClouds = ALB_CLOUD * C + surf * (1 - C);
+  // How bright that cloud is, which depends on how long it has been standing in
+  // one place. `slowness` is already the blend of solar-day length and full
+  // synchronisation that the rest of the model uses, so Earth at 24 h gets
+  // exactly the 0.310 it was calibrated with and nothing here moves.
+  // ...and on there being a sea to build it out of. A deep convective tower is
+  // fed by a moist boundary layer over open water; Way's paleo-Venus grows its
+  // 100% dayside deck over a 60%-flooded ocean. A world whose water is all
+  // frozen onto the night side has nothing to lift, and gating on `slowness`
+  // alone gave it the bright deck anyway -- which cooled the sunlit face below
+  // the temperature that makes it a desert and removed the night-side cold trap
+  // (Menou 2013, Leconte 2013) from the reachable parameter space entirely. Not
+  // a subtle loss: a sweep of thirty-six configurations across water, nitrogen
+  // and insolation found the trapped state at none of them.
+  const moist = clamp((o.oceanFrac ?? 0) / 0.25, 0, 1);
+  const albCloud = ALB_CLOUD + (ALB_CLOUD_DEEP - ALB_CLOUD)
+    * clamp(o.slowness ?? 0, 0, 1) * (o.cloudWhite ?? 1) * moist;
+  const withClouds = albCloud * C + surf * (1 - C);
   // Rayleigh + haze from the *dry* gas. Exponent set so a 92 bar CO2 atmosphere
   // reaches Venus's bright scattering (~0.7) while 1 bar stays at Earth's 0.06.
   const pDry = Math.max(0, o.pTot - o.pH2O);

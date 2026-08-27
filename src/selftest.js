@@ -3,7 +3,8 @@
 import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify, reasonText } from './physics/classify.js';
-import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
+import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
+         planetaryAlbedo } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
@@ -33,6 +34,22 @@ function settle(params, years) {
   const s = new Simulation(params);
   s.runYears(years);
   return s;
+}
+
+// The inner edge of the habitable zone, by bisection: the lowest flux at which
+// this world ends up with no liquid sea left. Deliberately a local copy rather
+// than an import from tools/ -- this file also runs in the browser under
+// ?selftest, where nothing outside src/ is served.
+function lostItsOcean(w) {
+  const total = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
+  return total > 0 && w.water.ocean / total < 0.02 && w.diag.Tmean > 330;
+}
+function threshold(params, lo = 0.8, hi = 3.0, tol = 0.03) {
+  const at = (S) => lostItsOcean(settle({ ...params, insolation: S }, 3e6).world);
+  if (at(lo)) return lo;
+  if (!at(hi)) return hi;
+  while (hi - lo > tol) { const m = (lo + hi) / 2; if (at(m)) hi = m; else lo = m; }
+  return (lo + hi) / 2;
 }
 
 export function run() {
@@ -649,6 +666,146 @@ export function run() {
     check('…but it still moves heat like one',
       slowRotation(venusRot) > 0.99,
       `slow-rotation factor ${slowRotation(venusRot).toFixed(2)} at 243 days`);
+
+    // ...and moving heat like one is not the half of it. A planet whose solar
+    // day is months long stops sweeping its convection around the globe and
+    // parks it over the substellar point, where it builds a deep tower with an
+    // anvil on top: optically thick, and far brighter than the thin stratus and
+    // cirrus mixture Earth's 0.310 was fitted to. That deck is what keeps a slow
+    // rotator habitable out to nearly twice Earth's flux (Yang, Boue, Fabrycky &
+    // Abbot 2014) and what put Way et al.'s (2016) paleo-Venus at 11 C under
+    // 1.40 S(+) -- 40% more sunlight than Earth gets -- with a 243-day day.
+    //
+    // Before this the model had the mechanism named in a comment and worth
+    // essentially nothing: the inner edge moved from 1.32 S(+) at a 24-hour day
+    // to 1.36 at 243 days. Four hundredths, where the literature wants seven
+    // tenths. Every one of Way's three simulations boiled, including the two
+    // their GCM puts below 15 C.
+    {
+      const paleoVenus = { ...EARTH, mass: 0.815, n2Bar: 1.0126, o2Bar: 0,
+        co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.40,
+        landAlbedo: 0.2, biosphere: 0, outgassing: 0, obliquity: 2.6,
+        emissions: 0, fossilUsed: 0, startT: 288 };
+      const fast = threshold({ ...paleoVenus, rotationHours: 24 });
+      const slow = threshold({ ...paleoVenus, rotationHours: 5832 });
+      check('A slow rotator keeps its ocean far closer to its star',
+        slow > fast + 0.4,
+        `inner edge ${fast.toFixed(2)} S⊕ at a 24-hour day, ${slow.toFixed(2)} at 243 days`);
+
+      const simB = settle({ ...paleoVenus, rotationHours: 5832, insolation: 1.70 }, 3e6).world;
+      check('…so Way et al.\u2019s paleo-Venus is temperate under 70% more sunlight than Earth',
+        simB.diag.Tmean > 273 && simB.diag.Tmean < 313 && simB.water.ocean > 0.05,
+        `${(simB.diag.Tmean - 273.15).toFixed(1)} °C against ROCKE-3D's 15, ` +
+        `with ${simB.water.ocean.toFixed(3)} EO still liquid`);
+
+      // The same planet spun up. Way's Sim D is 45 K hotter than Sim A on
+      // rotation alone, and this is the control that says the effect above is
+      // about rotation and not about the composition being forgiving.
+      const spun = settle({ ...paleoVenus, rotationHours: 24, insolation: 1.70 }, 3e6).world;
+      check('…and spinning it up on nothing else loses it',
+        spun.diag.Tmean > simB.diag.Tmean + 100,
+        `${(spun.diag.Tmean - 273.15).toFixed(0)} °C at a 24-hour day against ` +
+        `${(simB.diag.Tmean - 273.15).toFixed(0)} °C at 243 days`);
+    }
+
+    // Cloud is only as white as the light falling on it. Water reflects well in
+    // the visible and absorbs past about 1.4 um; a G star puts 88% of its output
+    // shortward of that and TRAPPIST-1, at 2566 K, puts 46%. It is the same
+    // reason the ice-albedo feedback is weak around M dwarfs (Joshi & Haberle
+    // 2012; Shields et al. 2013). Without it the deck above was worth as much
+    // around a red dwarf as around the Sun, and it took TRAPPIST-1e from 0.9 C
+    // to -18 C on nothing but a term that should never have applied there.
+    check('Cloud reflects a red dwarf\u2019s light worse than the Sun\u2019s',
+      Math.abs(cloudWhiteness(5772) - 1) < 1e-9
+        && cloudWhiteness(2566) > 0.35 && cloudWhiteness(2566) < 0.6
+        && cloudWhiteness(3270) > cloudWhiteness(2566),
+      `Sun 1.00, GJ 1132 ${cloudWhiteness(3270).toFixed(2)}, ` +
+      `TRAPPIST-1 ${cloudWhiteness(2566).toFixed(2)}`);
+
+    // ...and the deck needs a sea to build itself out of. A deep convective
+    // tower is fed by a moist boundary layer over open water, so a world whose
+    // water is all frozen onto its night side does not get one. Gating on
+    // rotation alone gave it the bright deck anyway, cooled the sunlit face
+    // below the temperature that makes it a desert, and removed the night-side
+    // cold trap from the reachable parameter space -- a sweep of thirty-six
+    // configurations across water, nitrogen and insolation found it at none.
+    {
+      const wet = planetaryAlbedo(300, { oceanFrac: 0.7, landAlbedo: 0.2, hasWater: true,
+        waterCap: 1, glaciated: 0, pH2O: 0.02, pTot: 1.0, slowness: 1, subStellar: 0.35,
+        cloudWhite: 1 }).albedo;
+      const dry = planetaryAlbedo(300, { oceanFrac: 0.0, landAlbedo: 0.2, hasWater: true,
+        waterCap: 1, glaciated: 0, pH2O: 0.02, pTot: 1.0, slowness: 1, subStellar: 0.35,
+        cloudWhite: 1 }).albedo;
+      check('…and a slow rotator with no sea grows no bright deck',
+        wet > dry + 0.05,
+        `albedo ${wet.toFixed(3)} over a 70% ocean, ${dry.toFixed(3)} over none`);
+    }
+
+    // ---- the door only opens one way ------------------------------------
+    // A runaway greenhouse is not a temperature, it is a bifurcation, and the
+    // flux a world tips at depends on how it got there. Walk a planet up to
+    // 1.36 S(+) in small steps and it settles at about 63 C with its ocean
+    // intact -- the hot branch that Wolf & Toon (2015) ran to 362.8 K and Popp
+    // et al. (2016) found above 330 K, an ocean at bath temperature. Throw the
+    // same planet at the same flux in one jump and the surface overshoots, the
+    // sea goes into the air, the steam is dark rather than bright, and there is
+    // no way back.
+    //
+    // Both are self-consistent runs of the same model at the same insolation.
+    // That is the physics and not an integration failure, and the evidence is
+    // that the gradual path CONVERGES: sixteen steps and sixty-four agree to a
+    // degree, while four -- jumps too big to track the branch -- tip like the
+    // abrupt one. What must not happen is the fine end still moving.
+    {
+      const base = { ...EARTH, outgassing: 0, emissions: 0, fossilUsed: 0, biosphere: 0 };
+      const walk = (steps) => {
+        const s = new Simulation({ ...base, insolation: 1.00 });
+        s.runYears(3e6, 2e5);
+        for (let i = 1; i <= steps; i++) {
+          s.world.params.insolation = 1.00 + 0.36 * (i / steps);
+          s.runYears(2e6, 2e5);
+        }
+        return s.world;
+      };
+      const gentle = walk(16), gentler = walk(32);
+      const thrown = settle({ ...base, insolation: 1.36 }, 1e7).world;
+
+      check('A world walked to the runaway limit keeps an ocean the same world thrown there loses',
+        gentle.water.ocean > 0.8 && gentle.diag.Tmean > 320 && gentle.diag.Tmean < 360
+          && lostItsOcean(thrown),
+        `1.36 S⊕ either way: gradually ${(gentle.diag.Tmean - 273.15).toFixed(0)} °C with ` +
+        `${gentle.water.ocean.toFixed(2)} EO liquid, abruptly ` +
+        `${(thrown.diag.Tmean - 273.15).toFixed(0)} °C with ${thrown.water.ocean.toFixed(2)}`);
+
+      check('…and that is the physics, not the step sequence — the gradual path converges',
+        Math.abs(gentle.diag.Tmean - gentler.diag.Tmean) < 1.0,
+        `${(gentle.diag.Tmean - 273.15).toFixed(1)} °C over 16 steps against ` +
+        `${(gentler.diag.Tmean - 273.15).toFixed(1)} °C over 32`);
+
+      // And the branch is a place, not a transient: it holds its energy balance
+      // and it is still there a hundred million years later.
+      const held = new Simulation(gentle.params);
+      Object.assign(held.world.water, gentle.water);
+      for (let i = 0; i < held.world.T.length; i++) held.world.T[i] = gentle.T[i];
+      held.world.co2 = gentle.co2; held.world.n2 = gentle.n2;
+      held.world.o2 = gentle.o2; held.world.ch4 = gentle.ch4;
+      held.runYears(1e8, 5e5);
+      check('…and the hot branch is somewhere a world can actually live',
+        held.world.water.ocean > 0.8 && Math.abs(held.world.diag.imbalance) < 0.05,
+        `${(held.world.diag.Tmean - 273.15).toFixed(0)} °C and ` +
+        `${held.world.water.ocean.toFixed(2)} EO after another 100 Myr, ` +
+        `imbalance ${held.world.diag.imbalance.toFixed(3)} W/m²`);
+
+      // The initial temperature is not a way in. The ocean's heat capacity
+      // erases it: starting the air at 63 C and at 27 C gives the same runaway
+      // to the tenth of a degree, because what decides this is the history of
+      // the forcing and nothing else.
+      const hotStart = settle({ ...base, insolation: 1.36, startT: 336 }, 1e7).world;
+      check('…and you cannot get onto it by starting hot, only by arriving slowly',
+        Math.abs(hotStart.diag.Tmean - thrown.diag.Tmean) < 0.5 && lostItsOcean(hotStart),
+        `starting at 63 °C ends at ${(hotStart.diag.Tmean - 273.15).toFixed(1)} °C, ` +
+        `same as starting at 15 °C`);
+    }
 
     const S = insolationProfile(venusRot);
     check('…and every point on it sees the star',
