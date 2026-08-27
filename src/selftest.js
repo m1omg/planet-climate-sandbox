@@ -17,6 +17,8 @@ import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B } from './render/terrain.js';
+import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE }
+  from './physics/evolution.js';
 import { bakeTerrain } from './render/cpushade.js';
 
 let pass = 0, fail = 0;
@@ -739,6 +741,92 @@ export function run() {
       check('…and a slow rotator with no sea grows no bright deck',
         wet > dry + 0.05,
         `albedo ${wet.toFixed(3)} over a 70% ocean, ${dry.toFixed(3)} over none`);
+    }
+
+    // ---- growing old ----------------------------------------------------
+    // A star burns helium ash into a denser core, the core contracts, and it
+    // fuses faster: the Sun has gained about 40% since it formed. An interior
+    // does the opposite -- uranium, thorium and potassium run down, and the
+    // volcanism they drive runs down with them.
+    {
+      check('A young planet makes about five times the radiogenic heat',
+        Math.abs(radiogenic(EARTH_AGE) - 1) < 1e-9
+          && radiogenic(0) > 4.5 && radiogenic(0) < 6,
+        `${radiogenic(0).toFixed(2)}× at formation, 1.00× now, ` +
+        `${radiogenic(2).toFixed(2)}× at 2 Gyr`);
+
+      // The interior is the only thing decaying, but volcanism has to come with
+      // it: melt production is what carries dissolved carbon up, and the model
+      // already ties the two together through meltBoost.
+      const young = new Simulation({ ...EARTH, realisticGeology: true, startAge: 0.5,
+        internalHeat: 0.092 * radiogenic(0.5), outgassing: 1 });
+      const heat0 = young.world.params.internalHeat;
+      const melt0 = meltBoost(young.world.params);
+      young.runYears((EARTH_AGE - 0.5) * 1e9, 5e6);
+      check('…so a world started young arrives at exactly today\u2019s interior',
+        Math.abs(young.world.params.internalHeat - 0.092) < 1e-4
+          && Math.abs(meltBoost(young.world.params) - 1) < 1e-3,
+        `${(heat0 * 1e3).toFixed(0)} mW/m² and ${melt0.toFixed(2)}× melt at 0.5 Gyr → ` +
+        `${(young.world.params.internalHeat * 1e3).toFixed(1)} mW/m² and ` +
+        `${meltBoost(young.world.params).toFixed(2)}× at ${EARTH_AGE} Gyr`);
+
+      // Brightening is compounding and it moves the control, not just the sum
+      // inside the model -- the point of it is watching the star change.
+      const sun = new Simulation({ ...EARTH, brightening: 0.10, outgassing: 0,
+        emissions: 0, fossilUsed: 0 });
+      sun.runYears(3e9, 5e6);
+      check('…and a brightening star carries its own control with it',
+        Math.abs(sun.world.params.insolation - Math.pow(1.10, 3)) < 1e-3,
+        `${sun.world.params.insolation.toFixed(4)} S⊕ after 3 Gyr, against ` +
+        `1.10³ = ${Math.pow(1.10, 3).toFixed(4)}`);
+
+      // Absolute functions of age, not rates integrated alongside the climate:
+      // the answer must not depend on how the clock happened to chop the run up.
+      const coarse = new Simulation({ ...EARTH, brightening: 0.10, realisticGeology: true,
+        startAge: 1, outgassing: 0, emissions: 0, fossilUsed: 0 });
+      const fine = new Simulation({ ...EARTH, brightening: 0.10, realisticGeology: true,
+        startAge: 1, outgassing: 0, emissions: 0, fossilUsed: 0 });
+      coarse.runYears(2e9, 5e6);
+      for (let i = 0; i < 40; i++) fine.runYears(5e7, 2e5);
+      check('…and neither depends on how the clock chopped the run up',
+        Math.abs(coarse.world.params.insolation - fine.world.params.insolation) < 1e-6
+          && Math.abs(coarse.world.params.internalHeat - fine.world.params.internalHeat) < 1e-9,
+        `one 2 Gyr run and forty 50 Myr ones agree to ` +
+        `${Math.abs(coarse.world.params.insolation - fine.world.params.insolation).toExponential(1)} S⊕`);
+
+      // Off by default, and off means off.
+      const still = new Simulation({ ...EARTH, outgassing: 0, emissions: 0, fossilUsed: 0 });
+      const s0 = still.world.params.insolation, h0 = still.world.params.internalHeat;
+      still.runYears(2e9, 5e6);
+      check('…and a world with both modes off does not age at all',
+        still.world.params.insolation === s0 && still.world.params.internalHeat === h0,
+        `${s0} S⊕ and ${(h0 * 1e3).toFixed(0)} mW/m² after two billion years`);
+    }
+
+    // Smoothing turns a slider into a destination. It exists because of the
+    // result below it: the same drag, applied at once or walked to, leaves two
+    // different planets, and only the walk can reach the hot branch on purpose.
+    {
+      const base = { ...EARTH, outgassing: 0, emissions: 0, fossilUsed: 0, biosphere: 0 };
+      const run = (smooth) => {
+        const s = new Simulation({ ...base, smoothInsolation: smooth });
+        s.runYears(3e6, 2e5);
+        s.setParams({ insolation: 1.36 });
+        s.runYears(2e8, 5e5);
+        return s.world;
+      };
+      const jumped = run(false), walked = run(true);
+      check('The same change of starlight, walked to rather than jumped to, keeps the ocean',
+        lostItsOcean(jumped) && walked.water.ocean > 0.8 && walked.diag.Tmean > 320,
+        `1.00 → 1.36 S⊕: at once ${(jumped.diag.Tmean - 273.15).toFixed(0)} °C and no sea, ` +
+        `walked ${(walked.diag.Tmean - 273.15).toFixed(0)} °C with ${walked.water.ocean.toFixed(2)} EO`);
+      check('…and it arrives where it was sent',
+        Math.abs(walked.params.insolation - 1.36) < 1e-6 && walked.insolationTarget == null,
+        `ended at ${walked.params.insolation.toFixed(4)} S⊕ with nothing left to walk`);
+      check('…while approach() cannot overshoot whichever way it is going',
+        approach(1.0, 1.36, 1e12) === 1.36 && approach(1.36, 1.0, 1e12) === 1.0
+          && approach(1.0, 1.36, 1e5) > 1.0 && approach(1.0, 1.36, 1e5) < 1.36,
+        'up, down, and a partial step in between');
     }
 
     // ---- the door only opens one way ------------------------------------

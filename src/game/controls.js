@@ -81,10 +81,30 @@ export const SLIDERS = [
     fmt: (v) => `${(v * 100).toFixed(0)} % land`, units: { '%': 0.01 }, unitFor: () => '%',
     note: 'How much of this world would stand above the sea at Earth-like water. Actual coverage is worked out from the water it really has — see the readout.' },
 
-  { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 4, log: true,
+  { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 100, log: true,
+    live: 'insolation',
     fmt: (v) => `${v.toFixed(3)} S⊕`,
     units: { s: 1, 'se': 1, 's⊕': 1, 'w/m2': 1 / 1361, 'w/m²': 1 / 1361, w: 1 / 1361 },
-    note: 'Relative to Earth. 1 S⊕ = 1361 W/m².' },
+    note: 'Relative to Earth. 1 S⊕ = 1361 W/m². Runs to 100× because real planets do: GJ 1132 b takes 18.8 and Trappist-1b 4.15, and a slider that stopped at 4 could not represent two of the worlds shipped with it.',
+    // Main-sequence stars brighten as they burn: helium ash makes the core
+    // denser, it contracts, and it fuses faster. The Sun has gained about 40%
+    // since it formed (Gough 1981), which is 7.4% per billion years compounded
+    // and closer to 10% over the last billion, where the curve is steepest.
+    // Ten is the round number and the pessimistic one, which is the right way
+    // to be wrong about the faint young Sun.
+    //
+    // The slider moves with it rather than sitting still while the number
+    // underneath changes -- and dragging it while it is running means "make it
+    // this now", with the curve re-based to carry on from there.
+    extra: `
+      <div class="supply">
+        <label class="supply-inf" title="The star brightens by 10% every billion years, and the control follows it. The Sun's real track is 7.4%/Gyr averaged over its life.">
+          <input type="checkbox" id="chk-brightening"> brightening star
+        </label>
+        <label class="supply-inf" title="Move this control and the star walks to the new value instead of jumping to it. A jump can throw a world across a threshold that the same change made gradually would carry it along — the difference between a 63 °C ocean and a 576 °C steam greenhouse.">
+          <input type="checkbox" id="chk-smooth-sun"> smooth changes
+        </label>
+      </div>` },
   { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2600, max: 9000, step: 10,
     fmt: (v) => `${v.toFixed(0)} K`, units: { k: 1 } },
   { g: 'star', key: 'xuvFraction', label: 'Stellar XUV activity', min: 1e-6, max: 1e-2, log: true,
@@ -153,7 +173,7 @@ export const SLIDERS = [
   // and why it cannot be left out of a model of anything tidally heated: the
   // range spans four orders of magnitude and the top of it boils oceans.
   { g: 'surface', key: 'internalHeat', label: 'Internal heat', min: 0, max: 1000,
-    log: true, zero: true,
+    log: true, zero: true, live: 'internalHeat',
     // Every threshold sits just below its round number, for the reason spelled
     // out on the rotation control: a boundary at exactly 1 would let the mW
     // branch print "1000 mW/m²" for 0.9999, and typing that back gives 1.0.
@@ -166,7 +186,32 @@ export const SLIDERS = [
     unitFor: (v) => (v > 0 && v < 0.9995 ? 'mW/m²' : 'W/m²'),
     note: 'Radiogenic, primordial and — the one that can dominate — tidal. Past about 282 W/m² it boils an ocean on its own, with no help from the star. The buttons set this <em>and</em> the volcanism below, because on a real body the two are not independent.',
     // Rendered as a chip row under the note. See INTERIOR_BODIES.
-    bodies: true },
+    bodies: true,
+    // An interior is a battery, not a boiler: uranium, thorium and potassium
+    // burn down and the heat goes with them. A young Earth made about five
+    // times the radiogenic heat it makes now, nearly half of it from the
+    // potassium-40 that has since almost entirely gone.
+    //
+    // Volcanic outgassing is deliberately NOT a separate switch. It already
+    // follows the heat through meltBoost = sqrt(F / F_earth) -- melt production
+    // is what carries dissolved CO2 up -- so a mantle that cools to a quarter
+    // of its heat erupts at half the rate on its own, and decaying it here as
+    // well would count the same physics twice.
+    //
+    // Needs to know how old the world is, which is the age control beside it:
+    // the curve is steep early, so a planet starting at half a billion years
+    // loses two thirds of its heat over the next four, while one starting at
+    // three billion loses a third.
+    extra: `
+      <div class="supply">
+        <label class="supply-inf" title="Uranium, thorium and potassium decay, the interior cools, and volcanism slows with it. The volcanic outgassing control follows automatically through melt production.">
+          <input type="checkbox" id="chk-geology"> realistic decay
+        </label>
+      </div>` },
+  { g: 'surface', key: 'startAge', label: 'Age at start', min: 0, max: 10, step: 0.01,
+    fmt: (v) => `${v.toFixed(2)} Gyr`,
+    units: { gyr: 1, gy: 1, byr: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
+    note: 'How old the planet already is when the clock starts. Only does anything with realistic decay on, where it says which part of the radiogenic curve the world begins on. The solar system is 4.567 Gyr old.' },
 
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
     // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",

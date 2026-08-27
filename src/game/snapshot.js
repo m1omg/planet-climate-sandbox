@@ -33,6 +33,10 @@ export function captureWorld(w) {
     carbonDeep: w.carbonDeep,
     bio: w.bio,
     co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
+    // Where the evolving controls started. Without this a saved world resumes
+    // with its star re-based to whatever brightness it had reached, and the
+    // history scrubber would brighten it a second time on the way back.
+    evolve0: w.evolve0 ? { ...w.evolve0 } : null,
   };
 }
 
@@ -54,6 +58,7 @@ export function applyWorld(sim, s, params = s.params) {
   w.fossil = s.fossil ?? null;
   w.carbonDeep = s.carbonDeep ?? null;
   w.bio = s.bio ?? null;
+  if (s.evolve0) w.evolve0 = { ...s.evolve0 };
   if (s.co2 != null) w.co2 = s.co2;
   if (s.n2 != null) w.n2 = s.n2;
   if (s.o2 != null) w.o2 = s.o2;

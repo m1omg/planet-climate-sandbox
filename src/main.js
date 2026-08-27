@@ -52,10 +52,26 @@ const discovered = loadDiscovered();
 // Surface style. Generated albedo maps are the default; ?graphics=procedural
 // (or ?graphics=proc) selects the fully procedural look instead, and the button
 // in the view controls switches between them at any time.
+// Where this build's browser storage lives.
+//
+// localStorage is scoped to the ORIGIN, not to the path, so every copy of this
+// site served from m1omg.github.io -- the stable one at /, /dev/ and this one --
+// reads and writes the same keys unless they are told apart. They were not, and
+// the consequence was not academic: slot 1 is the autosave slot and it fires
+// every thirty seconds, so a minute spent in one build silently overwrote a
+// world saved from another. Worse, a slot holds full simulation state rather
+// than slider values and there is no version tag on it, so the world loaded
+// fine in the other build and then simulated differently. Silent wrong answers.
+//
+// Worlds still travel between builds the way they should: the URL hash and the
+// export file both carry parameters rather than physics state, so they mean the
+// same thing wherever they are opened.
+const NS = 'planetclimate.altdev';
+
 // Rendering detail. High everywhere by default; Low is a manual choice for
 // hardware that still struggles, and it is remembered between visits.
-const QUALITY_KEY = 'planetclimate.quality.v1';
-const ATMO_KEY = 'planetclimate.atmosphere.v1';
+const QUALITY_KEY = `${NS}.quality.v1`;
+const ATMO_KEY = `${NS}.atmosphere.v1`;
 
 // Stylised by default. A real atmosphere is a hairline -- Earth's is 0.7% of its
 // radius -- and the whole point of the app is watching one change, so the
@@ -73,7 +89,7 @@ function atmosphereFromUrl() {
 // start of setting something up, and at a year a second the first decades of a
 // world you have not finished building are wasted ones. Remembered, because it
 // is a working habit rather than a property of any particular planet.
-const RESET_PAUSED_KEY = 'planetclimate.resetPaused.v1';
+const RESET_PAUSED_KEY = `${NS}.resetPaused.v1`;
 function resetPausedPref() {
   try { return localStorage.getItem(RESET_PAUSED_KEY) !== 'run'; } catch { return true; }
 }
@@ -372,6 +388,12 @@ function syncSliders() {
     e.out.value = d.fmt(params[d.key]);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
+  // The two evolution modes are checkboxes rather than sliders, so they are not
+  // covered by the loop above and have to be put back by hand -- on load, on a
+  // preset, and on anything restored from a slot or from the world's own past.
+  const br = $('#chk-brightening'); if (br) br.checked = params.brightening > 0;
+  const gl = $('#chk-geology'); if (gl) gl.checked = !!params.realisticGeology;
+  const sm = $('#chk-smooth-sun'); if (sm) sm.checked = !!params.smoothInsolation;
   markBody();
 }
 
@@ -382,6 +404,11 @@ const LIVE_READERS = {
   o2: (w) => w.o2 * w.diag.g / 1e5,
   ch4: (w) => w.ch4 * w.diag.g / 1e5,
   water: (w) => w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour,
+  // Not reservoirs, but evolved by the clock all the same when their modes are
+  // on. With the modes off these return the value the control already holds and
+  // the guard below skips them, so they cost nothing.
+  insolation: (w) => w.params.insolation,
+  internalHeat: (w) => w.params.internalHeat,
 };
 
 // The four reservoirs above are *outputs* as much as inputs: volcanoes, weathering,
@@ -766,7 +793,7 @@ function toast(msg, ms = 2600) {
 // below. Saving only the sliders would have given you a world that looked right
 // and had forgotten everything it had been through, which for a model whose
 // whole subject is history would be the wrong thing to keep.
-const slotKey = (i) => `planetclimate.slot${i}.v1`;
+const slotKey = (i) => `${NS}.slot${i}.v1`;
 let armedToSave = false;
 
 function readSlot(i) {
@@ -1190,6 +1217,38 @@ function bindControls() {
     writeHash(); markTouched();
   });
 
+  // The star brightens as it burns. 10% per billion years, compounding, and the
+  // control follows it -- see the note on the insolation slider for why ten and
+  // not the Sun's own 7.4.
+  $('#chk-brightening').addEventListener('change', (e) => {
+    params.brightening = e.target.checked ? 0.10 : 0;
+    sim.setParams({ brightening: params.brightening });
+    writeHash(); markTouched();
+    toast(e.target.checked
+      ? 'The star now brightens by 10% every billion years'
+      : 'The star holds steady');
+  });
+
+  // The interior runs down its radiogenic curve, and volcanism follows through
+  // melt production without needing a switch of its own.
+  $('#chk-smooth-sun').addEventListener('change', (e) => {
+    params.smoothInsolation = e.target.checked;
+    sim.setParams({ smoothInsolation: params.smoothInsolation });
+    writeHash(); markTouched();
+    toast(e.target.checked
+      ? 'Starlight changes now walk to the new value instead of jumping'
+      : 'Starlight changes apply at once');
+  });
+
+  $('#chk-geology').addEventListener('change', (e) => {
+    params.realisticGeology = e.target.checked;
+    sim.setParams({ realisticGeology: params.realisticGeology });
+    writeHash(); markTouched();
+    toast(e.target.checked
+      ? `Interior decaying from ${(params.startAge ?? 4.567).toFixed(2)} Gyr — volcanism follows it down`
+      : 'Interior heat holds steady');
+  });
+
   $('#btn-settle').addEventListener('click', () => {
     markTouched();
     if (settling) { endSettle(); return; }        // click again to stop
@@ -1576,7 +1635,7 @@ async function start() {
 }
 
 // Handy from the console, and used by the browser self-test.
-try { localStorage.removeItem('planetclimate.renderer.v1'); } catch { }
+try { localStorage.removeItem(`${NS}.renderer.v1`); } catch { }
 
 window.__app = {
   sim, view, tick, frame, params, loadPreset, startScenario, graphicsFromUrl, useRenderer,

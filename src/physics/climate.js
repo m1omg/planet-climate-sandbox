@@ -73,6 +73,13 @@ export function resetWorld(w, params) {
   w.fossil = null;     // a fresh world has its fossil carbon still in the ground
   w.carbonDeep = null; // rebuilt from the planet's mass on the first step
   w.bio = null;        // the living biosphere, grown from the conditions
+  // Where the evolving controls stood when the clock started. The star's
+  // brightness and the interior's heat are absolute functions of age rather
+  // than rates to integrate, so they are computed from here every step instead
+  // of being stepped forward -- which is what keeps them independent of the
+  // step sequence.
+  w.evolve0 = { insolation: params.insolation, internalHeat: params.internalHeat };
+  w.insolationTarget = null;   // no walk in progress on a fresh world
   update(w, 0);
 }
 

@@ -228,6 +228,38 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   if (last) console.log(`   (warmest non-runaway sampled: ${last.mult}× → ${last.T.toFixed(1)} °C)`);
 }
 
+// ---- Mars, run forward through its own history ----------------------------
+// With the two evolution modes on, a Noachian Mars should end up as the Mars we
+// have: 6 mbar of CO2, no ocean, -63 C. It does not, and the reason is a
+// mechanism this model has none of.
+//
+// The escape it DOES have is hydrodynamic -- a blow-off gated on the XUV flux
+// exceeding a critical value that scales as v_esc^4 -- and that gate is
+// correctly shut for Mars under a modern Sun. What actually stripped Mars is
+// non-thermal: with no dynamo there is no magnetosphere, the solar wind reaches
+// the top of the atmosphere directly, and pickup-ion sputtering carries it off
+// ion by ion. MAVEN measures the rate today and Jakosky et al. (2018) integrate
+// it to roughly 0.5 bar of CO2 over four billion years -- comfortably the whole
+// Noachian atmosphere.
+//
+// Nothing here represents that, so the CO2 has nowhere to go: this Mars keeps
+// its greenhouse, keeps its ocean, and ends the run temperate. Adding the
+// channel means a magnetic-field state the model does not have and two fresh
+// constants to calibrate, which is a change to make deliberately rather than at
+// the end of an afternoon.
+{
+  const mars = new Simulation({ ...PRESETS.earlyMars.params,
+    realisticGeology: true, brightening: 0.10, startAge: 0.6 });
+  mars.runYears((4.567 - 0.6) * 1e9, 5e6);
+  deviation('Mars CO2 after 4 Gyr', mars.world.diag.pCO2, 0.004, 0.05, 'bar',
+    'Mars has 6 mbar today and had of order a bar in the Noachian. The loss is ' +
+    'non-thermal escape to the solar wind on a planet with no dynamo -- MAVEN, ' +
+    'integrated by Jakosky et al. 2018, gives ~0.5 bar of CO2 over 4 Gyr. This ' +
+    'model has hydrodynamic escape only, whose v_esc^4 gate is correctly shut ' +
+    'for Mars, so its Noachian atmosphere has no way to leave and the planet ' +
+    'ends the run temperate with an ocean.');
+}
+
 // ---- report ---------------------------------------------------------------
 let bad = 0;
 console.log('');

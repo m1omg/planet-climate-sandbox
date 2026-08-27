@@ -36,6 +36,12 @@ export const EARTH = {
   internalHeat: 0.092,
   landAlbedo: 0.25,
   startT: 288.3,
+  // How the world ages, both off by default: most of what this model gets used
+  // for is "what would this world do", not "what did it do".
+  brightening: 0,          // fractional increase in starlight per Gyr
+  realisticGeology: false, // let the interior run down its radiogenic curve
+  startAge: 4.567,         // Gyr the planet has already lived through at t=0
+  smoothInsolation: false, // walk to a new starlight value instead of jumping
 };
 
 export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
@@ -113,7 +119,9 @@ export const PRESETS = {
   earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, mass: 0.815,
     insolation: 1.40, rotationHours: 5832, obliquity: 2.6, o2Bar: 0, biosphere: 0,
     n2Bar: 1.0126, co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.40,
-    landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288 } },
+    landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288,
+    // Way's Sim A is 2.9 Gya, so the planet is 4.567 - 2.9 Gyr old here.
+    startAge: 1.67 } },
   // Mars in the Noachian, when the valley networks were being cut. The Sun was
   // at 75% of today's, so this world gets less than a third of Earth's light,
   // and warming it is the oldest unsolved problem in the subject: CO2 alone
@@ -130,7 +138,9 @@ export const PRESETS = {
   earlyMars: { name: 'Noachian Mars', icon: '🟠', params: { ...EARTH, mass: 0.107,
     insolation: 0.32, rotationHours: 24.6, obliquity: 25, o2Bar: 0, biosphere: 0,
     n2Bar: 0.3, co2Bar: 4, ch4Bar: 0.01, water: 0.06, landFraction: 0.70,
-    landAlbedo: 0.22, outgassing: 0.5, internalHeat: 0.06, startT: 280 } },
+    landAlbedo: 0.22, outgassing: 0.5, internalHeat: 0.06, startT: 280,
+    // The Noachian runs 4.1-3.7 Gya, so Mars is about half a billion years old.
+    startAge: 0.6 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },
