@@ -42,6 +42,17 @@ export function captureWorld(w) {
     // scrubber is then quietly a different simulation, which is precisely what
     // the round-trip test exists to catch.
     ch4Escape: w.ch4Escape, h2Rate: w.h2Rate,
+    // The last step actually taken. maxStep low-passes the step size against it,
+    // so a world restored without it takes a differently-sized first step and
+    // never quite rejoins the trajectory it left -- the same defect as the two
+    // rates above, one line further down the stack.
+    //
+    // It hid for as long as it did because the round-trip test caps its steps at
+    // two kiloyears, and while that cap was binding the smoothing had nothing to
+    // do. Gating the quasi-static shortcut across the ice edge made maxStep
+    // return values below the cap on exactly that world, the cap stopped
+    // masking it, and 700 kyr later the two runs were 0.001 K apart.
+    dtPrev: w.dtPrev,
   };
 }
 
@@ -77,5 +88,8 @@ export function applyWorld(sim, s, params = s.params) {
   // After update(), because a zero-length step rewrites both of these to zero.
   if (s.ch4Escape != null) w.ch4Escape = s.ch4Escape;
   if (s.h2Rate != null) w.h2Rate = s.h2Rate;
+  // Older saves do not carry it; zero is what resetWorld leaves and what those
+  // worlds were restored with before, so they behave exactly as they used to.
+  if (s.dtPrev != null) w.dtPrev = s.dtPrev;
   return w;
 }

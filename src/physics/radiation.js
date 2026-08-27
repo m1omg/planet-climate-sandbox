@@ -158,14 +158,34 @@ const TAU = new Float64Array(4);
 
 // Optical depth in each band. `pH2` is the hydrogen partial pressure; its
 // collision-induced absorption is handled in h2Cia() below.
+// CO2's power and logarithm and methane's logarithm, memoised on one entry.
+//
+// Every caller walks the eighteen bands with the same well-mixed gases and only
+// water and the total pressure changing, so these three were being recomputed
+// eighteen times for one distinct answer -- a Math.pow and two logarithms thrown
+// away seventeen times out of every eighteen, in the second-hottest function in
+// the model.
+//
+// A memo of a pure function on its own arguments returns exactly what computing
+// it would, so this cannot move the step sequence the way a remembered *step*
+// would. NaN never matches itself, so a NaN input recomputes rather than
+// poisoning the entry.
+let gCO2 = -1, gCH4 = -1, gU = 0, gL = 0, gG = 0;
+function gasTerms(pCO2, pCH4) {
+  if (pCO2 === gCO2 && pCH4 === gCH4) return;
+  gCO2 = pCO2; gCH4 = pCH4;
+  gU = pCO2 > 0 ? Math.pow(pCO2, D_CO2) : 0;
+  gL = pCO2 > 0 ? Math.log(1 + pCO2 / P_CO2) : 0;
+  gG = pCH4 > 0 ? Math.log(1 + pCH4 / P_CH4) : 0;
+}
+
 export function bandTau(pCO2, pH2O, pCH4, pTot, pH2 = 0, out = TAU) {
   const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
   const w = pH2O > 0 ? Math.pow(pH2O, M_H2O) : 0;
   const wc = pH2O > 0 ? pH2O * pH2O : 0;
-  const u = pCO2 > 0 ? Math.pow(pCO2, D_CO2) : 0;
-  const L = pCO2 > 0 ? Math.log(1 + pCO2 / P_CO2) : 0;
+  gasTerms(pCO2, pCH4);
+  const u = gU, L = gL, g = gG;
   const Lw = pH2O > 0 ? Math.log(1 + pH2O / P_H2O) : 0;
-  const g = pCH4 > 0 ? Math.log(1 + pCH4 / P_CH4) : 0;
   const ciaC = pCH4 > 0 ? CIA_CH4 * pCH4 * pCH4 * Math.max(pTot, 0) : 0;
   const h2 = h2Cia(pH2, pTot);
   const wcap = A1WC * wc;

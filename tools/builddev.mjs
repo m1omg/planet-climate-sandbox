@@ -29,6 +29,7 @@ if (!out) { console.error('usage: node tools/builddev.mjs <path-to-main-checkout
 const dev = join(out, 'dev');
 
 const NOTE = 'Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes and Hycean work in progress \u2014 known gaps reported by calibrate.mjs';
+// The Huronian entry below is kept because it was reported from this build twice.
 
 // Which branch this copy came from. Asked of git rather than written down here,
 // because the written-down one went stale the moment the work moved to another
@@ -110,6 +111,12 @@ rather than fixed: Earth's pre-industrial temperature, which is 0.79 K warm and
 and CO₂'s forcing per doubling at high concentration, which falls off where the
 real thing strengthens because a semi-grey band saturates all at once. Both
 print their numbers on every run.
+
+The Great Oxidation scenario no longer depends on how fast the clock was
+running. It used to snowball pole-to-pole at any step cap above about 20 kyr and
+deglaciate into a 128 \u00b0C hothouse on eleven bar of CO\u2082; the quasi-static
+shortcut in \`maxStep\` is now off across the ice-albedo bifurcation, and the peak
+glaciation agrees to a point from a 2 kyr cap to a 5 Myr one.
 
 A band-overlap refit that closed four more gaps was reverted from this build: it
 left a 1.32 S⊕ ocean world with no energy balance at any temperature, which shows

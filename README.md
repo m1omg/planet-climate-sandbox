@@ -292,8 +292,14 @@ a thousandth, and it is *path-independent in the starting state*, which is the p
 it worth having: eased at this rate, Earth tips at **1.259 starting from today, 1.259 starting
 pre-industrial, and 1.259 starting from the +2.2 Gyr preset already at 1.20 S⊕** — three different
 atmospheres, three different temperatures, one edge. Drag the slider as fast as you like; the star
-takes as long as it takes, and a status line under the checkbox says where it has got to and how
-long is left.
+takes as long as it takes.
+
+**The slider follows the star**, the way the five reservoir sliders follow the planet — a mode whose
+whole job is to move the star used to leave the one number naming the star sitting still, which
+looked exactly like nothing happening. What you asked for is kept in the status line underneath
+instead, along with how long the star has been moving since: *Sun at 6.08 Gyr — 11.2% brighter per
+Gyr from here · 1.51 Gyr since you set 1.000 S⊕*, or *easing to 1.350 S⊕ — 87.2 Myr to go · 309 Myr
+since you set 1.350 S⊕*.
 
 **`main-sequence Sun`** hands the slider to Gough (1981) instead. A star brightens as its core fills
 with helium and has to run hotter and denser to hold itself up:
@@ -381,7 +387,40 @@ paced frames with stalls trace **bit-identical** trajectories (verified: max ΔT
 The solver is semi-implicit and linearised over both the longwave *and* shortwave feedbacks, with a
 quasi-static shortcut that strides over quiet epochs — gated off wherever the radiative damping goes
 negative, since that is exactly a runaway and striding over it would invent equilibria the planet
-does not have.
+does not have, and gated off again across the **ice-albedo bifurcation**, where the linearisation
+looks perfectly healthy and there is a saddle between the planet and the equilibrium it is pointing
+at. That second gate is what the Great Oxidation scenario needed; the deviations section has the
+whole account.
+
+### What the clock can actually do
+
+The rate slider goes to 295 Myr/s. Whether you get it depends on the planet, and there are three
+different reasons you might not.
+
+**The planet is stiff.** A step is sized for accuracy from the state, so a world in a hurry gets
+small steps: a settled Earth takes 736 kyr at a time, the Great Oxidation about 1.9 kyr. No budget
+fixes that — the only levers are bigger steps, which is an accuracy question, or cheaper steps.
+
+**Cheaper steps.** A step was 240 µs; it is 154 µs now, and nothing about the physics changed to get
+there. `psatH2O` was **28% of the whole model's CPU time** — every band asks for it several times a
+step — and it was spending that on three `Math.pow` calls with half-integer exponents. Written as
+`th·√th`, `th³·√th`, `th⁷·√th` with one shared square root it is **11.4× faster** and agrees with the
+old form to 7×10⁻¹⁵ relative across 273–647 K, which is a few tens of ulp. Then `bandTau`, the next
+hottest: CO₂'s power and logarithm and methane's logarithm do not vary across the eighteen bands, so
+seventeen of every eighteen evaluations were thrown away; a one-entry memo on the two arguments that
+decide them removes a `pow` and two logs per band. Together: **Earth a gigayear in 209 ms against
+326, the Archean in 96 against 163.** Every `calibrate.mjs` anchor is bit-identical either way.
+
+**The frame is not a sixtieth of a second.** Both of the clock's per-frame limits used to be
+absolutes tuned for a fast machine, and on a slow one they compounded: credit was capped at 0.1 s a
+frame, so anything under 10 fps was paid for a tenth of a second however long the frame really took;
+and the physics budget was a flat 12 ms, which is a fifth of a 60 fps frame and six per cent of a
+5 fps one — the slower the machine, the smaller the share it was allowed to use. Both are shares of
+the *observed* frame now (three frames' worth of credit, a quarter of a frame of physics, floored at
+the old 12 ms and capped at 60), tracked with a low-pass so one long frame cannot bank a jump. A
+backgrounded tab or a GC pause is still cut off at 0.1 s. Measured on a deliberately frame-starved
+build, Earth went from 38.6 to **91.4 Myr/s** and the Archean from 22.3 to 47.8, with no change to
+what either world does.
 
 ---
 
@@ -2009,14 +2048,99 @@ Stated plainly, because a model that hides these is less useful:
   — idling peaks at 34%, raising the CO₂ to 0.40 bar peaks at 24%, to 0.45 bar at 8% — so there is a
   gradient to play on and a half-measure survives.
 
-* **That scenario's outcome still depends on the step size at the coarse end, and the runaway it
-  produces there is the pressure gap.** Capped at 5 kyr or below it dips and recovers; left to stride
-  it snowballs, piles 17.7 bar of CO₂ over two hundred megayears and finishes at 758 °C. 1 kyr and
-  5 kyr agree with each other, so the dip is the physics and the snowball is the integrator. And the
-  runaway is forced by a limit that should not fall: at 17.7 bar this model's Simpson–Nakajima limit
-  is **123 W/m²** against the 144–183 the deglaciated world absorbs. Goldblatt has it very nearly
-  CO₂-independent; at 282 the world settles as a hothouse and there is no runaway at all. The
-  self-tests ask for the converged answer and `calibrate.mjs` measures the limit at six bar every run.
+* **That scenario's outcome used to depend on the step size, and the fix was one line in the step
+  controller. Closed.** Reported twice from the live site, the second time as "Huronian still
+  runawaying" — which it was, because the first pass had only made the self-tests ask for the
+  converged answer instead of making the answer converge.
+
+  Played at a clock speed anyone actually uses, the world did not dip to a third of its surface under
+  ice and recover. It went pole-to-pole frozen at 73 Myr, spent 140 Myr piling **11.4 bar of CO₂**
+  behind the ice, and deglaciated into a **128 °C** hothouse. The threshold was sharp: a 20 kyr step
+  cap survived, a 50 kyr cap did not.
+
+  It is not a runaway greenhouse, and that mattered for finding it — the Simpson–Nakajima margin is
+  still **+66 W/m²** at the moment it goes. It is a snowball exit. This world at 0.77 S⊕ cannot
+  deglaciate below about eleven bar (measured: still 100% ice and −33 °C at fifteen), so *any* hard
+  snowball here ends as a hothouse. The bug was never the ending; it was getting into the snowball
+  at all.
+
+  **What went wrong — twice, in two different places, and the first one found was not the one the
+  player was hitting.** For about ten megayears while its methane goes, this world sits on the
+  ice-albedo bifurcation: between roughly a fifth and a half of the surface frozen, where a temperate
+  branch and a snowball branch both exist and a nudge picks one. Anything that nudges it decides the
+  outcome, and two things were.
+
+  *The step controller.* The quasi-static shortcut strides up to 4000× when the temperatures look
+  slaved to the slow reservoirs, and here it saw exactly what it looks for: every band within
+  **0.8 K** of its equilibrium and a healthy mean damping of **0.63**. So it struck a 21 kyr stride,
+  and the stride crossed the bifurcation. The equilibrium the linearisation pointed at was real; what
+  it could not know is that a saddle sat between here and there.
+
+  *The scenario's own driver, which is the one a player actually met.* The Great Oxidation's
+  biosphere grows on a curve with a 30 Myr e-folding, and the code comment said it was "driven off
+  simulated time so the rate does not depend on the frame rate or on how fast the clock is running".
+  Half true: the *value* was a function of `w.time`, but it was being **applied from the readout, ten
+  times a real second** — and ten times a real second is ten times per 29.5 Myr at the top of the
+  rate slider. A 30 Myr curve sampled every 29 Myr is a staircase, and each tread jumped the
+  biosphere by a third of its whole range, took oxygen with it, and removed the methane greenhouse in
+  one step. Nothing about the step size or the ice-albedo gate could save that: reproduced at 60, 10
+  and 2 fps, all three snowballed, at 38, 43 and 155 Myr respectively — *the frame rate chose the
+  date of the glaciation.*
+
+  Scenario drivers run inside `stepOnce` now, on the clock they claimed to run on, placed after the
+  time advances and before the last `update()` so it costs nothing. Same three frame rates:
+  **peak ice 34% at 75–76 Myr, every time.**
+
+  **The fix is a gate, not a tolerance**, and the measurement insisted on that. Turning the stride
+  *down* is not enough: at a tenth of it the scenario survives, at a *twentieth* it tips again. That
+  non-monotonicity is the signature of nudging a trajectory across a basin boundary rather than
+  resolving it. Off inside the band, the answer converges — **peak ice 34% at −4.1 °C from a 2 kyr
+  cap to a 5 Myr cap**, three and a half decades of step size agreeing to a point, where before it
+  was 34% / 37% / *snowball*.
+
+  The ice-albedo gate costs nothing anywhere else, because nowhere else is part-glaciated: Earth over
+  a gigayear is 1358 steps either way, the Archean 729, a 1.4 S⊕ runaway 618, a hard snowball 6883
+  against 6663. The scenario itself gets **cheaper** — 150,000 steps against 206,000 — because it no
+  longer has a snowball to integrate. The one world that pays is one that genuinely parks
+  mid-glaciated: Earth at 0.95 S⊕ sits at 30% ice and goes from 752 steps a gigayear to 2285.
+  `selftest.js` now runs the whole scenario at a 2 kyr cap *and* at a 500 kyr cap, and through the
+  real clock at 60 fps and at 2 fps, and requires the same answer from all four.
+
+  The pressure gap the old entry blamed is real and still reported — `calibrate.mjs` measures the
+  runaway limit at six bar every run — but it was not what was doing this.
+
+  **And it caught two more worlds on the way past.** The gate keys on the global mean ice fraction,
+  which is a crude way to ask "is the ice edge moving?" — a fast rotator sits on its bifurcation
+  around a third of the surface frozen, but a tidally locked world carries a permanently frozen night
+  side, so the *same* question about its day-side edge is being asked at 68%. Keyed narrowly, the
+  Locked Eyeball with its carbon weathered away fell outside the band, and it turned out never to
+  have been converged at all: it froze at two step caps and **boiled its entire ocean at 422 °C** at
+  the other two, off one starting state. Widening the band to a twelfth of the surface through nine
+  tenths lands it on 68% ice and an 89.6 °C substellar point at *every* cap, to a tenth of a degree.
+  Before any of this work it agreed about being frozen while disagreeing by **40 K** about how warm
+  its day side was, and nothing any test asserted on could see the difference.
+
+  The other was the nightside-trapped desert the self-tests use, and that one is worth reading as a
+  cautionary tale about pinning. At 0.03 EO and 0.70 S⊕ it was **never converged**: step caps of
+  20 kyr and above called it a trapped desert with 0.16% of the surface flooded, a 2 kyr cap called
+  it a waterbelt with 7.7%, off the same starting state — and the test was pinned to the coarse
+  answer, which is the one to distrust. Gating the shortcut converged it onto the fine answer, and
+  the fine answer is a waterbelt. The pin has moved to a point that is converged *and* trapped —
+  0.04 EO at 0.67 S⊕, 99.92% night-side ice and 0.22% flooded, bit-identical from a 2 kyr cap to a
+  2 Myr one. The interleaving that entry has always described is still there; what is new is that
+  every point in it is now an answer rather than a step size in disguise.
+
+* **A rewound or reloaded world took a differently-sized first step, and it had done so all along.**
+  `maxStep` low-passes the step size against the previous step, and `dtPrev` was not in the snapshot
+  — so a world restored from a save slot or from a drag on the history chart re-entered its own
+  trajectory at a slightly different pace and never quite rejoined it. Exactly the defect the
+  snapshot already documents for `ch4Escape` and `h2Rate`, one line further down the stack.
+
+  It hid because the round-trip test caps its steps at two kiloyears, and while that cap was binding
+  the smoothing had nothing to do. Gating the shortcut across the ice edge made `maxStep` return
+  values *below* the cap on exactly that world, the cap stopped masking it, and 700 kyr later the two
+  runs were 0.001 K apart — which is how a test that asks for bit-exact equality earns its keep. Old
+  saves that do not carry the field restore as they always did.
 
 * **Land plants starved at 1 ppm of CO₂, which is a cyanobacterium's limit and not a plant's.** The
   carbon term in `photosynthesis()` was one curve fitted to organisms that run carbon-concentrating

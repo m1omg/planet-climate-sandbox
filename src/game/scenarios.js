@@ -120,10 +120,21 @@ export const SCENARIOS = [
     // makes "keep it off a total snowball" a challenge you win by waiting, and
     // that is the exact thing this scenario was rebuilt to stop being.
     //
-    // 30% discriminates cleanly and step-independently: idling peaks at 34% on
-    // 2 kyr steps and 37% on 20 kyr, raising the CO2 to 0.40 bar peaks at 24%,
-    // and to 0.45 bar at 8%. So there is a gradient to play on rather than a
-    // cliff, and a half-measure survives while doing nothing does not.
+    // 30% discriminates cleanly and step-independently: idling peaks at 34%
+    // from a 2 kyr cap all the way to a 5 Myr one, raising the CO2 to 0.40 bar
+    // peaks at 24%, and to 0.45 bar at 8%. So there is a gradient to play on
+    // rather than a cliff, and a half-measure survives while doing nothing does
+    // not.
+    //
+    // "Step-independently" is new and was the thing this scenario was reported
+    // broken for. Played at the clock speeds a person actually uses, it did not
+    // dip to a third of the planet under ice -- it went pole to pole frozen at
+    // 73 Myr, spent 140 Myr piling eleven bar of CO2 behind the ice, and
+    // deglaciated into a 128 C hothouse. The world sits on the ice-albedo
+    // bifurcation for about ten megayears while its methane goes, and the
+    // solver's quasi-static shortcut was striding 21 kyr across it. See maxStep
+    // in climate.js: the shortcut is off inside that band now, and the peak dips
+    // agree to a point across three and a half decades of step size.
     check: (w) => w.diag.pO2 > 0.01 && w.diag.Tmean > 273 && w.diag.iceMean < 0.30,
     fail: (w) => w.diag.iceMean > 0.30,
   },
