@@ -42,8 +42,8 @@ const pressureUnitFor = (v) => (v >= 0.01 ? 'bar' : 'ppm');
 export const INTERIOR_BODIES = [
   { id: 'moon',  name: 'Moon',        heat: 0.011, outgassing: 0,     total: 0,
     note: 'Radiogenic only, and volcanically dead for a billion years.' },
-  { id: 'mars',  name: 'Mars',        heat: 0.02,  outgassing: 0.02,  total: 0.01,
-    note: 'Modelled, never measured — the InSight mole never got deep enough. All but dead.' },
+  { id: 'mars',  name: 'Mars',        heat: 0.02,  outgassing: 0.2,   total: 0.093,
+    note: 'Heat modelled, never measured — the InSight mole never got deep enough. The outgassing is higher than Mars\u2019s lava alone would justify because here it has to stand in for everything that puts CO₂ back into that atmosphere: the seasonal polar caps and the regolith, which are what actually hold Mars at six millibars against a solar wind that would otherwise take the lot.' },
   { id: 'venus', name: 'Venus',       heat: 0.031, outgassing: 1.2,   total: 0.70,
     note: 'A third of Earth’s heat under a stagnant lid, but geologically active with it.' },
   { id: 'europa', name: 'Europa',     heat: 0.04,  outgassing: 0,     total: 0,
@@ -208,6 +208,25 @@ export const SLIDERS = [
           <input type="checkbox" id="chk-geology"> realistic decay
         </label>
       </div>` },
+  { g: 'surface', key: 'magneticField', label: 'Magnetic field', min: 0, max: 5,
+    step: 0.01, zero: true,
+    fmt: (v) => v <= 0 ? 'none' : `${v.toFixed(2)}× Earth`,
+    units: { x: 1, '×': 1, earth: 1, earths: 1 }, unitFor: () => '× Earth',
+    note: 'A dynamo puts a magnetopause between the atmosphere and the solar wind. Earth\u2019s sits ten radii out, so a hundredth of the wind gets through; with no field at all the wind reaches the top of the air and sputters it away ion by ion. That is what emptied Mars. Under realistic decay it goes out when the core stops convecting — half a billion years for Mars, eight for Earth.',
+    extra: `
+      <div class="supply">
+        <label class="supply-inf" title="A resurfacing event: the whole mantle's worth of carbon, all at once. Venus repaved about 80% of itself around 700 Myr ago.">
+          <input type="checkbox" id="chk-resurface"> resurfacing event
+        </label>
+      </div>` },
+  { g: 'surface', key: 'resurfacingAge', label: 'Resurfacing at', min: 0, max: 10, step: 0.01,
+    fmt: (v) => v <= 0 ? 'never' : `${v.toFixed(2)} Gyr`,
+    units: { gyr: 1, gy: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
+    note: 'The age at which the mantle turns over and everything dissolved in it comes up at once. Venus\u2019s is dated to roughly 700 Myr ago — an age of 3.85 Gyr — from a crater population too sparse and too evenly spread to be anything else.' },
+  { g: 'surface', key: 'resurfacingBoost', label: 'Resurfacing size', min: 1, max: 5000,
+    log: true, fmt: (v) => `${v < 9.995 ? v.toFixed(2) : v.toFixed(0)}×`,
+    units: { x: 1, '×': 1 }, unitFor: () => '×',
+    note: 'How much it multiplies volcanic outgassing by at its peak. Shaped as a smooth pulse so nothing in the solver meets a step change.' },
   { g: 'surface', key: 'startAge', label: 'Age at start', min: 0, max: 10, step: 0.01,
     fmt: (v) => `${v.toFixed(2)} Gyr`,
     units: { gyr: 1, gy: 1, byr: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
@@ -240,7 +259,7 @@ export const SLIDERS = [
 export function parseValue(d, raw, current) {
   let t = String(raw).trim().toLowerCase().replace(',', '.');
   if (!t) return null;
-  if (t === 'none' || t === 'dead' || t === '-') return 0;
+  if (t === 'none' || t === 'dead' || t === 'never' || t === '-') return 0;
   const m = t.match(/^([-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?)\s*(.*)$/);
   if (!m) return null;
   const n = parseFloat(m[1]);

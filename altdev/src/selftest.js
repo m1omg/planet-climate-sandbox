@@ -17,8 +17,8 @@ import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B } from './render/terrain.js';
-import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE }
-  from './physics/evolution.js';
+import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE, dynamoLifetime,
+         windExposure, nonThermalEscape, resurfacingBoost, xuvAtAge } from './physics/evolution.js';
 import { bakeTerrain } from './render/cpushade.js';
 
 let pass = 0, fail = 0;
@@ -801,6 +801,139 @@ export function run() {
       check('…and a world with both modes off does not age at all',
         still.world.params.insolation === s0 && still.world.params.internalHeat === h0,
         `${s0} S⊕ and ${(h0 * 1e3).toFixed(0)} mW/m² after two billion years`);
+    }
+
+    // ---- the dynamo, and the wind that gets in without one ---------------
+    {
+      check('A small core keeps its dynamo for a fraction of the time a big one does',
+        Math.abs(dynamoLifetime(0.107) - 0.5) < 0.05 && dynamoLifetime(1) > 4.567,
+        `Mars ${dynamoLifetime(0.107).toFixed(2)} Gyr — where its crustal remanence stops — ` +
+        `against Earth's ${dynamoLifetime(1).toFixed(1)}`);
+
+      // Not a free constant: Earth's magnetopause is about ten radii out, so a
+      // hundredth of the cross-section a bare Earth would present.
+      check('…and a field that stands the wind off ten radii out lets a hundredth through',
+        Math.abs(windExposure(1) - 0.01) < 0.001 && windExposure(0) === 1,
+        `${windExposure(1).toFixed(3)} of the wind reaches a magnetised Earth, ` +
+        `${windExposure(0).toFixed(2)} an unmagnetised one`);
+
+      check('…and a young star is far harsher in the ultraviolet than an old one',
+        xuvAtAge(EARTH_AGE) === 1 && xuvAtAge(0.5) > 10 && xuvAtAge(0.5) < 25,
+        `${xuvAtAge(0.5).toFixed(0)}× at half a billion years, ${xuvAtAge(1).toFixed(1)}× at one, ` +
+        `1× now (Ribas et al. 2005)`);
+
+      // The whole point of the channel: it is what a planet's gravity and its
+      // field together decide, and Mars loses on both counts.
+      const d = (m) => ({ vesc: 11186 * Math.sqrt(m / Math.cbrt(m)) });
+      const marsD = { vesc: 5030 }, earthD = { vesc: 11186 };
+      const bare = nonThermalEscape({ magneticField: 0 }, marsD, 1361 * 3.4e-6 / 4);
+      const shielded = nonThermalEscape({ magneticField: 1 }, earthD, 1361 * 3.4e-6 / 4);
+      check('…so an unmagnetised Mars is stripped hundreds of times faster than a magnetised Earth',
+        bare / shielded > 100 && bare / shielded < 10000,
+        `${(bare / shielded).toFixed(0)}× — 24 from gravity, 100 from the field`);
+    }
+
+    // Mars, run forward through its own history. This is the check that says the
+    // escape channel above is the right size rather than merely present.
+    {
+      const mars = new Simulation({ ...PRESETS.earlyMars.params,
+        realisticGeology: true, brightening: 0.10 });
+      const w = mars.world;
+      const t0 = w.diag.Tmean, ocean0 = w.water.ocean;
+      // runYears stops at its own step guard, so drive it until the clock gets there.
+      const to = (yrs) => { let g = 0; while (w.time < yrs - 1 && g++ < 400) {
+        const b = w.time; mars.runYears(yrs - w.time, 5e6); if (w.time <= b + 1) break; } };
+      // 0.1 Gyr in is 3.87 Gya, which is inside the window the valley networks
+      // were cut in. By 3.77 the ocean has gone, which is where they stop.
+      to(0.1e9);
+      const wetT = w.diag.Tmean, wetOcean = w.water.ocean;
+      to((4.567 - 0.6) * 1e9);
+      check('A Noachian Mars is warm and wet, and does not stay either',
+        t0 > 273 && ocean0 > 0.01 && wetOcean > 0.005 && w.water.ocean < 1e-4
+          && w.diag.Tmean < 220,
+        `${(t0 - 273.15).toFixed(1)} °C with ${ocean0.toFixed(3)} EO at 3.97 Gya, ` +
+        `${(wetT - 273.15).toFixed(1)} °C at 3.87, ` +
+        `${(w.diag.Tmean - 273.15).toFixed(0)} °C and dry today`);
+      check('…and it ends up as the Mars we have, to a few millibars',
+        w.diag.pCO2 > 0.002 && w.diag.pCO2 < 0.02 && classify(w).id !== 'airless',
+        `${(w.diag.pCO2 * 1e3).toFixed(1)} mbar against Mars's 6.0, ` +
+        `${(w.diag.Tmean - 273.15).toFixed(0)} °C against -63, → ${classify(w).name}`);
+
+      // The counterfactual, which is the part that says it was the field and not
+      // something else: give Mars a dynamo that never dies and it keeps its air.
+      const kept = new Simulation({ ...PRESETS.earlyMars.params, brightening: 0.10,
+        magneticField: 1 });
+      const kw = kept.world;
+      let g = 0;
+      while (kw.time < (4.567 - 0.6) * 1e9 && g++ < 400) {
+        const b = kw.time; kept.runYears((4.567 - 0.6) * 1e9 - kw.time, 5e6);
+        if (kw.time <= b + 1) break;
+      }
+      check('…while the same Mars with a magnetic field keeps it',
+        kw.diag.pCO2 > 0.5,
+        `${kw.diag.pCO2.toFixed(2)} bar left with a dynamo, ` +
+        `${(w.diag.pCO2 * 1e3).toFixed(1)} mbar without one`);
+    }
+
+    // Earth is the control on the other side: it has a field, and its nitrogen
+    // is not supposed to be going anywhere.
+    {
+      const e = new Simulation({ ...EARTH, realisticGeology: true, brightening: 0.10,
+        startAge: 0.6, insolation: 1 / Math.pow(1.10, 3.967), outgassing: 1 });
+      const w = e.world;
+      let g = 0;
+      while (w.time < 3.967e9 && g++ < 400) {
+        const b = w.time; e.runYears(3.967e9 - w.time, 5e6); if (w.time <= b + 1) break;
+      }
+      check('…and an Earth with a field keeps its nitrogen and its ocean for four billion years',
+        w.diag.pN2 > 0.7 && w.water.ocean > 0.7 && w.diag.Tmean > 273 && w.diag.Tmean < 310,
+        `${w.diag.pN2.toFixed(3)} bar of N₂ left of 0.78, ` +
+        `${w.water.ocean.toFixed(2)} EO of ocean, ${(w.diag.Tmean - 273.15).toFixed(1)} °C`);
+    }
+
+    // A resurfacing event: the mantle turning over, as a pulse rather than a step.
+    {
+      const p = { resurfacingAge: 3.85, resurfacingBoost: 300, resurfacingSpan: 50 };
+      // ...and it does to a planet what Venus's did to Venus. Way et al.'s
+      // paleo-Venus does not end because the Sun brightened -- this model rides
+      // the hot branch straight past that, which is their thesis too, that it
+      // stayed habitable for two billion years. What ends it is the mantle
+      // turning over: eighty percent of the surface repaved, and the carbon that
+      // came up with it going into an atmosphere that no longer had an ocean to
+      // weather it back down.
+      //
+      // 60x is what puts roughly Venus's ninety-two bar into the air out of this
+      // planet's mantle; above about 150x the mantle itself runs out and the
+      // answer stops moving.
+      {
+        const at = 4.567 - 0.715;
+        const venusish = { ...PRESETS.earlyVenus.params, realisticGeology: true,
+          brightening: 0.10, startAge: at, co2Bar: 0.037, startT: 303,
+          insolation: 1.40 * Math.pow(1.10, at - 1.67), resurfacingSpan: 40 };
+        const run = (boost) => {
+          const s = new Simulation({ ...venusish, resurfacingAge: at + 0.05,
+            resurfacingBoost: boost });
+          let g = 0;
+          while (s.world.time < 0.715e9 && g++ < 600) {
+            const b = s.world.time; s.runYears(0.715e9 - s.world.time, 5e6);
+            if (s.world.time <= b + 1) break;
+          }
+          return s.world;
+        };
+        const quiet = run(1), repaved = run(60);
+        check('…and one the size of Venus\u2019s puts Venus\u2019s atmosphere into the air',
+          repaved.diag.pCO2 > 60 && repaved.diag.pCO2 < 200
+            && repaved.diag.pCO2 > quiet.diag.pCO2 * 4,
+          `${repaved.diag.pCO2.toFixed(0)} bar against Venus's 92, from ` +
+          `${quiet.diag.pCO2.toFixed(1)} bar without the event`);
+      }
+
+      check('A resurfacing event is a pulse, not a step',
+        resurfacingBoost(p, 3.85) === 300 && resurfacingBoost(p, 3.5) === 1
+          && resurfacingBoost(p, 4.2) === 1 && resurfacingBoost(p, 3.80) > 50
+          && resurfacingBoost({ ...p, resurfacingAge: 0 }, 3.85) === 1,
+        `1× at 3.5 Gyr, ${resurfacingBoost(p, 3.80).toFixed(0)}× at 3.80, ` +
+        `300× at 3.85, 1× again by 4.2 — and off when no age is set`);
     }
 
     // Smoothing turns a slider into a destination. It exists because of the
