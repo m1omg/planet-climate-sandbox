@@ -147,30 +147,20 @@ export function frostPointCO2(pPa) {
 // already built on and it is now the one the brightening mode drives, so the
 // preset and the mode cannot disagree about where the Sun is.
 //
-// "About ten per cent a gigayear" is right where we are and gets steeper: 9.6%
-// over the next gigayear, 10.1% at +0.5, 10.6% at +1, 12.2% at +2.2 and 15.6%
-// at +4 -- the denominator is shrinking. Worth knowing before setting a rate by
-// hand, and selftest.js pins all of it.
+// It works out to about a tenth per gigayear near today, which is where the
+// brightening mode's flat 10% comes from -- see BRIGHTEN_PER_GYR in main.js.
+// This function's job is the two presets that were fitted to it by hand: the
+// Archean's 0.77 at 3.3 Ga and Earth +2.2 Gyr's 1.2385.
 //
-// The Faint Young Sun is the same formula run backwards: 0.77 at 3.3 Ga, which
-// is the number the Archean preset carries.
+// **It has a pole and the domain is not optional.** The denominator vanishes at
+// t/t_now = 3.5, or 16.0 Gyr, and past that the "luminosity" is negative: 12 Gyr
+// gives 2.86, 16 gives -2285, 17.2 gives -9.48. The Sun leaves the main sequence
+// long before any of that, so the relation simply does not apply there -- but a
+// caller integrating forwards will walk into it, and one did. Clamped to
+// 0.5-11 Gyr, which is the span this is fitted over.
 export const SUN_AGE_NOW = 4.57e9;               // years
-export function mainSequenceLuminosity(ageYears) {
-  const t = Math.max(ageYears, 1e6) / SUN_AGE_NOW;
-  return 1 / (1 + 0.4 * (1 - t));
-}
-
-// The same relation read backwards: how old a Sun would have to be to shine
-// this much. Used to answer "where in its life is this star?" from the one
-// number the game actually has, which is how much light the planet receives.
-//
-// That reading only makes sense for a planet at something like one au of a
-// Sun-like star, and it is nonsense for a world that is dim because it orbits
-// far out rather than because its star is young. So the caller is given a range
-// to test: outside 0.74-2.29 S(+) the inversion lands outside the Sun's own main
-// sequence (0.5 to 11 Gyr) and should be ignored rather than clamped.
 export const SUN_AGE_MIN = 0.5e9, SUN_AGE_MAX = 11e9;
-export function mainSequenceAge(rel) {
-  if (!(rel > 0)) return SUN_AGE_NOW;
-  return SUN_AGE_NOW * (1 - (1 / rel - 1) / 0.4);
+export function mainSequenceLuminosity(ageYears) {
+  const t = clamp(ageYears, SUN_AGE_MIN, SUN_AGE_MAX) / SUN_AGE_NOW;
+  return 1 / (1 + 0.4 * (1 - t));
 }

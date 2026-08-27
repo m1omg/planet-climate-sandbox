@@ -9,8 +9,7 @@ import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
 import { NBANDS, lockFactor } from './physics/climate.js';
-import { clamp, mainSequenceLuminosity, mainSequenceAge,
-         SUN_AGE_NOW, SUN_AGE_MIN, SUN_AGE_MAX } from './physics/constants.js';
+import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX,
@@ -257,9 +256,22 @@ let activeScenario = null, scenarioResult = null, settling = false, activePreset
 // in a single jump the same planet tips at 1.21, and stepped up at 20 kyr a step
 // it appears to hold to 1.32 while actually being gone in under three megayears.
 const EASE_PER_YEAR = 0.01 / 2e7;
+// Ten per cent a gigayear, compounding, and flat. That is the number a
+// main-sequence star is worth near today and it is what this mode was asked
+// for; the alternative was driving Gough (1981) forwards from an age inferred
+// by inverting it, which is how this mode came to dim GJ 1132 b from 18.8 S(+)
+// to 0.05 and report "-65.6% per Gyr". The relation has a pole at 16 Gyr and
+// goes *negative* past it, and inverting an insolation to an age only ever made
+// sense for a planet at one au of a Sun-like star anyway. A constant rate has
+// no domain to leave.
+const BRIGHTEN_PER_GYR = 0.10;
+// The slider's own range, so the star can never be driven off the end of the
+// control that is supposed to be showing it.
+const STAR_DEF = SLIDERS.find((d) => d.key === 'insolation');
+const SLIDER_MIN = STAR_DEF.min, SLIDER_MAX = STAR_DEF.max;
 let easeStar = false, mainSeqStar = false;
 let slew = null;      // { from, to, startYear } while a change is being spread
-let starAge = null;   // { baseS, baseAge, startYear } while the Sun is running
+let starAge = null;   // { baseS, startYear } while the star is brightening
 // The last value a person actually asked for, and the moment the star started
 // moving on its own from it. Both modes now write the slider as the star moves,
 // so without this the number you typed would be gone the instant it did.
@@ -270,38 +282,20 @@ function starStatus(text) {
   if (el) el.textContent = text || '';
 }
 
-// Where in its life a star has to be to shine this brightly on this planet.
-//
-// Read off the insolation, which is the only stellar number the game has, and
-// only when the answer lands inside the Sun's own main sequence -- a world at
-// 0.3 S(+) is dim because of where it orbits, not because its star is young,
-// and inverting that would put the Sun before it existed. Outside the range the
-// star keeps whatever age it already had, so the mode still works on a planet
-// at any distance; it just stops pretending to know the star's age.
-//
-// The point of inferring it at all is the *rate*, which steepens as a star ages
-// -- and that the mode then has no memory to get out of step with. Switch the
-// Sun off and on again after a gigayear and it carries on at 10.6% per gigayear
-// rather than dropping back to today's 9.6%; load Earth +2.2 Gyr and switch it
-// on and it starts at that world's 12.2%. The age itself stays internal: it is
-// an inversion valid for a planet at one au of a Sun-like star, which is a claim
-// worth using and not one worth printing.
-function sunAgeFor(S, fallback = SUN_AGE_NOW) {
-  const age = mainSequenceAge(S);
-  return age >= SUN_AGE_MIN && age <= SUN_AGE_MAX ? age : fallback;
-}
-
 // Advance whichever mode is on. Called from updateReadout, ten times a second,
 // and idempotent: it reads w.time and writes the value that time implies.
 function driveStar(w) {
   if (mainSeqStar && starAge) {
-    const age = starAge.baseAge + (w.time - starAge.startYear);
-    const v = clamp(starAge.baseS * mainSequenceLuminosity(age)
-                  / mainSequenceLuminosity(starAge.baseAge), 0.05, 4);
+    const gyr = (w.time - starAge.startYear) / 1e9;
+    // Clamped to the slider's range *or wherever the star already was*,
+    // whichever is wider. Switching a mode on must never move the planet, and a
+    // world can legitimately sit outside the control: Titan receives 0.011 S(+)
+    // against a 0.005 floor now, but it was 0.05 and turning the star on threw
+    // Titan four and a half times brighter before it had ticked once.
+    const lo = Math.min(SLIDER_MIN, starAge.baseS), hi = Math.max(SLIDER_MAX, starAge.baseS);
+    const v = clamp(starAge.baseS * Math.pow(1 + BRIGHTEN_PER_GYR, gyr), lo, hi);
     setStarValue(v);
-    starStatus(`brightening `
-             + `${((mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100).toFixed(1)}% per Gyr from here`
-             + sinceManual(w, v));
+    starStatus(`brightening ${(BRIGHTEN_PER_GYR * 100).toFixed(0)}% per Gyr` + sinceManual(w, v));
     return;
   }
   if (!slew) { starStatus(''); return; }
@@ -329,7 +323,7 @@ function driveStar(w) {
 function rebaseStar() {
   slew = null;
   const S = sim.world.params.insolation ?? params.insolation;
-  starAge = mainSeqStar ? { baseS: S, baseAge: sunAgeFor(S), startYear: sim.world.time } : null;
+  starAge = mainSeqStar ? { baseS: S, startYear: sim.world.time } : null;
   starManual = mainSeqStar ? { S, atYear: sim.world.time } : null;
   starStatus('');
 }
@@ -563,14 +557,9 @@ function applyParams(key) {
   // ease would be cosmetic.
   if (key === 'insolation' && (easeStar || mainSeqStar)) {
     if (mainSeqStar) {
-      // Moving the slider under the Sun re-bases it: you have decided where the
-      // star is, and it goes on brightening from *that* age. The age carries --
-      // re-basing to SUN_AGE_NOW would put the Sun's clock back to today every
-      // time the slider was touched, and with it the per-gigayear rate, which
-      // steepens as the star ages and is half of what this mode is for.
-      const running = starAge ? starAge.baseAge + (w.time - starAge.startYear) : SUN_AGE_NOW;
-      starAge = { baseS: params.insolation, baseAge: sunAgeFor(params.insolation, running),
-                  startYear: w.time };
+      // Moving the slider under the star re-bases it: you have decided where it
+      // is, and it goes on brightening from there at the same rate.
+      starAge = { baseS: params.insolation, startYear: w.time };
       sim.setParams({ insolation: params.insolation });
     } else if (Math.abs((w.params.insolation ?? 0) - params.insolation) > 1e-9) {
       slew = { from: w.params.insolation ?? 0, to: params.insolation, startYear: w.time };
@@ -1509,13 +1498,10 @@ function bindControls() {
       // abandoned where it stands rather than completed, for the same reason.
       if (easeStar) { easeStar = false; $('#chk-ease-star').checked = false; slew = null; }
       const S = sim.world.params.insolation ?? params.insolation;
-      const age = sunAgeFor(S);
-      starAge = { baseS: S, baseAge: age, startYear: sim.world.time };
+      starAge = { baseS: S, startYear: sim.world.time };
       starManual = { S, atYear: sim.world.time };
       params.insolation = S; syncSliders();
-      const rate = (mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100;
-      toast(`The Sun is running now — ${rate.toFixed(1)}% brighter over the next gigayear, `
-          + 'and steepening', 4600);
+      toast(`The star is brightening now — ${(BRIGHTEN_PER_GYR * 100).toFixed(0)}% per gigayear`, 4600);
     } else {
       starAge = null; starManual = null; starStatus('');
       params.insolation = sim.world.params.insolation ?? params.insolation;
