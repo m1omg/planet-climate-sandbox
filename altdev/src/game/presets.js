@@ -88,6 +88,49 @@ export const PRESETS = {
   // depth having to serve 230 K and 288 K at once, reported against the
   // snowball rows in calibrate.mjs.
   earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2, insolation: 0.77, landFraction: 0.1, co2Bar: 0.10, ch4Bar: 1e-3, startT: 290 } },
+  // Venus with an ocean on it, as Way et al. (2016) modelled it in ROCKE-3D:
+  // a 1 bar nitrogen atmosphere with Earth's CO2 and methane, the 310 m ocean
+  // that Magellan's topography holds if you fill the lowlands, and the 2.9 Gya
+  // Sun -- which at Venus's orbit is still 40% more sunlight than Earth gets
+  // today. Their answer was 11 C, and the reason is the rotation: 243 days is
+  // slow enough that convection parks over the substellar point and grows a
+  // dayside cloud deck that reflects most of it straight back. Spin the same
+  // planet up to a 16-day day and it is 45 K hotter.
+  //
+  // Whether Venus ever actually did this is a live argument and this preset
+  // takes no side in it. Constantinou, Shorttle & Rimmer (2024) infer from what
+  // its volcanoes have to be resupplying that the interior is dry -- at most 6%
+  // water in the magma -- which points to a Venus that never condensed an ocean
+  // at all. That is a question about how much water the planet started with,
+  // which is the `water` control here: wind it to zero and this becomes the
+  // Venus next door. The rotation physics is the same either way.
+  //
+  // The 310 m is kept as the water inventory rather than as a coastline: Venus's
+  // lowlands are broad and flat and hold that depth over 60% of the planet,
+  // while this model floods Earth-shaped basins with it and gets 34%. The
+  // inventory is the part that matters -- it sets how much vapour there is and
+  // how long the ocean survives being blown off.
+  earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, mass: 0.815,
+    insolation: 1.40, rotationHours: 5832, obliquity: 2.6, o2Bar: 0, biosphere: 0,
+    n2Bar: 1.0126, co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.40,
+    landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288 } },
+  // Mars in the Noachian, when the valley networks were being cut. The Sun was
+  // at 75% of today's, so this world gets less than a third of Earth's light,
+  // and warming it is the oldest unsolved problem in the subject: CO2 alone
+  // cannot do it at any pressure, because past a few bar the Rayleigh
+  // scattering wins and it condenses besides (Kasting 1991).
+  //
+  // What is here is 4 bar of CO2 and 10 mbar of methane, and the methane is
+  // standing in for the collision-induced absorption of CO2 with hydrogen that
+  // Ramirez et al. (2014) need -- a few percent H2 from a reduced mantle, which
+  // this model has no hydrogen to represent. So read this as "Mars with enough
+  // greenhouse, however it got it" rather than as a claim about which gas did
+  // it. Turn the CO2 down to a bar and watch it freeze, which is the honest
+  // difficulty of the real problem.
+  earlyMars: { name: 'Noachian Mars', icon: '🟠', params: { ...EARTH, mass: 0.107,
+    insolation: 0.32, rotationHours: 24.6, obliquity: 25, o2Bar: 0, biosphere: 0,
+    n2Bar: 0.3, co2Bar: 4, ch4Bar: 0.01, water: 0.06, landFraction: 0.70,
+    landAlbedo: 0.22, outgassing: 0.5, internalHeat: 0.06, startT: 280 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },

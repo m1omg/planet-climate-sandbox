@@ -96,4 +96,16 @@ export const SCENARIOS = [
     check: (w) => w.diag.Tmean < 373,
     fail: null,
   },
+  {
+    id: 'hotbranch',
+    name: 'The Hot Ocean',
+    icon: '♨️',
+    brief: 'A world with a full ocean under a brightening star. There is a stable climate on the far side of 60 °C — an ocean that stays an ocean at bath temperature — but the only way in is slowly. Get this planet above 55 °C with its sea intact, and hold it.',
+    hint: 'Push the star up in small steps and let each one settle. Cross the same distance in one jump and the ocean goes into the air, the albedo collapses, and there is no way back — the door only opens one way.',
+    params: { ...EARTH, insolation: 1.00, outgassing: 0, emissions: 0, fossilUsed: 0,
+              biosphere: 0, startT: 288 },
+    limit: 3e8,
+    check: (w) => w.diag.Tmean > 328 && w.water.ocean > 0.8,
+    fail: (w) => w.water.ocean < 0.5 && w.diag.Tmean > 400,
+  },
 ];
