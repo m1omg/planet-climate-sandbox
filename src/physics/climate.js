@@ -489,6 +489,18 @@ export function maxStep(w, maxDeltaT = 2.5) {
   const quasi = smoothstep(6, 1, eqDistance) * smoothstep(0.10, 0.45, meanDamping);
   if (quasi > 0) dt = Math.min(dt * (1 + quasi * 4000), 5e6);
 
+  // The other half of the trust region in stepTemperature. If the last step's
+  // solve wanted to move a band further than it was allowed to, the step it was
+  // given was too long for the linearisation it was built from -- so shorten it
+  // in proportion and try again from a state that linearisation does describe.
+  // The implicit change is very nearly linear in dt while C/dt dominates the
+  // diagonal, so one pass usually lands it; where it does not the reduction
+  // repeats and converges geometrically. On every world where the region never
+  // binds -- which is all of them except during a tipping -- this does nothing.
+  if (w.trustOver > 1 && w.dtPrev > 0) {
+    dt = Math.min(dt, Math.max(w.dtPrev / w.trustOver, 2e-3));
+  }
+
   // ...but never step so far that a slow reservoir jumps discontinuously.
   const esc = w.escape;
   if (esc && esc.water > 0 && dg.totalWater > 0) {
