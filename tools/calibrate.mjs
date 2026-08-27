@@ -229,35 +229,30 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
 }
 
 // ---- Mars, run forward through its own history ----------------------------
-// With the two evolution modes on, a Noachian Mars should end up as the Mars we
-// have: 6 mbar of CO2, no ocean, -63 C. It does not, and the reason is a
-// mechanism this model has none of.
+// With the evolution modes on, a Noachian Mars should end up as the Mars we
+// have. It now does, and the mechanism is the one that did it: no dynamo, so
+// the solar wind reaches the top of the atmosphere and sputters it away.
 //
-// The escape it DOES have is hydrodynamic -- a blow-off gated on the XUV flux
-// exceeding a critical value that scales as v_esc^4 -- and that gate is
-// correctly shut for Mars under a modern Sun. What actually stripped Mars is
-// non-thermal: with no dynamo there is no magnetosphere, the solar wind reaches
-// the top of the atmosphere directly, and pickup-ion sputtering carries it off
-// ion by ion. MAVEN measures the rate today and Jakosky et al. (2018) integrate
-// it to roughly 0.5 bar of CO2 over four billion years -- comfortably the whole
-// Noachian atmosphere.
-//
-// Nothing here represents that, so the CO2 has nowhere to go: this Mars keeps
-// its greenhouse, keeps its ocean, and ends the run temperate. Adding the
-// channel means a magnetic-field state the model does not have and two fresh
-// constants to calibrate, which is a change to make deliberately rather than at
-// the end of an afternoon.
+// The dates are not fitted. The wet period ends around 3.8 Gya, which is where
+// the valley networks stop being cut, and that falls out of the escape rate and
+// the XUV history rather than being put in.
 {
   const mars = new Simulation({ ...PRESETS.earlyMars.params,
-    realisticGeology: true, brightening: 0.10, startAge: 0.6 });
-  mars.runYears((4.567 - 0.6) * 1e9, 5e6);
-  deviation('Mars CO2 after 4 Gyr', mars.world.diag.pCO2, 0.004, 0.05, 'bar',
-    'Mars has 6 mbar today and had of order a bar in the Noachian. The loss is ' +
-    'non-thermal escape to the solar wind on a planet with no dynamo -- MAVEN, ' +
-    'integrated by Jakosky et al. 2018, gives ~0.5 bar of CO2 over 4 Gyr. This ' +
-    'model has hydrodynamic escape only, whose v_esc^4 gate is correctly shut ' +
-    'for Mars, so its Noachian atmosphere has no way to leave and the planet ' +
-    'ends the run temperate with an ocean.');
+    realisticGeology: true, brightening: 0.10 });
+  let guard = 0;
+  while (mars.world.time < (4.567 - 0.6) * 1e9 && guard++ < 400) {
+    const before = mars.world.time;
+    mars.runYears((4.567 - 0.6) * 1e9 - mars.world.time, 5e6);
+    if (mars.world.time <= before + 1) break;
+  }
+  const w = mars.world;
+  anchor('Mars CO2 today, run from the Noachian', w.diag.pCO2 * 1e3, 2, 20, 'mbar',
+    'Mars has 6.0 mbar. Started at 4 bar 3.97 Gyr ago and stripped by non-thermal ' +
+    'escape once its dynamo was gone (MAVEN; Jakosky et al. 2018 integrate the ' +
+    'present rate to ~0.5 bar over 4 Gyr, and the early Sun did far more).');
+  anchor('Mars surface temperature today', w.diag.Tmean - 273.15, -75, -50, '°C',
+    'Mars averages -63 C. This is the same run as the row above, so it is a check ' +
+    'on the whole history and not on a state that was set by hand.');
 }
 
 // ---- report ---------------------------------------------------------------

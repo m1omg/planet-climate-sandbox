@@ -60,8 +60,9 @@ export class Simulation {
     } else if ('insolation' in patch) {
       w.insolationTarget = null;
     }
-    const touched = ['insolation', 'internalHeat', 'brightening',
-                     'realisticGeology', 'startAge'].some((k) => k in patch);
+    const touched = ['insolation', 'internalHeat', 'brightening', 'realisticGeology',
+                     'startAge', 'xuvFraction', 'magneticField', 'outgassing',
+                     'resurfacingAge', 'resurfacingBoost', 'resurfacingSpan'].some((k) => k in patch);
     if (touched) this.rebaseEvolution();
     update(w, 0);
   }
@@ -86,6 +87,11 @@ export class Simulation {
     } else {
       w.evolve0.internalHeat = p.internalHeat;
     }
+    // The rest are along for the ride: they are only ever read from the base,
+    // so re-basing them is just recording where the controls now stand.
+    w.evolve0.xuvFraction = p.xuvFraction;
+    w.evolve0.magneticField = p.magneticField;
+    w.evolve0.outgassing = p.outgassing;
   }
 
   // realDt in seconds; returns simulated years actually advanced.
@@ -150,6 +156,9 @@ export class Simulation {
     const ev = evolvedParams(w.params, w.evolve0, w.time);
     if (ev.insolation !== undefined) w.params.insolation = ev.insolation;
     if (ev.internalHeat !== undefined) w.params.internalHeat = ev.internalHeat;
+    if (ev.xuvFraction !== undefined) w.params.xuvFraction = ev.xuvFraction;
+    if (ev.magneticField !== undefined) w.params.magneticField = ev.magneticField;
+    if (ev.outgassing !== undefined) w.params.outgassing = ev.outgassing;
     // ...and then walk towards whatever the controls were last set to, if the
     // world is being asked to change smoothly. This runs after the evolution
     // above so that a brightening star and a hand on the slider compose:

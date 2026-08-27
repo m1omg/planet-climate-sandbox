@@ -394,6 +394,7 @@ function syncSliders() {
   const br = $('#chk-brightening'); if (br) br.checked = params.brightening > 0;
   const gl = $('#chk-geology'); if (gl) gl.checked = !!params.realisticGeology;
   const sm = $('#chk-smooth-sun'); if (sm) sm.checked = !!params.smoothInsolation;
+  const rs = $('#chk-resurface'); if (rs) rs.checked = params.resurfacingAge > 0 && params.resurfacingBoost > 1;
   markBody();
 }
 
@@ -1231,6 +1232,24 @@ function bindControls() {
 
   // The interior runs down its radiogenic curve, and volcanism follows through
   // melt production without needing a switch of its own.
+  // A resurfacing event is three numbers, and nobody wants to set three numbers
+  // to ask "what if the mantle turned over". The checkbox places Venus's, which
+  // is the one with a date on it; the sliders are there to move it afterwards.
+  $('#chk-resurface').addEventListener('change', (e) => {
+    if (e.target.checked) {
+      if (!(params.resurfacingAge > 0)) params.resurfacingAge = 3.85;
+      if (!(params.resurfacingBoost > 1)) params.resurfacingBoost = 60;
+    } else {
+      params.resurfacingAge = 0;
+    }
+    sim.setParams({ resurfacingAge: params.resurfacingAge,
+                    resurfacingBoost: params.resurfacingBoost });
+    syncSliders(); writeHash(); markTouched();
+    toast(e.target.checked
+      ? `Mantle turnover at ${params.resurfacingAge.toFixed(2)} Gyr, ${params.resurfacingBoost.toFixed(0)}× volcanism`
+      : 'No resurfacing event');
+  });
+
   $('#chk-smooth-sun').addEventListener('change', (e) => {
     params.smoothInsolation = e.target.checked;
     sim.setParams({ smoothInsolation: params.smoothInsolation });

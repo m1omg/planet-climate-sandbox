@@ -78,7 +78,9 @@ export function resetWorld(w, params) {
   // than rates to integrate, so they are computed from here every step instead
   // of being stepped forward -- which is what keeps them independent of the
   // step sequence.
-  w.evolve0 = { insolation: params.insolation, internalHeat: params.internalHeat };
+  w.evolve0 = { insolation: params.insolation, internalHeat: params.internalHeat,
+                xuvFraction: params.xuvFraction, magneticField: params.magneticField,
+                outgassing: params.outgassing };
   w.insolationTarget = null;   // no walk in progress on a fresh world
   update(w, 0);
 }

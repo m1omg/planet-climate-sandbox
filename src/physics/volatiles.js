@@ -3,6 +3,7 @@ import {
   OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH, M_EARTH,
 } from './constants.js';
 import { iceFraction } from './radiation.js';
+import { nonThermalEscape } from './evolution.js';
 import { outgassingScale, radiusFromMass } from './planet.js';
 import { NBANDS } from './climate.js';
 
@@ -364,7 +365,11 @@ export function escapeRates(w) {
   const gate = smoothstep(0.3, 3, xuv / Math.max(fCrit, 1e-12));
   const background = 0.005 * xuv / (dg.g * d.R) * YEAR * gate;
 
-  return { water, background, fStrat, Tct, diffusion, energy, xSteam };
+  // ...and the channel that has no threshold at all: the solar wind stripping
+  // ions off whatever the magnetosphere does not cover. See nonThermalEscape.
+  const nonThermal = nonThermalEscape(p, d, xuv, pTot);
+
+  return { water, background, nonThermal, fStrat, Tct, diffusion, energy, xSteam };
 }
 
 // ---------------------------------------------------------------------------
@@ -894,6 +899,19 @@ export function stepVolatiles(w, dtYears) {
   if (esc.background > 0) {
     const f = Math.max(0, 1 - esc.background * dtYears / Math.max(w.n2 + w.co2 + w.o2, 1e-6));
     w.n2 *= f; w.co2 *= f; w.o2 *= f;
+  }
+  // The non-thermal channel runs whatever the flux, so it is not gated the way
+  // the hydrodynamic one above is. It takes the background mixture in
+  // proportion, which is close enough: the wind picks off what is at the top of
+  // the atmosphere, and on the worlds where this matters that is nearly all CO2
+  // anyway. Only what is airborne is exposed -- carbon in the ocean, in the
+  // crust or frozen onto the poles is not.
+  if (esc.nonThermal > 0) {
+    const col = w.n2 + w.co2 + w.o2;
+    if (col > 0) {
+      const f = Math.max(0, 1 - esc.nonThermal * dtYears / col);
+      w.n2 *= f; w.co2 *= f; w.o2 *= f;
+    }
   }
 
   // --- a molten surface degasses hard -------------------------------------

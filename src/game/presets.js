@@ -42,6 +42,14 @@ export const EARTH = {
   realisticGeology: false, // let the interior run down its radiogenic curve
   startAge: 4.567,         // Gyr the planet has already lived through at t=0
   smoothInsolation: false, // walk to a new starlight value instead of jumping
+  // Earth's field, relative to Earth's. What it buys is a magnetopause ten
+  // radii out and a hundredth of the solar wind reaching the air; without one
+  // the wind sputters the atmosphere away ion by ion, which is what happened to
+  // Mars. Under realistic decay it goes out when the core stops convecting.
+  magneticField: 1,
+  // A resurfacing event, off unless placed: the age it happens at, how much it
+  // multiplies volcanic outgassing by, and how long it lasts.
+  resurfacingAge: 0, resurfacingBoost: 1, resurfacingSpan: 50,
 };
 
 export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
@@ -63,8 +71,8 @@ export const PRESETS = {
   // still there if you want them -- the control does not go away, it just starts
   // at nothing.
   earthlike: { name: 'Earth-like', icon: '🌐', params: { ...PREINDUSTRIAL, co2Bar: 280e-6, emissions: 0, fossilUsed: 0 } },
-  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
-  mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.02, landAlbedo: 0.25, startT: 215 } },
+  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
+  mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.2, landAlbedo: 0.25, startT: 215 } },
   // 0.10 bar of CO2, and it has been raised for the same reason twice now.
   //
   // It was 0.02, which only worked because methane's opacity was some five
@@ -116,12 +124,18 @@ export const PRESETS = {
   // while this model floods Earth-shaped basins with it and gets 34%. The
   // inventory is the part that matters -- it sets how much vapour there is and
   // how long the ocean survives being blown off.
-  earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, mass: 0.815,
+  earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, mass: 0.815, magneticField: 0,
     insolation: 1.40, rotationHours: 5832, obliquity: 2.6, o2Bar: 0, biosphere: 0,
     n2Bar: 1.0126, co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.40,
     landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288,
     // Way's Sim A is 2.9 Gya, so the planet is 4.567 - 2.9 Gyr old here.
-    startAge: 1.67 } },
+    startAge: 1.67,
+    // The resurfacing is loaded but not armed: 3.852 Gyr is 715 Myr ago, and 60x
+    // is what it takes to put roughly Venus's ninety-two bar into the air out of
+    // this planet's mantle. Tick "resurfacing event" to fire it.
+    resurfacingAge: 0, resurfacingBoost: 60, resurfacingSpan: 40,
+    // Same again: 3.45x today's XUV at an age of 1.67 Gyr.
+    xuvFraction: 3.4e-6 * 3.45 } },
   // Mars in the Noachian, when the valley networks were being cut. The Sun was
   // at 75% of today's, so this world gets less than a third of Earth's light,
   // and warming it is the oldest unsolved problem in the subject: CO2 alone
@@ -138,7 +152,11 @@ export const PRESETS = {
   earlyMars: { name: 'Noachian Mars', icon: '🟠', params: { ...EARTH, mass: 0.107,
     insolation: 0.32, rotationHours: 24.6, obliquity: 25, o2Bar: 0, biosphere: 0,
     n2Bar: 0.3, co2Bar: 4, ch4Bar: 0.01, water: 0.06, landFraction: 0.70,
-    landAlbedo: 0.22, outgassing: 0.5, internalHeat: 0.06, startT: 280,
+    landAlbedo: 0.22, outgassing: 0.2, internalHeat: 0.06, startT: 280, magneticField: 0,
+    // The Sun at 0.6 Gyr was about twelve times as harsh in the extreme
+    // ultraviolet as it is now (Ribas et al. 2005). A preset that starts in the
+    // deep past has to carry the star of that epoch, not this one's.
+    xuvFraction: 3.4e-6 * 12.1,
     // The Noachian runs 4.1-3.7 Gya, so Mars is about half a billion years old.
     startAge: 0.6 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
