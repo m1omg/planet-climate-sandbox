@@ -1,6 +1,9 @@
 import { STATES } from '../physics/classify.js';
+import { key } from './storage.js';
 
-const KEY = 'planetclimate.discovered.v1';
+// Namespaced per build: /dev/ and /altdev/ do not classify worlds identically,
+// so a shared discovery log credits one build for the other's states.
+const KEY = key('discovered.v1');
 
 export function loadDiscovered() {
   try { return new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); }

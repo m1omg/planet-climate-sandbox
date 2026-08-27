@@ -11,6 +11,10 @@
 //
 //   * window.__assetBase points at ../assets/, so this copy borrows the 23 MB of
 //     surface maps already at the site root rather than shipping a second set;
+//   * window.__storageScope names the directory, so this copy's saves, discovery
+//     log and preferences sit in their own corner of localStorage instead of in
+//     the stable site's. localStorage is keyed by origin and not by path, and
+//     all three builds are one origin;
 //   * a banner saying what is broken.
 //
 // The banner is pointer-events:none with only its dismiss button clickable, and
@@ -26,9 +30,12 @@ import { execFileSync } from 'node:child_process';
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const out = process.argv[2];
 if (!out) { console.error('usage: node tools/builddev.mjs <path-to-main-checkout>'); process.exit(1); }
-const dev = join(out, 'dev');
+// The directory this build is served from, which is also its storage namespace
+// and the word in its banner.
+const NAME = 'dev';
+const dev = join(out, NAME);
 
-const NOTE = 'Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes and Hycean work in progress \u2014 known gaps reported by calibrate.mjs';
+const NOTE = 'Goldblatt runaway limit, saturating hot branch, refitted methane, four-band radiation, the two star modes, the prokaryote/eukaryote split and Hycean work in progress \u2014 known gaps reported by calibrate.mjs';
 // The Huronian entry below is kept because it was reported from this build twice.
 
 // Which branch this copy came from. Asked of git rather than written down here,
@@ -49,7 +56,7 @@ for (const d of ['css', 'src']) cpSync(join(root, d), join(dev, d), { recursive:
 let html = readFileSync(join(root, 'index.html'), 'utf8');
 const tag = '<script type="module" src="src/main.js"></script>';
 if (!html.includes(tag)) { console.error('module script tag not found in index.html'); process.exit(1); }
-html = html.replace(tag, '<script>window.__assetBase = "../assets/";</script>\n' + tag);
+html = html.replace(tag, `<script>window.__assetBase = "../assets/"; window.__storageScope = "${NAME}";</script>\n` + tag);
 html = html.replace('<title>', '<title>[dev] ');
 
 const banner = `<div id="devbar"><span class="devbar-tag">DEV</span><span class="devbar-msg">${NOTE}</span>` +
@@ -72,10 +79,11 @@ const banner = `<div id="devbar"><span class="devbar-tag">DEV</span><span class=
 <script>
 (function(){
   var bar=document.getElementById('devbar');
-  try{ if(localStorage.getItem('devbar.dismissed')==='1') bar.classList.add('gone'); }catch(e){}
+  var k='planetclimate.${NAME}.devbar.v1';
+  try{ if(localStorage.getItem(k)==='1') bar.classList.add('gone'); }catch(e){}
   bar.querySelector('.devbar-x').addEventListener('click',function(){
     bar.classList.add('gone');
-    try{ localStorage.setItem('devbar.dismissed','1'); }catch(e){}
+    try{ localStorage.setItem(k,'1'); }catch(e){}
   });
 })();
 </script>
@@ -98,6 +106,17 @@ node tools/builddev.mjs /path/to/main/checkout
 \`../assets/\` and borrows the surface maps at the site root, which is 668 KB
 instead of 23 MB.
 
+Its saves, preferences and discovery log are its own. \`localStorage\` is keyed by
+origin and not by path, so this copy, the stable site and \`/altdev/\` shared one
+set of keys until \`src/game/storage.js\` split them — and slot 1 is the autosave,
+firing every thirty seconds, so a minute here wrote over a world saved there.
+Keys are \`planetclimate.${NAME}.*\`; the site root keeps the bare ones it has
+always used. A namespace opened for the first time copies what was in the shared
+keys, so nothing looks lost; it is a copy, and the stable site keeps everything.
+
+Worlds still cross between builds the way they should — the URL hash and the
+export file carry parameters rather than physics state.
+
 **This build is knowingly not green** — ${NOTE}. \`selftest.js\` has seventeen
 standing failures, every one of them a test asserting a deviation the README
 names and explains; two of them assert the *old* deviation, since snowball
@@ -111,6 +130,20 @@ rather than fixed: Earth's pre-industrial temperature, which is 0.79 K warm and
 and CO₂'s forcing per doubling at high concentration, which falls off where the
 real thing strengthens because a semi-grey band saturates all at once. Both
 print their numbers on every run.
+
+The biosphere is split between prokaryotes and eukaryotes, in the readout's
+**Life** bar. Three conditions decide it, each a fact rather than a knob: oxygen
+(the mitochondrion is an oxygen-respiring endosymbiont, so an anoxic world has
+no eukaryotes at all), heat (none is known above 60 \u00b0C where prokaryotes reach
+122), and CO\u2082 (vascular plants starve at 150 ppm where cyanobacteria manage on a
+few). Plus one about history: eukaryogenesis happened once and trailed Earth's
+oxygen by ~700 Myr, so oxygenating a world here does not hand it a nucleus in
+the same breath. A living Earth reads 86/14 against Bar-On et al. 2018's 85/14,
+an Archean one 100% prokaryote, and Earth +2.2 Gyr 100% prokaryote again \u2014 the
+star has brightened, weathering has taken the CO\u2082, and the plants are gone.
+
+It reports and does not steer: every preset is bit-identical to seventeen
+significant figures with it in.
 
 The brightening mode is a flat 10% a gigayear now. It used to drive Gough
 (1981) forwards from an age inferred by inverting it, and that relation has a

@@ -1099,6 +1099,56 @@ The rules live in `src/game/saves.js`, free of the DOM and of storage for the
 same reason `controls.js` is: which slot a world lands in is a decision worth
 testing on its own, and it needs no browser to make.
 
+### Three builds, one browser
+
+The stable site, `/dev/` and `/altdev/` are three copies of this served from one
+GitHub Pages origin, and **`localStorage` is keyed by origin, not by path**. So
+all three were reading and writing the same keys.
+
+That is not academic. Slot 1 is the autosave and it fires every thirty seconds,
+so a minute spent in one build wrote over a world saved from another. Worse, a
+slot holds full simulation state — band temperatures, the ice sheet, the carbon
+below — with no build tag on it, so the world loaded in the other build without
+complaint and then simulated differently. A silent wrong answer, which is the
+worst kind of wrong answer this program can give.
+
+`src/game/storage.js` splits the area. Every key goes through one `key()` call,
+and the namespace comes from **the path the page was served from** rather than a
+constant written into the source:
+
+| served from | keys |
+| --- | --- |
+| `/` | `planetclimate.slot1.v1` |
+| `/dev/` | `planetclimate.dev.slot1.v1` |
+| `/altdev/` | `planetclimate.altdev.slot1.v1` |
+
+Read off the path and not written down, because this source is *both* the dev
+build and, once it merges, the site root. A constant saying `dev` would travel
+with it and move everybody's saved worlds out from under them on the day it
+shipped. The signal that a copy is not the root one is `window.__assetBase`: a
+build below the root borrows the 23 MB of surface maps at the root instead of
+shipping a second set, and pointing that at `../assets/` is a fact about where
+the files are rather than a flag that can drift.
+
+Preferences and the discovery log are split the same way, and for the log there
+is a second reason: two builds do not classify worlds identically, so a shared
+log credits one build for the other's states.
+
+Because the slots were shared until this landed, a namespace that has never been
+used **adopts what was in the shared keys, once** — a copy, never a move, so the
+stable site keeps every world it had. From there the two sets go their own ways.
+
+What deliberately is *not* namespaced is anything that crosses builds on
+purpose: the URL hash and the export file both carry parameters rather than
+physics state, so they mean the same thing wherever they are opened. An export
+does put the build in the filename, since two taken the same day otherwise
+collide in the downloads folder.
+
+The guard against regression is a grep. `smoketest.mjs` fails on a
+`'planetclimate.…'` literal anywhere outside `storage.js`, because the way this
+breaks again is not a broken split — it is one new preference written by hand,
+landing back in the shared area where nothing would notice.
+
 ### The biosphere you ask for, and the one there is
 
 The control is a request. What the planet supports is a separate number, and until now nothing showed
@@ -1187,6 +1237,106 @@ still no light there.
 and weathering draws CO₂ down to nothing; nothing photosynthesises without
 carbon, however warm and wet the day side is. That is the usual reason a locked
 world with visible oceans reads dead — not the temperature.
+
+### Prokaryotes and eukaryotes
+
+`Photosynthetic biosphere` gives one number for how much life there is. Two
+kinds of it are possible, they want very different things, and the model now
+says which is which. The readout carries a **Life** bar next to the atmosphere's.
+
+The target is Bar-On, Phillips & Milo (2018), who put Earth's standing biomass
+at about **550 Gt C** — plants 450, bacteria 70, archaea 7, fungi 12, protists 4,
+animals 2. That is **85% eukaryote, 14% prokaryote**, and a living Earth here
+reads 86 / 14 (473 Gt C against their 468, and 77 against their 77).
+
+Three conditions decide the split, and each is a fact rather than a knob.
+
+**Oxygen.** The mitochondrion is what makes a eukaryote and it is an
+oxygen-respiring endosymbiont, so this is the sharpest of the three: on an anoxic
+world there is no such thing as a eukaryote. The ramp runs in `log10` of present
+atmospheric level, because the evidence is always about which *order of
+magnitude* of PAL and never about which per cent — 0.1% PAL at the bottom, 20% at
+the top, with Berkner & Marshall's 1% "Pasteur point" sitting inside it rather
+than at either end, and the Neoproterozoic Oxygenation Event's ~10% near the top.
+
+What that gets right without being asked to is the Proterozoic. At 1% PAL the
+ramp returns **0.40** — the boring billion comes out as a world that *has*
+eukaryotes and is still mostly run by bacteria, which is what the rock record
+says and is not a number anything here was fitted to.
+
+**Heat.** Sixty degrees separate the two domains and it is the least ambiguous
+fact about them: no eukaryote is known above about 60 °C (Tansey & Brock 1972 put
+the limit at 62), while *Methanopyrus kandleri* strain 116 grows at **122**
+(Takai et al. 2008). The band loop that decides where photosynthesis can run now
+answers both questions in one pass, with one term different — the ceiling. Warm a
+world and its bands drop out of the eukaryotes' reach before they drop out of the
+biosphere's, so the split shifts bacterial: Earth at 1.14 S⊕ is measurably more
+prokaryotic than Earth at 1.00.
+
+**Carbon.** `carbonLimit` already parts vascular plants, which starve at 150 ppm,
+from the cyanobacteria and carbon-concentrating phytoplankton that manage on a
+few — and the first of those is the eukaryotic constituency. So this costs
+nothing new and produces the right ending: **Earth +2.2 Gyr reads 100%
+prokaryote.** The star has brightened, weathering has taken the CO₂, the plants
+are gone, and 0.44× of a microbial biosphere is still running. That is the end of
+Earth's biosphere as it is usually reconstructed, and it fell out rather than
+being written in.
+
+And one condition that is about history rather than about conditions:
+
+**It happened once, and it took time.** Eukaryogenesis occurred a single time in
+four billion years, and on Earth it trailed the oxygen that permitted it by some
+seven hundred million years — the Great Oxidation is 2.4 Ga, unambiguous
+crown-group eukaryotes 1.7–1.6. So `eukReady` is a state variable on a 300 Myr
+exponential, which is 90% of the way there after 700. **Oxygenating a world does
+not hand it a nucleus in the same breath**; you have to wait, and the readout says
+you are waiting rather than barred.
+
+Run the **Great Oxidation** scenario and that is what you get. Oxygen crosses at
+about 100 Myr and the methane collapses from 254 ppm to 1; by 150 Myr the air is
+at 63% PAL and the biosphere is **still only 18% eukaryote**; it reaches 82% a
+gigayear later. A fully oxygenated world, and the nucleus takes its own time
+regardless.
+
+| in-game | pO₂ | eukaryote |
+| ---: | ---: | ---: |
+| 50 Myr | 0.0005 PAL | 0% |
+| 100 Myr | 0.43 PAL | 6% |
+| 300 Myr | 0.62 PAL | 45% |
+| 850 Myr | 0.66 PAL | 79% |
+
+It ratchets: losing the oxygen again does not un-evolve anything, since the gate
+already handles a world that suffocates and the lineage waits in what is left.
+Only sterilising the planet resets it — and that had to be made exclusive with the
+ratchet, because a snowball that dies while still holding its dead atmosphere's
+oxygen satisfies both rules at once, and running both left readiness climbing as
+fast as the reset pulled it down.
+
+Finally, a floor: **14% of any biosphere stays prokaryotic** however good things
+get. Not a fudge — it is where Earth's 77 Gt C of bacteria and archaea actually
+are. Most of it is the deep subsurface, which no eukaryote occupies at all; the
+rest is anoxic sediment and the open-ocean picoplankton size class that
+*Prochlorococcus* owns because a cell carrying a nucleus cannot be that small.
+
+#### It reports; it does not steer
+
+The split reads the biosphere, the oxygen and the temperature. It feeds back on
+none of them, and **every preset is bit-identical to seventeen significant figures
+across temperature, CO₂, biosphere, oxygen and methane** with this in.
+
+That is deliberate. The one coupling worth having — that an anoxic,
+prokaryote-only world is the methane-rich one — is *already* in the model, as the
+oxygen dependence of the methane flux. Wiring it a second time through a
+prokaryote fraction would double-count the same physics and move every methane
+anchor `calibrate.mjs` holds.
+
+Two simplifications worth naming. Marine eukaryotic algae are not resolved
+separately from the cyanobacteria they share the ocean with, so CO₂ starvation
+removes them along with the land plants; on a real world diatoms and
+coccolithophores would hold on longer. And the reported quantity is standing
+biomass, not production — the two differ by a lot, since wood is standing stock
+and plankton turn over in days, and Bar-On's is the number with a definitive
+answer to check against.
 
 ### Us
 
@@ -2659,7 +2809,7 @@ obliquity resists glaciation) · Turbet et al. 2018 (TRAPPIST-1 climates and vol
 et al. 2021 (TRAPPIST-1 masses, radii and insolations) · Bonfils et al. 2018 (GJ 1132 b) · Greene et
 al. 2023 (TRAPPIST-1b's 503 K dayside, and no atmosphere) · Joshi, Haberle & Reynolds 1997,
 Wordsworth 2015, Koll & Abbot 2016 (night-side cold traps and atmospheric collapse on tidally locked
-planets) · Draper 1847 (the temperature at which solids begin to glow visibly).
+planets) · Draper 1847 (the temperature at which solids begin to glow visibly) · Bar-On, Phillips & Milo 2018 (the biomass distribution on Earth: 550 Gt C, 85% of it eukaryotic) · Takai et al. 2008 (*Methanopyrus kandleri* strain 116 growing at 122 °C) · Tansey & Brock 1972 (the upper temperature limit for eukaryotic life, ~62 °C) · Berkner & Marshall 1965 (the Pasteur point) · Lyons, Reinhard & Planavsky 2014 (the rise of oxygen in Earth's early ocean and atmosphere) · Mills et al. 2014 (sponges respiring below 4% PAL) · Field et al. 1998 (primary production of the biosphere).
 
 ## Licence
 

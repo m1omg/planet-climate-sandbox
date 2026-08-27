@@ -529,5 +529,47 @@ if (created < 20) {
   }
 }
 
+// Every storage key goes through storage.js.
+//
+// localStorage is keyed by origin and not by path, so the stable site, /dev/
+// and /altdev/ share one storage area. storage.js is what splits it, and the
+// way that regresses is not a broken split -- it is one new preference written
+// with a hardcoded 'planetclimate.something' string, which lands back in the
+// shared area and is read and written by all three builds. So this greps for
+// the literal rather than testing behaviour: the next key added has to go
+// through key(), or it never reaches a test that could notice.
+{
+  const { readFileSync } = await import('node:fs');
+  const offenders = [];
+  for (const f of files) {
+    // storage.js is where the prefix lives; selftest.js spells the finished keys
+    // out on purpose, since pinning the exact strings is what it is for.
+    if (/[\\/](storage|selftest)\.js$/.test(f)) continue;
+    const src = readFileSync(f, 'utf8');
+    for (const m of src.matchAll(/(['"`])planetclimate\.[^'"`]*\1/g)) {
+      offenders.push(`${relative(root, f)}: ${m[0]}`);
+    }
+  }
+  if (offenders.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  storage keys written by hand, which puts them back in the ` +
+      `area all three builds share — ${offenders.join('; ')}`);
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  every storage key is built by storage.js, so each build keeps its own');
+  }
+}
+
+// The dev build has to say which build it is, or it takes the site root's keys.
+{
+  const { readFileSync } = await import('node:fs');
+  const build = readFileSync(new URL('./builddev.mjs', import.meta.url), 'utf8');
+  if (!/__storageScope\s*=\s*"\$\{NAME\}"/.test(build)) {
+    console.log('\x1b[31mFAIL\x1b[0m  the dev build does not declare a storage scope');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  the dev build declares its storage scope');
+  }
+}
+
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);

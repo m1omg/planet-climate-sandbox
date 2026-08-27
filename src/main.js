@@ -3,11 +3,13 @@ import { carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
+import { key as storeKey, storageScope } from './game/storage.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
 import { runawayLimit } from './physics/radiation.js';
+import { eukaryoteOxygen, EARTH_BIOMASS_GTC } from './physics/biology.js';
 import { NBANDS, lockFactor } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
@@ -55,8 +57,8 @@ const discovered = loadDiscovered();
 // in the view controls switches between them at any time.
 // Rendering detail. High everywhere by default; Low is a manual choice for
 // hardware that still struggles, and it is remembered between visits.
-const QUALITY_KEY = 'planetclimate.quality.v1';
-const ATMO_KEY = 'planetclimate.atmosphere.v1';
+const QUALITY_KEY = storeKey('quality.v1');
+const ATMO_KEY = storeKey('atmosphere.v1');
 
 // Stylised by default. A real atmosphere is a hairline -- Earth's is 0.7% of its
 // radius -- and the whole point of the app is watching one change, so the
@@ -74,7 +76,7 @@ function atmosphereFromUrl() {
 // start of setting something up, and at a year a second the first decades of a
 // world you have not finished building are wasted ones. Remembered, because it
 // is a working habit rather than a property of any particular planet.
-const RESET_PAUSED_KEY = 'planetclimate.resetPaused.v1';
+const RESET_PAUSED_KEY = storeKey('resetPaused.v1');
 function resetPausedPref() {
   try { return localStorage.getItem(RESET_PAUSED_KEY) !== 'run'; } catch { return true; }
 }
@@ -791,6 +793,47 @@ function composition(dg) {
   return `<div class="comp-bar">${bar}</div><div class="comp-list">${text}</div>`;
 }
 
+// The two domains of life, on the same bar the atmosphere gets.
+//
+// Reported as standing biomass rather than as production, because that is what
+// "how much life is there" means to anyone asking, and because it is the number
+// with a definitive answer to check against: Bar-On, Phillips & Milo 2018 put
+// Earth at 550 Gt C, 450 of it plants. A living Earth here reads 473 Gt C of
+// eukaryote against their 468, and 77 of prokaryote against their 77.
+function biomass(dg) {
+  const tot = Math.max(dg.bio ?? 0, 0);
+  if (!(tot > 0)) return '<span class="comp-none">nothing alive</span>';
+  const euk = clamp(dg.euk ?? 0, 0, tot), prok = Math.max(tot - euk, 0);
+  const gt = (v) => v * EARTH_BIOMASS_GTC >= 10 ? (v * EARTH_BIOMASS_GTC).toFixed(0)
+    : (v * EARTH_BIOMASS_GTC).toPrecision(2);
+  const parts = [
+    ['Prokaryotes', prok, '#7fb2c9', 'Bacteria and archaea. No nucleus, no oxygen required, and they '
+      + 'hold the deep subsurface whatever happens at the surface — which is why a share of every '
+      + 'biosphere here stays theirs.'],
+    ['Eukaryotes', euk, '#8fcf6a', 'Cells with a nucleus and mitochondria: plants, animals, fungi, '
+      + 'protists. The mitochondrion is an oxygen-respiring endosymbiont, so they need oxygen; none '
+      + 'is known above 60 °C where prokaryotes reach 122; and a planet has to evolve them once '
+      + 'before it has them at all.'],
+  ];
+  const bar = parts.filter((e) => e[1] / tot > 0.004)
+    .map((e) => `<i style="width:${(e[1] / tot * 100).toFixed(2)}%;background:${e[2]}"></i>`).join('');
+  const list = parts.map(([n, v, c, t]) =>
+    `<span title="${t}"><b style="color:${c}">${n}</b> ${(v / tot * 100).toFixed(0)}% · ${gt(v)} Gt C</span>`).join('');
+  // When there are none, say which of the three gates is shut. Otherwise a world
+  // that has just crossed the Great Oxidation reads "0% eukaryote" for seven
+  // hundred million years with no clue that it is waiting rather than barred.
+  let why = '';
+  if (euk / tot < 0.005) {
+    why = eukaryoteOxygen(dg.pO2 ?? 0) < 0.02
+        ? 'anoxic — nothing here can respire'
+      : (dg.eukReady ?? 0) < 0.5
+        ? 'the oxygen is new; a nucleus has not evolved yet'
+        : 'too hot, or too little CO\u2082 left for anything but microbes';
+    why = `<div class="comp-list"><span>${why}</span></div>`;
+  }
+  return `<div class="comp-bar">${bar}</div><div class="comp-list">${list}</div>${why}`;
+}
+
 function stat(k, v, cls = '') { return `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
 
 function updateReadout() {
@@ -843,6 +886,9 @@ function updateReadout() {
     stat('Surface pressure', `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +
     stat('CO₂', dg.pCO2 >= 0.01 ? `${dg.pCO2.toFixed(2)}<small> bar</small>` : `${(dg.pCO2 * 1e6).toFixed(0)}<small> ppm</small>`) +
     stat('Composition', composition(dg), 'wide') +
+    // Only once somebody has asked for a biosphere at all.
+    ((w.params.biosphere ?? 0) > 0 || (dg.bio ?? 0) > 0
+      ? stat('Life', biomass(dg), 'wide') : '') +
     // What is left in the mantle and crust. Worth showing once a world has
     // started seriously outgassing -- it is what stops the CO2.
     (w.carbonDeep != null && w.carbonDeep < 0.97 * carbonBudget(w.params.mass)
@@ -974,7 +1020,7 @@ function toast(msg, ms = 2600) {
 // below. Saving only the sliders would have given you a world that looked right
 // and had forgotten everything it had been through, which for a model whose
 // whole subject is history would be the wrong thing to keep.
-const slotKey = (i) => `planetclimate.slot${i}.v1`;
+const slotKey = (i) => storeKey(`slot${i}.v1`);
 let armedToSave = false;
 
 function readSlot(i) {
@@ -1210,7 +1256,10 @@ function exportSaves() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const stamp = new Date().toISOString().slice(0, 10);
-  a.href = url; a.download = `planet-climate-saves-${stamp}.json`;
+  // Which build wrote it goes in the name. Two exports taken the same day from
+  // two builds otherwise land in the downloads folder as the same filename and
+  // one of them becomes " (1)".
+  a.href = url; a.download = `planet-climate-saves-${storageScope ? storageScope + '-' : ''}${stamp}.json`;
   document.body.appendChild(a); a.click(); a.remove();
   // Revoked on the next turn of the event loop: revoking synchronously can
   // race the download on some browsers.
@@ -1939,11 +1988,11 @@ async function start() {
 }
 
 // Handy from the console, and used by the browser self-test.
-try { localStorage.removeItem('planetclimate.renderer.v1'); } catch { }
+try { localStorage.removeItem(storeKey('renderer.v1')); } catch { }
 
 window.__app = {
   sim, view, tick, frame, params, loadPreset, startScenario, graphicsFromUrl, useRenderer,
-  rendererLog,
+  rendererLog, storageScope,
   // Paste __app.diagnose() into the console to see what this machine offers.
   diagnose() {
     const probe = (kind) => {

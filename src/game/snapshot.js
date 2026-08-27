@@ -32,6 +32,10 @@ export function captureWorld(w) {
     fossil: w.fossil,
     carbonDeep: w.carbonDeep,
     bio: w.bio,
+    // Both halves of the biosphere split. `eukReady` especially: it is a
+    // ratchet on a 300 Myr timescale, so a world restored without it forgets
+    // that it ever evolved a nucleus and has to spend the time again.
+    euk: w.euk, eukReady: w.eukReady,
     co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4, h2: w.h2,
     // Two rates rather than reservoirs, and they are here for the same reason
     // the reservoirs are. `ch4Escape` is the hydrogen last step's methane
@@ -74,6 +78,8 @@ export function applyWorld(sim, s, params = s.params) {
   w.fossil = s.fossil ?? null;
   w.carbonDeep = s.carbonDeep ?? null;
   w.bio = s.bio ?? null;
+  w.euk = s.euk ?? null;
+  w.eukReady = s.eukReady ?? null;
   if (s.co2 != null) w.co2 = s.co2;
   if (s.n2 != null) w.n2 = s.n2;
   if (s.o2 != null) w.o2 = s.o2;
