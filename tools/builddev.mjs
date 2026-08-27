@@ -112,6 +112,13 @@ and CO₂'s forcing per doubling at high concentration, which falls off where th
 real thing strengthens because a semi-grey band saturates all at once. Both
 print their numbers on every run.
 
+The brightening mode is a flat 10% a gigayear now. It used to drive Gough
+(1981) forwards from an age inferred by inverting it, and that relation has a
+pole at 16 Gyr: Young Venus crossed it, was dimmed to the bottom of the slider
+and reported "brightening \u221245.3% per Gyr". The starlight slider also
+reaches 50 S\u2295 now, because GJ 1132 b receives 18.8 and could not be
+represented on one that stopped at 4.
+
 A wet runaway used to crawl at a couple of kiloyears a second with nothing
 happening on it: \`o2Rate\` was missing the oxygen that escaping hydrogen leaves
 behind, so the step controller clamped the clock to five-year steps on a world

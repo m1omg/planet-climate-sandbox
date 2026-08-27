@@ -5,7 +5,7 @@ import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, psatH2O, smoothstep,
-         mainSequenceLuminosity, mainSequenceAge,
+         mainSequenceLuminosity,
          SUN_AGE_NOW, SUN_AGE_MIN, SUN_AGE_MAX } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
@@ -512,36 +512,30 @@ export function run() {
       `Archean at 3.3 Ga ${rel(SUN_AGE_NOW - 3.3e9).toFixed(3)} against the preset's 0.77; ` +
       `+1 Gyr ${rel(SUN_AGE_NOW + 1e9).toFixed(3)} against the 1.09 it used to ship`);
 
-    // "About ten per cent a gigayear" is right where we are and gets steeper,
-    // which is worth pinning because it is the number people quote flat: 9.6%
-    // over the next gigayear, 10.6% at +1, 12.2% at +2.2, 15.6% at +4. The
-    // band asks for the rate and for the steepening, and it is deliberately
-    // tight enough to catch a wrong t_now as well as a wrong exponent.
-    const per = (dt) => (rel(SUN_AGE_NOW + dt + 1e9) / rel(SUN_AGE_NOW + dt) - 1) * 100;
-    check('…and it steepens, because the denominator is shrinking',
-      per(0) > 9 && per(0) < 10 && per(2.2e9) > per(0) + 2 && per(4e9) > per(0) + 5,
-      `${per(0).toFixed(1)}% over the next Gyr, ${per(2.2e9).toFixed(1)}% a Gyr by +2.2, ` +
-      `${per(4e9).toFixed(1)}% by +4`);
+    // The pole, which is not academic: the denominator vanishes at 3.5 t_now and
+    // past it the relation returns a *negative* luminosity -- 12 Gyr gives 2.86,
+    // 16 gives -2285, 17.2 gives -9.48. The brightening mode used to drive this
+    // forwards from an inferred age and walked straight into it, which is how
+    // Young Venus and GJ 1132 b were dimmed to the bottom of the slider and told
+    // they were brightening at -45% and -66% a gigayear. The mode is a flat rate
+    // now and does not call this at all; the domain clamp is the belt.
+    check('…and it never returns a luminosity a star could not have',
+      [0, 1e6, 1e9, 12e9, 16e9, 17.2e9, 1e11, -1e9].every((a) => {
+        const v = mainSequenceLuminosity(a); return v > 0 && v < 10 && Number.isFinite(v);
+      }) && mainSequenceLuminosity(17.2e9) === mainSequenceLuminosity(SUN_AGE_MAX),
+      `17.2 Gyr gives ${(mainSequenceLuminosity(17.2e9) / mainSequenceLuminosity(SUN_AGE_NOW)).toFixed(3)} ` +
+      `rather than -9.48, clamped to the ${SUN_AGE_MIN / 1e9}–${SUN_AGE_MAX / 1e9} Gyr this is fitted over`);
 
-    // The relation read backwards, which is how the brightening mode works out
-    // where in its life a star is from the only stellar number the game has.
-    // It has to round-trip, and it has to *refuse* rather than clamp on a world
-    // that is dim because of where it orbits: inverting TRAPPIST-1e's 0.646 S(+)
-    // puts the Sun 1.7 Gyr before it existed.
+    // The mode's own rate: flat, ten per cent a gigayear, compounding. Flat is
+    // the point -- it is what was asked for, and a constant has no domain to
+    // leave.
     {
-      const trip = (S) => rel(mainSequenceAge(S));
-      const inRange = (S) => { const a = mainSequenceAge(S);
-                               return a >= SUN_AGE_MIN && a <= SUN_AGE_MAX; };
-      check('…and reading it backwards recovers the age it came from',
-        near(trip(1), 1, 1e-9) && near(trip(1.2385), 1.2385, 1e-9)
-        && near(mainSequenceAge(1) - SUN_AGE_NOW, 0, 1)
-        && near(mainSequenceAge(1.2385) - (SUN_AGE_NOW + 2.2e9), 0, 2e6),
-        `1.2385 S⊕ → ${(mainSequenceAge(1.2385) / 1e9).toFixed(2)} Gyr, which is the +2.2 preset`);
-      check('…and refuses the worlds it has no business answering for',
-        inRange(1) && inRange(1.2385) && !inRange(0.646) && !inRange(3),
-        `0.646 S⊕ (TRAPPIST-1e) inverts to ${(mainSequenceAge(0.646) / 1e9).toFixed(1)} Gyr, ` +
-        `3 S⊕ to ${(mainSequenceAge(3) / 1e9).toFixed(1)} — both outside ` +
-        `${SUN_AGE_MIN / 1e9}–${SUN_AGE_MAX / 1e9} Gyr, so the caller keeps today's age`);
+      const after = (gyr) => Math.pow(1.10, gyr);
+      check('…while the brightening mode itself is a flat 10% per Gyr, compounding',
+        near(after(1), 1.10, 1e-9) && near(after(4), 1.4641, 1e-9)
+        && near(after(0), 1, 1e-12),
+        `+1 Gyr ×${after(1).toFixed(3)}, +4 Gyr ×${after(4).toFixed(3)}, ` +
+        `+15 Gyr ×${after(15).toFixed(2)} — no pole, no inference, no sign changes`);
     }
 
     // And the preset it puts at the edge really does sit there. This world has

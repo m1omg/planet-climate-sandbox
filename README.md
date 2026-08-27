@@ -297,59 +297,76 @@ takes as long as it takes.
 **The slider follows the star**, the way the five reservoir sliders follow the planet — a mode whose
 whole job is to move the star used to leave the one number naming the star sitting still, which
 looked exactly like nothing happening. What you asked for is kept in the status line underneath
-instead, along with how long the star has been moving since: *brightening 11.2% per Gyr from
-here · 1.51 Gyr, +15.2% since you set 1.000 S⊕*, or *easing to 1.350 S⊕ — 85.8 Myr to go · 310 Myr
-since you set 1.350 S⊕*.
+instead, along with how long the star has been moving since: *brightening 10% per Gyr · 2.01 Gyr,
++21.1% since you set 1.000 S⊕*, or *easing to 1.350 S⊕ — 85.8 Myr to go · 310 Myr since you set
+1.350 S⊕*.
 
-**`main-sequence Sun`** hands the slider to Gough (1981) instead. A star brightens as its core fills
-with helium and has to run hotter and denser to hold itself up:
+**`main-sequence Sun`** brightens the star on its own, at a **flat 10% per gigayear, compounding**.
+Half again in four gigayears, four times over in fifteen. That is what a main-sequence star is worth
+near today (Gough 1981), and flat is deliberate — see below.
+
+The two modes are mutually exclusive. Under the star the slider sets where it *is*, and it goes on
+brightening from there at the same rate.
+
+**It used to drive Gough's relation forwards from an age it inferred by inverting it, and that was a
+bug with teeth.**
 
     L(t)/L_now = 1 / (1 + 0.4 (1 − t/t_now)),  t_now = 4.57 Gyr
 
-which is about **9.6% per gigayear now**, steepening to 10.6% at +1 Gyr, 12.2% at +2.2 and 15.6% at
-+4 as the denominator shrinks. Run backwards
-it gives 0.77 at 3.3 Ga, which is the number the Archean preset already carried; run forwards it is
-where **Earth +2.2 Gyr** comes from. The two modes are mutually exclusive — under the Sun the slider
-sets where the star *is*, and it goes on brightening from that age.
+The denominator vanishes at t = 3.5 t_now — **16.0 Gyr** — and past it the "luminosity" is negative:
+12 Gyr gives 2.86, 16 gives −2285, 17.2 gives −9.48. The Sun leaves the main sequence long before
+that, so the relation simply does not apply there; but a mode integrating forwards walks into it, and
+did. Young Venus, started at 1.400 S⊕, inverted to a base age of 7.8 Gyr, ran 9.4 Gyr of simulated
+time, crossed the pole, and was **dimmed to 0.050 S⊕ — the bottom of the slider — while reporting
+"brightening −45.3% per Gyr"**. GJ 1132 b, at 18.8 S⊕, read −65.6%. Reported from the live site with
+screenshots.
 
-The mode works out the *rate* by reading the relation backwards from the one stellar number the game
-has, which is how much light the planet receives — so it has no memory of its own to fall out of step
-with. Switch the Sun off and on again after a gigayear and it carries on at 10.6% a gigayear rather
-than dropping back to today's 9.6%; load **Earth +2.2 Gyr** and switch it on and it starts at that
-world's 12.2%, which is the whole reason the rate is a curve and not a constant. The inversion is
-only honest for a planet at something like one au of a Sun-like star, so it is refused rather than
-clamped outside 0.74–2.29 S⊕: TRAPPIST-1e's 0.646 S⊕ inverts to −1.7 Gyr, which is before the Sun
-existed, and that world keeps today's rate instead. It is dim because of where it orbits, not because
-its star is young.
+Two things came out of it. `mainSequenceLuminosity` is clamped to the 0.5–11 Gyr it is fitted over,
+so it can never return a luminosity a star could not have, and `selftest.js` checks that across the
+pole. And the mode itself does not call it: **a constant rate has no domain to leave.** The relation
+stays where it belongs — deriving the two presets that were fitted to it by hand, the Archean's 0.77
+at 3.3 Ga and Earth +2.2 Gyr's 1.2385.
 
-**The age itself stays internal, and everything the status line says is relative.** It used to open
-with "Sun at 7.85 Gyr", which is a claim this model has no business making — Venus and Mars are not
-at one au, nothing here simulates a red giant, and an absolute main-sequence age has nowhere to go.
-What it says now is what it can stand behind: *brightening 11.2% per Gyr from here · 1.51 Gyr, +15.2%
-since you set 1.000 S⊕*.
+**Everything the status line says is relative.** It used to open with the absolute age — "Sun at
+7.85 Gyr" — which is a claim this model has no business making: Venus and Mars are not at one au,
+nothing here simulates a red giant, and an absolute main-sequence age has nowhere to go. What it says
+now is what it can stand behind: *brightening 10% per Gyr · 2.01 Gyr, +21.1% since you set
+1.000 S⊕*.
+
+**The starlight slider spans 0.005 to 50 S⊕**, up from 0.05–4, and both ends were set by presets
+that did not fit inside the old range: GJ 1132 b receives **18.8** and Titan **0.011**, so loading
+either pinned the star to an end stop. TRAPPIST-1b's 4.153 was on the boundary. Four decades on a log
+control — Mercury's orbit out to Uranus's — and it still round-trips exactly: every preset lands on a
+representable position.
+
+The brightening mode clamps to that range **or to wherever the star already was, whichever is
+wider**, and the second half of that is the part with teeth. Switching a mode on must never move the
+planet, and a world can legitimately sit outside its own control: with the old 0.05 floor, turning
+the star on threw Titan four and a half times brighter before the clock had ticked once.
 
 Neither mode is world state. They are how the control behaves, so neither goes in the URL hash or
 the save file; what gets saved is wherever the star had actually got to, which is the honest thing
 to keep.
 
-Left to run, the Sun's own rate is quasi-static as far as this model is concerned — it lands on the
-same edge the eased slider does, from a completely different direction:
+Left to run, that rate is quasi-static as far as this model is concerned — it lands on the same edge
+the eased slider does, from a completely different direction:
 
-| from now | starlight | mean surface | CO₂ |
-|---|---|---|---|
-| +0.5 Gyr | 1.046 S⊕ | 19.1 °C | 155 ppm |
-| +1.0 | 1.096 | 22.2 | 74 |
-| +1.5 | 1.151 | 25.5 | 33 |
-| +2.0 | 1.212 | 29.6 | 13 |
-| **+2.34** | **1.257** | runaway | — |
+| from now | starlight | mean surface | CO₂ | land plants |
+|---|---|---|---|---|
+| +0.5 Gyr | 1.049 S⊕ | 19.3 °C | 147 ppm | 100% |
+| +1.0 | 1.100 | 22.4 | 70 | 67% |
+| +1.5 | 1.154 | 25.7 | 32 | 50% |
+| +2.0 | 1.210 | 29.4 | 14 | 46% |
+| **+2.40** | **1.257** | runaway | — | — |
 
 1.257 against the eased slider's 1.259 and `calibrate.mjs`'s quasi-static 1.26. `EASE_PER_YEAR` is
-about twice as slow again as the real Sun, which is the direction that makes it safe to use.
+about twice as slow again, which is the direction that makes it safe to use.
 
-The right-hand column is the part worth stopping on. **The world does not cook — it starves first.**
-Every one of those temperatures is habitable, and the thermostat holds them by weathering the CO₂
-away underneath the brightening: past 155 ppm at half a gigayear the land plants are already
-failing, and by +2 Gyr there is not enough carbon in the air for anything on land at all. That is
+The right-hand columns are the part worth stopping on. **The world does not cook — it starves
+first.** Every one of those temperatures is habitable, and the thermostat holds them by weathering
+the CO₂ away underneath the brightening: by +1 Gyr the land plants are down to two thirds, and by
++2 Gyr there is not enough carbon in the air for anything on land at all — 46% is the marine half,
+and all that is left. That is
 what **Earth +2.2 Gyr** is a snapshot of — 1.2385 S⊕, 8.5 ppm, 31.6 °C, ice-free, wet, and with 46%
 of today's primary production left, all of it marine.
 
@@ -1751,7 +1768,7 @@ different answers depending on one switch:
 | CO₂ held at 400 ppm, walked up | — | 1.26 S⊕ |
 | carbon cycle running, walked up | *— none before the runaway* | **1.26 S⊕**, last stable 1.24 |
 | eased continuously at 0.01 per 20 Myr | *—* | **1.259** |
-| under the real solar brightening | *—* | **1.257**, at +2.34 Gyr |
+| under the brightening star, 10%/Gyr | *—* | **1.257**, at +2.40 Gyr |
 | *cold-started at each step* | *—* | *an overshoot, not an edge* |
 | *stepped up 0.02 at a time, 20 kyr each* | *—* | *1.34, and none of it holds* |
 | *Kopparapu 2013 (1-D)* | *1.015* | *1.066* |
