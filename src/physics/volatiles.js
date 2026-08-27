@@ -210,6 +210,30 @@ export function carbonBudget(massEarths) {
     / (4 * Math.PI * r * r);
 }
 
+// How much carbon the *surface system* is holding: the atmosphere, plus the
+// ocean and the reactive crust behind it.
+//
+// This is not kappa times the atmosphere, and conflating the two was a real bug
+// with a long reach. kappa is a *buffer ratio* -- how much of an increment the
+// ocean takes -- and it is about fifty at Earth's 280 ppm. The ocean's carbon
+// *pool* is not proportional to the atmosphere at all: seawater's dissolved
+// inorganic carbon is set by alkalinity and barely moves with pCO2, which is
+// exactly why the ratio is fifty at 280 ppm and would be twenty-five at 560. A
+// ratio for increments and a pool for inventory are different numbers.
+//
+// Using kappa*co2 for the inventory claimed 437 bar of surface carbon for the
+// Hot Ocean preset's 8.74-bar atmosphere -- more than the entire 400-bar budget
+// of the planet -- so the mantle initialised to the zero clamp. Every preset
+// with a thick atmosphere did the same: Venus booted with an empty mantle and
+// its volcanoes switched off from the first step, and so did Young Mars, and so
+// did the Hot Ocean world. Written as a pool the same worlds hold 73%, 97% and
+// 98% of their carbon below, and every thin-atmosphere world is bit-identical
+// because at 280 ppm the two expressions agree exactly: 2.89 + 49 x 2.89 is
+// 50 x 2.89.
+export function surfaceCarbon(co2Col, liquid) {
+  return Math.max(co2Col, 0) + (CARBON_RESERVOIR_FACTOR - 1) * CO2_EARTH_COL * clamp(liquid, 0, 1);
+}
+
 // Area-averaged thickness an ice sheet can reach before it flows and calves
 // faster than it accumulates, and the density of glacier ice.
 const SHEET_MAX_THICKNESS = 2500;   // m
@@ -759,15 +783,29 @@ export function stepVolatiles(w, dtYears) {
   // Melt production scales with the heat coming out of the interior, so a
   // tidally heated world genuinely erupts more -- see meltBoost().
   //
-  // Scaling this by how depleted the mantle is was tried, to stop a one-way
-  // planet degassing its entire inventory, and reverted. See the README: the
-  // deep reservoir starts at `budget - kappa*co2`, so on any world already
-  // holding a thick CO2 atmosphere it begins at the zero clamp -- the Hot Ocean
-  // preset among them -- and scaling on it does not measure mantle depletion at
-  // all, it measures how much CO2 is in the air. It held that world's volcanism
-  // at 15% of its rate and cooled it from 72 C to 26. Three self-tests caught
-  // it. The overshoot is real and is recorded as a known deviation instead.
-  const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0) * meltBoost(p);
+  // And they cannot outgas at full rate from a mantle that has already given up
+  // most of what it had: the flux tracks the carbon *concentration* in the melt,
+  // so a depleted mantle erupts just as much rock and far less CO2. Without this
+  // the tap ran flat out until the planet was empty and then stopped dead, which
+  // is a cliff rather than a curve -- and it is why a brightening Earth put its
+  // entire 399.6-bar inventory into the air, and Young Venus all 331 of hers,
+  // finishing as a 2167 C magma ocean. Venus has 92 bar; the rest of its carbon
+  // is still inside it.
+  //
+  // This only works because carbonDeep means what its name says now. Written
+  // against `budget - kappa*co2` it did not: every thick-atmosphere preset
+  // initialised to the zero clamp, and scaling on that fraction measured how
+  // much CO2 was in the air rather than how empty the mantle was. See
+  // surfaceCarbon().
+  //
+  // Earth barely notices -- weathering returns carbon to the deep reservoir, so
+  // the fraction sits near one and this multiplies by one. It is a *one-way*
+  // planet, with no liquid water and no return path, where depletion is the only
+  // thing left to limit the tap.
+  const budget = carbonBudget(p.mass);
+  const left = budget > 0 ? clamp((w.carbonDeep ?? budget) / budget, 0, 1) : 0;
+  const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0)
+             * meltBoost(p) * (p.mantleInfinite ? 1 : left);
   const V = (dtYears > 0 && w.carbonDeep != null && !p.mantleInfinite)
     ? Math.min(want, Math.max(w.carbonDeep, 0) / dtYears) : want;
 
@@ -831,7 +869,7 @@ export function stepVolatiles(w, dtYears) {
   if (w.carbonDeep == null) {
     const spent = clamp(p.carbonSpent ?? 0, 0, 1);
     w.carbonDeep = Math.max(0, carbonBudget(p.mass) * (1 - spent)
-      - kappa * w.co2 - (w.co2Frozen ?? 0));
+      - surfaceCarbon(w.co2, liquid) - (w.co2Frozen ?? 0));
   }
   // Semi-implicit, so an arbitrarily long step still lands on the right answer
   // instead of overshooting past zero. Weathering goes as C^0.3, so dW/dC =

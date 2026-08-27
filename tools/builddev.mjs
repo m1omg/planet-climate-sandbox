@@ -119,6 +119,13 @@ and reported "brightening \u221245.3% per Gyr". The starlight slider also
 reaches 50 S\u2295 now, because GJ 1132 b receives 18.8 and could not be
 represented on one that stopped at 4.
 
+\`carbonDeep\` now means carbon still in the mantle rather than the budget minus
+a buffer ratio, which had five presets \u2014 Venus and the Hot Ocean world
+among them \u2014 booting with an empty mantle and their volcanoes off. With
+that right, outgassing falls as the mantle empties, so a one-way planet no
+longer degasses its whole inventory: Young Venus finishes at 130 bar and a dry
+runaway rather than 331 bar and a magma ocean.
+
 A far-future magma ocean crawled at 36.6 kyr/s: pO\u2082 was sweeping four
 decades as the world went anoxic, and the step controller resolved it to a tenth
 of the reservoir per step on a planet with no methane for that to matter to.

@@ -2081,28 +2081,63 @@ Stated plainly, because a model that hides these is less useful:
   Six standing failures closed with it, including snowball deglaciation and duration, and Earth's
   inner edge came in a further 0.04 to **1.26 S⊕**.
 
-* **A one-way planet degasses its entire carbon inventory, and the obvious fix was worse than the
-  problem.** Once a world loses its liquid water there is no weathering sink, so volcanism runs
-  unopposed until `carbonDeep` is empty. A brightening Earth puts its **whole 399.6 bar** into the air
-  by 3.4 Gyr; Young Venus, started from the preset and left under a brightening star, puts in all 331
-  and finishes as a **2167 °C magma ocean**. It passes Venus's own 92 bar at about 3.4 Gyr and does
-  not stop. Reported from the live site.
+* **`carbonDeep` did not mean what its name says, and five presets booted with an empty mantle.**
+  The deep reservoir was initialised as `budget − κ·co2`, where κ is the buffer ratio the ocean and
+  reactive crust give the atmosphere — about 50 at Earth's 280 ppm. That is the wrong quantity. κ is
+  a ratio for *increments*: how much of a change the ocean absorbs. The ocean's carbon *pool* is not
+  proportional to the atmosphere at all — seawater's dissolved inorganic carbon is set by alkalinity
+  and barely moves with pCO₂, which is exactly why the ratio is 50 at 280 ppm and would be 25 at 560.
 
-  Scaling outgassing by how depleted the mantle is — physically the right shape, since the flux
-  tracks the carbon concentration in the melt — was tried and **reverted**. `carbonDeep` starts at
-  `budget − κ·co2`, and κ is 50, so any world already holding a thick CO₂ atmosphere begins at the
-  zero clamp: the Hot Ocean preset starts with 8.74 bar in the air and a deep reservoir of exactly
-  nothing. Scaling on that fraction does not measure mantle depletion, it measures how much CO₂ is in
-  the air. It held that world's volcanism at 15% of its rate and cooled it from **72 °C to 26**, and
-  moved the nightside-trapped locked world back across its threshold. Three self-tests caught it
-  inside one run.
+  So on any world already holding a thick atmosphere, `κ·co2` claimed more surface carbon than the
+  planet has. The **Hot Ocean** preset's 8.74 bar came out as 437 bar of surface carbon against a
+  400-bar budget, and the mantle initialised to the zero clamp:
 
-  What it would take is a `carbonDeep` that means "carbon still in the mantle" rather than "budget
-  minus whatever the surface bookkeeping claims", which is a change to the carbon cycle's shape
-  rather than a coefficient. Not attempted. The magma-ocean term degassing at 30× volcanism, with no
-  limit but the reservoir, is the other half of the same entry.
+  | preset | CO₂ | mantle, before | after |
+  |---|---|---|---|
+  | Venus | 88 bar | **0.0%** | 73.4% |
+  | Hot Ocean | 8.74 | **0.0%** | 97.8% |
+  | Young Mars | 1.53 | **0.0%** | 97.0% |
+  | TRAPPIST-1e | 1.00 | 82.4% | 99.6% |
+  | Archean | 0.40 | 95.0% | 99.9% |
 
-* **CO₂'s forcing per doubling falls off too fast, and it has been failing quietly for a long time.**
+  Venus — the most volcanically active planet we know of — booted with its volcanoes switched off at
+  the first step. Written as a pool instead of a ratio, every thin-atmosphere world is bit-identical,
+  because at 280 ppm the two expressions agree exactly: 2.89 + 49 × 2.89 is 50 × 2.89. GJ 1132 b
+  stays at 0%, which is what its `carbonSpent: 1` says it should be.
+
+* **A one-way planet used to degas its entire carbon inventory. Fixed, and it needed the above
+  first.** Once a world loses its liquid water there is no weathering sink, so volcanism ran
+  unopposed until `carbonDeep` was empty — a cliff rather than a curve. A brightening Earth put its
+  **whole 399.6 bar** into the air by 3.4 Gyr; Young Venus put in all 331 and finished as a
+  **2167 °C magma ocean**, passing Venus's own 92 bar on the way without stopping. Reported from the
+  live site.
+
+  Outgassing now scales with how much carbon is left below, because the flux tracks the carbon
+  *concentration* in the melt: a depleted mantle erupts just as much rock and far less CO₂. Earth
+  barely notices — weathering returns carbon to the deep reservoir, so the fraction sits near one and
+  this multiplies by one. It is the one-way planet, with no return path, where depletion is the only
+  thing left to limit the tap.
+
+  Young Venus under a brightening star is the worked example:
+
+  | from the preset | starlight | | CO₂ | |
+  |---|---|---|---|---|
+  | +1.5 Gyr | 1.62 S⊕ | 45 °C | — | Ice-Free Hothouse |
+  | +2.0 | 1.69 | 608 | 7 bar | Wet Runaway |
+  | +2.5 | 1.78 | 320 | 37 | **Dry Runaway** — ocean gone |
+  | +3.5 | 1.95 | 690 | **88** | Dry Runaway |
+  | +4.5 | 2.15 | 1009 | 130 | Dry Runaway |
+
+  It becomes a dry runaway on schedule and passes Venus's **92 bar at about 3.6 Gyr**. It does not
+  *stop* there: at 4.5 Gyr it holds 130 bar at 1009 °C against the real 92 bar and 464 °C. Two things
+  are left in that gap — the preset's 1.5× outgassing sustained for four and a half gigayears, which
+  is more than Venus's own history delivered, and the fact that the world is still accumulating
+  rather than settled, so it is chasing a target it never catches.
+
+  A side effect worth recording: the **Hot Ocean** preset now holds **68.9 °C** over a gigayear
+  instead of drifting to 51.5, because it no longer boots with its volcanoes off.
+
+* **CO₂'s forcing per doubling falls off too fast,* **CO₂'s forcing per doubling falls off too fast, and it has been failing quietly for a long time.**
   Etminan et al. (2016) give 3.80 W/m² for 280→560 ppm and **4.02 for 1120→2240** — the real forcing
   per doubling gets *stronger* with concentration. This model gives 3.64 and **3.02**: seventeen per
   cent weaker over two doublings, where reality is six per cent stronger.
