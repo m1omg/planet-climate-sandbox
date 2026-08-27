@@ -297,7 +297,24 @@ export function run() {
       // longer holds this world -- the eye takes the whole inventory into the
       // air and runs away at 340 C. Tripling the background thirds the ratio and
       // the trap is intact again, at 37 C under the star and -98 C behind it.
-      water: 0.03, landFraction: 0.7, insolation: 0.70, n2Bar: 0.6,
+      //
+      // Re-pinned a sixth time, and this one is different in kind from the five
+      // before it: the world moved because it stopped being *ambiguous*, not
+      // because the physics moved. At 0.03 EO and 0.70 S(+) this configuration
+      // was never converged -- step caps of 20 kyr and above called it a trapped
+      // desert with 0.16% of the surface flooded, and a 2 kyr cap called it a
+      // waterbelt with 7.7%, off the same starting state. The pin was on the
+      // coarse answer, which is the one to distrust. Gating the quasi-static
+      // shortcut across the ice edge (see maxStep) converged it, onto the fine
+      // answer, and it is a waterbelt.
+      //
+      // So the pin moves to a point that is converged *and* trapped: 0.04 EO at
+      // 0.67 S(+) gives 99.92% night-side ice, a liquid share of 3e-4 and 0.22%
+      // flooded, bit-identical from a 2 kyr cap to a 2 Myr one. The interleaving
+      // the notes above describe is still there -- 0.65 S(+) at this inventory
+      // is a waterbelt again -- but every point in it is now a converged answer
+      // rather than a step size in disguise.
+      water: 0.04, landFraction: 0.7, insolation: 0.67, n2Bar: 0.6,
       // A bare rocky world: no oxygen, and nothing alive to make any. Inheriting
       // Earth's 0.21 bar would nearly double its atmosphere and move enough heat
       // to the night side to stop the trap.
@@ -2285,13 +2302,14 @@ export function run() {
     const sc = SCENARIOS.find((x) => x.id === 'oxidation');
     const s = new Simulation({ ...sc.params });
     const w = s.world;
-    // Capped at two kiloyears, and that is not caution -- it is the converged
-    // answer. This world's outcome still depends on the step size at the coarse
-    // end: left to stride it snowballs pole to pole, capped at 5 kyr or below it
-    // dips to a third of the planet under ice and the thermostat pulls it back
-    // out. 1 kyr and 5 kyr agree with each other, so the dip is the physics and
-    // the snowball is the integrator. The gap is recorded in the README; what
-    // this block asks for is the answer that converges.
+    // Capped at two kiloyears, which is now a convenience rather than a
+    // necessity: the block below asks the same world the same question at a
+    // 500 kyr cap and requires the same answer. It did not used to survive that.
+    // Left to stride, this world snowballed pole to pole around 73 Myr, spent
+    // 140 Myr piling eleven bar of CO2 behind the ice and deglaciated into a
+    // 128 C hothouse -- reported from the live site, and fixed in maxStep by
+    // switching the quasi-static shortcut off across the ice-albedo
+    // bifurcation rather than by capping anything here.
     let n = 0, peakIce = 0, dipT = 1e9;
     const to = (yr) => { while (w.time < yr && n++ < 4e5) {
       s.setParams({ biosphere: sc.evolve(w) });
@@ -2368,6 +2386,61 @@ export function run() {
       won.diag.pO2 > 0.01 && won.diag.Tmean > 273 && won.worstIce < 0.20,
       `${won.diag.pO2.toFixed(3)} bar O₂ at ${(won.diag.Tmean - 273.15).toFixed(1)} °C, and the ` +
       `ice never got past ${(won.worstIce * 100).toFixed(0)}% against the idle world’s 34%`);
+
+    // And the whole of it has to be the physics rather than the step sequence,
+    // which is the assertion this scenario did not used to be able to make. A
+    // player at 150 Myr/s takes steps five hundred times longer than the block
+    // above; the answer must not know. Both the depth of the glaciation and
+    // where the world ends up are compared, because a run that snowballs still
+    // "recovers" -- into a hothouse on eleven bar of CO2.
+    {
+      const deep = (cap) => {
+        const x = new Simulation({ ...sc.params });
+        const v = x.world;
+        let m = 0, worst = 0;
+        while (v.time < 3e8 && m++ < 6e5) {
+          x.setParams({ biosphere: sc.evolve(v) });
+          x.stepOnce(Math.min(maxStep(v), cap));
+          worst = Math.max(worst, v.diag.iceMean);
+          if (v.diag.Tmean > 400) break;
+        }
+        return { worst, T: v.diag.Tmean, co2: v.diag.pCO2, steps: m };
+      };
+      const fine = deep(2e3), coarse = deep(5e5);
+      check('…and none of that depends on how big the steps were',
+        Math.abs(fine.worst - coarse.worst) < 0.05 && coarse.T < 320
+        && Math.abs(fine.co2 - coarse.co2) < 0.05,
+        `2 kyr steps: ${(fine.worst * 100).toFixed(0)}% peak ice, ends ` +
+        `${(fine.T - 273.15).toFixed(1)} °C on ${fine.co2.toFixed(3)} bar. ` +
+        `500 kyr steps: ${(coarse.worst * 100).toFixed(0)}%, ` +
+        `${(coarse.T - 273.15).toFixed(1)} °C on ${coarse.co2.toFixed(3)} bar ` +
+        `(${coarse.steps} steps against ${fine.steps})`);
+
+      // ...or on the frame rate, which is the one a player actually met. Driven
+      // through the real clock rather than by hand: credit, the rate slider at
+      // its top, and the scenario's own evolve() on sim.drive. Applied from the
+      // readout instead -- ten times a *real* second, which is once per 29 Myr
+      // up there -- all three of these snowballed, at 38, 43 and 155 Myr. The
+      // frame rate was choosing the date of the glaciation.
+      const paced = (fps) => {
+        const x = new Simulation({ ...sc.params });
+        x.rate = 3e8;
+        x.drive = (v) => { v.params.biosphere = sc.evolve(v); };
+        let worst = 0, m = 0;
+        while (x.world.time < 3e8 && m++ < 2e5) {
+          x.advance(1 / fps);
+          worst = Math.max(worst, x.world.diag.iceMean);
+          if (x.world.diag.Tmean > 400) break;
+        }
+        return { worst, T: x.world.diag.Tmean };
+      };
+      const fast = paced(60), slow = paced(2);
+      check('…nor on the frame rate, which is what the clock speed really is',
+        Math.abs(fast.worst - slow.worst) < 0.05 && fast.T < 320 && slow.T < 320,
+        `60 fps: ${(fast.worst * 100).toFixed(0)}% peak ice, ends ` +
+        `${(fast.T - 273.15).toFixed(1)} °C. 2 fps: ${(slow.worst * 100).toFixed(0)}%, ` +
+        `${(slow.T - 273.15).toFixed(1)} °C`);
+    }
   }
 
   // ---- 3o. a waterworld has a thermostat too --------------------------------

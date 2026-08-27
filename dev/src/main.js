@@ -260,6 +260,10 @@ const EASE_PER_YEAR = 0.01 / 2e7;
 let easeStar = false, mainSeqStar = false;
 let slew = null;      // { from, to, startYear } while a change is being spread
 let starAge = null;   // { baseS, baseAge, startYear } while the Sun is running
+// The last value a person actually asked for, and the moment the star started
+// moving on its own from it. Both modes now write the slider as the star moves,
+// so without this the number you typed would be gone the instant it did.
+let starManual = null;   // { S, atYear }
 
 function starStatus(text) {
   const el = $('#star-status');
@@ -293,8 +297,9 @@ function driveStar(w) {
     const v = clamp(starAge.baseS * mainSequenceLuminosity(age)
                   / mainSequenceLuminosity(starAge.baseAge), 0.05, 4);
     setStarValue(v);
-    starStatus(`Sun at ${(age / 1e9).toFixed(2)} Gyr — ${v.toFixed(3)} S⊕, `
-             + `${((mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100).toFixed(1)}% brighter per Gyr from here`);
+    starStatus(`Sun at ${(age / 1e9).toFixed(2)} Gyr — `
+             + `${((mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100).toFixed(1)}% brighter per Gyr from here`
+             + sinceManual(w));
     return;
   }
   if (!slew) { starStatus(''); return; }
@@ -304,8 +309,8 @@ function driveStar(w) {
   const v = slew.from + (slew.to - slew.from) * f;
   setStarValue(v);
   if (f >= 1) { slew = null; starStatus(''); return; }
-  starStatus(`star easing to ${slew.to.toFixed(3)} S⊕ — at ${v.toFixed(3)} now, `
-           + `${fmtTime(need * (1 - f))} to go`);
+  starStatus(`easing to ${slew.to.toFixed(3)} S⊕ — ${fmtTime(need * (1 - f))} to go`
+           + sinceManual(w));
 }
 
 // A new world means a new clock, and both modes are anchored to w.time. A
@@ -323,14 +328,40 @@ function rebaseStar() {
   slew = null;
   const S = sim.world.params.insolation ?? params.insolation;
   starAge = mainSeqStar ? { baseS: S, baseAge: sunAgeFor(S), startYear: sim.world.time } : null;
+  starManual = mainSeqStar ? { S, atYear: sim.world.time } : null;
   starStatus('');
 }
 
-// The world's insolation, without disturbing the slider. The slider holds where
-// you asked the star to go; this is where it actually is.
+// The world's insolation, and the control with it.
+//
+// This used to leave the slider alone on the theory that it should hold what you
+// asked for while the readout below said where the star had actually got to.
+// That is not what it looks like from the outside: a mode whose whole job is to
+// move the star left the one number naming the star sitting still, so the star
+// appeared not to be running at all. The control follows now, exactly as the
+// five reservoir sliders do, and the value you set is kept in the status line
+// underneath instead of in the slider -- which is where it can also say how long
+// the star has been moving since.
+//
+// Skipped while that control is being typed into or dragged, for the same reason
+// syncLiveControls skips: nothing should rewrite a field under someone's cursor.
 function setStarValue(v) {
   if (Math.abs((sim.world.params.insolation ?? 0) - v) < 1e-9) return;
   sim.setParams({ insolation: v });
+  const e = els.insolation;
+  if (!e || e.editing || e.dragging) return;
+  params.insolation = v;
+  const pos = clamp(toSlider(e.def, v), 0, 1000);
+  e.input.value = String(pos);
+  e.input.style.setProperty('--fill', `${pos / 10}%`);
+  e.out.value = e.def.fmt(v);
+}
+
+// "…and it has been doing that for a while, having started from here."
+function sinceManual(w) {
+  if (!starManual) return '';
+  const dt = w.time - starManual.atYear;
+  return dt > 0 ? ` · ${fmtTime(dt)} since you set ${starManual.S.toFixed(3)} S⊕` : '';
 }
 
 // The world as it was handed to you. Reset restores exactly this, because the
@@ -521,6 +552,7 @@ function applyParams(key) {
     } else if (Math.abs((w.params.insolation ?? 0) - params.insolation) > 1e-9) {
       slew = { from: w.params.insolation ?? 0, to: params.insolation, startYear: w.time };
     }
+    starManual = { S: params.insolation, atYear: w.time };
     return;
   }
   sim.setParams({ [key]: params[key] });
@@ -633,9 +665,21 @@ function buildScenarios() {
     host.appendChild(b);
   }
 }
+// A scenario driving one of its own controls, on the simulation's clock. Kept
+// out of the frame loop entirely: see stepOnce in clock.js for why that matters.
+// It stops the moment the scenario is decided, and it never fights a hand on the
+// slider.
+function scenarioDrive(w) {
+  if (!activeScenario || !activeScenario.evolve || scenarioResult) return;
+  const e = els[activeScenario.evolveKey ?? 'biosphere'];
+  if (e && (e.editing || e.dragging)) return;
+  w.params.biosphere = activeScenario.evolve(w);
+}
+
 function startScenario(id) {
   const s = SCENARIOS.find((x) => x.id === id);
   activeScenario = s; scenarioResult = null;
+  sim.drive = s.evolve ? scenarioDrive : null;
   Object.assign(params, s.params);
   renderState.seed = Math.random() * 100;
   sim.reset(params);
@@ -651,7 +695,7 @@ function startScenario(id) {
   toast(`${s.icon} ${s.name} — ${s.hint}`, 7000);
 }
 function closeScenario() {
-  activeScenario = null; scenarioResult = null;
+  activeScenario = null; scenarioResult = null; sim.drive = null;
   $('#scenario-banner').hidden = true;
   document.querySelectorAll('[data-scenario]').forEach((b) => b.classList.remove('active'));
 }
@@ -860,20 +904,22 @@ function updateReadout() {
     // Some scenarios move a control on their own. The Great Oxidation is one:
     // the cyanobacteria are not waiting for permission, and a player who does
     // nothing has to watch it happen rather than being left with a stable world.
-    // Driven off simulated time so the rate does not depend on the frame rate or
-    // on how fast the clock is running.
-    if (activeScenario.evolve && !scenarioResult) {
+    //
+    // The *value* is set by sim.drive, once per simulation step, which is what
+    // makes it a function of simulated time rather than of the frame rate. This
+    // used to apply it here instead -- ten times a real second, which at the top
+    // of the rate slider is once every 29 Myr, and a curve with a 30 Myr
+    // e-folding sampled every 29 Myr is a staircase. All that is left here is
+    // showing the control where the simulation has already put it.
+    if (activeScenario.evolve) {
       const e = els.biosphere;
-      if (!e.editing && !e.dragging) {
-        const v = activeScenario.evolve(w);
-        if (Math.abs(v - params.biosphere) > 1e-4) {
-          params.biosphere = v;
-          applyParams('biosphere');
-          const pos = clamp(toSlider(e.def, v), 0, 1000);
-          e.input.value = String(pos);
-          e.input.style.setProperty('--fill', `${pos / 10}%`);
-          e.out.value = e.def.fmt(v);
-        }
+      const v = w.params.biosphere ?? params.biosphere;
+      if (!e.editing && !e.dragging && Math.abs(v - params.biosphere) > 1e-6) {
+        params.biosphere = v;
+        const pos = clamp(toSlider(e.def, v), 0, 1000);
+        e.input.value = String(pos);
+        e.input.style.setProperty('--fill', `${pos / 10}%`);
+        e.out.value = e.def.fmt(v);
       }
     }
     const el = $('#scenario-banner .sc-status');
@@ -1411,9 +1457,13 @@ function bindControls() {
       // Turning it off honours the slider immediately, which is what someone who
       // just switched it off is asking for.
       if (slew) { params.insolation = slew.to; sim.setParams({ insolation: slew.to }); slew = null; }
+      starManual = null;
       starStatus('');
-    } else if (Math.abs((sim.world.params.insolation ?? 0) - params.insolation) > 1e-9) {
-      slew = { from: sim.world.params.insolation ?? 0, to: params.insolation, startYear: sim.world.time };
+    } else {
+      if (Math.abs((sim.world.params.insolation ?? 0) - params.insolation) > 1e-9) {
+        slew = { from: sim.world.params.insolation ?? 0, to: params.insolation, startYear: sim.world.time };
+      }
+      starManual = { S: params.insolation, atYear: sim.world.time };
     }
     updateReadout();
   });
@@ -1427,12 +1477,13 @@ function bindControls() {
       const S = sim.world.params.insolation ?? params.insolation;
       const age = sunAgeFor(S);
       starAge = { baseS: S, baseAge: age, startYear: sim.world.time };
+      starManual = { S, atYear: sim.world.time };
       params.insolation = S; syncSliders();
       const rate = (mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100;
       toast(`The Sun is running now — ${rate.toFixed(1)}% brighter over the next gigayear, `
           + 'and steepening', 4600);
     } else {
-      starAge = null; starStatus('');
+      starAge = null; starManual = null; starStatus('');
       params.insolation = sim.world.params.insolation ?? params.insolation;
       syncSliders();
     }

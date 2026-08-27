@@ -27,6 +27,12 @@ and CO₂'s forcing per doubling at high concentration, which falls off where th
 real thing strengthens because a semi-grey band saturates all at once. Both
 print their numbers on every run.
 
+The Great Oxidation scenario no longer depends on how fast the clock was
+running. It used to snowball pole-to-pole at any step cap above about 20 kyr and
+deglaciate into a 128 °C hothouse on eleven bar of CO₂; the quasi-static
+shortcut in `maxStep` is now off across the ice-albedo bifurcation, and the peak
+glaciation agrees to a point from a 2 kyr cap to a 5 Myr one.
+
 A band-overlap refit that closed four more gaps was reverted from this build: it
 left a 1.32 S⊕ ocean world with no energy balance at any temperature, which shows
 up as cycling in and out of glaciation, and cost fourteen thousand times the

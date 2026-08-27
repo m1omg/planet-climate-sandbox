@@ -24,6 +24,13 @@ export class Simulation {
     this.paused = false;
     this.maxStepsPerFrame = 4000;
     this.budgetMs = 12;       // hard wall-clock ceiling on physics per frame
+    // What a frame has actually been costing lately, in seconds. Both limits
+    // below are shares of a frame rather than absolutes, and on a slow machine
+    // the frame is not a sixtieth of a second. See advance().
+    this.frameCost = 0;
+    // Optional per-step hook for anything that moves a control on simulated
+    // time. See stepOnce().
+    this.drive = null;
     this.actualRate = 0;
     this.throttled = false;   // true when the budget, not the clock, is the limit
     this._acc = 0;
@@ -47,14 +54,43 @@ export class Simulation {
   // realDt in seconds; returns simulated years actually advanced.
   advance(realDt) {
     if (this.paused) { this.actualRate = 0; return 0; }
-    const dtReal = clamp(realDt, 0, 0.1);          // ignore huge stalls
+    // How long a frame has really been taking. Both of the limits that follow
+    // used to be absolutes tuned for a machine drawing sixty frames a second,
+    // and on a machine drawing eight they were the reason the clock ran at a
+    // fraction of the rate the slider claimed:
+    //
+    //   * credit was clamped at 0.1 s a frame, so anything under ten frames a
+    //     second was paid for a tenth of a second however long the frame had
+    //     actually taken -- at 5 fps that is half the clock thrown away, and
+    //     silently, because the throttle flag reports the *physics* budget;
+    //   * the physics budget was a flat 12 ms, which is a fifth of a 60 fps
+    //     frame and six per cent of a 5 fps one. The slower the machine, the
+    //     smaller the share of it the simulation was allowed to use.
+    //
+    // Both are shares of the observed frame now. A steady low frame rate keeps
+    // its time and gets a proportionate slice to work in; a real stall -- a
+    // backgrounded tab, a long GC pause -- is still cut off, because one long
+    // frame barely moves the average and the ceilings are clamped anyway.
+    const seen = clamp(realDt, 0, 1);
+    this.frameCost = this.frameCost > 0
+      ? this.frameCost + (seen - this.frameCost) * 0.1
+      : seen;
+    const dtReal = clamp(realDt, 0, clamp(this.frameCost * 3, 0.1, 1));
     this.credit = Math.min(this.credit + dtReal * this.rate, this.rate * 4);
     return this.runCredit();
   }
 
+  // A quarter of the frame, never less than the 12 ms this was fixed at and
+  // never more than 60. Responsiveness is a *share* of the frame: taking 50 ms
+  // out of a 200 ms frame leaves exactly as much room to draw and handle input
+  // as taking 12 out of 16 does.
+  frameBudgetMs() {
+    return clamp(this.frameCost * 250, this.budgetMs, 60);
+  }
+
   runCredit() {
     const w = this.world;
-    const deadline = performance.now() + this.budgetMs;
+    const deadline = performance.now() + this.frameBudgetMs();
     let advanced = 0, steps = 0;
     this.throttled = false;
     while (steps < this.maxStepsPerFrame) {
@@ -101,6 +137,20 @@ export class Simulation {
     update(w, dt);
     stepVolatiles(w, dt);
     w.time += dt;
+    // Anything driving a control off simulated time runs here, on the clock it
+    // claims to run on. A scenario's evolve() used to be applied from the
+    // readout instead, ten times a real second -- which is ten times a second
+    // whether that second is a year of simulated time or three hundred
+    // megayears. At the top of the rate slider it was a 29 Myr staircase on a
+    // curve with a 30 Myr e-folding: the Great Oxidation's biosphere jumped a
+    // third of its whole range in one go, oxygen went with it, the methane
+    // greenhouse vanished in a single step and the planet snowballed. That is
+    // what "Huronian still runawaying" was.
+    //
+    // Placed after the clock advances and before the last update(), so the
+    // diagnostics the next step reads are built with the new value and it costs
+    // nothing: there is no extra update() call here.
+    if (this.drive) this.drive(w);
     update(w, dt);
 
     if (w.time >= this._nextSample) {

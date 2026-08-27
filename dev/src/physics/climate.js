@@ -498,7 +498,55 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // -- melting ice darkens them -- while transport from everywhere else holds
   // them stable, and judging by the worst band alone made the solver crawl
   // through exactly the epoch a player most wants to watch.
-  const quasi = smoothstep(6, 1, eqDistance) * smoothstep(0.10, 0.45, meanDamping);
+  //
+  // ...and it must be *off*, not merely turned down, while the planet is sitting
+  // on the ice-albedo bifurcation.
+  //
+  // Between roughly a fifth and a half of the surface frozen, an Earth-like
+  // world is on the steep part of the albedo curve, where a temperate branch and
+  // a snowball branch both exist and a small nudge decides which one it is on.
+  // The two tests above do not see that: at the moment the Great Oxidation
+  // scenario tipped, every band was within 0.8 K of its equilibrium and the mean
+  // damping was a healthy 0.63, so the shortcut struck a 21 kyr stride -- and
+  // that stride carried the planet across the bifurcation. It went pole-to-pole
+  // frozen, spent 140 Myr piling 11 bar of CO2 behind the ice, and deglaciated
+  // into a 128 C hothouse. Reported from the live site.
+  //
+  // The equilibrium the linearisation points at is a real one; what it does not
+  // know is that a saddle sits between here and there. Nothing local can know
+  // that, which is why this is a gate rather than a tolerance.
+  //
+  // Turning the stride *down* is not enough and the measurement says so
+  // plainly: at a tenth of it the scenario survives, at a twentieth it tips
+  // again. That non-monotonicity is the signature of perturbing a trajectory
+  // across a basin boundary rather than resolving it, and it is exactly the kind
+  // of fix that looks fine until the next preset. Off, the answer converges --
+  // peak ice 34% at -4.1 C from a 2 kyr cap to a 5 Myr cap, three and a half
+  // decades of step size agreeing to a point.
+  //
+  // What it costs: nothing on a world that is not part-glaciated. Earth over a
+  // gigayear is 1358 steps either way, the Archean 729, a 1.4 S(+) runaway 618,
+  // a hard snowball 6883 against 6663. The scenario itself gets *cheaper* --
+  // 150 000 steps against 206 000 -- because it no longer has a snowball to
+  // integrate. The one world that pays is one that genuinely parks
+  // mid-glaciated: Earth at 0.95 S(+) sits at 30% ice and goes from 752 steps a
+  // gigayear to 2285. That is the bill for being in the band where this model
+  // was demonstrably getting the answer wrong, and it is the right way round.
+  //
+  // The band is wide -- a twelfth of the surface frozen to nine tenths -- because
+  // a global mean is a crude way to ask "is the ice edge moving?", and it has to
+  // be crude in the safe direction. A fast rotator sits on its bifurcation
+  // around a third; a tidally locked world carries a permanently frozen night
+  // side, so the same question about its day-side edge is being asked at 68%
+  // global ice. Keyed at 0.22-0.45 the Locked Eyeball with its carbon weathered
+  // away fell outside the band and stayed unconverged -- frozen at two step caps
+  // and a 422 C boiled ocean at the other two, off one starting state. Widened,
+  // it lands on 68% ice and an 89.6 C substellar point at every cap, to a tenth
+  // of a degree. That world was never converged: before this it agreed about
+  // being frozen while disagreeing by 40 K about how warm its day side was, and
+  // nothing any test asserted on could see the difference.
+  const onEdge = smoothstep(0.08, 0.18, dg.iceMean) * smoothstep(0.90, 0.72, dg.iceMean);
+  const quasi = smoothstep(6, 1, eqDistance) * smoothstep(0.10, 0.45, meanDamping) * (1 - onEdge);
   if (quasi > 0) dt = Math.min(dt * (1 + quasi * 4000), 5e6);
 
   // ...but never step so far that a slow reservoir jumps discontinuously.
