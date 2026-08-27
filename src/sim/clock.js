@@ -1,7 +1,7 @@
 import { createWorld, resetWorld, update, stepTemperature, maxStep } from '../physics/climate.js';
 import { stepVolatiles } from '../physics/volatiles.js';
 import { clamp } from '../physics/constants.js';
-import { evolvedParams, brightnessAfter, radiogenic, EARTH_AGE, approach }
+import { evolvedParams, brightnessAfter, radiogenic, EARTH_AGE, approach, walkRate }
   from '../physics/evolution.js';
 
 // ---------------------------------------------------------------------------
@@ -56,6 +56,12 @@ export class Simulation {
     // getting there, which is what keeps it on a branch instead of across one.
     if (p0.smoothInsolation && 'insolation' in patch && w.time > 0) {
       w.insolationTarget = patch.insolation;
+      // Fixed by the size of the move rather than by a fixed rate, so that a
+      // walk from 1 to 100 S(+) takes the same twenty million years as one from
+      // 1 to 1.5 rather than a hundred times longer. Recorded once, here: taking
+      // it from the remaining distance every step would make the approach
+      // asymptotic and it would never arrive.
+      w.insolationRate = walkRate(p0.insolation, patch.insolation);
       w.params.insolation = p0.insolation;      // stay where we are; walk from here
     } else if ('insolation' in patch) {
       w.insolationTarget = null;
@@ -164,8 +170,8 @@ export class Simulation {
     // above so that a brightening star and a hand on the slider compose:
     // the walk is towards the target, from wherever the star has got to.
     if (w.insolationTarget != null) {
-      const next = approach(w.params.insolation, w.insolationTarget, dt);
-      if (next === w.insolationTarget) w.insolationTarget = null;
+      const next = approach(w.params.insolation, w.insolationTarget, dt, w.insolationRate);
+      if (next === w.insolationTarget) { w.insolationTarget = null; w.insolationRate = undefined; }
       w.params.insolation = next;
       if (w.evolve0) w.evolve0.insolation = w.params.insolation
         / brightnessAfter(w.params.brightening ?? 0, Math.max(w.time, 0) / 1e9);

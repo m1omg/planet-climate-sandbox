@@ -116,9 +116,20 @@ export function drawHistory(canvas, world, markT = null) {
 // ---------------------------------------------------------------------------
 // Zonal temperature profile.
 // ---------------------------------------------------------------------------
-export function drawProfile(canvas, world) {
+// The x geometry of the zonal profile, in one place, because the hover readout
+// has to agree with the drawing to the pixel or it reads the wrong band.
+const PROFILE_PAD = { l: 38, r: 8, t: 10, b: 20 };
+
+// Which of the eighteen bands a pointer at `x` css-pixels is over.
+export function profileBandAtX(x, width) {
+  const span = Math.max(width - PROFILE_PAD.l - PROFILE_PAD.r, 1);
+  const f = (x - PROFILE_PAD.l) / span;
+  return clamp(Math.round(f * (NBANDS - 1)), 0, NBANDS - 1);
+}
+
+export function drawProfile(canvas, world, hover = null) {
   const { ctx, w, h } = setup(canvas);
-  const pad = { l: 38, r: 8, t: 10, b: 20 };
+  const pad = PROFILE_PAD;
   axes(ctx, w, h, pad);
   const lam = lockFactor(world.params);
   const T = world.T;
@@ -149,6 +160,15 @@ export function drawProfile(canvas, world) {
   ctx.strokeStyle = '#ffc46b'; ctx.lineWidth = 2; ctx.stroke();
   for (let i = 0; i < NBANDS; i++) {
     ctx.beginPath(); ctx.arc(px(i), py(T[i]), 2, 0, 7); ctx.fillStyle = '#ffc46b'; ctx.fill();
+  }
+
+  // The band under the pointer, marked so that the number in the tooltip has a
+  // place on the curve rather than being a figure beside a picture.
+  if (hover != null && hover >= 0 && hover < NBANDS) {
+    ctx.strokeStyle = 'rgba(255,196,107,0.35)';
+    ctx.beginPath(); ctx.moveTo(px(hover), pad.t); ctx.lineTo(px(hover), h - pad.b); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px(hover), py(T[hover]), 4.5, 0, 7);
+    ctx.fillStyle = '#fff'; ctx.fill();
   }
 
   label(ctx, `${(hi - 273.15).toFixed(0)}°C`, pad.l - 4, pad.t + 8, 'right');

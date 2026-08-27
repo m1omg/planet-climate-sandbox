@@ -175,6 +175,36 @@ export function dynamoLifetime(massEarths) {
 // A hundredth rather than the tenth this first used, and the difference is the
 // whole calibration. At a tenth, an Earth with a full field lost 38% of its
 // nitrogen in half a billion years -- Earth's nitrogen is not doing that.
+//
+// An induced magnetosphere is NOT modelled, and the omission is deliberate and
+// known. An unmagnetised planet with a thick ionosphere holds the wind off on
+// its own -- it is why Venus, which has no dipole at all, still has three and a
+// half bar of nitrogen after four and a half billion years while Mars, which
+// also has none, has six millibars of anything. Their measured ion escape rates
+// are within a factor of a few of each other (Venus Express, MAVEN: both near
+// 10^24-10^25 particles a second); what differs is what that leak is measured
+// against.
+//
+// It was implemented, as a shielding term linear in surface pressure, and it
+// does what it should for Venus: Early Venus stopped losing fourteen fifteenths
+// of its nitrogen in 1.5 Gyr and kept the lot. It also saved Mars. This model's
+// Noachian Mars starts at four bar, so any pressure-based shielding protects it
+// far better than it protects a one-bar Venus, and Mars finished its history
+// with 1520 mbar of CO2 against the six it actually has -- with as little as
+// nine-fold shielding at four bar being enough to do it. No function of
+// pressure can give a four-bar Mars less protection than a one-bar Venus; only
+// gravity can, and gravity is already carrying a fourth power here.
+//
+// What that really says is that this channel is being asked to do work that was
+// not all its own. MAVEN's present rate integrated over four billion years is
+// about half a bar (Jakosky et al. 2018), not four; the rest of Mars's carbon
+// went into carbonate while the planet was still wet, and into early
+// hydrodynamic escape and impact erosion. Until there is a carbonate sink to
+// take that share, NONTHERMAL_K has to be large enough to strip four bar on its
+// own, and at that size no honest shielding term can be added on top.
+//
+// So Early Venus loses nitrogen it should keep. That is the price, it is
+// recorded here, and it is smaller than the price of a Mars that never dried.
 export function windExposure(field) {
   const B = Math.max(field ?? 0, 0);
   return 1 / (1 + 99 * Math.pow(B, 2 / 3));
@@ -270,6 +300,24 @@ export function resurfacingBoost(p, ageGyr) {
 // 36 Myr for the 36% change the hysteresis test uses, against the 32 Myr that
 // test needed to stay on the branch.
 export const SMOOTH_RATE = 1e-8;      // fraction of the current value per year
+
+// ...but a rate alone makes a long move take proportionally longer, and the
+// starlight control now spans a factor of a thousand. Walking from Earth's
+// sunlight to GJ 1132 b's nineteen at 1e-8 a year is 300 Myr, which reads as a
+// control that does nothing. So the rate is set from the size of the move: any
+// change crosses in this long, and only the small ones -- where SMOOTH_RATE is
+// already the faster of the two -- take less.
+//
+// Twenty million years is chosen against what the smoothing is for. The point
+// is to keep the planet on its branch rather than throwing it across a
+// bifurcation, and the slowest thing that has to keep up is the carbonate
+// weathering feedback at about a million years. Twenty e-folds of margin.
+export const SMOOTH_SPAN_YEARS = 2e7;
+
+export function walkRate(from, to, years = SMOOTH_SPAN_YEARS) {
+  if (!(from > 0) || !(to > 0) || !(years > 0)) return SMOOTH_RATE;
+  return Math.max(SMOOTH_RATE, Math.abs(Math.log(to / from)) / years);
+}
 
 // One step of the walk. Returns the new value; equal to `target` once there.
 export function approach(current, target, years, rate = SMOOTH_RATE) {
