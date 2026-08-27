@@ -596,11 +596,30 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // 123 000 years starting at 6.5 mbar emptied the whole reservoir and landed
   // anoxic. Ten percent of the reservoir per step costs about 135 steps to take
   // a world from Earth's oxygen to none, which is nothing.
+  //
+  // How *tightly* it has to be resolved follows the methane, because methane is
+  // what the bound is for. There is no other reader of pO2 that a tenth of a
+  // reservoir per step protects: the hydrogen burn reads it too, but that is
+  // capped by what the oxygen can afford and cannot overshoot however long the
+  // step. So a tenth where there is methane to ruin, and a whole reservoir where
+  // there is none.
+  //
+  // The measurement that decided it: a far-future Earth crossing from oxic to
+  // anoxic on a magma ocean, pO2 sweeping four decades in 140 Myr with no
+  // methane anywhere. Run to 3.4 Gyr, a tenth of the reservoir per step takes
+  // 1 785 117 steps; a whole reservoir takes 26 276, and ten reservoirs 26 082.
+  // All three agree on 2891.4 C, 399.60 bar of CO2 and 0.7718 oceans. Sixty-eight
+  // times the work for the fourth decimal place. Reported from the live site as
+  // 36.6 kyr/s on an 1812 C world.
+  //
+  // The floor is about a part per million of methane at Earth gravity, below
+  // which its band is worth nothing whatever pO2 does.
   if (w.o2Rate) {
     const pinned = w.o2 <= 0 && w.o2Rate < 0;
     if (!pinned) {
       const floor = 3e-7 * 1e5 / dg.d.g;
-      dt = Math.min(dt, Math.max(0.1 * (w.o2 + floor) / Math.abs(w.o2Rate), 1.0));
+      const frac = 1 - 0.9 * smoothstep(0, 0.01, w.ch4);
+      dt = Math.min(dt, Math.max(frac * (w.o2 + floor) / Math.abs(w.o2Rate), 1.0));
     }
   }
 

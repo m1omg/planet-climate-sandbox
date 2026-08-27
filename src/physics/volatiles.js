@@ -731,6 +731,9 @@ export function stepVolatiles(w, dtYears) {
 
   const p = w.params, dg = w.diag, d = dg.d;
   const esc = escapeRates(w);
+  // What the oxygen reservoir was worth before anything in this step touched
+  // it. See the end of this function for what it is for.
+  const o2AtEntry = w.o2;
 
   // --- water inventory -----------------------------------------------------
   if (totalWater(w) > 0) {
@@ -755,6 +758,15 @@ export function stepVolatiles(w, dtYears) {
   // world. See carbonBudget().
   // Melt production scales with the heat coming out of the interior, so a
   // tidally heated world genuinely erupts more -- see meltBoost().
+  //
+  // Scaling this by how depleted the mantle is was tried, to stop a one-way
+  // planet degassing its entire inventory, and reverted. See the README: the
+  // deep reservoir starts at `budget - kappa*co2`, so on any world already
+  // holding a thick CO2 atmosphere it begins at the zero clamp -- the Hot Ocean
+  // preset among them -- and scaling on it does not measure mantle depletion at
+  // all, it measures how much CO2 is in the air. It held that world's volcanism
+  // at 15% of its rate and cooled it from 72 C to 26. Three self-tests caught
+  // it. The overshoot is real and is recorded as a known deviation instead.
   const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0) * meltBoost(p);
   const V = (dtYears > 0 && w.carbonDeep != null && !p.mantleInfinite)
     ? Math.min(want, Math.max(w.carbonDeep, 0) / dtYears) : want;
@@ -955,27 +967,6 @@ export function stepVolatiles(w, dtYears) {
     // no sink at all.
     const weathering = (0.25 + 0.75 * landExposed) * liquid / O2_TAU_OX;
 
-    // Kept for maxStep: how fast the reservoir is moving right now -- and it
-    // has to be *all* of the terms, which it was not.
-    //
-    // Oxygen left behind by escaping hydrogen is credited a few hundred lines
-    // up, where the water is lost, and it was missing from here entirely. On a
-    // world that is losing an ocean it is the largest term by far, and it very
-    // nearly cancels the reductant sink: the reservoir sits in a steady balance
-    // at a few thousandths of a kg/m^2 and goes nowhere for hundreds of
-    // megayears, while this rate reported it emptying in thirty years.
-    //
-    // maxStep believed it, because believing it is this rate's job. The oxygen
-    // bound there allows a tenth of the reservoir per step, so on a wet runaway
-    // it clamped the clock to five-year steps for ever -- on a planet where
-    // nothing whatever was happening. Reported from the live site as 2.2 kyr/s
-    // on a 1006 C world; Earth at 1.4 S(+) took 300 001 steps to cross 500 Myr
-    // and now takes 884.
-    //
-    // Nothing about the physics moves: this is a diagnostic the integrator reads
-    // and it was wrong about a quantity the integrator then had to respect.
-    const photolytic = totalWater(w) > 0 ? Math.max(esc.water, 0) * (32 / 18) * 0.15 : 0;
-    w.o2Rate = (source + photolytic - reductantNet) - w.o2 * weathering;
     // Semi-implicit in the part that depends on w.o2, so a long step cannot
     // overshoot past zero.
     const o2Before = w.o2;
@@ -1318,6 +1309,31 @@ export function stepVolatiles(w, dtYears) {
     w.co2 += molten * dtYears;
     w.carbonDeep = Math.max(0, w.carbonDeep - molten * dtYears);
   }
+
+  // How fast the oxygen reservoir is actually moving, measured rather than
+  // assembled.
+  //
+  // maxStep bounds the step at a tenth of this reservoir, because methane's
+  // lifetime pivots three orders of magnitude across four decades of pO2. That
+  // makes this number load-bearing, and every attempt to write it as a sum of
+  // its terms has been missing one. First it omitted the oxygen escaping
+  // hydrogen leaves behind, which is the largest term on any world losing an
+  // ocean -- so a wet runaway reported the reservoir emptying in thirty years
+  // while it sat in a steady balance, and the clock crawled at five-year steps.
+  // Adding that term fixed the sign and not the problem: the hydrogen burn a few
+  // hundred lines below is charged to the same reservoir *after* the sum was
+  // taken, and a far-future Earth still ground along at eighteen-year steps and
+  // 36.6 kyr/s. Reported from the live site both times.
+  //
+  // Taking the difference cannot miss a term, by construction. It is one step
+  // behind, which is what a step controller wants anyway -- and it is
+  // self-consistent: the bound solves for the step on which the reservoir moves
+  // by a tenth, which is exactly what it is asking for.
+  //
+  // dtYears is zero on the update() that follows a parameter change; there is no
+  // rate to measure then, so the previous one stands.
+  if (dtYears > 0) w.o2Rate = (w.o2 - o2AtEntry) / dtYears;
+  else if (w.o2Rate == null) w.o2Rate = 0;
 
   w.escape = esc;
   // V carries the emissions so maxStep's carbon bound sees them: forty times

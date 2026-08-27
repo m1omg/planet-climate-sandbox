@@ -439,8 +439,23 @@ seconds' worth of simulated years. The bound believed it, because believing it i
 and clamped the clock to **five-year steps, for ever**.
 
 It is a diagnostic the integrator reads, and it was wrong about a quantity the integrator then had to
-respect. Everything else is untouched by the correction: Earth over a gigayear still 1358 steps, a
-1.1 S⊕ Earth still 2268, Venus still 154, the Archean still 729, the Great Oxidation unchanged.
+respect. It is **measured now rather than assembled** — the difference in the reservoir across the
+step, which cannot miss a term by construction. Two attempts to write it as a sum both missed one:
+first the photolytic oxygen, then the hydrogen burn charged to the same reservoir a few hundred lines
+further down.
+
+**And how tightly it is bounded follows the methane, because methane is what the bound is for.** A
+tenth of the reservoir per step where there is methane whose lifetime pivots on pO₂; a whole
+reservoir where there is none. The measurement that decided it: a far-future Earth crossing from oxic
+to anoxic on a magma ocean, pO₂ sweeping four decades in 140 Myr with no methane anywhere. Run to
+3.4 Gyr, a tenth of the reservoir per step takes **1,785,117 steps**; a whole reservoir takes
+**26,276**, and ten reservoirs 26,082 — all three agreeing on 2891.4 °C, 399.60 bar and 0.7718
+oceans. Sixty-eight times the work for the fourth decimal place, and it was reported from the live
+site as **36.6 kyr/s on an 1812 °C world**.
+
+Everything else is untouched: Earth over a gigayear still 1358 steps, Venus 153, the Archean 701, the
+Great Oxidation still converged at 34–35% peak ice from a 2 kyr cap to a 5 Myr one and at 60, 10 and
+2 fps.
 
 **Cheaper steps.** A step was 240 µs; it is 154 µs now, and nothing about the physics changed to get
 there. `psatH2O` was **28% of the whole model's CPU time** — every band asks for it several times a
@@ -2065,6 +2080,27 @@ Stated plainly, because a model that hides these is less useful:
 
   Six standing failures closed with it, including snowball deglaciation and duration, and Earth's
   inner edge came in a further 0.04 to **1.26 S⊕**.
+
+* **A one-way planet degasses its entire carbon inventory, and the obvious fix was worse than the
+  problem.** Once a world loses its liquid water there is no weathering sink, so volcanism runs
+  unopposed until `carbonDeep` is empty. A brightening Earth puts its **whole 399.6 bar** into the air
+  by 3.4 Gyr; Young Venus, started from the preset and left under a brightening star, puts in all 331
+  and finishes as a **2167 °C magma ocean**. It passes Venus's own 92 bar at about 3.4 Gyr and does
+  not stop. Reported from the live site.
+
+  Scaling outgassing by how depleted the mantle is — physically the right shape, since the flux
+  tracks the carbon concentration in the melt — was tried and **reverted**. `carbonDeep` starts at
+  `budget − κ·co2`, and κ is 50, so any world already holding a thick CO₂ atmosphere begins at the
+  zero clamp: the Hot Ocean preset starts with 8.74 bar in the air and a deep reservoir of exactly
+  nothing. Scaling on that fraction does not measure mantle depletion, it measures how much CO₂ is in
+  the air. It held that world's volcanism at 15% of its rate and cooled it from **72 °C to 26**, and
+  moved the nightside-trapped locked world back across its threshold. Three self-tests caught it
+  inside one run.
+
+  What it would take is a `carbonDeep` that means "carbon still in the mantle" rather than "budget
+  minus whatever the surface bookkeeping claims", which is a change to the carbon cycle's shape
+  rather than a coefficient. Not attempted. The magma-ocean term degassing at 30× volcanism, with no
+  limit but the reservoir, is the other half of the same entry.
 
 * **CO₂'s forcing per doubling falls off too fast, and it has been failing quietly for a long time.**
   Etminan et al. (2016) give 3.80 W/m² for 280→560 ppm and **4.02 for 1120→2240** — the real forcing

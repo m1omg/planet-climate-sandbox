@@ -119,6 +119,12 @@ and reported "brightening \u221245.3% per Gyr". The starlight slider also
 reaches 50 S\u2295 now, because GJ 1132 b receives 18.8 and could not be
 represented on one that stopped at 4.
 
+A far-future magma ocean crawled at 36.6 kyr/s: pO\u2082 was sweeping four
+decades as the world went anoxic, and the step controller resolved it to a tenth
+of the reservoir per step on a planet with no methane for that to matter to.
+1 785 117 steps to cross 3.4 Gyr against 26 276 with the bound gated on the
+methane, agreeing to four significant figures.
+
 A wet runaway used to crawl at a couple of kiloyears a second with nothing
 happening on it: \`o2Rate\` was missing the oxygen that escaping hydrogen leaves
 behind, so the step controller clamped the clock to five-year steps on a world
