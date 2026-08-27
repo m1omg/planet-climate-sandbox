@@ -5,7 +5,7 @@ import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED,
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
 
-import { EARTH_INTERNAL_FLUX } from './volatiles.js';
+import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL } from './volatiles.js';
 
 export const NBANDS = 18;
 
@@ -70,6 +70,16 @@ export function resetWorld(w, params) {
   w.history = [];
   w.dtPrev = 0;
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
+  w.landIceMass = null;  // and so is the mass the cold trap has moved
+  w.life = null;       // seeded on the first step, from whether this world has a biosphere
+  // A world that starts with industry running has been running it for a while:
+  // modern Earth is a tenth of the way through its fossil carbon, not at the
+  // first day of it. Both reservoirs therefore start where that activity would
+  // already have put them, the same argument that gives that preset its
+  // `fossilUsed`. A world with the emissions control at zero starts clean.
+  w.industrial = clamp(params.emissions ?? 0, 0, 100);
+  w.otherGHG = OTHER_GHG_FULL * w.industrial;
+  w.aerosol = AEROSOL_FULL * w.industrial;
   w.fossil = null;     // a fresh world has its fossil carbon still in the ground
   w.carbonDeep = null; // rebuilt from the planet's mass on the first step
   w.bio = null;        // the living biosphere, grown from the conditions
@@ -282,6 +292,23 @@ export function update(w, dt) {
   // that water absorbs rather than scatters.
   const cloudWhite = cloudWhiteness(p.starTemp);
 
+  // What an industrial civilisation adds that is not CO2. Both are computed in
+  // volatiles.js, which knows whether anyone is still burning anything; here
+  // they are only applied.
+  //
+  // The gases come off the longwave, which is what a greenhouse forcing is. The
+  // aerosol comes off the shortwave, because that is what it is -- sulphate
+  // scatters sunlight -- and it is applied as a uniform addition to the band
+  // albedo rather than as a flat watt off the total. That puts the cooling
+  // where the sunlight is, which on a rotating world is the tropics and on a
+  // locked world is the day side, and stops it from cooling ground the star
+  // never reaches.
+  const ghgForce = Math.max(w.otherGHG ?? 0, 0);
+  let sMean = 0;
+  for (let i = 0; i < NBANDS; i++) sMean += S[i] / NBANDS;
+  const aerAlb = clamp(Math.max(w.aerosol ?? 0, 0)
+    / Math.max(sMean * swTrans, 1e-6), 0, 0.5);
+
   const alb = new Float64Array(NBANDS), out = new Float64Array(NBANDS);
   const cloud = new Float64Array(NBANDS), pTotArr = new Float64Array(NBANDS);
   const hasWater = totalWater > 1e-5;
@@ -297,10 +324,13 @@ export function update(w, dt) {
       glaciated: glaciatedShare,
       pH2O: pH2O[i], pTot, slowness, subStellar, cloudWhite,
     });
-    alb[i] = a.albedo; cloud[i] = a.cloud;
+    alb[i] = clamp(a.albedo + aerAlb, 0, 0.95); cloud[i] = a.cloud;
     const moistOLR = olr(w.T[i], pCO2, pH2O[i], pCH4, pTot);
     const dryOLR = olr(w.T[i], pCO2, pH2Odry[i], pCH4, pTot);
-    out[i] = (1 - FIN_FRACTION) * moistOLR + FIN_FRACTION * dryOLR;
+    // Floored rather than merely subtracted: a lumped forcing that could drive
+    // the outgoing flux to nothing would be a runaway with no physics behind it.
+    out[i] = Math.max((1 - FIN_FRACTION) * moistOLR + FIN_FRACTION * dryOLR - ghgForce,
+                      1e-3);
     Tmean += w.T[i] / NBANDS;
     // Two different questions, so two numbers. `iceMean` is how much of the
     // planet is frozen, which is what decides whether this is a snowball.

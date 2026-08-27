@@ -4,6 +4,7 @@ import {
 } from './constants.js';
 import { iceFraction } from './radiation.js';
 import { nonThermalEscape } from './evolution.js';
+import { stepLife } from './biosphere.js';
 import { outgassingScale, radiusFromMass } from './planet.js';
 import { NBANDS } from './climate.js';
 
@@ -108,6 +109,44 @@ const CH4_LIGHT_SAT = 50;
 // what burning the Earth's fossil carbon does. What it does is spike the CO2
 // and then hand it to the carbonate-silicate thermostat, which takes it back
 // over a hundred thousand years or so -- the long thaw.
+// The rest of what an industrial civilisation puts in the air, which is not a
+// footnote: CO2 is 2.16 W/m^2 of the 2019 forcing against 1750 and everything
+// else together is another 1.16 (IPCC AR6 Table 7.8). Three components, and
+// they are kept apart because they behave completely differently.
+//
+//   METHANE, 0.54 W/m^2, goes into the methane reservoir that already exists
+//   rather than being lumped, because the model has the gas and knows what to
+//   do with it -- including its shortwave absorption and its ten-year life.
+//   Anthropogenic methane is about 360 of the 580 Tg/yr Earth emits, against
+//   the 218 Tg/yr natural budget CH4_BIO is anchored on, so it is 1.65x nature
+//   at today's rate. This is what the CH4_BIO comment meant by "most of today's
+//   methane is ours": until now the model had the natural budget and no us, so
+//   a modern Earth relaxed to 0.72 ppm within a century. Now it holds 1.9.
+//
+//   NITROUS OXIDE AND THE HALOCARBONS, 0.62 W/m^2 between them, are lumped into
+//   one effective forcing. Nothing is gained by resolving CFC-12 from HFC-134a
+//   from SF6 here: they are all long-lived, well-mixed, and small enough that
+//   what matters is the total and the timescale. 150 years is the mass-weighted
+//   life of the mixture -- N2O is 116, the CFCs 45-100, SF6 three thousand.
+//
+//   SULPHATE AEROSOL, and this one cools: -1.1 W/m^2, which is why the planet
+//   has warmed 1.3 K and not 2.4. It is emitted by the same combustion and it
+//   is gone in about a week, so unlike the gases it tracks activity rather than
+//   accumulating -- and that asymmetry is the whole reason it is worth
+//   modelling. Stop burning and the aerosol is gone within the decade while the
+//   gases stay for centuries, so the planet gets warmer before it gets cooler.
+//   That is the termination shock, and with only CO2 in the model there was no
+//   way to see it.
+//
+// The three very nearly cancel to the CO2-only answer at today's rate, which is
+// why this could be added without moving the calibration: +0.54 and +0.62
+// against -1.1. What it changes is everything away from today's rate.
+const CH4_ANTHRO = 1.33e-3;     // kg/m^2/yr of CH4 at the present-day rate
+export const OTHER_GHG_FULL = 0.62;   // W/m^2 at 1x, N2O + halocarbons
+const OTHER_GHG_TAU = 150;      // yr
+export const AEROSOL_FULL = 1.10;     // W/m^2 of cooling at 1x
+const AEROSOL_TAU = 5;          // yr -- a week, rounded up to something a solver can see
+
 const EMIT_TODAY = 7.8e-2;      // kg/m^2/yr of CO2 at the present-day rate
 export const FOSSIL_TOTAL = 36.0;      // kg/m^2 of CO2, ~5000 GtC of recoverable carbon
 
@@ -211,8 +250,10 @@ export function carbonBudget(massEarths) {
 // faster than it accumulates, and the density of glacier ice.
 const SHEET_MAX_THICKNESS = 2500;   // m
 const RHO_ICE = 917;                // kg/m^3
+// How long the water takes to actually get there. See partitionWater().
+export const TRAP_TAU = 5e4;        // years
 
-export function partitionWater(w) {
+export function partitionWater(w, dtYears = 0) {
   const dg = w.diag, d = dg.d;
   const total = totalWater(w);
   if (total <= 0) {
@@ -278,7 +319,42 @@ export function partitionWater(w) {
   // A permanent cold trap has no return path, so it does not stop at some
   // arbitrary residual -- it drains the basins. What is left is whatever is in
   // transit, which is nothing on the timescales here.
-  const landIce = clamp(wanted, 0, surface * 0.999);
+  const target = clamp(wanted, 0, surface * 0.999);
+
+  // ...but it gets there at a rate, not instantly, and that is the whole of it.
+  //
+  // The sheet's *extent* has had a fifteen-thousand-year memory since it became
+  // a state variable; its *mass* did not, and was recomputed algebraically from
+  // the target every step. So a world creeping towards the trap threshold could
+  // move its entire remaining ocean onto the continents inside one step of any
+  // size -- Early Venus did exactly that, dropping the flooded fraction from
+  // 0.18 to 0.007 in a single step and taking its cloud deck with it. Absorbed
+  // sunlight jumped sixty watts, the planet warmed thirty kelvin, the clock
+  // fell to hundredths of a year, and it then cycled between a desert and a
+  // moist greenhouse for the rest of the run.
+  //
+  // Fifty thousand years, and it is the atmosphere's timescale rather than the
+  // ice's: what limits a cold trap is how fast the air can carry water to it.
+  // Earth's whole atmospheric column is 25 mm of water and turns over in nine
+  // days, so moving a 300 m ocean to the poles takes of order 10^4 to 10^5
+  // years even with every drop that falls there staying. The sheets themselves
+  // are slower still. Nothing in this model is sensitive to which of those two
+  // sets the number; what matters is that it is not zero.
+  //
+  // Both directions, because a trap that releases instantly is the same
+  // discontinuity run backwards.
+  if (w.landIceMass == null || !isFinite(w.landIceMass)) w.landIceMass = target;
+  // Whatever else has happened to the inventory -- escape, condensation,
+  // outgassed water -- the sheet cannot hold more than there is.
+  w.landIceMass = clamp(w.landIceMass, 0, surface * 0.999);
+  if (dtYears > 0) {
+    const relax = 1 - Math.exp(-dtYears / TRAP_TAU);
+    w.landIceMass += (target - w.landIceMass) * relax;
+  } else if (w.landIceMass == null) {
+    w.landIceMass = target;
+  }
+  w.landIceTarget = target;
+  const landIce = clamp(w.landIceMass, 0, surface * 0.999);
   const basin = Math.max(0, surface - landIce);
   const seaIce = clamp(basin * frozenShare, 0, basin);
 
@@ -554,9 +630,13 @@ const BIO_GROW = 5000;    // yr
 
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
+  // Who is living here. Reads the climate, changes nothing about it -- see
+  // biosphere.js for why that separation is deliberate.
+  stepLife(w, dtYears);
 
   const p = w.params, dg = w.diag, d = dg.d;
   const esc = escapeRates(w);
+  let escapeO2 = 0;      // kg/m^2/yr, filled in by the water block below
 
   // --- water inventory -----------------------------------------------------
   if (totalWater(w) > 0) {
@@ -568,11 +648,25 @@ export function stepVolatiles(w, dtYears) {
       w.water.vapour *= f; w.water.ocean *= f;
       w.water.seaIce *= f; w.water.landIce *= f;
       w.water.lost += lostEO;
-      // oxygen left behind when the hydrogen goes; some is taken up by the crust
-      w.o2 += lostEO * d.eoColumn * (32 / 18) * 0.15;
+      // Oxygen left behind when the hydrogen goes; some is taken up by the
+      // crust. Handed to the oxygen cycle below as a rate rather than added
+      // here, and that is not tidiness.
+      //
+      // Added directly, it went into w.o2 *before* the oxygen block ran, and
+      // the methane block then read the pre-block value as "the oxygen at the
+      // start of the step". On a world whose reductants pin oxygen at zero --
+      // every anoxic volcanic world in the game -- that value was not the
+      // oxygen the atmosphere had, it was a spike proportional to the step,
+      // deposited and removed within the same step. Methane's lifetime pivots
+      // over four decades of pO2 and a spike of a few times 1e-5 bar lands in
+      // the middle of them, so the lifetime came out a function of dt: 7300
+      // years on a 25 kyr step and 5500 on an 87 kyr one. Methane then rang
+      // between 0.5 and 2.4 ppm from step to step, and the step controller rang
+      // with it. Early Venus spent its whole run doing this.
+      escapeO2 = dtYears > 0 ? lostEO * d.eoColumn * (32 / 18) * 0.15 / dtYears : 0;
     }
   }
-  partitionWater(w);
+  partitionWater(w, dtYears);
 
   // --- carbonate-silicate cycle -------------------------------------------
   // Volcanoes cannot outgas carbon the planet does not have. `outgassing` used
@@ -599,6 +693,21 @@ export function stepVolatiles(w, dtYears) {
     if (!p.fossilInfinite) w.fossil = Math.max(0, w.fossil - emit * dtYears);
   }
   w.emitting = emit;
+
+  // Everything else the same activity emits. `running` is the industrial rate
+  // that is actually happening, which is not p.emissions once the reserve has
+  // run out: an economy with nothing left to burn has stopped making nitrous
+  // oxide and sulphate too. Taken from the CO2 flux so the three can never
+  // disagree about whether industry is running.
+  {
+    const running = EMIT_TODAY > 0 ? clamp(emit / EMIT_TODAY, 0, 100) : 0;
+    w.industrial = running;
+    // Both semi-implicit, so a long step lands on the answer instead of past it.
+    const relaxTo = (have, target, tau) =>
+      dtYears > 0 ? (have + (target / tau) * dtYears) / (1 + dtYears / tau) : have;
+    w.otherGHG = relaxTo(w.otherGHG ?? 0, OTHER_GHG_FULL * running, OTHER_GHG_TAU);
+    w.aerosol = relaxTo(w.aerosol ?? 0, AEROSOL_FULL * running, AEROSOL_TAU);
+  }
   const liquid = clamp(1 - dg.iceMean, 0, 1) * smoothstep(0, 0.02, w.water.ocean);
   const landExposed = clamp(p.landFraction * (1 - dg.iceMean), 0, 1);
   const pCO2rel = Math.max(dg.pCO2 / 280e-6, 1e-6);
@@ -701,7 +810,7 @@ export function stepVolatiles(w, dtYears) {
     // single smoothstep on the global mean temperature between 330 and 360 K,
     // which is neither the right quantity nor the right numbers: it is a local
     // condition, and 57 C is nowhere near where phototrophs actually stop.
-    const source = O2_BIO * w.bio;
+    const source = O2_BIO * w.bio + escapeO2;
 
     // Reduced volcanic gases, straight out of the ground and into the air.
     // This is the term the biosphere has to outrun, and until it does the
@@ -806,8 +915,15 @@ export function stepVolatiles(w, dtYears) {
       let ground = 0;
       for (let i = 0; i < NBANDS; i++) ground += dg.S[i] * (dg.swTrans ?? 1) / NBANDS;
       const lit = clamp(ground / CH4_LIGHT_SAT, 0, 1);
-      const bio = CH4_BIO * Math.max(p.biosphere ?? 0, 0) * wet * lit
-        * (1 + (CH4_ANOX_BOOST - 1) * (1 - oxidising));
+      // Ours is added beside the biosphere's rather than inside it: it does not
+      // scale with how hard photosynthesis is running, it scales with us. It is
+      // still gated on there being liquid water and a lit surface, because a
+      // civilisation on a frozen or sunless world is not a case this model has
+      // anything to say about and letting the term through unconditionally
+      // would have put methane on a planet that had boiled dry.
+      const bio = (CH4_BIO * Math.max(p.biosphere ?? 0, 0)
+          * (1 + (CH4_ANOX_BOOST - 1) * (1 - oxidising))
+        + CH4_ANTHRO * (w.industrial ?? 0)) * wet * lit;
 
       // And the interior makes the rest: serpentinisation and the seeps.
       const geo = CH4_GEO * outgassingScale(p.mass) * Math.max(p.outgassing ?? 0, 0) * meltBoost(p);
@@ -835,12 +951,32 @@ export function stepVolatiles(w, dtYears) {
       // so an exhausted pool stops the source rather than going negative.
       const CH4_AS_CO2 = 44 / 16;    // the same carbon, weighed as CO2
       let bioRate = bio * makes, geoRate = geo * makes;
-      if (dtYears > 0) {
-        if (!p.mantleInfinite) {
-          geoRate = Math.min(geoRate, Math.max(w.carbonDeep, 0) / CH4_AS_CO2 / dtYears);
-        }
-        bioRate = Math.min(bioRate, Math.max(w.co2, 0) * kappa / CH4_AS_CO2 / dtYears);
+      // The mantle term is a one-way drain -- carbon leaves the interior and
+      // does not go back -- so what it may take is what is there, over the step.
+      if (dtYears > 0 && !p.mantleInfinite) {
+        geoRate = Math.min(geoRate, Math.max(w.carbonDeep, 0) / CH4_AS_CO2 / dtYears);
       }
+      // The biological term is not a drain at all. Methanogens borrow surface
+      // carbon and oxidation hands it straight back a decade later, so over any
+      // step longer than the methane lifetime the net transfer is nil -- what
+      // the loop holds is a standing stock, not a debt.
+      //
+      // Capping this flux at pool/dt, the way the mantle one is capped, was
+      // therefore wrong twice over: it limited a gross flux by a net budget,
+      // and it made the answer a function of the step size. On Earth the cap
+      // bit by a factor of five, so methane read 0.16 ppm on a 250 kyr step and
+      // 0.82 ppm on a 16 kyr one. That is 0.28 W/m^2 of forcing appearing and
+      // disappearing with the step, which drove the step controller into a
+      // three-step limit cycle -- 0.2 K of temperature ringing, and the clock
+      // dropping from 250 kyr steps to 10 kyr for the rest of the run. It is
+      // the flicker seen on a brightening Earth.
+      //
+      // What is actually bounded is the standing stock: the loop cannot hold
+      // more carbon as methane than the surface has to lend it. bioRate * tau
+      // is that stock, so this is the same conservation guarantee, stated in
+      // the quantity it belongs to and independent of the step.
+      bioRate = Math.min(bioRate,
+        Math.max(w.co2, 0) * kappa / CH4_AS_CO2 / Math.max(tau, 1));
       // Semi-implicit, so an arbitrarily long step still lands on the right
       // answer instead of overshooting past zero.
       w.ch4Source = bioRate + geoRate;

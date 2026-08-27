@@ -28,8 +28,14 @@ export function captureWorld(w) {
     water: { ...w.water },
     waterInitial: w.waterInitial,
     iceSheet: w.iceSheet,
+    landIceMass: w.landIceMass,
+    life: w.life ? { ...w.life } : null,
     co2Frozen: w.co2Frozen,
     fossil: w.fossil,
+    // The two industrial reservoirs. The aerosol clears in a decade and the
+    // gases do not, and a save that dropped them would resume every world in
+    // the middle of its own termination shock.
+    otherGHG: w.otherGHG, aerosol: w.aerosol, industrial: w.industrial,
     carbonDeep: w.carbonDeep,
     bio: w.bio,
     co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
@@ -54,8 +60,13 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.water) Object.assign(w.water, s.water);
   w.waterInitial = s.waterInitial ?? w.waterInitial;
   w.iceSheet = s.iceSheet ?? null;
+  w.landIceMass = s.landIceMass ?? null;
+  w.life = s.life ? { ...s.life } : { pro: 0, euk: 0 };
   w.co2Frozen = s.co2Frozen ?? 0;
   w.fossil = s.fossil ?? null;
+  w.otherGHG = s.otherGHG ?? w.otherGHG;
+  w.aerosol = s.aerosol ?? w.aerosol;
+  w.industrial = s.industrial ?? w.industrial;
   w.carbonDeep = s.carbonDeep ?? null;
   w.bio = s.bio ?? null;
   if (s.evolve0) w.evolve0 = { ...s.evolve0 };

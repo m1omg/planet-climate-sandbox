@@ -10,7 +10,7 @@
 </head>
 <body>
 <script>window.__assetBase = "../assets/";</script>
-<div id="devbar"><span class="devbar-tag">ALTDEV</span><span class="devbar-msg">An alternative line of work to /dev/: step-size convergence and the volcanism bistability. Physics may be wrong here on purpose.</span><a class="devbar-link" href="../">stable site</a><a class="devbar-link" href="../dev/">dev</a><button type="button" class="devbar-x" aria-label="Dismiss">&#215;</button></div>
+<div id="devbar"><span class="devbar-tag">ALTDEV</span><span class="devbar-msg">An alternative line of work to /dev/. Planetary histories, magnetic fields, resurfacing, and the step-size bugs behind the flickering.</span><a class="devbar-link" href="../">stable site</a><a class="devbar-link" href="../dev/">dev</a><button type="button" class="devbar-x" aria-label="Dismiss">&#215;</button></div>
 <style>
 #devbar{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;gap:.5rem;
   padding:.15rem .5rem;background:rgba(28,64,110,.94);color:#dceaff;
@@ -53,6 +53,12 @@
 
       <section class="group">
         <h2>Saves</h2>
+        <label class="name-row" for="world-name">
+          <span>Name</span>
+          <input id="world-name" type="text" maxlength="40" autocomplete="off"
+                 spellcheck="false" placeholder="Custom world"
+                 title="What to call this world. It goes into the save slots, the export file and the log line when you load it. Loading a preset puts its own name back.">
+        </label>
         <div id="slots" class="slot-row"></div>
         <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
           class="supply-btn">Save…</button> then pick a slot to overwrite. Slot 1 keeps itself.<br>
@@ -162,8 +168,12 @@
       </section>
 
       <section class="group">
-        <h2>Zonal profile</h2>
-        <canvas class="chart" id="chart-profile"></canvas>
+        <h2>Zonal profile <small>hover for one latitude</small></h2>
+        <div class="chart-wrap">
+          <canvas class="chart probe" id="chart-profile"
+            title="Each point is one of the eighteen equal-area bands the model actually solves. Hover or drag along it to read that band."></canvas>
+          <div class="chart-tip" id="profile-tip" hidden></div>
+        </div>
       </section>
 
       <section class="group">

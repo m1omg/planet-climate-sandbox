@@ -52,6 +52,30 @@ export const EARTH = {
   resurfacingAge: 0, resurfacingBoost: 1, resurfacingSpan: 50,
 };
 
+// The modes that turn a preset from a snapshot into a history, switched on for
+// every world in this file that actually exists. A real planet has a star that
+// brightens and an interior that runs down, and the presets that claim to be
+// real ought to say so without the player having to know which two boxes to
+// tick. The invented worlds below keep them off: "what would this do" is a
+// different question from "what did this do", and it is the one they are for.
+//
+// 10%/Gyr is the Sun over the span these worlds live in. Gough's (1981) track
+// is 7.4%/Gyr compounded over the whole main sequence and steeper than that
+// recently, and every solar preset here carries a `startAge` consistent with
+// its own insolation on that curve -- the Archean's 0.77 S(+) is the Sun at
+// 1.15 Gyr, Noachian Mars's 0.32 is Mars at 0.6, Way's Early Venus is 2.9 Gya.
+export const SOLAR_HISTORY = { brightening: 0.10, realisticGeology: true };
+
+// The three worlds around M dwarfs get `realisticGeology` off and no
+// brightening at all, and both are the accurate choice rather than an omission.
+// An M dwarf is essentially a constant star: TRAPPIST-1 will sit where it is
+// for trillions of years, so 10%/Gyr would be pure fiction. And their interior
+// heat is tidal, not radiogenic -- 2.68 W/m^2 on TRAPPIST-1b and 80 on GJ 1132 b
+// come from eccentricity held by resonance, which does not decay on a
+// potassium-40 half-life. Running them down the radiogenic curve would cool
+// worlds that are being kneaded, not worlds that are cooling.
+export const DWARF_HISTORY = { brightening: 0, realisticGeology: false };
+
 export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
 
 export const PRESETS = {
@@ -63,16 +87,16 @@ export const PRESETS = {
   // the 36 kg/m^2 in the ground -- and it is the same carbon that has taken this
   // preset from Pre-Industrial Earth's 280 ppm to 427. Pre-Industrial Earth has
   // the lot, because nobody had touched it yet.
-  earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH, emissions: 1, fossilUsed: 0.098 } },
-  preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL } },
+  earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH, ...SOLAR_HISTORY, emissions: 1, fossilUsed: 0.098 } },
+  preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL, ...SOLAR_HISTORY } },
   // Earth's physics without Earth's biography: no industry, no real coastlines,
   // and a fresh set of continents every time you load it. For trying something
   // out without the answer being about this planet in particular. Emissions are
   // still there if you want them -- the control does not go away, it just starts
   // at nothing.
   earthlike: { name: 'Earth-like', icon: '🌐', params: { ...PREINDUSTRIAL, co2Bar: 280e-6, emissions: 0, fossilUsed: 0 } },
-  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
-  mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.2, landAlbedo: 0.25, startT: 215 } },
+  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
+  mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.2, landAlbedo: 0.25, startT: 215 } },
   // 0.10 bar of CO2, and it has been raised for the same reason twice now.
   //
   // It was 0.02, which only worked because methane's opacity was some five
@@ -101,7 +125,14 @@ export const PRESETS = {
   // is the semi-grey scheme's gap, not methane's. It is the same one optical
   // depth having to serve 230 K and 288 K at once, reported against the
   // snowball rows in calibrate.mjs.
-  earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, o2Bar: 0, biosphere: 0.2, insolation: 0.77, landFraction: 0.1, co2Bar: 0.10, ch4Bar: 1e-3, startT: 290 } },
+  // The day was thirteen hours long. The Moon was closer and the tides that
+  // have been slowing the spin ever since had had a billion years rather than
+  // four and a half to work -- tidal-rhythmite and cyclostratigraphic estimates
+  // put the Archean day between twelve and sixteen hours (Williams 2000;
+  // Mitchell & Kirscher 2023). It is not a large climatic lever at this end of
+  // the range: the cloud deck that makes slow rotation matter needs hundreds of
+  // hours, not tens. It is here because it is true.
+  earlyEarth: { name: 'Archean', icon: '🌊', params: { ...EARTH, ...SOLAR_HISTORY, startAge: 1.15, o2Bar: 0, biosphere: 0.2, insolation: 0.77, landFraction: 0.1, co2Bar: 0.10, ch4Bar: 1e-3, rotationHours: 13, startT: 290 } },
   // Venus with an ocean on it, as Way et al. (2016) modelled it in ROCKE-3D:
   // a 1 bar nitrogen atmosphere with Earth's CO2 and methane, the 310 m ocean
   // that Magellan's topography holds if you fill the lowlands, and the 2.9 Gya
@@ -119,21 +150,37 @@ export const PRESETS = {
   // which is the `water` control here: wind it to zero and this becomes the
   // Venus next door. The rotation physics is the same either way.
   //
-  // The 310 m is kept as the water inventory rather than as a coastline: Venus's
-  // lowlands are broad and flat and hold that depth over 60% of the planet,
-  // while this model floods Earth-shaped basins with it and gets 34%. The
-  // inventory is the part that matters -- it sets how much vapour there is and
-  // how long the ocean survives being blown off.
-  earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, mass: 0.815, magneticField: 0,
+  // The 310 m is kept as the water inventory rather than as a coastline, but the
+  // land fraction is then set to make the *coverage* come out right too, and
+  // that turned out to matter more than it looks. Venus's lowlands are broad and
+  // flat and hold that depth over about 60% of the planet; this model floods
+  // Earth-shaped basins, which at a land fraction of 0.40 gave 34% coverage and
+  // an equilibrium of 5.6 C. At 0.10 it floods 52% and settles at 10 C, which is
+  // Way's answer. Coverage is what sets how much vapour a shallow ocean can put
+  // in the air, and on a world this marginal that is six kelvin.
+  //
+  // What it does not fix: left alone at fixed sunlight this world still cools
+  // over the following billion years and ices over, because the sea is small
+  // enough that the ice-albedo feedback beats the carbonate thermostat -- CO2
+  // climbs a hundredfold on the way down and the world gets colder anyway, since
+  // what it is losing is water vapour, not carbon. Way et al. ran Sim A for
+  // thousands of years, not billions, so this is not a disagreement with them so
+  // much as a question they did not ask. With the solar brightening on, which is
+  // now the default here, it comes back out of it.
+  earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, ...SOLAR_HISTORY, mass: 0.815, magneticField: 0,
     insolation: 1.40, rotationHours: 5832, obliquity: 2.6, o2Bar: 0, biosphere: 0,
-    n2Bar: 1.0126, co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.40,
+    n2Bar: 1.0126, co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.10,
     landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288,
     // Way's Sim A is 2.9 Gya, so the planet is 4.567 - 2.9 Gyr old here.
     startAge: 1.67,
-    // The resurfacing is loaded but not armed: 3.852 Gyr is 715 Myr ago, and 60x
-    // is what it takes to put roughly Venus's ninety-two bar into the air out of
-    // this planet's mantle. Tick "resurfacing event" to fire it.
-    resurfacingAge: 0, resurfacingBoost: 60, resurfacingSpan: 40,
+    // And the resurfacing is armed, because it happened. 3.852 Gyr is 715 Myr
+    // ago -- the age Venus's crater population dates its global repaving to --
+    // and 60x is what it takes to put roughly its ninety-two bar into the air
+    // out of this planet's own mantle. Way's argument is that this, and not the
+    // Sun, is what ended Venus: brightening alone leaves the model's Venus
+    // habitable for billions of years too long, which is the same answer his
+    // GCM gives. Untick "resurfacing event" to watch that counterfactual.
+    resurfacingAge: 3.852, resurfacingBoost: 60, resurfacingSpan: 40,
     // Same again: 3.45x today's XUV at an age of 1.67 Gyr.
     xuvFraction: 3.4e-6 * 3.45 } },
   // Mars in the Noachian, when the valley networks were being cut. The Sun was
@@ -149,7 +196,7 @@ export const PRESETS = {
   // greenhouse, however it got it" rather than as a claim about which gas did
   // it. Turn the CO2 down to a bar and watch it freeze, which is the honest
   // difficulty of the real problem.
-  earlyMars: { name: 'Noachian Mars', icon: '🟠', params: { ...EARTH, mass: 0.107,
+  earlyMars: { name: 'Noachian Mars', icon: '🟠', params: { ...EARTH, ...SOLAR_HISTORY, mass: 0.107,
     insolation: 0.32, rotationHours: 24.6, obliquity: 25, o2Bar: 0, biosphere: 0,
     n2Bar: 0.3, co2Bar: 4, ch4Bar: 0.01, water: 0.06, landFraction: 0.70,
     landAlbedo: 0.22, outgassing: 0.2, internalHeat: 0.06, startT: 280, magneticField: 0,
@@ -182,7 +229,7 @@ export const PRESETS = {
   // brightness temperature of about 503 K, which is what a bare rock with no
   // atmosphere redistributing heat looks like: no atmosphere detected. So it
   // starts with essentially none, and the volcanism has to build one.
-  trappist1b: { name: 'TRAPPIST-1b', icon: '🔥', params: { ...EARTH,
+  trappist1b: { name: 'TRAPPIST-1b', icon: '🔥', params: { ...EARTH, ...DWARF_HISTORY,
     mass: 1.374, insolation: 4.153, starTemp: 2566, tidallyLocked: true,
     rotationHours: 36.3, obliquity: 0, water: 0, landFraction: 1,
     n2Bar: 1e-4, o2Bar: 0, co2Bar: 1e-5, ch4Bar: 0, biosphere: 0,
@@ -201,7 +248,7 @@ export const PRESETS = {
   // 1 bar CO2 case). Those GCMs manage it on far less CO2, because a locked
   // world grows a thick cloud deck over the substellar point that this model
   // only approximates; a bar is at the thick end of plausible, not the middle.
-  trappist1e: { name: 'TRAPPIST-1e', icon: '🌍', params: { ...EARTH,
+  trappist1e: { name: 'TRAPPIST-1e', icon: '🌍', params: { ...EARTH, ...DWARF_HISTORY,
     mass: 0.692, insolation: 0.646, starTemp: 2566, tidallyLocked: true,
     rotationHours: 146.4, obliquity: 0, water: 1.0, landFraction: 0.3,
     n2Bar: 1.0, o2Bar: 0, co2Bar: 1.0, ch4Bar: 0, biosphere: 0,
@@ -219,7 +266,7 @@ export const PRESETS = {
   // times Earth's specific activity on top of it would have counted the same
   // heat twice and landed on ninety. It matches the GJ 1132 b button under the
   // internal-heat slider, which is where that arithmetic is written out.
-  gj1132b: { name: 'GJ 1132 b', icon: '🌋', params: { ...EARTH,
+  gj1132b: { name: 'GJ 1132 b', icon: '🌋', params: { ...EARTH, ...DWARF_HISTORY,
     mass: 1.66, insolation: 18.8, starTemp: 3270, tidallyLocked: true,
     rotationHours: 39.1, obliquity: 0, water: 0, landFraction: 1,
     n2Bar: 0.01, o2Bar: 0, co2Bar: 0.1, ch4Bar: 0, biosphere: 0,

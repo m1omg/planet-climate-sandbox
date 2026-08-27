@@ -861,8 +861,15 @@ export function run() {
 
       // The counterfactual, which is the part that says it was the field and not
       // something else: give Mars a dynamo that never dies and it keeps its air.
+      //
+      // `realisticGeology` is switched off here rather than left to the preset,
+      // and that is the whole counterfactual rather than a detail. The preset
+      // now carries it on, and with it on a 0.107 M(+) core stops convecting at
+      // 0.5 Gyr -- before this run even starts, at 0.6. So the field would be
+      // handed over and immediately taken away again, and the two runs would be
+      // the same run. "A dynamo that never dies" has to say so.
       const kept = new Simulation({ ...PRESETS.earlyMars.params, brightening: 0.10,
-        magneticField: 1 });
+        realisticGeology: false, magneticField: 1 });
       const kw = kept.world;
       let g = 0;
       while (kw.time < (4.567 - 0.6) * 1e9 && g++ < 400) {

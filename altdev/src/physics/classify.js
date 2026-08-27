@@ -140,6 +140,13 @@ export function reasonText(w, st) {
   // Tmin, so this and the state label cannot disagree about which is which.
   if (dg.lam > 0.5 && st && st.Tsub != null) {
     bits.push(`day ${(st.Tsub - 273.15).toFixed(0)} °C, night ${(st.Tanti - 273.15).toFixed(0)} °C`);
+  } else if (dg.Tmax != null && dg.Tmin != null && dg.Tmax - dg.Tmin > 2) {
+    // The same argument one step down: on a rotating world the mean is a number
+    // the equator and the poles are both a long way from, and forty kelvin of
+    // spread is the difference between an ice cap and no ice cap. Tmax and Tmin
+    // are the equator and the poles here -- the insolation profile is monotonic
+    // in latitude on anything that is not tidally locked.
+    bits.push(`equator ${(dg.Tmax - 273.15).toFixed(0)} °C, poles ${(dg.Tmin - 273.15).toFixed(0)} °C`);
   }
   if (dg.iceMean > 0.01) bits.push(`${(dg.iceMean * 100).toFixed(0)}% ice`);
   if (Math.abs(dg.imbalance) > 0.5) bits.push(`${dg.imbalance > 0 ? '+' : ''}${dg.imbalance.toFixed(1)} W/m² imbalance`);

@@ -219,10 +219,10 @@ export const SLIDERS = [
           <input type="checkbox" id="chk-resurface"> resurfacing event
         </label>
       </div>` },
-  { g: 'surface', key: 'resurfacingAge', label: 'Resurfacing at', min: 0, max: 10, step: 0.01,
-    fmt: (v) => v <= 0 ? 'never' : `${v.toFixed(2)} Gyr`,
+  { g: 'surface', key: 'resurfacingAge', label: 'Resurfacing at age', min: 0, max: 10, step: 0.01,
+    fmt: (v) => v <= 0 ? 'never' : `${v.toFixed(2)} Gyr old`,
     units: { gyr: 1, gy: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
-    note: 'The age at which the mantle turns over and everything dissolved in it comes up at once. Venus\u2019s is dated to roughly 700 Myr ago — an age of 3.85 Gyr — from a crater population too sparse and too evenly spread to be anything else.' },
+    note: 'When the mantle turns over and everything dissolved in it comes up at once. Measured as the planet\u2019s <em>age</em> — time since it formed, not time since the clock started — so it counts from “age at start” above plus however long the run has been going. Venus\u2019s repaving is dated to roughly 700 Myr ago, which for a 4.567 Gyr planet is an age of 3.85 Gyr, from a crater population too sparse and too evenly spread to be anything else.' },
   { g: 'surface', key: 'resurfacingBoost', label: 'Resurfacing size', min: 1, max: 5000,
     log: true, fmt: (v) => `${v < 9.995 ? v.toFixed(2) : v.toFixed(0)}×`,
     units: { x: 1, '×': 1 }, unitFor: () => '×',
@@ -230,7 +230,7 @@ export const SLIDERS = [
   { g: 'surface', key: 'startAge', label: 'Age at start', min: 0, max: 10, step: 0.01,
     fmt: (v) => `${v.toFixed(2)} Gyr`,
     units: { gyr: 1, gy: 1, byr: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
-    note: 'How old the planet already is when the clock starts. Only does anything with realistic decay on, where it says which part of the radiogenic curve the world begins on. The solar system is 4.567 Gyr old.' },
+    note: 'How old the planet already is when the clock starts — so a preset set in the deep past begins part-way along its own life rather than at the beginning of it. This is what the elapsed clock counts on from, and what the resurfacing age below is measured against. The solar system is 4.567 Gyr old.' },
 
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
     // Two decimals called a hundredth of Earth's volcanism "0.00× Earth",
@@ -245,8 +245,17 @@ export const SLIDERS = [
     // billion. The switch is here for the same reason the fossil one is: "what
     // if it never ran out" is a fair question with an instructive answer, and
     // it is not how a planet works.
+    // The reservoir gets the same bar the fossil reserve has, and for the same
+    // reason: the thing that makes this control finite is invisible until you
+    // can watch it go down. It reads in bar of CO2 rather than in percent
+    // because the number that means something is "four hundred bar still
+    // underneath", not "ninety-eight percent of an endowment you were never
+    // told the size of" -- and on a tidally heated world it is the difference
+    // between a Venus and a Mars.
     extra: `
       <div class="supply">
+        <div class="supply-bar"><i id="mantle-fill"></i></div>
+        <span id="mantle-left" class="supply-left">100 %</span>
         <label class="supply-inf" title="Never run out of mantle carbon. Not how a planet works — but a fair thing to ask.">
           <input type="checkbox" id="chk-mantle-inf"> bottomless mantle
         </label>

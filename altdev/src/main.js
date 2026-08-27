@@ -7,12 +7,12 @@ import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/tim
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
-import { runawayLimit } from './physics/radiation.js';
-import { NBANDS, lockFactor } from './physics/climate.js';
+import { runawayLimit, iceFraction } from './physics/radiation.js';
+import { NBANDS, lockFactor, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
-import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX } from './render/charts.js';
+import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, profileBandAtX } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 
@@ -408,7 +408,13 @@ const LIVE_READERS = {
   // Not reservoirs, but evolved by the clock all the same when their modes are
   // on. With the modes off these return the value the control already holds and
   // the guard below skips them, so they cost nothing.
-  insolation: (w) => w.params.insolation,
+  // While a smooth change is walking, the control shows where you asked the
+  // star to go, not where it has got to. Reading the current value here put the
+  // handle back where it started the moment the readout refreshed -- drag it to
+  // 2 S(+) with smoothing on and it snapped to 1 and looked broken, while the
+  // star was in fact walking there perfectly well underneath. Where the star
+  // actually is has its own readout in the diagnostics.
+  insolation: (w) => w.insolationTarget ?? w.params.insolation,
   internalHeat: (w) => w.params.internalHeat,
 };
 
@@ -483,6 +489,28 @@ function setPresetActive(id) {
   document.querySelectorAll('[data-preset]').forEach((b) =>
     b.classList.toggle('active', b.dataset.preset === id));
 }
+
+// ---------------------------------------------------------------------------
+// What this world is called.
+//
+// Null means "whatever the preset is called", so loading Venus shows Venus in
+// the slots without anyone having typed anything, and a world built from
+// nothing is a Custom world. Type into the field and the name sticks to the
+// world instead: it goes into the slot, into the export file, and into the line
+// that says which world you just loaded. Loading a preset hands the naming back
+// to the preset, because that is a different planet.
+let worldName = null;
+function currentName() {
+  const typed = (worldName ?? '').trim();
+  return typed || PRESETS[activePreset]?.name || 'Custom world';
+}
+function setWorldName(v, { toField = true } = {}) {
+  worldName = v == null ? null : String(v).slice(0, 40);
+  const el = $('#world-name');
+  if (el && toField) el.value = worldName ?? '';
+  if (el) el.placeholder = PRESETS[activePreset]?.name || 'Custom world';
+  syncSlots();
+}
 // Which real world, if any, this preset is. Geography is not a function of
 // climate: warming Earth does not move its continents, so the map stays put
 // while every slider is dragged and only changes when you load a different
@@ -501,7 +529,7 @@ function loadPreset(id) {
   if (!BODY_MAPS[id]) renderState.seed = Math.random() * 100;
   sim.reset(params);
   applyBody(id);
-  syncSliders(); setPresetActive(id); writeHash();
+  syncSliders(); setPresetActive(id); setWorldName(null); writeHash();
   markTouched();
   rememberStart();
   closeScenario();
@@ -547,6 +575,16 @@ function closeScenario() {
 function writeHash() {
   const keep = {};
   for (const k of Object.keys(EARTH)) if (params[k] !== EARTH[k]) keep[k] = params[k];
+  // The starlight control holds the *destination* while a smooth change is
+  // walking, which is right for the handle and wrong for the URL: the address
+  // bar is meant to be the world you are looking at, and writing the target
+  // there meant a reload arrived at the far end instantly. Someone who dragged
+  // to 100 S(+) with smoothing on, watched the star begin its walk, and then
+  // reloaded came back to a planet already at sixteen times Earth's sunlight --
+  // with the smoothing that was supposed to prevent exactly that jump switched
+  // on the whole time. What the world actually has is what gets shared.
+  if ('insolation' in keep) keep.insolation = sim.world.params.insolation;
+  if (keep.insolation === EARTH.insolation) delete keep.insolation;
   const s = Object.entries(keep).map(([k, v]) => `${k}=${typeof v === 'number' ? +v.toPrecision(6) : v}`).join('&');
   // Keep the query string. It carries ?renderer= and ?quality=, and writing
   // location.pathname alone silently erased them the moment anything changed --
@@ -613,6 +651,32 @@ function composition(dg) {
   const text = shown.map((e) =>
     `<span title="${e.t}"><b style="color:${e.c}">${e.n}</b> ${pct(e.f)}%</span>`).join('');
   return `<div class="comp-bar">${bar}</div><div class="comp-list">${text}</div>`;
+}
+
+// The two populations, as bars, because the interesting thing about them is the
+// ratio and not either number. `room` is what the climate could support and the
+// filled part is what is actually there, so a world that has just become
+// habitable shows the gap it has yet to close -- which on the eukaryote line is
+// most of a billion years wide.
+function lifeText(w) {
+  const L = w.life || { pro: 0, euk: 0 };
+  const room = w.lifeRoom || { pro: 0, euk: 0 };
+  const row = (label, have, could, colour, title) => {
+    const pct = have <= 0 ? 'none'
+      : have < 0.01 ? 'traces'
+      : `${(have * 100).toFixed(0)}% of the surface`;
+    const behind = could - have > 0.02 && have < 0.995
+      ? `<i class="life-room" style="width:${(could * 100).toFixed(1)}%"></i>` : '';
+    return `<div class="life-row" title="${title}">` +
+      `<span class="life-k">${label}</span>` +
+      `<span class="life-bar">${behind}` +
+      `<i class="life-fill" style="width:${(Math.max(have, 0) * 100).toFixed(1)}%;background:${colour}"></i>` +
+      `</span><span class="life-v">${pct}</span></div>`;
+  };
+  return row('prokaryotes', L.pro, room.pro, '#6fc7a0',
+      'Cells without a nucleus. Liquid water and an electron donor is the whole requirement: −20 °C to 122 °C, no oxygen needed, no light needed.') +
+    row('eukaryotes', L.euk, room.euk, '#c9a0e0',
+      'Cells with a nucleus and mitochondria, so: aerobes. They need free oxygen — a percent or so of Earth\u2019s is enough — and they give out around 60 °C, far short of what a bacterium will take.');
 }
 
 function stat(k, v, cls = '') { return `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
@@ -685,6 +749,25 @@ function updateReadout() {
         left > 1e-6 ? `${(left / FOSSIL_TOTAL * 100).toFixed(0)}<small> %</small>` : 'exhausted',
         left <= 1e-6 ? 'warn' : '');
     })() +
+    // Where the star actually is. Only worth a line when it is not where the
+    // control says -- which is exactly while a smooth change is walking, and is
+    // the thing that made the control look broken when nothing showed it.
+    (w.insolationTarget != null
+      ? stat('Starlight now', `${w.params.insolation.toFixed(3)}<small> → ${(+w.insolationTarget.toPrecision(4))} S⊕</small>`, 'warn')
+      : '') +
+    // How old this planet is, which is the age at start plus however far the
+    // clock has run. Worth its own line whenever anything is keyed to it: the
+    // radiogenic curve, the dynamo, and above all the resurfacing event, whose
+    // control is set in ages and not in elapsed time.
+    ((w.params.realisticGeology || w.params.resurfacingAge > 0
+      || (w.params.startAge ?? 4.567) !== 4.567)
+      ? stat('Planet age', `${((w.params.startAge ?? 4.567) + w.time / 1e9).toFixed(3)}<small> Gyr</small>`)
+      : '') +
+    // Who lives here. Only shown once there is something to say -- a bare rock
+    // does not need a line telling it that it is sterile.
+    ((w.life && (w.life.pro > 1e-3 || w.lifeRoom?.pro > 1e-3))
+      ? stat('Life', lifeText(w), 'wide')
+      : '') +
     stat('Absorbed', `${dg.absorbed.toFixed(1)}<small> W/m²</small>`) +
     stat('Emitted', `${dg.emitted.toFixed(1)}<small> W/m²</small>`) +
     // Shown against Earth's, because the absolute number means little on its
@@ -731,6 +814,7 @@ function updateReadout() {
   }
 
   syncFossil();
+  syncMantle();
   syncBio();
 
   // scenario progress
@@ -808,7 +892,7 @@ function snapshot() {
   // which set of continents was drawn for it.
   return {
     v: 1, at: Date.now(),
-    name: PRESETS[activePreset]?.name || 'Custom world',
+    name: currentName(),
     seed: renderState.seed,
     ...captureWorld(sim.world),
   };
@@ -856,7 +940,12 @@ function restore(s) {
   restorePoints = [snapshot()];
   scrubMark = null;
   applyBody(null);
-  syncSliders(); setPresetActive(null); writeHash(); rememberStart();
+  syncSliders(); setPresetActive(null);
+  // A saved world carries its own name back. `s.name` may be a preset's name
+  // rather than a typed one, which is fine: from here it is this world's name
+  // until a preset is loaded over it.
+  setWorldName(s.name ?? null);
+  writeHash(); rememberStart();
   sim.paused = resetPaused; syncPlay();
 }
 
@@ -1101,6 +1190,70 @@ function bindScrub() {
   cv.addEventListener('pointercancel', end);
 }
 
+// ---------------------------------------------------------------------------
+// The zonal profile reads one band at a time.
+//
+// The chart plots eighteen equal-area bands and can label none of them, so the
+// hover does it: which latitude (or which angle from the substellar point, on a
+// locked world), what the ground there is doing, and how much of it is frozen.
+// The bands are the model's actual resolution, so this is not an interpolation
+// of a curve -- it is the number the solver holds.
+let profileHover = null;
+
+function bandLabel(w, i) {
+  const x = BAND_X[i];
+  if (w.diag.lam > 0.5) {
+    // On a locked world x is the cosine of the angle from the substellar point,
+    // not a latitude: +1 is noon for ever and -1 is the middle of the night.
+    const ang = Math.acos(clamp(x, -1, 1)) * 180 / Math.PI;
+    return ang < 1 ? 'substellar point'
+      : ang > 179 ? 'antistellar point'
+      : `${ang.toFixed(0)}° from substellar`;
+  }
+  const lat = Math.asin(clamp(x, -1, 1)) * 180 / Math.PI;
+  if (Math.abs(lat) < 2) return 'equator';
+  return `${Math.abs(lat).toFixed(0)}° ${lat > 0 ? 'N' : 'S'}`;
+}
+
+function bindWorldName() {
+  const el = $('#world-name');
+  if (!el) return;
+  el.placeholder = PRESETS[activePreset]?.name || 'Custom world';
+  el.addEventListener('input', () => {
+    setWorldName(el.value, { toField: false });
+    markTouched();
+  });
+}
+
+function bindProfile() {
+  const cv = $('#chart-profile'), tip = $('#profile-tip');
+  if (!cv || !tip) return;
+  const show = (e) => {
+    const r = cv.getBoundingClientRect();
+    const i = profileBandAtX(e.clientX - r.left, r.width);
+    profileHover = i;
+    const w = sim.world, dg = w.diag;
+    const T = w.T[i];
+    const frozen = dg.hasWater ? iceFraction(T) : 0;
+    const sun = dg.S ? dg.S[i] : 0;
+    tip.innerHTML =
+      `<b>${(T - 273.15).toFixed(1)} °C</b> · ${bandLabel(w, i)}` +
+      `<span class="tip-sub">${sun.toFixed(0)} W/m² down` +
+      (dg.hasWater ? ` · ${(frozen * 100).toFixed(0)}% frozen` : ' · no water') +
+      ` · cloud ${(dg.cloud[i] * 100).toFixed(0)}%</span>`;
+    tip.hidden = false;
+    // Kept inside the chart: at the right-hand end the box would otherwise hang
+    // off the panel and be clipped.
+    const wTip = tip.offsetWidth || 150;
+    tip.style.left = `${clamp(e.clientX - r.left - wTip / 2, 2, Math.max(2, r.width - wTip - 2))}px`;
+  };
+  cv.addEventListener('pointermove', show);
+  cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture?.(e.pointerId); show(e); });
+  const hide = () => { profileHover = null; tip.hidden = true; };
+  cv.addEventListener('pointerleave', hide);
+  cv.addEventListener('pointercancel', hide);
+}
+
 // The living biosphere, under the control that asks for one.
 function syncBio() {
   const fill = $('#bio-fill'), left = $('#bio-left');
@@ -1115,6 +1268,39 @@ function syncBio() {
   left.textContent = want <= 0 ? 'none'
     : dead ? 'dead'
     : `${(alive).toFixed(alive < 0.1 ? 3 : 2)}× alive`;
+}
+
+// What is still dissolved in the mantle and crust, shown the same way the
+// fossil reserve is. The bar is against the planet's own endowment, which
+// scales with its mass; the label is in bar of CO2, because that is the number
+// that says what the world could still become. Earth's is about four hundred.
+function syncMantle() {
+  const fill = $('#mantle-fill'), left = $('#mantle-left'), inf = $('#chk-mantle-inf');
+  if (!fill) return;
+  if (inf) inf.checked = !!params.mantleInfinite;
+  if (params.mantleInfinite) {
+    fill.style.width = '100%';
+    fill.classList.remove('spent');
+    left.textContent = '\u221e';
+    left.classList.remove('spent');
+    return;
+  }
+  const w = sim.world;
+  const total = carbonBudget(w.params.mass);
+  // Null until the first step has run, exactly as the fossil reserve is, and
+  // reading it raw showed a fresh world as an exhausted one.
+  const col = w.carbonDeep ?? total;
+  const f = Math.max(0, Math.min(1, col / Math.max(total, 1e-12)));
+  fill.style.width = `${f * 100}%`;
+  const spent = f <= 1e-4;
+  fill.classList.toggle('spent', spent);
+  left.classList.toggle('spent', spent);
+  // kg/m^2 of CO2 into bar, through the planet's own gravity.
+  const bar = col * (w.diag?.g ?? 9.81) / 1e5;
+  left.textContent = spent ? 'exhausted'
+    : bar >= 10 ? `${bar.toFixed(0)} bar`
+    : bar >= 0.1 ? `${bar.toFixed(2)} bar`
+    : `${(bar * 1e3).toFixed(bar * 1e3 < 10 ? 1 : 0)} mbar`;
 }
 
 function syncFossil() {
@@ -1570,7 +1756,7 @@ function tick(dtReal) {
       updateReadout();
       drawHistory($('#chart-history'), sim.world, scrubMark);
       drawPhase($('#chart-phase'), sim.world);
-      drawProfile($('#chart-profile'), sim.world);
+      drawProfile($('#chart-profile'), sim.world, profileHover);
       drawWater($('#chart-water'), sim.world);
     }
   } catch (err) {
@@ -1598,6 +1784,8 @@ buildPresets();
 buildSlots();
 buildScenarios();
 bindScrub();
+bindProfile();
+bindWorldName();
 syncSliders();
 bindControls();
 buildLogUI($('#statelog'), discovered, (id) => {
