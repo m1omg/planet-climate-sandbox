@@ -1,0 +1,321 @@
+import { NBANDS, X, lockFactor, insolationProfile } from '../physics/climate.js';
+import { olr, planetaryAlbedo, iceFraction } from '../physics/radiation.js';
+import { psatH2O, clamp } from '../physics/constants.js';
+
+const CSS = getComputedStyle(document.documentElement);
+const col = (n, fb) => (CSS.getPropertyValue(n) || fb).trim() || fb;
+
+function setup(canvas) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+    canvas.width = w * dpr; canvas.height = h * dpr;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+
+function axes(ctx, w, h, pad) {
+  ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, h - pad.b); ctx.lineTo(w - pad.r, h - pad.b);
+  ctx.stroke();
+}
+
+function label(ctx, text, x, y, align = 'left', color = 'rgba(233,240,255,0.55)', size = 10) {
+  ctx.fillStyle = color;
+  ctx.font = `${size}px ui-monospace, "SF Mono", Menlo, monospace`;
+  ctx.textAlign = align;
+  ctx.fillText(text, x, y);
+}
+
+// ---------------------------------------------------------------------------
+// Temperature vs time, log axis, with the band between coldest and warmest
+// latitude shaded.
+// ---------------------------------------------------------------------------
+// The time axis of the temperature chart, in both directions.
+//
+// Exported because the chart is a scrubber now: a click has to be turned back
+// into a year, and the only way for the marker to land under the pointer is for
+// the two mappings to be the same one written once. Log time, because this
+// model's runs span a kiloyear to ten billion years and a linear axis would put
+// the whole Archean in the first pixel.
+export const HISTORY_PAD = { l: 38, r: 8, t: 10, b: 18 };
+
+export function historyX(t, tMax, w) {
+  const { l, r } = HISTORY_PAD;
+  return l + (Math.log10(Math.max(t, 1) + 1) / Math.log10(Math.max(tMax, 10) + 1)) * (w - l - r);
+}
+
+export function historyTimeAtX(x, tMax, w) {
+  const { l, r } = HISTORY_PAD;
+  const span = Math.max(w - l - r, 1);
+  const f = Math.min(Math.max((x - l) / span, 0), 1);
+  return Math.pow(10, f * Math.log10(Math.max(tMax, 10) + 1)) - 1;
+}
+
+// `markT` draws the scrub handle: where in its own history the world is
+// currently standing. Absent on a world running normally, which is every world
+// until somebody goes back.
+export function drawHistory(canvas, world, markT = null) {
+  const { ctx, w, h } = setup(canvas);
+  const pad = HISTORY_PAD;
+  const H = world.history;
+  axes(ctx, w, h, pad);
+  if (H.length < 2) { label(ctx, 'collecting…', w / 2, h / 2, 'center'); return; }
+
+  const tMax = Math.max(world.time, 10);
+  const lx = (t) => historyX(t, tMax, w);
+  let tlo = 1e9, thi = -1e9;
+  for (const p of H) { tlo = Math.min(tlo, p.Tmin); thi = Math.max(thi, p.Tmax); }
+  tlo = Math.min(tlo, 240); thi = Math.max(thi, 320);
+  const pad2 = (thi - tlo) * 0.08;
+  tlo -= pad2; thi += pad2;
+  const ly = (T) => h - pad.b - ((T - tlo) / (thi - tlo)) * (h - pad.t - pad.b);
+
+  // freezing and boiling references
+  for (const [T, lab, c] of [[273.15, '0°C', 'rgba(120,190,255,0.35)'], [373.15, '100°C', 'rgba(255,150,110,0.30)']]) {
+    if (T > tlo && T < thi) {
+      ctx.strokeStyle = c; ctx.setLineDash([3, 4]); ctx.beginPath();
+      ctx.moveTo(pad.l, ly(T)); ctx.lineTo(w - pad.r, ly(T)); ctx.stroke(); ctx.setLineDash([]);
+      label(ctx, lab, w - pad.r - 2, ly(T) - 3, 'right', c, 9);
+    }
+  }
+
+  ctx.beginPath();
+  for (let i = 0; i < H.length; i++) ctx[i ? 'lineTo' : 'moveTo'](lx(H[i].t), ly(H[i].Tmax));
+  for (let i = H.length - 1; i >= 0; i--) ctx.lineTo(lx(H[i].t), ly(H[i].Tmin));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(120,200,255,0.14)'; ctx.fill();
+
+  ctx.beginPath();
+  for (let i = 0; i < H.length; i++) ctx[i ? 'lineTo' : 'moveTo'](lx(H[i].t), ly(H[i].T));
+  ctx.strokeStyle = '#7fd4ff'; ctx.lineWidth = 1.8; ctx.stroke();
+
+  label(ctx, `${(thi - 273.15).toFixed(0)}°C`, pad.l - 4, pad.t + 8, 'right');
+  label(ctx, `${(tlo - 273.15).toFixed(0)}°C`, pad.l - 4, h - pad.b, 'right');
+  label(ctx, 'time →', w - pad.r, h - 5, 'right');
+  label(ctx, 'surface temperature', pad.l + 4, pad.t + 8, 'left', 'rgba(233,240,255,0.4)');
+
+  // The scrub handle, drawn last so it sits over the trace. Everything to the
+  // right of it is the future being abandoned, dimmed to say so.
+  if (markT != null) {
+    const mx = lx(markT);
+    ctx.fillStyle = 'rgba(8,12,20,0.55)';
+    ctx.fillRect(mx, pad.t, Math.max(0, w - pad.r - mx), h - pad.t - pad.b);
+    ctx.strokeStyle = '#f0d9b8'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(mx, pad.t); ctx.lineTo(mx, h - pad.b); ctx.stroke();
+    ctx.fillStyle = '#f0d9b8';
+    ctx.beginPath(); ctx.arc(mx, pad.t + 3, 3, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Zonal temperature profile.
+// ---------------------------------------------------------------------------
+export function drawProfile(canvas, world) {
+  const { ctx, w, h } = setup(canvas);
+  const pad = { l: 38, r: 8, t: 10, b: 20 };
+  axes(ctx, w, h, pad);
+  const lam = lockFactor(world.params);
+  const T = world.T;
+  let lo = Math.min(...T), hi = Math.max(...T);
+  lo = Math.min(lo, 250); hi = Math.max(hi, 300);
+  const m = (hi - lo) * 0.1; lo -= m; hi += m;
+  const px = (i) => pad.l + (i / (NBANDS - 1)) * (w - pad.l - pad.r);
+  const py = (t) => h - pad.b - ((t - lo) / (hi - lo)) * (h - pad.t - pad.b);
+
+  if (273.15 > lo && 273.15 < hi) {
+    ctx.strokeStyle = 'rgba(120,190,255,0.3)'; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.l, py(273.15)); ctx.lineTo(w - pad.r, py(273.15)); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // shade the frozen fraction of each band
+  for (let i = 0; i < NBANDS; i++) {
+    const f = iceFraction(T[i]) * (world.diag.hasWater ? world.diag.waterCap * 0.7 + 0.3 : 0);
+    if (f > 0.02) {
+      ctx.fillStyle = `rgba(200,232,255,${0.05 + 0.20 * f})`;
+      const x0 = pad.l + ((i - 0.5) / (NBANDS - 1)) * (w - pad.l - pad.r);
+      ctx.fillRect(x0, pad.t, (w - pad.l - pad.r) / (NBANDS - 1), h - pad.t - pad.b);
+    }
+  }
+
+  ctx.beginPath();
+  for (let i = 0; i < NBANDS; i++) ctx[i ? 'lineTo' : 'moveTo'](px(i), py(T[i]));
+  ctx.strokeStyle = '#ffc46b'; ctx.lineWidth = 2; ctx.stroke();
+  for (let i = 0; i < NBANDS; i++) {
+    ctx.beginPath(); ctx.arc(px(i), py(T[i]), 2, 0, 7); ctx.fillStyle = '#ffc46b'; ctx.fill();
+  }
+
+  label(ctx, `${(hi - 273.15).toFixed(0)}°C`, pad.l - 4, pad.t + 8, 'right');
+  label(ctx, `${(lo - 273.15).toFixed(0)}°C`, pad.l - 4, h - pad.b, 'right');
+  if (lam > 0.5) {
+    label(ctx, 'anti-stellar', pad.l, h - 6, 'left');
+    label(ctx, 'substellar', w - pad.r, h - 6, 'right');
+  } else {
+    label(ctx, 'S pole', pad.l, h - 6, 'left');
+    label(ctx, 'equator', (pad.l + w - pad.r) / 2, h - 6, 'center');
+    label(ctx, 'N pole', w - pad.r, h - 6, 'right');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Water inventory over time: ocean / ice / vapour / lost to space.
+// ---------------------------------------------------------------------------
+export function drawWater(canvas, world) {
+  const { ctx, w, h } = setup(canvas);
+  // Room above the plot for the legend. It used to sit inside the plot at 55%
+  // opacity in 9px type, over the data, which made it unreadable against the
+  // pale ice bands it was drawn on top of.
+  const pad = { l: 38, r: 8, t: 26, b: 18 };
+  const H = world.history;
+  axes(ctx, w, h, pad);
+  const inv = world.water;
+  const total = Math.max(world.waterInitial ?? world.params.water,
+                         inv.ocean + inv.seaIce + inv.landIce + inv.vapour + inv.lost);
+  if (total <= 0 || H.length < 2) {
+    label(ctx, total <= 0 ? 'no water on this world' : 'collecting…', w / 2, h / 2, 'center');
+    return;
+  }
+  const tMax = Math.max(world.time, 10);
+  const lx = (t) => pad.l + (Math.log10(Math.max(t, 1) + 1) / Math.log10(tMax + 1)) * (w - pad.l - pad.r);
+  const ly = (v) => h - pad.b - (v / total) * (h - pad.t - pad.b);
+
+  // Cumulative bands, bottom to top. `sup` is the airborne water that has
+  // crossed the critical point: physically the same fluid as the vapour below
+  // it, but a state worth seeing separately.
+  const layers = [
+    ['ocean',         '#2f8fd6', (p) => p.ocean],
+    ['sea ice',       '#9fd4ec', (p) => p.ocean + (p.seaIce || 0)],
+    ['land ice',      '#e6f3fb', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0)],
+    ['vapour',        '#e8c07a', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + (p.vap || 0)],
+    ['supercritical', '#c98ad0', (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + (p.vap || 0) + (p.sup || 0)],
+    ['lost',          'rgba(255,90,60,0.55)',
+      (p) => p.ocean + (p.seaIce || 0) + (p.landIce || 0) + (p.vap || 0) + (p.sup || 0) + p.lost],
+  ];
+  for (let k = layers.length - 1; k >= 0; k--) {
+    const [, c, fn] = layers[k];
+    ctx.beginPath();
+    ctx.moveTo(lx(H[0].t), h - pad.b);
+    for (const p of H) ctx.lineTo(lx(p.t), ly(Math.min(fn(p), total)));
+    ctx.lineTo(lx(H[H.length - 1].t), h - pad.b);
+    ctx.closePath(); ctx.fillStyle = c; ctx.fill();
+  }
+  label(ctx, `${total.toFixed(2)} EO`, pad.l - 4, pad.t + 8, 'right');
+  label(ctx, '0', pad.l - 4, h - pad.b, 'right');
+
+  // Legend, with where the water actually is right now. Reading a stacked area
+  // chart to the nearest percent is not possible, and the number is the thing
+  // most worth knowing.
+  const now = H[H.length - 1];
+  const share = [now.ocean, now.seaIce || 0, now.landIce || 0,
+                 now.vap || 0, now.sup || 0, now.lost];
+  const swatch = ['#2f8fd6', '#9fd4ec', '#e6f3fb', '#e8c07a', '#c98ad0', '#ff5a3c'];
+  // Drop reservoirs that are empty and staying empty, so the row does not run
+  // off the end of a narrow panel with five zeroes on it.
+  const shown = layers.map((l, i) => ({ name: l[0], c: swatch[i], v: share[i] }))
+                      .filter((e) => e.v / total >= 5e-4);
+  ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
+  const wOf = (e) => 9 + 4 + ctx.measureText(`${e.name} ${pct(e.v / total)}`).width + 10;
+  let need = shown.reduce((a, e) => a + wOf(e), 0);
+  // If it will not fit, show the largest few rather than truncating mid-word.
+  const room = w - pad.l - pad.r;
+  const list = shown.slice();
+  while (need > room && list.length > 1) {
+    let smallest = 0;
+    for (let i = 1; i < list.length; i++) if (list[i].v < list[smallest].v) smallest = i;
+    need -= wOf(list[smallest]);
+    list.splice(smallest, 1);
+  }
+  let x = pad.l + 2;
+  for (const e of list) {
+    ctx.fillStyle = e.c; ctx.fillRect(x, 6, 9, 9);
+    label(ctx, `${e.name} ${pct(e.v / total)}`, x + 13, 14, 'left', 'rgba(233,240,255,0.92)', 10);
+    x += wOf(e);
+  }
+}
+
+// A share as a percentage, with enough precision near zero to show that a
+// reservoir is draining rather than already empty.
+function pct(f) {
+  const p = f * 100;
+  if (p >= 99.95) return '100%';
+  if (p >= 10) return `${p.toFixed(0)}%`;
+  if (p >= 1) return `${p.toFixed(1)}%`;
+  if (p > 0) return `${p.toFixed(2)}%`;
+  return '0%';
+}
+
+// ---------------------------------------------------------------------------
+// The phase diagram: absorbed sunlight against outgoing longwave, as functions
+// of temperature. Where they cross is an equilibrium. The flat top of the OLR
+// curve is the Simpson-Nakajima limit -- lift the absorbed curve above it and
+// the crossings vanish, which *is* the runaway greenhouse.
+// ---------------------------------------------------------------------------
+export function drawPhase(canvas, world) {
+  const { ctx, w, h } = setup(canvas);
+  const pad = { l: 40, r: 10, t: 12, b: 22 };
+  axes(ctx, w, h, pad);
+  const p = world.params, dg = world.diag;
+  const T0 = 240, T1 = 420;
+  const px = (T) => pad.l + ((T - T0) / (T1 - T0)) * (w - pad.l - pad.r);
+
+  const Sglobal = dg.S.reduce((a, b) => a + b, 0) / NBANDS;
+  const pts = [];
+  let fmax = 0;
+  for (let T = T0; T <= T1; T += 2) {
+    const pw = Math.min(dg.RH * psatH2O(T) / 1e5, dg.totalWater * dg.d.eoColumn * dg.g / 1e5);
+    const pTot = dg.pN2 + dg.pCO2 + dg.pCH4 + pw;
+    const O = olr(T, dg.pCO2, pw, dg.pCH4, pTot);
+    const a = planetaryAlbedo(T, {
+      oceanFrac: dg.oceanFrac, landAlbedo: p.landAlbedo, hasWater: dg.hasWater,
+      waterCap: dg.waterCap, pH2O: pw, pTot, slowness: dg.slowness, subStellar: 0.4,
+    });
+    // Interior heat counts here too. The caption under this chart promises that
+    // where the curves cross is where the climate rests, and on a tidally
+    // heated world a sunlight-only curve crosses somewhere the planet is not.
+    const A = Sglobal * (1 - a.albedo) + (dg.Fint ?? 0);
+    pts.push([T, O, A]);
+    fmax = Math.max(fmax, O, A);
+  }
+  fmax = Math.max(fmax, 60) * 1.08;
+  const py = (F) => h - pad.b - (F / fmax) * (h - pad.t - pad.b);
+
+  const line = (idx, color, width) => {
+    ctx.beginPath();
+    pts.forEach((q, i) => ctx[i ? 'lineTo' : 'moveTo'](px(q[0]), py(q[idx])));
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
+  };
+  line(1, '#ff9d5c', 2);   // OLR
+  line(2, '#7fd4ff', 2);   // absorbed
+
+  // equilibria
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1][2] - pts[i - 1][1], b = pts[i][2] - pts[i][1];
+    if (a === 0 || (a > 0) !== (b > 0)) {
+      const t = a / (a - b);
+      const T = pts[i - 1][0] + t * 2;
+      const F = pts[i - 1][1] + t * (pts[i][1] - pts[i - 1][1]);
+      const stable = a > 0;
+      ctx.beginPath(); ctx.arc(px(T), py(F), 4, 0, 7);
+      ctx.fillStyle = stable ? '#4ec98a' : 'rgba(255,255,255,0.25)';
+      ctx.fill();
+      ctx.strokeStyle = stable ? '#4ec98a' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.2; ctx.stroke();
+    }
+  }
+
+  // current state
+  ctx.beginPath(); ctx.arc(px(clamp(dg.Tmean, T0, T1)), py(clamp(dg.emitted, 0, fmax)), 3.5, 0, 7);
+  ctx.fillStyle = '#fff'; ctx.fill();
+
+  label(ctx, 'OLR', px(T1) - 4, py(pts[pts.length - 1][1]) - 6, 'right', '#ff9d5c', 10);
+  label(ctx, 'absorbed', px(T0) + 6, py(pts[0][2]) - 6, 'left', '#7fd4ff', 10);
+  label(ctx, `${fmax.toFixed(0)} W/m²`, pad.l - 4, pad.t + 8, 'right');
+  label(ctx, '-30°C', px(243), h - 6, 'center');
+  label(ctx, '60°C', px(333), h - 6, 'center');
+  label(ctx, '145°C', px(418), h - 6, 'center');
+}
