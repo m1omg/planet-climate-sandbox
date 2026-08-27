@@ -1,6 +1,8 @@
 import { createWorld, resetWorld, update, stepTemperature, maxStep } from '../physics/climate.js';
 import { stepVolatiles } from '../physics/volatiles.js';
 import { clamp } from '../physics/constants.js';
+import { evolvedParams, brightnessAfter, radiogenic, EARTH_AGE, approach }
+  from '../physics/evolution.js';
 
 // ---------------------------------------------------------------------------
 // The clock. Physics advances on *simulated* time only.
@@ -40,8 +42,50 @@ export class Simulation {
   }
 
   setParams(patch) {
-    Object.assign(this.world.params, patch);
-    update(this.world, 0);
+    const w = this.world;
+    const p0 = { ...w.params };                 // where the controls were
+    Object.assign(w.params, patch);
+    // Moving a control that is currently evolving means "make it this NOW",
+    // not "make it this at time zero". So the curve is re-based to pass through
+    // the value just set at the age the world has actually reached; without
+    // this the next step would recompute from t=0 and the drag would appear to
+    // do nothing at all. Switching a mode on re-bases for the same reason, so
+    // it starts from where the world already is instead of jumping.
+    // Smoothing turns a change of starlight into a destination rather than a
+    // jump. The control shows where the star is going; the star takes its time
+    // getting there, which is what keeps it on a branch instead of across one.
+    if (p0.smoothInsolation && 'insolation' in patch && w.time > 0) {
+      w.insolationTarget = patch.insolation;
+      w.params.insolation = p0.insolation;      // stay where we are; walk from here
+    } else if ('insolation' in patch) {
+      w.insolationTarget = null;
+    }
+    const touched = ['insolation', 'internalHeat', 'brightening',
+                     'realisticGeology', 'startAge'].some((k) => k in patch);
+    if (touched) this.rebaseEvolution();
+    update(w, 0);
+  }
+
+  // Make the evolution curves pass through the controls' present values at the
+  // world's present age.
+  rebaseEvolution() {
+    const w = this.world, p = w.params;
+    if (!w.evolve0) w.evolve0 = {};
+    const gyr = Math.max(w.time, 0) / 1e9;
+    if (p.brightening > 0) {
+      const f = brightnessAfter(p.brightening, gyr);
+      w.evolve0.insolation = f > 0 ? p.insolation / f : p.insolation;
+    } else {
+      w.evolve0.insolation = p.insolation;
+    }
+    if (p.realisticGeology) {
+      const startAge = p.startAge ?? EARTH_AGE;
+      const nowR = radiogenic(startAge + gyr), baseR = radiogenic(startAge);
+      w.evolve0.internalHeat = nowR > 0 ? (p.internalHeat ?? 0) * baseR / nowR
+                                        : (p.internalHeat ?? 0);
+    } else {
+      w.evolve0.internalHeat = p.internalHeat;
+    }
   }
 
   // realDt in seconds; returns simulated years actually advanced.
@@ -101,6 +145,22 @@ export class Simulation {
     update(w, dt);
     stepVolatiles(w, dt);
     w.time += dt;
+    // The star and the interior are functions of the world's age, so they are
+    // set from the age it has just reached rather than integrated alongside it.
+    const ev = evolvedParams(w.params, w.evolve0, w.time);
+    if (ev.insolation !== undefined) w.params.insolation = ev.insolation;
+    if (ev.internalHeat !== undefined) w.params.internalHeat = ev.internalHeat;
+    // ...and then walk towards whatever the controls were last set to, if the
+    // world is being asked to change smoothly. This runs after the evolution
+    // above so that a brightening star and a hand on the slider compose:
+    // the walk is towards the target, from wherever the star has got to.
+    if (w.insolationTarget != null) {
+      const next = approach(w.params.insolation, w.insolationTarget, dt);
+      if (next === w.insolationTarget) w.insolationTarget = null;
+      w.params.insolation = next;
+      if (w.evolve0) w.evolve0.insolation = w.params.insolation
+        / brightnessAfter(w.params.brightening ?? 0, Math.max(w.time, 0) / 1e9);
+    }
     update(w, dt);
 
     if (w.time >= this._nextSample) {
