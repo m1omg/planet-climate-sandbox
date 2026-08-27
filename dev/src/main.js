@@ -279,11 +279,13 @@ function starStatus(text) {
 // star keeps whatever age it already had, so the mode still works on a planet
 // at any distance; it just stops pretending to know the star's age.
 //
-// The point of inferring it at all is that the mode then has no memory to get
-// out of step with. Switch the Sun off and on again after a gigayear and it
-// picks up at 5.57 Gyr rather than resetting to today; load Earth +2.2 Gyr and
-// switch it on and the star starts at 6.77 Gyr and brightens at that age's
-// steeper 12.2% per gigayear, which is the whole reason the rate is a curve.
+// The point of inferring it at all is the *rate*, which steepens as a star ages
+// -- and that the mode then has no memory to get out of step with. Switch the
+// Sun off and on again after a gigayear and it carries on at 10.6% per gigayear
+// rather than dropping back to today's 9.6%; load Earth +2.2 Gyr and switch it
+// on and it starts at that world's 12.2%. The age itself stays internal: it is
+// an inversion valid for a planet at one au of a Sun-like star, which is a claim
+// worth using and not one worth printing.
 function sunAgeFor(S, fallback = SUN_AGE_NOW) {
   const age = mainSequenceAge(S);
   return age >= SUN_AGE_MIN && age <= SUN_AGE_MAX ? age : fallback;
@@ -297,9 +299,9 @@ function driveStar(w) {
     const v = clamp(starAge.baseS * mainSequenceLuminosity(age)
                   / mainSequenceLuminosity(starAge.baseAge), 0.05, 4);
     setStarValue(v);
-    starStatus(`Sun at ${(age / 1e9).toFixed(2)} Gyr — `
-             + `${((mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100).toFixed(1)}% brighter per Gyr from here`
-             + sinceManual(w));
+    starStatus(`brightening `
+             + `${((mainSequenceLuminosity(age + 1e9) / mainSequenceLuminosity(age) - 1) * 100).toFixed(1)}% per Gyr from here`
+             + sinceManual(w, v));
     return;
   }
   if (!slew) { starStatus(''); return; }
@@ -358,19 +360,40 @@ function setStarValue(v) {
 }
 
 // "…and it has been doing that for a while, having started from here."
-function sinceManual(w) {
+//
+// Everything the status line says is relative, deliberately. It used to open
+// with the star's absolute age -- "Sun at 7.85 Gyr" -- which is a claim this
+// model has no business making: the age is inferred by inverting Gough for a
+// planet at one au of a Sun-like star, and Venus and Mars are neither. Nothing
+// here simulates a red giant either, so an absolute age on the main sequence is
+// a number with nowhere to go. The *rate* still comes from that inference,
+// because the rate is what steepens; it simply is not presented as a fact about
+// the star.
+function sinceManual(w, now = null) {
   if (!starManual) return '';
   const dt = w.time - starManual.atYear;
-  return dt > 0 ? ` · ${fmtTime(dt)} since you set ${starManual.S.toFixed(3)} S⊕` : '';
+  if (!(dt > 0)) return '';
+  const pct = now && starManual.S > 0
+    ? `, ${now >= starManual.S ? '+' : ''}${((now / starManual.S - 1) * 100).toFixed(1)}%` : '';
+  return ` · ${fmtTime(dt)}${pct} since you set ${starManual.S.toFixed(3)} S⊕`;
 }
 
 // The world as it was handed to you. Reset restores exactly this, because the
 // composition controls drift on their own as the simulation runs them and
 // "reset" that kept the drifted values would not put anything back.
-let initialParams = { ...params };
+//
+// Read off the *world's* parameters rather than the live `params` object the
+// sliders share. The two agree everywhere except in the one place that matters
+// here: `params` follows the reservoirs as they drift, because the five live
+// controls are outputs as well as inputs, while `sim.world.params` only moves
+// when something is actually set. Saving a world at four hundred megayears and
+// resetting has to land in the same place as loading that save and resetting,
+// and it is the second of those that decides which -- a save carries
+// `sim.world.params` and nothing else.
+let initialParams = { ...sim.world.params };
 let initialSeed = renderState.seed;
 function rememberStart() {
-  initialParams = { ...params };
+  initialParams = { ...sim.world.params };
   initialSeed = renderState.seed;
 }
 
@@ -1071,8 +1094,19 @@ function buildSlots() {
         catch { toast('Could not save — storage is full or blocked'); return; }
         armedToSave = false;
         if (i === AUTOSAVE_SLOT) { dirty = false; lastAutosave = Date.now(); }
+        // Saving deliberately is a statement about where you want to be able to
+        // get back to, so it becomes the reset point without your having to load
+        // it back first. Loading one does the same, in restore() below, and both
+        // record the same thing -- so save-then-reset and load-then-reset land
+        // in the same world.
+        //
+        // The autosave does *not* do this, which is the whole reason it is a
+        // separate function: it fires every thirty seconds on a running clock,
+        // and a reset button whose meaning quietly moved every thirty seconds
+        // would be worse than useless.
+        rememberStart();
         syncSlots();
-        toast(`Saved to slot ${i}`);
+        toast(`Saved to slot ${i} — reset comes back here now`);
         return;
       }
       const s = readSlot(i);

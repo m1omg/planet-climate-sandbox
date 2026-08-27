@@ -955,8 +955,27 @@ export function stepVolatiles(w, dtYears) {
     // no sink at all.
     const weathering = (0.25 + 0.75 * landExposed) * liquid / O2_TAU_OX;
 
-    // Kept for maxStep: how fast the reservoir is moving right now.
-    w.o2Rate = (source - reductantNet) - w.o2 * weathering;
+    // Kept for maxStep: how fast the reservoir is moving right now -- and it
+    // has to be *all* of the terms, which it was not.
+    //
+    // Oxygen left behind by escaping hydrogen is credited a few hundred lines
+    // up, where the water is lost, and it was missing from here entirely. On a
+    // world that is losing an ocean it is the largest term by far, and it very
+    // nearly cancels the reductant sink: the reservoir sits in a steady balance
+    // at a few thousandths of a kg/m^2 and goes nowhere for hundreds of
+    // megayears, while this rate reported it emptying in thirty years.
+    //
+    // maxStep believed it, because believing it is this rate's job. The oxygen
+    // bound there allows a tenth of the reservoir per step, so on a wet runaway
+    // it clamped the clock to five-year steps for ever -- on a planet where
+    // nothing whatever was happening. Reported from the live site as 2.2 kyr/s
+    // on a 1006 C world; Earth at 1.4 S(+) took 300 001 steps to cross 500 Myr
+    // and now takes 884.
+    //
+    // Nothing about the physics moves: this is a diagnostic the integrator reads
+    // and it was wrong about a quantity the integrator then had to respect.
+    const photolytic = totalWater(w) > 0 ? Math.max(esc.water, 0) * (32 / 18) * 0.15 : 0;
+    w.o2Rate = (source + photolytic - reductantNet) - w.o2 * weathering;
     // Semi-implicit in the part that depends on w.o2, so a long step cannot
     // overshoot past zero.
     const o2Before = w.o2;
