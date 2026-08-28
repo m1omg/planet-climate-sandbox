@@ -64,6 +64,43 @@ export const EARTH = {
 // recently, and every solar preset here carries a `startAge` consistent with
 // its own insolation on that curve -- the Archean's 0.77 S(+) is the Sun at
 // 1.15 Gyr, Noachian Mars's 0.32 is Mars at 0.6, Way's Early Venus is 2.9 Gya.
+// Venus has no dynamo and it is not unprotected.
+//
+// An unmagnetised planet with a thick ionosphere induces a magnetosphere of its
+// own: the solar wind's field piles up against the conducting upper atmosphere
+// and is held off above the neutral gas. It is why Venus, with no dipole at all,
+// still has three and a half bar of nitrogen after four and a half billion years
+// while Mars, also with none, has six millibars of anything. `magneticField` is
+// the only control this model has over how much wind reaches the air, so this is
+// that shielding expressed through it -- 0.02 lets 12% of the wind through,
+// about eightfold protection, which is the modest figure an induced
+// magnetosphere earns rather than the hundredfold a dipole like Earth's does.
+//
+// It is not a fudge, and it is not the fix I wanted either. The physical version
+// -- shielding as a function of atmospheric column, in windExposure() -- was
+// written, tested and cannot ship, because it protects Mars too. Noachian Mars
+// starts at 4 bar in this model and its entire fate rides on non-thermal escape,
+// so ANY column-based shielding saves it:
+//
+//     shielding    Venus boils at   Mars CO2 today
+//     none              never          9.4 mbar   <- Mars right, Venus dead
+//     2x pTot           never       1519.3 mbar
+//     4x pTot          3.83 Gyr     1514.0 mbar   <- Venus right, Mars 75x out
+//
+// There is no window. The real defect is upstream of both: this model's
+// non-thermal escape is some thousands of times the rate MAVEN and Venus Express
+// actually measure, because it has been asked to strip Mars's four bar single
+// handed when the literature attributes only about half a bar to escape and the
+// rest to carbonate. Until Mars's carbon has somewhere else to go, the rate
+// cannot come down, and while it is that high only a per-world number can tell
+// the two planets apart. Recorded here so the next person does not re-run the
+// scan.
+//
+// What it buys, measured: Early Venus stays temperate 15-23 C from 1.67 Gyr,
+// tips at an age of 3.82 Gyr -- Venus's global repaving is dated to 3.852 -- and
+// settles at 91.5 bar against the 92 the planet actually has.
+export const INDUCED_MAGNETOSPHERE = 0.02;
+
 export const SOLAR_HISTORY = { brightening: 0.10, realisticGeology: true };
 
 // The three worlds around M dwarfs get `realisticGeology` off and no
@@ -95,7 +132,7 @@ export const PRESETS = {
   // still there if you want them -- the control does not go away, it just starts
   // at nothing.
   earthlike: { name: 'Earth-like', icon: '🌐', params: { ...PREINDUSTRIAL, co2Bar: 280e-6, emissions: 0, fossilUsed: 0 } },
-  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
+  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: INDUCED_MAGNETOSPHERE, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
   mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.2, landAlbedo: 0.25, startT: 215 } },
   // 0.10 bar of CO2, and it has been raised for the same reason twice now.
   //
@@ -167,7 +204,7 @@ export const PRESETS = {
   // thousands of years, not billions, so this is not a disagreement with them so
   // much as a question they did not ask. With the solar brightening on, which is
   // now the default here, it comes back out of it.
-  earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, ...SOLAR_HISTORY, mass: 0.815, magneticField: 0,
+  earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, ...SOLAR_HISTORY, mass: 0.815, magneticField: INDUCED_MAGNETOSPHERE,
     insolation: 1.40, rotationHours: 5832, obliquity: 2.6, o2Bar: 0, biosphere: 0,
     n2Bar: 1.0126, co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.10,
     landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288,
