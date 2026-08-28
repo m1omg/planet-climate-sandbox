@@ -92,6 +92,10 @@ function atmosphereFromUrl() {
 // move in the third or fourth digit, which is why it is a switch and not the
 // default.
 const FAST_KEY = `${NS}.fastPhysics.v1`;
+const EASE_KEY = `${NS}.autoEase.v1`;
+function easePref() {
+  try { return localStorage.getItem(EASE_KEY) === 'on'; } catch { return false; }
+}
 function fastPref() {
   try { return localStorage.getItem(FAST_KEY) === 'on'; } catch { return false; }
 }
@@ -665,6 +669,28 @@ function paramsFromHash() {
 
 // ---------------------------------------------------------------------------
 // Readout
+// Splitting a rate into a number and a unit, so the field can hold "250" and
+// the menu beside it "Myr / s". The unit is the largest that leaves a number at
+// least 1, which is how anyone would say it out loud. Module scope rather than
+// inside the setup closure because the ten-a-second readout writes through it
+// too -- it lived in the closure for one commit and the frame loop threw.
+const RATE_UNIT_STEPS = [[1e9, 'Gyr'], [1e6, 'Myr'], [1e3, 'kyr'], [1, 'yr']];
+function splitRate(v) {
+  const [mult] = RATE_UNIT_STEPS.find(([m]) => v >= m) || [1];
+  const n = v / mult;
+  // Enough digits to be exact where it matters and no trailing noise: 250, 1.5,
+  // 2.5 and 12.5 all print as themselves.
+  const dp = n >= 100 ? 0 : n >= 10 ? 1 : 2;
+  return { mult, n: parseFloat(n.toFixed(dp)) };
+}
+function showRate(v) {
+  const out = $('#rate-out'), unit = $('#rate-unit');
+  if (!out || !unit) return;
+  const { mult, n } = splitRate(v);
+  out.value = String(n);
+  unit.value = String(mult);
+}
+
 function fmtTime(y) {
   if (y < 1e3) return `${y.toFixed(y < 10 ? 1 : 0)} yr`;
   if (y < 1e6) return `${(y / 1e3).toFixed(y < 1e5 ? 1 : 0)} kyr`;
@@ -858,6 +884,7 @@ function updateReadout() {
 
   syncLiveControls();
   $('#simtime').textContent = fmtTime(w.time);
+  syncClocks(w);
 
   // When the planet is in a stiff transition the integrator cannot keep up with
   // the requested acceleration. Say so, rather than letting it look frozen.
@@ -870,14 +897,20 @@ function updateReadout() {
   if (rateOut.editing) {
     /* leave it alone */
   } else if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
-    rateOut.value = `${fmtTime(Math.max(achieved, 0))} / s`;
+    showRate(Math.max(achieved, 0));
     rateOut.classList.add('throttled');
     rateOut.title = 'The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.';
   } else {
-    rateOut.value = `${fmtTime(sim.rate)} / s`;
+    showRate(sim.rate);
     rateOut.classList.remove('throttled');
     rateOut.title = typeAhead;
   }
+
+  // Say when the ease is actually holding the clock back, rather than only that
+  // it is armed -- otherwise a slow patch looks like the simulation stalling.
+  const slowBtn = $('#btn-slow');
+  if (slowBtn) slowBtn.classList.toggle('easing',
+    !!sim.autoEase && !sim.paused && sim.easeFactor < 0.9);
 
   syncFossil();
   syncMantle();
@@ -951,6 +984,76 @@ function readSlot(i) {
   try { return JSON.parse(localStorage.getItem(slotKey(i)) || 'null'); } catch { return null; }
 }
 
+// The three clocks. `age` counts from the world's formation and therefore
+// includes everything that happened before t=0 -- an Archean preset is already
+// 1.15 Gyr old at the moment it starts, and a timebar that only ever said
+// "elapsed 2 Gyr" was quietly hiding that this planet was 3.15 billion years
+// old. `elapsed` is the run. `since` is time from the last mark, and it is
+// absent rather than zeroed when there is none.
+function syncClocks(w) {
+  const age = (w.params.startAge ?? 0) * 1e9 + w.time;
+  const el = $('#worldage');
+  if (el) el.textContent = age >= 1e8 ? `${(age / 1e9).toFixed(2)} Gyr` : fmtTime(age);
+  const row = $('#since-row'), last = marks[marks.length - 1];
+  if (!row) return;
+  row.hidden = !last;
+  if (last) {
+    $('#since-label').textContent = last.name;
+    $('#since-label').title = `Marked at ${fmtTime(last.t)} elapsed`;
+    $('#sincetime').textContent = fmtTime(Math.max(0, w.time - last.t));
+  }
+  const btn = $('#btn-mark');
+  if (btn) btn.classList.toggle('has-mark', !!last);
+}
+
+// The list, where there is room to rename and to remove. The gap column is the
+// point of it: how long the world spent between the two things you marked.
+function renderMarks() {
+  const box = $('#marks-list'), group = $('#marks-group');
+  if (!box || !group) return;
+  group.hidden = marks.length === 0;
+  box.innerHTML = '';
+  marks.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = 'mark-row';
+
+    const name = document.createElement('input');
+    name.type = 'text'; name.value = m.name; name.spellcheck = false;
+    name.setAttribute('aria-label', 'Milestone name');
+    const rename = () => {
+      m.name = name.value.trim() || 'mark';
+      name.value = m.name;
+      syncClocks(sim.world);
+    };
+    name.addEventListener('blur', rename);
+    name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
+
+    const when = document.createElement('span');
+    when.className = 'mark-when';
+    when.textContent = fmtTime(m.t);
+    when.title = 'Elapsed time when this was marked';
+
+    const gap = document.createElement('span');
+    gap.className = 'mark-gap';
+    if (i > 0) {
+      gap.textContent = `+${fmtTime(m.t - marks[i - 1].t)}`;
+      gap.title = `after “${marks[i - 1].name}”`;
+    }
+
+    const drop = document.createElement('button');
+    drop.type = 'button'; drop.className = 'mark-drop';
+    drop.textContent = '\u00d7';
+    drop.title = 'Remove this milestone';
+    drop.addEventListener('click', () => {
+      marks.splice(i, 1);
+      renderMarks(); syncClocks(sim.world);
+    });
+
+    row.append(name, when, gap, drop);
+    box.appendChild(row);
+  });
+}
+
 function snapshot() {
   // The world itself comes from captureWorld, so the slots, the export file and
   // the history scrubber cannot drift apart about what a world is. What is
@@ -960,6 +1063,7 @@ function snapshot() {
     v: 1, at: Date.now(),
     name: currentName(),
     seed: renderState.seed,
+    marks: marks.map((m) => ({ t: m.t, name: m.name })),
     ...captureWorld(sim.world),
   };
 }
@@ -977,6 +1081,18 @@ function snapshot() {
 // Declared here rather than lower down because applyWorldState() below touches
 // them: a `let` used before its declaration line has run is a temporal dead
 // zone, which is a crash and not a warning, and this project has shipped one.
+// Milestones. A mark is a moment the player said mattered, and its whole job is
+// to give the clock a second origin: "the ice started advancing HERE, how long
+// has it been going". Three clocks then run at once -- the object's age, the
+// run, and the time since the last mark -- because those are three different
+// questions and the timebar was only answering one of them.
+//
+// Kept here rather than on the world because they are not physics. They travel
+// in a save because they are part of what happened; they are dropped by a reset
+// because that world has not happened yet; and a rewind drops the ones that are
+// now in the future, which is the same rule the temperature history follows.
+let marks = [];               // { t, name }, oldest first
+
 let restorePoints = [];       // whole worlds, oldest first
 let suspendCapture = false;   // no snapshots of a half-written world
 let scrubMark = null;         // where the handle is while dragging, else null
@@ -990,6 +1106,14 @@ let scrubMark = null;         // where the handle is while dragging, else null
 // either way, which is exactly the part that should not be written twice.
 function applyWorldState(s) {
   suspendCapture = true;
+  // Going back along a world's own history un-happens everything after where
+  // you land, milestones included: a mark on an event that this branch has not
+  // reached yet would be a note about a future that was just dropped.
+  const t = s.world?.time ?? s.time;
+  if (isFinite(t)) {
+    const kept = marks.filter((m) => m.t <= t + 1);
+    if (kept.length !== marks.length) { marks = kept; renderMarks(); }
+  }
   // The live params object is handed through rather than replaced: the sliders
   // read and write it, and it is what makes a change made after a rewind reach
   // the simulation at all.
@@ -1001,6 +1125,10 @@ function applyWorldState(s) {
 
 function restore(s) {
   applyWorldState(s);
+  marks = Array.isArray(s.marks)
+    ? s.marks.filter((m) => m && isFinite(m.t)).map((m) => ({ t: +m.t, name: String(m.name || 'mark') }))
+    : [];
+  renderMarks();
   // A loaded world has no past in this session yet: the run it came from
   // happened before, and its history did not travel in the slot.
   restorePoints = [snapshot()];
@@ -1421,6 +1549,7 @@ function bindControls() {
     Object.assign(params, initialParams);
     renderState.seed = initialSeed;
     sim.reset(params);
+    marks = []; renderMarks();
     syncSliders();
     scenarioResult = null; endSettle(); sim.paused = resetPaused; syncPlay();
     writeHash(); markTouched();
@@ -1474,7 +1603,7 @@ function bindControls() {
   // control follows it -- see the note on the insolation slider for why ten and
   // not the Sun's own 7.4.
   $('#chk-brightening').addEventListener('change', (e) => {
-    params.brightening = e.target.checked ? 0.10 : 0;
+    params.brightening = e.target.checked ? 1 : 0;
     sim.setParams({ brightening: params.brightening });
     writeHash(); markTouched();
     toast(e.target.checked
@@ -1562,11 +1691,17 @@ function bindControls() {
     { v: 1e3, name: '1 kyr / s', why: 'a thousand years a second' },
     { v: 1e4, name: '10 kyr / s', why: 'glacial cycles, and the long thaw after a carbon spike' },
     { v: 1e5, name: '100 kyr / s', why: 'a hundred thousand a second' },
+    { v: 5e5, name: '500 kyr / s', why: 'half a million a second' },
     { v: 1e6, name: '1 Myr / s', why: 'the carbonate-silicate thermostat works on this timescale' },
+    { v: 5e6, name: '5 Myr / s', why: 'five million a second' },
     { v: 1e7, name: '10 Myr / s', why: 'ice sheets, cold traps, the slow drift of a climate' },
+    { v: 2.5e7, name: '25 Myr / s', why: 'twenty-five million a second' },
+    { v: 5e7, name: '50 Myr / s', why: 'a whole geological era every couple of seconds' },
     { v: 1e8, name: '100 Myr / s', why: 'a continent\u2019s worth of time per second' },
+    { v: 2.5e8, name: '250 Myr / s', why: 'a galactic year a second' },
     { v: 5e8, name: '500 Myr / s', why: 'the fastest this goes — a planet\u2019s whole life in ten seconds' },
   ];
+
   {
     const custom = document.createElement('option');
     custom.value = ''; custom.textContent = 'custom'; custom.hidden = true;
@@ -1580,9 +1715,10 @@ function bindControls() {
     }
   }
 
+  const rateUnit = $('#rate-unit');
   const applyRate = () => {
     sim.rate = Math.pow(10, +rate.value);
-    if (!rateOut.editing) rateOut.value = `${fmtTime(sim.rate)} / s`;
+    if (!rateOut.editing) showRate(sim.rate);
     const lo = +rate.min, hi = +rate.max;
     rate.style.setProperty('--fill', `${((+rate.value - lo) / (hi - lo)) * 100}%`);
     // Show the menu entry the clock is actually on, or "custom" when the slider
@@ -1615,8 +1751,14 @@ function bindControls() {
   };
   const commitRate = () => {
     rateOut.editing = false;
-    const v = parseRate(rateOut.value);
-    if (v == null) { applyRate(); return; }
+    // A bare number means "this many of whatever the menu says". A number with
+    // a unit in it overrides the menu, so anything the readout has ever printed
+    // can be pasted straight back in.
+    const typed = String(rateOut.value).trim();
+    const bare = /^[-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?$/.test(typed.replace(',', '.'));
+    const v = bare ? parseFloat(typed.replace(',', '.')) * (+rateUnit.value || 1)
+                   : parseRate(typed);
+    if (v == null || !(v > 0)) { applyRate(); return; }
     const lo = +rate.min, hi = +rate.max;
     rate.value = String(clamp(Math.log10(v), lo, hi));
     applyRate();
@@ -1628,12 +1770,60 @@ function bindControls() {
         `${fmtTime(Math.pow(10, hi))} a second — set to ${fmtTime(got)} / s`);
     }
   };
+  // Changing the unit keeps the number and moves the decimal point: 250 kyr/s
+  // becomes 250 Myr/s. That is what picking a unit off a menu should do, and it
+  // is the whole reason the menu exists.
+  rateUnit.addEventListener('change', () => {
+    const n = parseFloat(String(rateOut.value).replace(',', '.'));
+    if (!isFinite(n) || n <= 0) { applyRate(); return; }
+    const lo = +rate.min, hi = +rate.max;
+    rate.value = String(clamp(Math.log10(n * (+rateUnit.value || 1)), lo, hi));
+    applyRate();
+  });
   rateOut.addEventListener('focus', () => { rateOut.editing = true; rateOut.select(); });
   rateOut.addEventListener('blur', commitRate);
   rateOut.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { rateOut.blur(); }
     else if (e.key === 'Escape') { rateOut.editing = false; applyRate(); rateOut.blur(); }
   });
+
+  // Dropping a mark. Named after whatever the planet is at that moment, because
+  // that is almost always what the player is marking -- "the ice started here",
+  // "this is where it ran away" -- and a name that writes itself is one fewer
+  // dialog between seeing something and recording it. Rename them in the list.
+  const markBtn = $('#btn-mark');
+  markBtn.addEventListener('click', () => {
+    const w = sim.world;
+    const st = classify(w);
+    marks.push({ t: w.time, name: st.name });
+    syncClocks(w); renderMarks();
+    toast(`Marked “${st.name}” at ${fmtTime(w.time)}`);
+  });
+
+  // Auto-ease. Off by default: it takes the clock off the player, and a control
+  // that does that has to be asked for.
+  const slowBtn = $('#btn-slow');
+  const syncSlow = () => {
+    slowBtn.classList.toggle('active', !!sim.autoEase);
+    slowBtn.setAttribute('aria-pressed', String(!!sim.autoEase));
+    slowBtn.title = sim.autoEase
+      ? 'Auto-ease is ON: when the climate starts moving fast — a runaway, a '
+        + 'glaciation, a collapse — the clock holds itself to about six degrees '
+        + 'a second so the transition can be watched instead of skipped over. '
+        + 'Click to turn off.'
+      : 'Auto-ease is OFF: the clock runs at whatever the slider says, so a '
+        + 'runaway or a glaciation can happen entirely inside one frame. Click '
+        + 'to have it slow down through a tipping.';
+  };
+  slowBtn.addEventListener('click', () => {
+    sim.autoEase = !sim.autoEase;
+    try { localStorage.setItem(EASE_KEY, sim.autoEase ? 'on' : 'off'); } catch { }
+    syncSlow();
+    toast(sim.autoEase ? 'Auto-ease on — the clock slows through a tipping'
+                       : 'Auto-ease off');
+  });
+  sim.autoEase = easePref();
+  syncSlow();
 
   // The accuracy/speed switch, beside the menu, because it is the other control
   // over how fast this thing runs.

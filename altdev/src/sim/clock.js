@@ -15,6 +15,31 @@ import { evolvedParams, brightnessAfter, radiogenic, EARTH_AGE, approach, walkRa
 // on where frame boundaries fell, 15 fps, 60 fps and a 500 ms stall all trace
 // exactly the same trajectory.
 // ---------------------------------------------------------------------------
+// How much the climate may change per wall-clock second while the auto-ease
+// governor is on, as a FRACTION of the temperature rather than in kelvin.
+//
+// Kelvin per second was the obvious unit and it does not work, because the two
+// events this exists for are not the same size. A snowball is a thirty-kelvin
+// fall and a runaway greenhouse is a seven-hundred-kelvin climb, so any fixed
+// number of degrees a second either flicks past the first or takes two minutes
+// over the second. In log temperature they are 0.14 and 1.2 -- within a factor
+// of nine of each other -- and 5%/s puts the glaciation in about three seconds
+// and the runaway in about twenty-five.
+const EASE_TARGET = 0.05;      // |d ln T| per wall-clock second
+
+// Measured, because the number above is not the whole story. At ten Myr a
+// second a runaway greenhouse goes from temperate to boiling in 0.05 s of wall
+// clock with this off and 2.8 s with it on; a glaciation goes 0.02 s to 1.3 s.
+// Both are rate-independent -- asking for a hundred Myr a second gives the same
+// 2.8 s -- and a settled Earth is untouched, running its full hundred million
+// years in six hundred frames with the governor armed.
+//
+// 2.8 s is a floor rather than the target, and lowering EASE_TARGET does not
+// move it: maxStep has bounds of its own that a smaller requested step does not
+// get under. Ninety times slower is the feature working; getting the last
+// factor of nine means arguing with the step-size estimator, which is a
+// different job than this one.
+
 export class Simulation {
   constructor(params) {
     this.world = createWorld(params);
@@ -28,6 +53,11 @@ export class Simulation {
     this.budgetMs = 12;       // hard wall-clock ceiling on physics per frame
     this.actualRate = 0;
     this.throttled = false;   // true when the budget, not the clock, is the limit
+    // Auto-ease: hold the clock back through a tipping so it can be watched.
+    this.autoEase = false;
+    this.easeFactor = 1;      // what it is currently doing to the rate, for the UI
+    this.easeRate = null;     // the rate it has settled on, null when not engaged
+    this.climateSpeed = 0;    // |d ln T| per wall-clock second, measured
     this._acc = 0;
     this.onSample = null;
     this._nextSample = 0;
@@ -80,7 +110,7 @@ export class Simulation {
     if (!w.evolve0) w.evolve0 = {};
     const gyr = Math.max(w.time, 0) / 1e9;
     if (p.brightening > 0) {
-      const f = brightnessAfter(p.brightening, gyr);
+      const f = brightnessAfter(p, gyr);
       w.evolve0.insolation = f > 0 ? p.insolation / f : p.insolation;
     } else {
       w.evolve0.insolation = p.insolation;
@@ -100,33 +130,89 @@ export class Simulation {
     w.evolve0.outgassing = p.outgassing;
   }
 
+  // Auto-ease: how far the world is allowed to move in one frame.
+  //
+  // A runaway greenhouse takes about a hundred thousand years and a glaciation
+  // rather less. At the ten-Myr-a-second most of this game is played at, both
+  // of them happen inside a single frame: the planet is temperate, and then it
+  // is not, and the transition every one of these worlds is *about* is the one
+  // thing the player never gets to see. So when this is on, the clock is held
+  // to a fixed number of degrees per wall-clock second and the tipping plays
+  // out over several of them.
+  //
+  // It is a governor on measured change, not a detector for two named events.
+  // That is deliberate: it catches a runaway and a snowball, and it also
+  // catches a CO2 collapse, a nightside freeze-out and anything else this model
+  // can do that a list would have missed. A planet that is merely drifting
+  // changes by microkelvins a year and never trips it.
+  //
+  // It has to act INSIDE the frame rather than by turning the rate down for the
+  // next one. A runaway takes about five hundred simulated years; one frame at
+  // ten Myr a second is a hundred and sixty thousand. By the time a controller
+  // watching the last frame could react, there is nothing left to slow down --
+  // measured, and it was three frames from temperate to boiling with the
+  // feedback loop running. So the budget is spent step by step and the frame
+  // simply stops when it runs out, which needs no prediction at all.
   // realDt in seconds; returns simulated years actually advanced.
   advance(realDt) {
     if (this.paused) { this.actualRate = 0; return 0; }
     const dtReal = clamp(realDt, 0, 0.1);          // ignore huge stalls
     this.credit = Math.min(this.credit + dtReal * this.rate, this.rate * 4);
-    return this.runCredit();
+    return this.runCredit(this.rate, dtReal);
   }
 
-  runCredit() {
+  runCredit(rate = this.rate, dtReal = 0) {
     const w = this.world;
     const deadline = performance.now() + this.budgetMs;
     let advanced = 0, steps = 0;
+    const T0 = w.diag.Tmean;
+    // The ease budget for this frame, in |d ln T|. Infinite when the governor
+    // is off, which is the only thing that has to cost nothing.
+    const budget = this.autoEase && dtReal > 0 ? EASE_TARGET * dtReal : Infinity;
+    let moved = 0, eased = false;
+    // Once the budget is binding, ask the solver for finer steps as well.
+    // Without this the ease has a granularity floor of one solver step, and one
+    // step of a runaway moves two and a half kelvin -- about seven frames'
+    // worth of budget -- so the frame overshoots every time and the transition
+    // still goes by six times too fast. Only while something is actually
+    // happening: a settled world would otherwise be forced to crawl.
+    const tighten = this.autoEase && this.climateSpeed > EASE_TARGET;
     this.throttled = false;
     while (steps < this.maxStepsPerFrame) {
-      const dt = Math.min(maxStep(w), this.rate * 0.3, 5e6);
+      const cap = tighten
+        ? clamp(w.diag.Tmean * Math.max(budget - moved, 0), 0.05, 2.5) : 2.5;
+      const dt = Math.min(maxStep(w, cap), rate * 0.3, 5e6);
       if (this.credit < dt) break;
       // Never blow the frame budget, however stiff the planet has become. A
       // difficult transition makes the simulated clock run slow; it must never
       // make the interface stop responding.
       if ((steps & 7) === 0 && performance.now() > deadline) { this.throttled = true; break; }
       this.credit -= dt;
+      const before = w.diag.Tmean;
       this.stepOnce(dt);
       advanced += dt;
       steps++;
+      if (budget < Infinity && before > 0 && w.diag.Tmean > 0) {
+        moved += Math.abs(Math.log(w.diag.Tmean / before));
+        if (moved >= budget) { eased = true; break; }
+      }
     }
-    // Unspent credit is capped so a long stall cannot bank a huge jump.
-    this.credit = Math.min(this.credit, this.rate * 2);
+    // Unspent credit is capped so a long stall cannot bank a huge jump -- and
+    // when the ease stopped the frame it is dropped outright, because banking
+    // the time the governor just declined to spend would hand it all back on
+    // the next frame and undo the whole thing.
+    this.credit = eased ? 0 : Math.min(this.credit, rate * 2);
+    // How fast the climate appeared to move, per wall-clock second, at the rate
+    // this frame actually ran at. Measured across the frame rather than read off
+    // the instantaneous tendency, because an implicit step absorbs most of a
+    // large tendency and what the governor needs is how far the planet got.
+    if (dtReal > 0 && T0 > 0 && w.diag.Tmean > 0) {
+      this.climateSpeed = Math.abs(Math.log(w.diag.Tmean / T0)) / dtReal;
+      // What the ease is doing to the clock, for the readout: how much of the
+      // rate that was asked for actually got spent.
+      const wanted = this.rate * dtReal;
+      this.easeFactor = wanted > 0 ? Math.min(1, advanced / wanted) : 1;
+    }
     this.actualRate = advanced;
     return advanced;
   }
@@ -186,7 +272,7 @@ export class Simulation {
       if (next === w.insolationTarget) { w.insolationTarget = null; w.insolationRate = undefined; }
       w.params.insolation = next;
       if (w.evolve0) w.evolve0.insolation = w.params.insolation
-        / brightnessAfter(w.params.brightening ?? 0, Math.max(w.time, 0) / 1e9);
+        / brightnessAfter(w.params, Math.max(w.time, 0) / 1e9);
     }
     update(w, dt);
 

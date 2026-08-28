@@ -57,6 +57,48 @@ const O2_EUK_HI = 0.04 * 0.21;
 const PRO_ORIGIN = 3.0e8;      // yr
 const EUK_ORIGIN = 8.0e8;      // yr
 const SPREAD = 2.0e6;          // yr, filling ground that is already habitable
+
+// How long a population takes to disappear once it has nowhere left to live,
+// which is NOT one number, because the two ways of running out of habitat are
+// not alike.
+//
+// Ice advancing over a biosphere is a retreat into refugia -- brine channels in
+// the sea ice, hydrothermal vents, the deep subsurface -- and Snowball Earth is
+// the standing proof that it does not sterilise a planet: everything alive now
+// came through one. Megayears is the right timescale for that, and it is what
+// SPREAD was already doing.
+//
+// Heat has no refuge. Past about 400 K there is no known chemistry that holds a
+// cell together, proteins denature in minutes, and the ocean is the thing doing
+// the cooking -- there is nowhere to be that is cooler. This model was applying
+// the refugia timescale to that case too, so a world whose ocean had reached
+// 278 C read 100% prokaryote coverage, and went on reading it for a million
+// years, because the population was relaxing towards zero with a 2 Myr time
+// constant. The readout was not wrong about the room being zero. It was wrong
+// about how long dying takes.
+const HEAT_DEATH = 20;         // yr, once every band is well past the limit
+const HEAT_MARGIN = 20;        // K past the ceiling for the full rate
+
+// ...and the other half of that asymmetry: what a frozen world keeps.
+//
+// Under a kilometre of sea ice there is liquid water at the pressure-melting
+// point, and under that there are hydrothermal vents, and neither of them cares
+// what the surface is doing. Snowball Earth is the standing case -- the ice
+// reached the equator, this model reads -56 C in its warmest band, and the
+// biosphere came through it, which is why there is anything here to argue
+// about. Scoring habitat off surface temperature alone said zero and then
+// sterilised the planet over the following ten million years.
+//
+// Four percent is a token: small, out of sight, and not none. It is gated on
+// there actually being an ice cover, so a world whose ocean is boiling rather
+// than frozen gets nothing from it -- there is no refuge from heat.
+//
+// Prokaryotes only. Eukaryotes came through the Cryogenian too and this does
+// not let them, which is a known simplification rather than a claim: a model
+// with one number for "under the ice" cannot also say which of the two things
+// living there was more fragile.
+const REFUGIA = 0.04;
+
 // Below this a population is gone rather than rare, and has to be originated
 // again rather than recovering. Without it a world that sterilised itself kept
 // an infinitesimal seed and sprang back the moment it was habitable, which is
@@ -80,9 +122,14 @@ export function habitableShare(w) {
   // rather than band by band -- it mixes.
   const air = smoothstep(O2_EUK_LO, O2_EUK_HI, dg.pO2 ?? 0);
 
-  let pro = 0, euk = 0;
+  let pro = 0, euk = 0, hotPro = 0, hotEuk = 0;
   for (let i = 0; i < NBANDS; i++) {
     const T = w.T[i];
+    // How far past the top of the tolerance this band is, area-averaged. Only
+    // the hot side is tracked: see HEAT_DEATH for why the cold side is not
+    // symmetric with it.
+    hotPro += Math.max(0, T - 400) / NBANDS;
+    hotEuk += Math.max(0, T - 338) / NBANDS;
     // -20 C to 122 C, the two measured records, with the edges softened over
     // ten kelvin because a hard cutoff would make the readout flicker across a
     // band boundary as the climate drifted.
@@ -94,7 +141,12 @@ export function habitableShare(w) {
     pro += proBand / NBANDS;
     euk += eukBand / NBANDS;
   }
-  return { pro: clamp(water * pro, 0, 1), euk: clamp(water * air * euk, 0, 1) };
+  const iced = (w.water.seaIce + w.water.landIce)
+             / Math.max(w.water.ocean + w.water.seaIce + w.water.landIce, 1e-12);
+  const subIce = REFUGIA * smoothstep(0.15, 0.6, iced);
+  return { pro: clamp(Math.max(water * pro, subIce), 0, 1),
+           euk: clamp(water * air * euk, 0, 1),
+           hotPro, hotEuk };
 }
 
 // One step of the two populations towards what the planet can currently hold.
@@ -128,7 +180,11 @@ export function stepLife(w, dtYears) {
     const seeded = k === 'euk' ? L.pro > 0.05 : true;
     let tau;
     if (target <= here) {
-      tau = SPREAD;                             // losing ground is quick
+      // Losing ground is quick, and being boiled is quicker. Geometric between
+      // the two, so twenty kelvin past the ceiling is already the full rate.
+      const over = (k === 'pro' ? room.hotPro : room.hotEuk) || 0;
+      tau = SPREAD * Math.pow(HEAT_DEATH / SPREAD,
+                              smoothstep(0, HEAT_MARGIN, over));
     } else if (here > EXTINCT && seeded) {
       tau = SPREAD;                             // spreading into new ground
     } else if (seeded) {

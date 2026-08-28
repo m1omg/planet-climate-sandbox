@@ -770,21 +770,30 @@ export function run() {
         `${(young.world.params.internalHeat * 1e3).toFixed(1)} mW/m² and ` +
         `${meltBoost(young.world.params).toFixed(2)}× at ${EARTH_AGE} Gyr`);
 
-      // Brightening is compounding and it moves the control, not just the sum
-      // inside the model -- the point of it is watching the star change.
-      const sun = new Simulation({ ...EARTH, brightening: 0.10, outgassing: 0,
+      // Brightening moves the control, not just the sum inside the model -- the
+      // point of it is watching the star change -- and it follows the star's own
+      // curve rather than a flat rate. Gough (1981) puts the Sun 35.6% brighter
+      // three billion years from now, and the curve has to be ACCELERATING to
+      // get there: the first billion years buy 9.6% and the third 12.2%. A
+      // compounding rate cannot do that, which is why it is gone.
+      const sun = new Simulation({ ...EARTH, brightening: 1, outgassing: 0,
         emissions: 0, fossilUsed: 0 });
+      const sunAt = (gyr) => brightnessAfter({ brightening: 1,
+        startAge: EARTH_AGE, starTemp: 5772 }, gyr);
       sun.runYears(3e9, 5e6);
+      const firstGyr = sunAt(1) - 1, thirdGyr = sunAt(3) - sunAt(2);
       check('…and a brightening star carries its own control with it',
-        Math.abs(sun.world.params.insolation - Math.pow(1.10, 3)) < 1e-3,
-        `${sun.world.params.insolation.toFixed(4)} S⊕ after 3 Gyr, against ` +
-        `1.10³ = ${Math.pow(1.10, 3).toFixed(4)}`);
+        Math.abs(sun.world.params.insolation - sunAt(3)) < 1e-3
+          && Math.abs(sunAt(3) - 1.3565) < 1e-3 && thirdGyr > firstGyr * 1.2,
+        `${sun.world.params.insolation.toFixed(4)} S⊕ after 3 Gyr, against Gough's ` +
+        `${sunAt(3).toFixed(4)} — and steepening, ${(firstGyr * 100).toFixed(1)}% in the ` +
+        `first Gyr against ${(thirdGyr * 100).toFixed(1)}% in the third`);
 
       // Absolute functions of age, not rates integrated alongside the climate:
       // the answer must not depend on how the clock happened to chop the run up.
-      const coarse = new Simulation({ ...EARTH, brightening: 0.10, realisticGeology: true,
+      const coarse = new Simulation({ ...EARTH, brightening: 1, realisticGeology: true,
         startAge: 1, outgassing: 0, emissions: 0, fossilUsed: 0 });
-      const fine = new Simulation({ ...EARTH, brightening: 0.10, realisticGeology: true,
+      const fine = new Simulation({ ...EARTH, brightening: 1, realisticGeology: true,
         startAge: 1, outgassing: 0, emissions: 0, fossilUsed: 0 });
       coarse.runYears(2e9, 5e6);
       for (let i = 0; i < 40; i++) fine.runYears(5e7, 2e5);
@@ -837,7 +846,7 @@ export function run() {
     // escape channel above is the right size rather than merely present.
     {
       const mars = new Simulation({ ...PRESETS.earlyMars.params,
-        realisticGeology: true, brightening: 0.10 });
+        realisticGeology: true, brightening: 1 });
       const w = mars.world;
       const t0 = w.diag.Tmean, ocean0 = w.water.ocean;
       // runYears stops at its own step guard, so drive it until the clock gets there.
@@ -868,7 +877,7 @@ export function run() {
       // 0.5 Gyr -- before this run even starts, at 0.6. So the field would be
       // handed over and immediately taken away again, and the two runs would be
       // the same run. "A dynamo that never dies" has to say so.
-      const kept = new Simulation({ ...PRESETS.earlyMars.params, brightening: 0.10,
+      const kept = new Simulation({ ...PRESETS.earlyMars.params, brightening: 1,
         realisticGeology: false, magneticField: 1 });
       const kw = kept.world;
       let g = 0;
@@ -885,7 +894,7 @@ export function run() {
     // Earth is the control on the other side: it has a field, and its nitrogen
     // is not supposed to be going anywhere.
     {
-      const e = new Simulation({ ...EARTH, realisticGeology: true, brightening: 0.10,
+      const e = new Simulation({ ...EARTH, realisticGeology: true, brightening: 1,
         startAge: 0.6, insolation: 1 / Math.pow(1.10, 3.967), outgassing: 1 });
       const w = e.world;
       let g = 0;
@@ -909,14 +918,17 @@ export function run() {
       // came up with it going into an atmosphere that no longer had an ocean to
       // weather it back down.
       //
-      // 60x is what puts roughly Venus's ninety-two bar into the air out of this
+      // 70x is what puts Venus's ninety-two bar into the air out of this
       // planet's mantle; above about 150x the mantle itself runs out and the
       // answer stops moving.
       {
         const at = 4.567 - 0.715;
+        // Venus gets 1.911 S(+) now, so this is what it got 715 Myr ago -- read
+        // backwards off the star's own curve rather than off a flat rate.
         const venusish = { ...PRESETS.earlyVenus.params, realisticGeology: true,
-          brightening: 0.10, startAge: at, co2Bar: 0.037, startT: 303,
-          insolation: 1.40 * Math.pow(1.10, at - 1.67), resurfacingSpan: 40 };
+          brightening: 1, startAge: at, co2Bar: 0.037, startT: 303,
+          insolation: 1.911 / brightnessAfter({ brightening: 1, startAge: at,
+            starTemp: 5772 }, 0.715), resurfacingSpan: 40 };
         // 0.05 Gyr *after this run starts*, which is the same instant it always
         // was: the world begins at an age of `at` and the event is placed 50 Myr
         // in. The control is elapsed time now, not age, so that it cannot be
@@ -931,7 +943,7 @@ export function run() {
           }
           return s.world;
         };
-        const quiet = run(1), repaved = run(60);
+        const quiet = run(1), repaved = run(70);
         check('…and one the size of Venus\u2019s puts Venus\u2019s atmosphere into the air',
           repaved.diag.pCO2 > 60 && repaved.diag.pCO2 < 200
             && repaved.diag.pCO2 > quiet.diag.pCO2 * 4,
@@ -980,6 +992,29 @@ export function run() {
         `${PRESETS.earlyVenus.params.resurfacingAge} Gyr later — an age of ` +
         `${(PRESETS.earlyVenus.params.startAge + PRESETS.earlyVenus.params.resurfacingAge).toFixed(3)}, ` +
         `which is Venus's 715 Myr ago`);
+
+      // ...and the world it leaves behind at the present day has to be Venus.
+      //
+      // Getting the runaway to happen on schedule is only half of it. Venus is
+      // not merely hot: it is hot AND DRY, 737 K under 92 bar that is 96.5%
+      // CO2 and 30 ppm water. A model that boils the ocean on time and then
+      // keeps the steam gets the temperature badly wrong in the same motion,
+      // because steam is a far better greenhouse gas than CO2 -- this run used
+      // to arrive at 928 K with nineteen bar of water still in the air, having
+      // shed a third of its ocean in the 650 Myr it had left.
+      {
+        const sim = new Simulation({ ...PRESETS.earlyVenus.params });
+        const vw = sim.world;
+        const span = (4.567 - PRESETS.earlyVenus.params.startAge) * 1e9;
+        while (vw.time < span) sim.stepOnce(Math.min(maxStep(vw), 5e6));
+        const left = vw.water.ocean + vw.water.seaIce + vw.water.landIce + vw.water.vapour;
+        const pH2O = vw.diag.pH2O.reduce((a, b) => a + b, 0) / vw.diag.pH2O.length;
+        check('Early Venus arrives at the present day as the Venus we have',
+          Math.abs(vw.diag.Tmean - 737) < 70 && Math.abs(vw.diag.pTotMean - 92) < 15
+            && pH2O < 0.5,
+          `${vw.diag.Tmean.toFixed(0)} K (737), ${vw.diag.pTotMean.toFixed(1)} bar (92), ` +
+          `${pH2O.toExponential(1)} bar of water (0.003), ${left.toExponential(2)} EO left`);
+      }
     }
 
     // Smoothing turns a slider into a destination. It exists because of the
@@ -1968,6 +2003,96 @@ export function run() {
       dead < 0.2 && back.world.diag.bio > 0.9,
       `${dead.toFixed(3)}× under the greenhouse, ${back.world.diag.bio.toFixed(3)}× ` +
       `after it cleared`);
+  }
+
+  // ---- 3o1z. the clock eases through a tipping ------------------------------
+  // At the ten-Myr-a-second this game is mostly played at, the transition every
+  // one of these worlds is ABOUT happens inside a single frame: the planet is
+  // temperate, and then it is not. Auto-ease spends a fixed budget of
+  // |d ln T| per wall-clock second, which is the only unit that serves both a
+  // thirty-kelvin glaciation and a seven-hundred-kelvin runaway.
+  //
+  // Driven by hand at a nominal sixty frames a second, so this measures the
+  // governor and not the machine it is running on.
+  {
+    const play = (ease, extra, stop, rate) => {
+      const s = new Simulation({ ...EARTH, ...extra });
+      s.rate = rate; s.autoEase = ease;
+      let frames = 0;
+      while (!stop(s.world) && frames < 60 * 600) { s.advance(1 / 60); frames++; }
+      return frames / 60;
+    };
+    const boil = { insolation: 1.6, outgassing: 0 };
+    const freeze = { insolation: 0.85, co2Bar: 1e-6, outgassing: 0 };
+    const hot = (w) => w.diag.Tmean > 500, cold = (w) => w.diag.Tmean < 255;
+    const rawHot = play(false, boil, hot, 1e7), easedHot = play(true, boil, hot, 1e7);
+    const rawCold = play(false, freeze, cold, 1e7), easedCold = play(true, freeze, cold, 1e7);
+    check('Auto-ease makes a runaway and a glaciation last long enough to watch',
+      easedHot > 1.5 && easedHot > rawHot * 20 && easedCold > 0.7 && easedCold > rawCold * 20,
+      `runaway ${rawHot.toFixed(2)}s \u2192 ${easedHot.toFixed(1)}s, ` +
+      `glaciation ${rawCold.toFixed(2)}s \u2192 ${easedCold.toFixed(1)}s`);
+
+    // ...and it costs nothing whatever when nothing is happening. A settled
+    // Earth with the governor armed must run at exactly the rate asked for:
+    // a control that quietly taxed every steady world would be worse than the
+    // problem it solves.
+    const still = new Simulation({ ...EARTH });
+    still.rate = 1e7; still.autoEase = true;
+    for (let i = 0; i < 600; i++) still.advance(1 / 60);
+    check('\u2026and does nothing at all to a world that is not tipping',
+      still.easeFactor > 0.999 && still.world.time > 0.95e8,
+      `${still.world.time.toExponential(2)} yr in ten seconds at 10 Myr/s, ` +
+      `ease factor ${still.easeFactor.toFixed(3)}`);
+
+    // The budget is in log temperature, so the same setting has to serve two
+    // events that differ by a factor of twenty in kelvin. That is the whole
+    // argument for the unit, and it is worth a check of its own: both land
+    // inside a factor of four of each other in wall-clock seconds.
+    check('\u2026and one setting serves both, because the budget is in log temperature',
+      easedHot / easedCold < 4 && easedCold / easedHot < 4,
+      `${easedHot.toFixed(1)}s against ${easedCold.toFixed(1)}s, for transitions ` +
+      `of 212 K and 33 K`);
+  }
+
+  // ---- 3o2a. boiling a planet kills what is on it ---------------------------
+  // The room a biosphere has and the time it takes to lose it are two different
+  // questions, and this model was only getting the first one right. A world run
+  // into a wet runaway had `lifeRoom` correctly at zero from the moment its
+  // ocean passed 122 C -- and went on reporting 100% prokaryote coverage,
+  // because the population was relaxing towards that zero with the two-million
+  // year time constant that belongs to an ice sheet advancing over a habitat.
+  // It read "prokaryotes 100% of the surface" at a mean surface of 288 C.
+  //
+  // The asymmetry is the point. Heat has no refugia and cold has plenty of
+  // them, so the same loss of habitable ground has to resolve at two different
+  // speeds depending on which end it happened at.
+  {
+    const boil = new Simulation({ ...EARTH, insolation: 1.6, outgassing: 0 });
+    let hot = null;
+    for (let i = 0; i < 6000 && boil.world.diag.Tmean < 520; i++) {
+      boil.stepOnce(Math.min(maxStep(boil.world), 1e5));
+      if (!hot && boil.world.diag.Tmean > 420) hot = boil.world.time;
+    }
+    check('A planet whose ocean has boiled is sterile, and quickly',
+      boil.world.life.pro < 1e-3 && boil.world.life.euk < 1e-3 && boil.world.time < 5e4,
+      `${(boil.world.diag.Tmean - 273.15).toFixed(0)} C after ` +
+      `${boil.world.time.toFixed(0)} yr, prokaryotes ${boil.world.life.pro.toExponential(1)} ` +
+      `(was 1.00 for the next two million years)`);
+
+    // ...and a snowball is not a sterilisation. Everything alive today came
+    // through one, which is the strongest single argument for refugia there is.
+    const ice = new Simulation({ ...EARTH, insolation: 0.75, co2Bar: 1e-6,
+      outgassing: 0, startT: 250 });
+    ice.runYears(2e6, 2e4);
+    const early = ice.world.life.pro;
+    ice.runYears(1.8e7, 5e4);                    // ...and twenty million more
+    check('\u2026while a world that froze over keeps its prokaryotes',
+      ice.world.diag.Tmean < 255 && ice.world.life.pro > 0.02
+        && ice.world.life.pro >= early * 0.9,
+      `${(ice.world.diag.Tmean - 273.15).toFixed(0)} C and ` +
+      `${(ice.world.life.pro * 100).toFixed(1)}% still there after 20 Myr — ` +
+      `under the ice, not on the surface, which reads ` +
+      `${(Math.max(...ice.world.T) - 273.15).toFixed(0)} C at its warmest`);
   }
 
   // ---- 3o2b. a locked world is not charged twice for its night ---------------

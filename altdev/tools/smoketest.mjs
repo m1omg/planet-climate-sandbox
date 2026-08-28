@@ -360,6 +360,25 @@ if (app && app.graphicsFromUrl) {
   }
 }
 
+// A milestone the player dropped has to travel in the save. It is not physics,
+// so captureWorld knows nothing about it, and a save format that silently drops
+// half a feature is the kind of thing that only shows up weeks later when
+// someone loads a world back and wonders where their marks went.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const saved = /marks: marks\.map\(/.test(src);
+  const loaded = /marks = Array\.isArray\(s\.marks\)/.test(src);
+  const cleared = /marks = \[\]; renderMarks\(\)/.test(src);
+  if (!saved || !loaded || !cleared) {
+    console.log('\x1b[31mFAIL\x1b[0m  milestones do not survive a save/load/reset round trip'
+      + ` (save ${saved}, load ${loaded}, reset ${cleared})`);
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  milestones are saved, restored and cleared by a reset');
+  }
+}
+
 // Every element main.js binds a listener to has to actually exist. The DOM stub
 // here cannot catch this -- querySelector returns a fresh element for any
 // selector, so a typo'd or missing id looks exactly like a present one -- and
@@ -371,8 +390,13 @@ if (app && app.graphicsFromUrl) {
   const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const ctrls = readFileSync(new URL('../src/game/controls.js', import.meta.url), 'utf8');
+  // EVERY lookup, not just the ones with .addEventListener chained straight
+  // onto them. The narrow form missed `const b = $('#btn-mark'); b.addEvent...`
+  // -- which is how most of them are written -- and it missed every plain read
+  // as well, so a renamed id in the readout would have sailed through here and
+  // thrown ten times a second in the browser instead.
   const bound = new Set();
-  for (const m of src.matchAll(/\$\('#([\w-]+)'\)\s*\.addEventListener/g)) bound.add(m[1]);
+  for (const m of src.matchAll(/\$\('#([\w-]+)'\)/g)) bound.add(m[1]);
   const missing = [...bound].filter((id) =>
     !html.includes(`id="${id}"`) && !ctrls.includes(`id="${id}"`));
   if (missing.length) {

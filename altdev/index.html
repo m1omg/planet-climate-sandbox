@@ -136,19 +136,34 @@
       </label>
 
       <div class="clock">
-        <span class="t-label">elapsed</span>
-        <span id="simtime">0 yr</span>
+        <div class="t-row"><span class="t-label">age</span><span id="worldage">4.57 Gyr</span></div>
+        <div class="t-row"><span class="t-label">elapsed</span><span id="simtime">0 yr</span></div>
+        <div class="t-row" id="since-row" hidden>
+          <span class="t-label" id="since-label">since mark</span><span id="sincetime">0 yr</span>
+        </div>
       </div>
+      <button id="btn-mark" class="icon-btn mark-btn"
+              title="Mark this moment. The clock then also counts from the mark, so you can time an event you are watching.">⚑</button>
 
       <div class="rate">
         <label for="rate">time acceleration</label>
         <input id="rate" type="range" min="0" max="8.69897" step="0.01" value="0">
-        <input id="rate-out" class="val rate-val" type="text" inputmode="decimal"
-               spellcheck="false" value="1.0 yr / s"
-               aria-label="Time acceleration, type to set exactly"
-               title="Type a rate: 500 yr, 2 Myr, 1.5 Gyr. Per second is assumed.">
+        <span class="rate-entry">
+          <input id="rate-out" class="rate-val" type="text" inputmode="decimal"
+                 spellcheck="false" value="1.0"
+                 aria-label="Time acceleration, type to set exactly"
+                 title="Type a number — the unit is the menu beside it. A whole rate works too: 500 yr, 2 Myr, 1.5 Gyr.">
+          <select id="rate-unit" class="rate-unit" aria-label="Time acceleration unit">
+            <option value="1">yr / s</option>
+            <option value="1000">kyr / s</option>
+            <option value="1000000">Myr / s</option>
+            <option value="1000000000">Gyr / s</option>
+          </select>
+        </span>
         <div class="rate-stops" id="rate-stops">
           <select id="rate-menu" aria-label="Jump to a time acceleration"></select>
+          <button type="button" id="btn-slow" class="stop slow-toggle"
+                  title="Ease off automatically when the climate tips">ease</button>
           <button type="button" id="btn-fast" class="stop fast-toggle">fast</button>
         </div>
       </div>
@@ -161,6 +176,11 @@
       <section class="group">
         <h2>Diagnostics</h2>
         <div id="stats" class="stats"></div>
+      </section>
+
+      <section class="group" id="marks-group" hidden>
+        <h2>Milestones <small>time between the things you marked</small></h2>
+        <div id="marks-list" class="marks"></div>
       </section>
 
       <section class="group">

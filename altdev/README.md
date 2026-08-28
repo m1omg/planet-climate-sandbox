@@ -105,13 +105,17 @@ The user-visible point of the model is that nothing snaps. Three things enforce 
 * **Latent heat as heat capacity.** Every extra kelvin near the runaway evaporates more ocean, and
   that term dwarfs the mixed layer. The runaway transient comes out at 10³–10⁵ yr depending on how
   hard the planet is being pushed, against ~10⁵ yr in Turbet et al.'s 3-D GCM.
-* **Escape is slow.** Hydrogen loss is the lesser of the diffusion limit (from the cold-trap mixing
-  ratio) and the XUV energy limit. Losing an ocean takes 10⁸–10⁹ yr under a young, active Sun —
-  Kasting's Venus timescale — so a *wet* runaway drifts into a *dry* one over hundreds of Myr.
+* **Escape is slow, until the cold trap fails.** Hydrogen loss is the lesser of the diffusion limit
+  (from the stratospheric mixing ratio) and the XUV energy limit. That mixing ratio is Kasting's
+  power law while a cold trap exists, and simply the bulk water fraction once saturation at the
+  tropopause exceeds the water actually present — because then nothing condenses at any altitude and
+  the column is well mixed to the exobase. Extrapolating the power law past that point suppressed
+  escape 290-fold on a planet in full runaway, and was why this model's Venus arrived at the present
+  day at 928 K under nineteen bar of steam. It now arrives at 739 K under 93 bar, dry.
 * **The carbonate–silicate thermostat.** Buffered by the ocean and reactive crust, it relaxes on
   ~1 Myr; inside a snowball the sink shuts off and volcanic CO₂ piles up for millions of years.
 
-An adjustable clock (1 yr/s → 150 Myr/s) lets you watch any of it. Acceleration costs nothing in
+An adjustable clock (1 yr/s → 500 Myr/s) lets you watch any of it. Acceleration costs nothing in
 accuracy: step size is chosen from the state of the planet, never from the clock, so the same
 300 Myr run gives the same temperature to three decimals and the same CO₂ to 0.1 ppm whether it is
 played at 100 kyr/s or 150 Myr/s.
@@ -253,6 +257,37 @@ quasi-static shortcut that strides over quiet epochs — gated off wherever the 
 negative, since that is exactly a runaway and striding over it would invent equilibria the planet
 does not have.
 
+### Watching a tipping instead of skipping over it
+
+At the 10 Myr/s this is mostly played at, a runaway greenhouse takes **0.05 seconds** of wall clock
+and a glaciation 0.02 — the planet is temperate, and then it is not, and the transition every one of
+these worlds is *about* is the one thing you never get to see.
+
+The **ease** switch beside the clock spends a fixed budget of `|d ln T|` per wall-clock second. Log
+temperature rather than kelvin, because the two events are not the same size: a snowball is a 33 K
+fall and a runaway a 212 K climb, so any fixed number of degrees a second either flicks past the
+first or takes two minutes over the second. In log they are 0.14 and 1.2, and one setting serves
+both — **2.8 s and 1.3 s** respectively, and the same 2.8 s if you ask for 100 Myr/s instead of 10.
+
+It acts *inside* the frame rather than turning the rate down for the next one. That is not a
+refinement: one frame at 10 Myr/s is 160 000 years and the whole runaway is 500, so a controller
+watching the previous frame has nothing left to slow down by the time it reacts — measured at three
+frames from temperate to boiling with the feedback loop running. The budget is spent step by step and
+the frame stops when it runs out, which needs no prediction at all. A settled Earth with the governor
+armed runs its full hundred million years in ten seconds and never notices it is there.
+
+It is a governor on measured change, not a detector for two named events, so it also catches a CO₂
+collapse, a nightside freeze-out and anything else this model can do that a list would have missed.
+
+### Three clocks and a flag
+
+`age` is how old the object is *including everything before the simulation started* — an Archean
+preset is already 1.15 Gyr old at t = 0, and a bar that only said "elapsed 2 Gyr" was hiding that the
+planet was 3.15 billion years old. `elapsed` is the run. `since` counts from the last **milestone**,
+dropped with the ⚑ button and named after whatever the planet was at that moment, so you can time an
+event while you are watching it. Milestones travel in a save, are cleared by a reset, and a rewind
+along the temperature history drops the ones that are now in the future.
+
 ---
 
 ### Phase limits
@@ -378,6 +413,57 @@ a quarter of the globe iced and most of its ocean liquid: an eyeball with a wide
 which is what the GCM literature gets for it too (Turbet et al. 2018 model exactly this 1 bar case).
 Those GCMs manage it on far less CO₂, because a locked world grows a thick cloud deck over the
 substellar point that this model only approximates. A bar is at the thick end of plausible.
+
+### Stars that brighten the way stars brighten
+
+The "brightening star" box used to add a flat 10% per Gyr, compounded. The Sun does not do that, and
+neither does anything else. Gough's (1981) track for the Sun is
+
+```
+L(t)/L_now = 1 / (1 + 0.4 (1 - t/4.567 Gyr))
+```
+
+— 71% at zero age, 77% in the Archean, and **steepening**: 6.7%/Gyr then against 8.8%/Gyr now.
+
+That is not a detail. Every solar preset here carries a `startAge` picked off Gough's curve to match
+its own insolation, so running them forward on a *different* curve left them missing the present day.
+The Archean starts at 0.77 S⊕ and reached 1.067 rather than 1.000; Noachian Mars starts at 0.32 and
+reached 0.467 against the 0.431 Mars actually gets. On the real curve both land exactly where the
+planet they represent is now, and that agreement is a check rather than a coincidence.
+
+The setting is now a **multiplier on the star's own track**, where 1 means "this star, brightening the
+way it does". Main-sequence lifetime goes as `M/L ~ M^-2.5`, and mass follows temperature as
+`M ~ T^2.51` across the dwarf sequence (fitted to Pecaut & Mamajek), so lifetime goes as `T^-6.28` —
+a ferociously steep dependence, and the whole point:
+
+| star | T_eff | main sequence | brightening now |
+|---|---|---|---|
+| the Sun | 5772 K | 10 Gyr | 8.8%/Gyr |
+| an F5 | 6500 K | 4.7 Gyr | 21%/Gyr |
+| GJ 1132 | 3270 K | 355 Gyr | 0.18%/Gyr |
+| TRAPPIST-1 | 2566 K | 1500 Gyr | 0.04%/Gyr |
+
+One ticked box, four different stars. A rate could not do that, because one number cannot be right for
+two stars — or, as it turns out, for one star at two different ages. "Hold Back the Runaway" needed a
+star that brightens 26%/Gyr and used to be *given* one; it is now an F at 6500 K, 2.75 Gyr old, which
+**has** one.
+
+### Two worlds tuned by where they end, not where they start
+
+Early Venus and Noachian Mars are the two presets whose endpoints are observations, and both are now
+pinned by the run rather than by the setting.
+
+Venus arrives at **739 K under 93.2 bar with no water in it**, against the 737 K, 92 bar and 30 ppm
+the planet has. Getting there took two corrections. Its insolation is 1.524 rather than Way's 1.40,
+for the same reason the Archean carries 0.77 — a world that starts at an age of 1.67 Gyr and runs to
+the present has to *arrive* at the 1.911 S⊕ Venus gets. And the cold trap had to be allowed to fail:
+see the escape bullet above. It stays habitable at 26 °C until 3.67 Gyr, boils at 3.80, and is dry by
+4.42 — which is Way's timeline, not an imposed one.
+
+Noachian Mars arrives at **5.8 mbar and −69 °C** against 6.0 mbar and −63 °C, with outgassing at 0.14
+of Earth's. 0.2 left it at 11 mbar, twice as thick as the planet out there.
+
+`node tools/track.mjs earlyVenus` prints either run every 250 Myr.
 
 ### The mean is not a temperature a locked world has
 
