@@ -2648,6 +2648,41 @@ export function run() {
           : `${Object.keys(PRESETS).length} presets across ${SLIDERS.length} controls`);
     }
 
+    // No scenario may be won by doing nothing.
+    //
+    // Three of the eight were. "Break the Snowball" started with the volcanoes
+    // already at Earth's rate, so it congratulated you 200 kyr in for touching
+    // nothing; the Great Oxidation had exactly this bug before and has a
+    // paragraph in scenarios.js about it; and "The Hot Ocean" was the opposite
+    // failure -- unwinnable rather than free, because with its volcanoes dead it
+    // stripped its own CO2 and was 90% ice inside eight hundred thousand years.
+    //
+    // A scenario is a question. If the answer is "wait", it is not one.
+    //
+    // Each is run to its own limit with nothing touched, applying its `evolve`
+    // if it has one, because that is the part that is *supposed* to happen by
+    // itself. Reaching `fail` is a fine outcome here -- several are designed to
+    // kill you if ignored, which is the same statement.
+    {
+      const idle = [];
+      for (const sc of SCENARIOS) {
+        const sim = new Simulation({ ...sc.params });
+        const w = sim.world;
+        let g = 0, won = false;
+        while (w.time < sc.limit && g++ < 3e5) {
+          sim.stepOnce(Math.min(maxStep(w), 5e6, sc.limit - w.time));
+          if (sc.evolve) w.params.biosphere = sc.evolve(w);
+          if (sc.check(w)) { won = true; break; }
+          if (sc.fail && sc.fail(w)) break;
+        }
+        if (won) idle.push(`${sc.id} at ${(w.time / 1e6).toFixed(1)} Myr`);
+      }
+      check('No scenario is won by doing nothing',
+        idle.length === 0,
+        idle.length ? `won unattended: ${idle.join(', ')}`
+          : `${SCENARIOS.length} scenarios, every one needs an act`);
+    }
+
     // Fast physics has to give the same planet, not merely a fast one.
     //
     // The switch stops re-deriving the radiative state in the middle of a step,
