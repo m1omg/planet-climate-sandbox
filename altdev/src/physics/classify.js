@@ -19,6 +19,7 @@ export const STATES = {
   waterbelt:  { name: 'Waterbelt / Slushball', color: '#8fd8d0', blurb: 'Ice reaches deep into the tropics but a narrow band of open equatorial ocean survives. A genuine stable state, and a far softer landing than a hard snowball.' },
   snowball:   { name: 'Hard Snowball',        color: '#cfe8f5', blurb: 'Runaway ice–albedo feedback has frozen the planet pole to pole. Weathering stops, so volcanic CO2 accumulates unopposed for 5–50 Myr until 0.1–0.3 bar finally breaks the ice.' },
   marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'The air itself has frozen onto the ground. Below the CO2 frost point the atmosphere condenses onto the winter pole faster than volcanoes can resupply it, and the pressure falls until what is left is in equilibrium with the caps. It is escapable: enough outgassing thickens the air, warms the poles above the frost point and puts the atmosphere back where it belongs.' },
+  nightfrost: { name: 'Nightside Collapse',   color: '#8c6fa8', blurb: 'The atmosphere is snowing out onto the dark side. A tidally locked world has a hemisphere that never sees its star, and if that face falls below the CO2 frost point the air condenses there permanently — no season ever brings it back, which is exactly what separates this from a Mars. The pressure falls until what is left balances against the night-side deposit, and the day side can stay warm, wet and inhabited the whole time: this is a planet with a working ocean under its sun and its atmosphere quietly draining away behind it. What stops it is heat transport. Thick enough air carries enough warmth to the night side to hold it above the frost point, so the collapse is self-limiting on a massive atmosphere and a trap for a thin one (Joshi et al. 1997; Wordsworth 2015; Turbet et al. 2018 for the TRAPPIST-1 planets).' },
   titan:      { name: 'Titan-Like',           color: '#c9a86a', blurb: 'A frigid world under a thick nitrogen–methane haze, far too cold for liquid water but warm enough for other liquids to run on the surface.' },
   frozen:     { name: 'Frozen Desert',        color: '#a8b8c8', blurb: 'Cold, dry and still. Not enough water for a true snowball and not enough greenhouse to thaw.' },
   thincold:   { name: 'Thin Cold Desert',     color: '#b08a6e', blurb: 'A thin, frigid, desiccated atmosphere over bare ground — Mars today. The air has not collapsed: it is simply all there is. Turn up the volcanoes and it will thicken, warm, and eventually hold liquid water again.' },
@@ -61,7 +62,22 @@ export function classify(w) {
   const collapsed = w.co2Frozen > 0.25 * (w.co2 + w.co2Frozen + 1e-12) && w.co2Frozen > 1e-3;
   if (T > 1400) id = 'magma';
   else if (pTot < 0.0015 && water < 0.05) id = 'airless';
-  else if (collapsed && pTot < 0.2 && T < 265) id = 'marslike';
+  // Two very different worlds share the one condition, and they were sharing a
+  // name as well. On a rotating planet the air freezes onto the WINTER pole and
+  // comes back in spring -- Mars, where the caps breathe once a year and the
+  // collapse is a pressure equilibrium against them. On a tidally locked one it
+  // freezes onto a hemisphere that never sees the star at all, and nothing ever
+  // brings it back. The second is not a Mars: its day side can be at 58 C with a
+  // liquid sea and a biosphere on it while the air drains away behind it, which
+  // is a thing worth having its own name for rather than being told it looks
+  // like a small cold planet with seasons.
+  //
+  // The mean temperature is left in the test for both, and on the locked branch
+  // it is admittedly the wrong quantity -- the mean of a 58 C day and a -145 C
+  // night is a number nowhere on the planet. It stays because it is what makes
+  // this a *collapse* rather than an ordinary eyeball with a cold trap: the
+  // whole world has to be cold on balance, not just the far side.
+  else if (collapsed && pTot < 0.2 && T < 265) id = lam > 0.5 ? 'nightfrost' : 'marslike';
   else if (T > 470 && water < 0.06 * Math.max(initialWater, 0.05)) id = 'dryRunaway';
   else if (T > 420) id = 'wetRunaway';
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
