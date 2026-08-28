@@ -28,10 +28,10 @@
 <script>
 (function(){
   var bar=document.getElementById('devbar');
-  try{ if(localStorage.getItem('altdevbar.dismissed')==='1') bar.classList.add('gone'); }catch(e){}
+  try{ if(localStorage.getItem('planetclimate.altdev.devbar.v1')==='1') bar.classList.add('gone'); }catch(e){}
   bar.querySelector('.devbar-x').addEventListener('click',function(){
     bar.classList.add('gone');
-    try{ localStorage.setItem('altdevbar.dismissed','1'); }catch(e){}
+    try{ localStorage.setItem('planetclimate.altdev.devbar.v1','1'); }catch(e){}
   });
 })();
 </script>
