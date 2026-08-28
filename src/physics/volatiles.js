@@ -354,6 +354,11 @@ export function partitionWater(w, dtYears = 0) {
     w.landIceMass = target;
   }
   w.landIceTarget = target;
+  // How hard the trap is pulling, kept for the step controller. A bound that
+  // waits for the sheet mass to already be out of step with its target is one
+  // step late by construction: the stride that opened the gap has been taken.
+  // This says the trap is *live*, before anything has moved.
+  w.trapActive = trap * (surface > 1e-4 ? 1 : 0);
   const landIce = clamp(w.landIceMass, 0, surface * 0.999);
   const basin = Math.max(0, surface - landIce);
   const seaIce = clamp(basin * frozenShare, 0, basin);
