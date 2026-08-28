@@ -24,6 +24,7 @@ const t0 = process.hrtime.bigint();
 for (const k of WORLDS) {
   const s = new Simulation({ ...PRESETS[k].params });
   const w = s.world;
+  w.fastPhysics = process.argv.includes('--fast');
   for (let i = 0; i < STEPS; i++) s.stepOnce(Math.min(maxStep(w), 5e6));
   checksum += w.diag.Tmean + w.time * 1e-9 + w.diag.pCO2 * 1e3;
 }

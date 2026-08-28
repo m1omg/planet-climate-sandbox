@@ -451,3 +451,26 @@ body.software-render #planet{image-rendering:auto}
 .life-room{background:rgba(255,255,255,.13)}
 .life-fill{transition:width .25s}
 .life-v{font:10px/1 var(--mono);color:var(--fg-dim);white-space:nowrap}
+
+/* Tappable stops under a slider. A logarithmic control covering nine decades
+   cannot be driven with a thumb -- a millimetre is a factor of ten -- so the
+   values worth landing on exactly get a button, and the slider covers the rest. */
+.stop{
+  flex:0 0 auto;background:var(--panel-2);border:1px solid var(--line);
+  color:var(--fg-dim);border-radius:999px;padding:3px 9px;cursor:pointer;
+  font:11px/1.25 var(--mono);letter-spacing:.02em;transition:.15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.stop:hover{color:var(--fg);border-color:var(--line-2)}
+.stop:active{background:rgba(30,40,64,.95)}
+.stop.active{color:var(--accent);border-color:var(--accent);background:rgba(127,212,255,.10)}
+.rate-stops{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;grid-column:1/-1}
+.ctl-stops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 2px}
+/* Touch targets: on a coarse pointer the chips get taller, because the whole
+   point of them is to be hittable with a thumb. */
+@media (pointer:coarse){ .stop{padding:7px 12px;font-size:12px} }
+
+/* The accuracy switch sits with the speed stops because it is the other speed
+   control, but it is a mode rather than a value -- hence the separator. */
+.fast-toggle{margin-left:auto;border-style:dashed}
+.fast-toggle.active{border-style:solid}
