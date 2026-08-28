@@ -90,6 +90,11 @@ const CH4_PHOTO = 1.6e-3;       // kg/m^2/yr at 1 S-earth
 // neither moves; a world under a closed haze deck gets fractions of a watt.
 const CH4_LIGHT_SAT = 50;
 
+// How far the real stratosphere overshoots bare saturation at the cold trap.
+// Fixed by modern Earth: saturation at 190 K over a bar is 3.2e-7, and the
+// observed stratospheric mixing ratio is 4 ppm. See escapeRates().
+const COLD_TRAP_OVERSHOOT = 12.37;
+
 // ---------------------------------------------------------------------------
 // Us.
 //
@@ -424,13 +429,57 @@ export function escapeRates(w) {
   // Evaluated band by band and then area-averaged: escape is dominated by the
   // warmest, wettest latitudes, not by the global mean.
   const xSteam = pH2Omean / pTot;
-  const Tct = clamp(190 + 0.62 * (dg.Tmean - 288), 120, 700);
+  // The cold trap, which was computed here and then read by nothing.
+  //
+  // `Tct` has been in this function since the escape model was written, is
+  // returned in the diagnostics, and no line of the model consumed it. So the
+  // one temperature in the whole escape calculation was dead, and the
+  // stratospheric mixing ratio was a pure function of pH2O/pTot -- a RATIO.
+  //
+  // That is fine while the background gas stays put and catastrophic when it
+  // does not. Early Venus has no magnetic field, so non-thermal escape strips
+  // its nitrogen: the column falls from 1.13e4 kg/m^2 to 47 by age 3.47 Gyr and
+  // the surface pressure with it, 1.013 bar to 0.045. The numerator barely
+  // moves -- pH2O goes 0.0096 to 0.028 bar on a surface that is still near
+  // freezing -- but the DENOMINATOR collapses, so x runs away, fStrat crosses
+  // Kasting's 1e-3 moist-greenhouse criterion at an age of 3.4 Gyr with a mean
+  // surface temperature of 3 C, and the planet quietly bleeds its ocean to
+  // space while frozen. 89% of the inventory left below 35 C. The readout has
+  // been flagging that world as a moist greenhouse, in red, at three degrees.
+  //
+  // A cold trap does not work on a ratio. It works on saturation: whatever the
+  // air below is doing, no more water gets past the tropopause than is
+  // saturated at the tropopause temperature. So that is the ceiling, and `Tct`
+  // is finally what sets it.
+  //
+  // Both constants are fixed by the two points the empirical fit below is
+  // already pinned to, which is why this can be added without recalibrating
+  // anything. COLD_TRAP_OVERSHOOT is what modern Earth needs to get from bare
+  // saturation at 190 K (3.2e-7) to its observed 4 ppm -- real air overshoots
+  // the trap, convection punches through it, and methane oxidation makes more
+  // water up there. The slope is then fixed by requiring Kasting's 340 K
+  // surface to give 1e-3, which lands it at 0.80 K of trap per K of surface.
+  // Earth reads 4.00e-6 and the moist-greenhouse onset reads 1.00e-3: the same
+  // two anchors, from saturation physics instead of a power law.
+  const Tct = clamp(190 + 0.7997 * (dg.Tmean - 288), 120, 700);
+  const trapCeiling = clamp(COLD_TRAP_OVERSHOOT * psatH2O(Tct) / (pTot * 1e5), 0, 1);
   let fStrat = 0;
   for (let i = 0; i < NBANDS; i++) {
     const x = clamp(dg.pH2O[i] / Math.max(dg.pTot[i], 1e-9), 0, 1);
     // x^8 written out: three multiplies against a call into pow's exp-and-log.
     const x2 = x * x, x4 = x2 * x2;
-    fStrat += clamp(0.0115 * Math.pow(x, 1.764) + x4 * x4, 0, 1) / NBANDS;
+    // The fit still runs the show wherever it is the smaller of the two, which
+    // is everywhere the atmosphere is thick and the surface temperate -- so
+    // Earth, the Archean and every anchor keep the number they had. The
+    // ceiling only bites where the fit has stopped meaning anything: a cold
+    // surface under an atmosphere that has been blown away.
+    //
+    // It also lifts out of the way by itself in a real runaway. At a 400 K
+    // surface the trap sits at 283 K and saturates at a kilopascal, so the
+    // ceiling is 5e-3 and the fit binds again -- which is correct, because a
+    // runaway greenhouse has no cold trap to speak of.
+    fStrat += Math.min(clamp(0.0115 * Math.pow(x, 1.764) + x4 * x4, 0, 1),
+                       trapCeiling) / NBANDS;
   }
 
   // Diffusion-limited: 2.5e13 * f H atoms/cm^2/s  ->  kg/m^2/yr of water
