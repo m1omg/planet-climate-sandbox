@@ -11,7 +11,7 @@
 // Run:  node tools/convergence.mjs [years]
 import { Simulation } from '../src/sim/clock.js';
 import { maxStep } from '../src/physics/climate.js';
-import { EARTH } from '../src/game/presets.js';
+import { EARTH, PRESETS } from '../src/game/presets.js';
 
 const YEARS = Number(process.argv[2] ?? 3e7);
 const CAPS = [5e6, 1e6, 2e5, 5e4, 1e4, 2e3];
@@ -62,12 +62,55 @@ export function sweep(label, params, years = YEARS, caps = CAPS) {
   return { ok, spread, conv, rows };
 }
 
+// A world that is KNOWN not to converge, reported and not counted.
+//
+// The same idea as calibrate.mjs's GAP rows and for the same reason: a failure
+// that is understood, written down and watched is worth more than one that has
+// been quietly removed from the sweep. These exist so that nobody can fix them
+// by accident and not notice, and so that anyone making the solver faster finds
+// out immediately whether they have made them better or worse.
+export function known(label, params, why, years = YEARS, caps = CAPS) {
+  const r = sweep(label, params, years, caps);
+  console.log(`      ${C.y}KNOWN${C.x} ${C.d}${why}${C.x}`);
+  return r;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`\nStep-size convergence over ${YEARS.toExponential(0)} yr\n`);
   let bad = 0;
   for (const og of [1, 2, 2.6, 2.8, 3.5, 5, 8]) {
     if (!sweep(`volcanism ${og}x`, { ...EARTH, outgassing: og }).ok) bad++;
   }
-  console.log(bad ? `\n${C.r}${bad} world(s) do not converge${C.x}\n`
-                  : `\n${C.g}every world converges${C.x}\n`);
+
+  // ---- tidally locked worlds ---------------------------------------------
+  //
+  // These were not in the sweep, and they should have been from the start. The
+  // volcanism ladder is an Earth with the volcanoes turned up; nothing here was
+  // watching the class of world the model is slowest on, which is exactly the
+  // class where the step size is doing the most work.
+  //
+  // What they show is that the crawl is load-bearing. A settled locked world
+  // takes one-year steps because `eqDistance` divides by radiative damping and
+  // ignores that a band is held by its neighbours -- fix that, and the clock
+  // speeds up by two orders of magnitude and these worlds move onto a 474 C
+  // branch that the finest steps say is wrong. The slowness is what has been
+  // keeping them on the right branch, and it is not a fix, it is a symptom
+  // shared with whatever is really wrong underneath.
+  //
+  // See src/selftest.js, "A settled tidally locked world does not crawl", for
+  // the diagnosis and for what a fix has to survive.
+  console.log('');
+  known('locked eyeball, no carbon', {
+    ...PRESETS.eyeball.params, biosphere: 1, outgassing: 0, co2Bar: 1e-7,
+  }, 'cold and wet at 5 Myr, 100 kyr and 2 kyr caps; 474 C and dry at 10 kyr. ' +
+     'The branch is decided by the step sequence, not by the physics.');
+  known('locked eyeball', { ...PRESETS.eyeball.params },
+    'the same world with its carbon cycle running.');
+  known('TRAPPIST-1e', { ...PRESETS.trappist1e.params },
+    'the slowest world in the game: 4e6 yr/s against Earth\'s 8e8.');
+
+  console.log(bad ? `\n${C.r}${bad} world(s) do not converge${C.x}` +
+                    ` ${C.d}(known failures above are reported, not counted)${C.x}\n`
+                  : `\n${C.g}every world converges${C.x}` +
+                    ` ${C.d}(known failures above are reported, not counted)${C.x}\n`);
 }
