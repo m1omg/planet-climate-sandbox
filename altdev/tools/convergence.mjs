@@ -102,8 +102,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('');
   known('locked eyeball, no carbon', {
     ...PRESETS.eyeball.params, biosphere: 1, outgassing: 0, co2Bar: 1e-7,
-  }, 'cold and wet at 5 Myr, 100 kyr and 2 kyr caps; 474 C and dry at 10 kyr. ' +
-     'The branch is decided by the step sequence, not by the physics.');
+  }, 'was 508 K apart -- cold and wet at three caps, 474 C and dry at two others. ' +
+     'It converges as of the optimisation pass, and that is luck rather than a ' +
+     'fix: nothing about its physics changed, a rounding difference in psatH2O ' +
+     'moved it off the separatrix, and it can move back. Watched, not solved.');
   known('locked eyeball', { ...PRESETS.eyeball.params },
     'the same world with its carbon cycle running.');
   known('TRAPPIST-1e', { ...PRESETS.trappist1e.params },

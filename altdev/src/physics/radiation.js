@@ -128,13 +128,32 @@ export function ch4Shortwave(pCH4) {
 const N_BROADEN = 0.30;
 
 // Optical depth of CO2 alone, before pressure broadening.
+// One-entry memo, and it is not a micro-optimisation: CO2 is well mixed, so
+// every band in a call to update() or radiativeDamping() passes the SAME pCO2,
+// and this was recomputing an identical log and an identical fractional power
+// seventy-odd times a step. The cache is exact -- same argument, same answer --
+// and a single slot is all that is needed because the calls come in runs.
+let tauCO2p = -1, tauCO2v = 0;
 export function tauCO2(pCO2) {
   if (!(pCO2 > 0)) return 0;
-  return A_CO2 * Math.log(1 + pCO2 / P_CO2) + C_CO2 * Math.pow(pCO2, D_CO2);
+  if (pCO2 === tauCO2p) return tauCO2v;
+  tauCO2p = pCO2;
+  return (tauCO2v = A_CO2 * Math.log(1 + pCO2 / P_CO2) + C_CO2 * Math.pow(pCO2, D_CO2));
+}
+
+// The pressure-broadening factor, memoised on one slot for the same reason
+// tauCO2 is: every band asks for the moist and the dry optical depth at the
+// SAME total pressure, so the calls arrive in identical pairs, and inside
+// radiativeDamping in identical runs.
+let brP = -1, brV = 0;
+function broadening(pTot) {
+  if (pTot === brP) return brV;
+  brP = pTot;
+  return (brV = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN));
 }
 
 export function opticalDepth(pCO2, pH2O, pCH4, pTot) {
-  const br = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN);
+  const br = broadening(pTot);
   let t = tauCO2(pCO2);
   if (pH2O > 0) t += K_H2O * Math.pow(pH2O, M_H2O);
   if (pCH4 > 0) t += tauCH4(pCH4, pTot, pH2O);
@@ -336,10 +355,29 @@ export function surfaceAlbedo(T, floodedFrac, landAlbedo, hasWater, glaciated = 
 // slow rotator habitable out to ~2 S (Yang et al. 2014).
 export function cloudCover(pH2O, slowness, subStellar) {
   const c0 = 0.67 * (1 + 0.6 * slowness * subStellar);
-  return Math.min(0.88, c0 * Math.tanh(pH2O / 0.0030));
+  // tanh saturates to 1 within double precision by an argument of about 20, and
+  // most worlds here sit far past that -- Earth's 11 mbar is already 3.7 and
+  // anything wetter is off the end. Skipping the call there is exact, not an
+  // approximation.
+  const x = pH2O / 0.0030;
+  return Math.min(0.88, x > 20 ? c0 : c0 * Math.tanh(x));
 }
 
-export function planetaryAlbedo(T, o) {
+let rayP = -1, rayV = 0;
+function rayleighOf(pDry) {
+  if (pDry === rayP) return rayV;
+  rayP = pDry;
+  return (rayV = Math.min(0.75, 0.06 * Math.pow(clamp(pDry, 0, 300), 0.545)));
+}
+
+// Writes into `out` instead of allocating, because this is called some fifty
+// times a step -- once per band in update() and twice per band inside the
+// Jacobian -- and a short-lived object per call is real garbage.
+//
+// planetaryAlbedo() below keeps allocating, and has to: callers in selftest.js
+// and calibrate.mjs hold two results side by side to difference them, which a
+// shared scratch object would silently break.
+export function planetaryAlbedoInto(T, o, out) {
   const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated, o.waterCap);
   const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * (o.cloudBoost ?? 1), 0, 0.9);
   // How bright that cloud is, which depends on how long it has been standing in
@@ -361,12 +399,22 @@ export function planetaryAlbedo(T, o) {
   const withClouds = albCloud * C + surf * (1 - C);
   // Rayleigh + haze from the *dry* gas. Exponent set so a 92 bar CO2 atmosphere
   // reaches Venus's bright scattering (~0.7) while 1 bar stays at Earth's 0.06.
+  // pDry is the same number for every band -- pTot is the dry gases plus that
+  // band's vapour, so subtracting the vapour leaves the dry gases, which are
+  // well mixed. So this was one fractional power recomputed with an identical
+  // argument fifty-odd times a step. One slot, same reason as tauCO2.
   const pDry = Math.max(0, o.pTot - o.pH2O);
-  const rayleigh = Math.min(0.75, 0.06 * Math.pow(clamp(pDry, 0, 300), 0.545));
+  const rayleigh = rayleighOf(pDry);
   let a = rayleigh + (1 - rayleigh) * withClouds;
   // A thick steam envelope is dark, not bright: water vapour absorbs strongly in
   // the near infrared, so a runaway greenhouse soaks up sunlight rather than
   // reflecting it. Negligible at Earth's 0.01 bar of vapour, decisive above 1 bar.
   a *= 1 / (1 + 1.2 * o.pH2O / (1 + o.pH2O));
-  return { albedo: clamp(a, 0.02, 0.92), cloud: C };
+  out.albedo = clamp(a, 0.02, 0.92);
+  out.cloud = C;
+  return out;
+}
+
+export function planetaryAlbedo(T, o) {
+  return planetaryAlbedoInto(T, o, { albedo: 0, cloud: 0 });
 }
