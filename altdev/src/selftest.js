@@ -917,8 +917,12 @@ export function run() {
         const venusish = { ...PRESETS.earlyVenus.params, realisticGeology: true,
           brightening: 0.10, startAge: at, co2Bar: 0.037, startT: 303,
           insolation: 1.40 * Math.pow(1.10, at - 1.67), resurfacingSpan: 40 };
+        // 0.05 Gyr *after this run starts*, which is the same instant it always
+        // was: the world begins at an age of `at` and the event is placed 50 Myr
+        // in. The control is elapsed time now, not age, so that it cannot be
+        // set behind the clock -- see resurfacingBoost.
         const run = (boost) => {
-          const s = new Simulation({ ...venusish, resurfacingAge: at + 0.05,
+          const s = new Simulation({ ...venusish, resurfacingAge: 0.05,
             resurfacingBoost: boost });
           let g = 0;
           while (s.world.time < 0.715e9 && g++ < 600) {
@@ -940,7 +944,25 @@ export function run() {
           && resurfacingBoost(p, 4.2) === 1 && resurfacingBoost(p, 3.80) > 50
           && resurfacingBoost({ ...p, resurfacingAge: 0 }, 3.85) === 1,
         `1× at 3.5 Gyr, ${resurfacingBoost(p, 3.80).toFixed(0)}× at 3.80, ` +
-        `300× at 3.85, 1× again by 4.2 — and off when no age is set`);
+        `300× at 3.85, 1× again by 4.2 — and off when no time is set`);
+
+      // The argument the whole control rests on. It is placed in elapsed time
+      // rather than in the planet's age precisely so that it cannot be set
+      // behind the clock: an age of 3.85 on a world that begins at 4.567 -- and
+      // most of them do -- is an event eight hundred million years before the
+      // run starts, which never fires and gives the interface no way to say so.
+      // Elapsed time has no such value. Every argument this function can be
+      // given, from a world's first instant onward, is one it can still reach.
+      check('\u2026and it is placed ahead of the clock, never behind it',
+        resurfacingBoost(p, 0) === 1 && SLIDERS.find((d) => d.key === 'resurfacingAge').min === 0
+          && PRESETS.earlyVenus.params.resurfacingAge
+             + PRESETS.earlyVenus.params.startAge > 3.8
+          && PRESETS.earlyVenus.params.resurfacingAge
+             + PRESETS.earlyVenus.params.startAge < 3.9,
+        `Early Venus starts at ${PRESETS.earlyVenus.params.startAge} Gyr old and repaves ` +
+        `${PRESETS.earlyVenus.params.resurfacingAge} Gyr later — an age of ` +
+        `${(PRESETS.earlyVenus.params.startAge + PRESETS.earlyVenus.params.resurfacingAge).toFixed(3)}, ` +
+        `which is Venus's 715 Myr ago`);
     }
 
     // Smoothing turns a slider into a destination. It exists because of the

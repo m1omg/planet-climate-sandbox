@@ -1423,7 +1423,13 @@ function bindControls() {
   // is the one with a date on it; the sliders are there to move it afterwards.
   $('#chk-resurface').addEventListener('change', (e) => {
     if (e.target.checked) {
-      if (!(params.resurfacingAge > 0)) params.resurfacingAge = 3.85;
+      // Venus's own date, expressed from wherever this world happens to start.
+      // A world already older than that gets a round half a billion years
+      // ahead of it instead: the event is meant to be watched, and one behind
+      // the clock cannot be.
+      if (!(params.resurfacingAge > 0)) {
+        params.resurfacingAge = Math.max(3.852 - (params.startAge ?? 4.567), 0.5);
+      }
       if (!(params.resurfacingBoost > 1)) params.resurfacingBoost = 60;
     } else {
       params.resurfacingAge = 0;
@@ -1432,7 +1438,7 @@ function bindControls() {
                     resurfacingBoost: params.resurfacingBoost });
     syncSliders(); writeHash(); markTouched();
     toast(e.target.checked
-      ? `Mantle turnover at ${params.resurfacingAge.toFixed(2)} Gyr, ${params.resurfacingBoost.toFixed(0)}× volcanism`
+      ? `Mantle turnover ${params.resurfacingAge.toFixed(2)} Gyr from now, ${params.resurfacingBoost.toFixed(0)}× volcanism`
       : 'No resurfacing event');
   });
 

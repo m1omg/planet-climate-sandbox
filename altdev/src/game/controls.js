@@ -219,10 +219,10 @@ export const SLIDERS = [
           <input type="checkbox" id="chk-resurface"> resurfacing event
         </label>
       </div>` },
-  { g: 'surface', key: 'resurfacingAge', label: 'Resurfacing at age', min: 0, max: 10, step: 0.01,
-    fmt: (v) => v <= 0 ? 'never' : `${v.toFixed(2)} Gyr old`,
+  { g: 'surface', key: 'resurfacingAge', label: 'Resurfacing after', min: 0, max: 10, step: 0.01,
+    fmt: (v) => v <= 0 ? 'never' : `${v.toFixed(2)} Gyr from start`,
     units: { gyr: 1, gy: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
-    note: 'When the mantle turns over and everything dissolved in it comes up at once. Measured as the planet\u2019s <em>age</em> — time since it formed, not time since the clock started — so it counts from “age at start” above plus however long the run has been going. Venus\u2019s repaving is dated to roughly 700 Myr ago, which for a 4.567 Gyr planet is an age of 3.85 Gyr, from a crater population too sparse and too evenly spread to be anything else.' },
+    note: 'When the mantle turns over and everything dissolved in it comes up at once. Counted from <em>the start of the run</em>, not from the planet\u2019s formation — so it is always ahead of you and never behind. Venus\u2019s repaving is dated to roughly 700 Myr ago, an age of 3.85 Gyr; Early Venus starts at an age of 1.67, which is why that preset asks for 2.18 from its own start.' },
   { g: 'surface', key: 'resurfacingBoost', label: 'Resurfacing size', min: 1, max: 5000,
     log: true, fmt: (v) => `${v < 9.995 ? v.toFixed(2) : v.toFixed(0)}×`,
     units: { x: 1, '×': 1 }, unitFor: () => '×',
