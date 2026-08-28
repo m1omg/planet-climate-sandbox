@@ -2403,6 +2403,12 @@ export function run() {
     // So: the thing to fix first is that water vapour is unbounded. The speed
     // is downstream of it and is not buyable on its own.
     {
+      // EXPECTED FAILURE. The coupled equilibrium check below is deliberately
+      // conservative enough to keep the volcanism ladder and the night-side
+      // cold trap on their converged branches. It improves the original crawl,
+      // but does not yet buy the unsafe diagonal shortcut's multi-kyr stride.
+      // Keep this red until that remaining performance gap is closed without
+      // changing either trajectory.
       const locked = settle({ ...EARTH, mass: 1.3, landFraction: 0.25, water: 0.412506,
         insolation: 1.122, xuvFraction: 5e-4, rotationHours: 264, tidallyLocked: true,
         n2Bar: 0, o2Bar: 0.224973, co2Bar: 0.0476703, ch4Bar: 1.23e-7, startT: 270 }, 1.4e6);
