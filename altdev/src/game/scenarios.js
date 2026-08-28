@@ -9,9 +9,24 @@ export const SCENARIOS = [
     id: 'thaw',
     name: 'Break the Snowball',
     icon: '❄️',
-    brief: 'The planet is frozen pole to pole and the ice is reflecting almost everything back to space. Weathering has stopped, so volcanic CO₂ has nowhere to go but up. Get liquid water back.',
-    hint: 'Volcanoes are your only lever inside a snowball. Turn outgassing up and run the clock — real snowballs needed 0.1–0.3 bar of CO₂ and tens of millions of years.',
-    params: { ...EARTH, co2Bar: 1e-5, startT: 225, outgassing: 1 },
+    brief: 'The planet is frozen pole to pole, the ice is reflecting almost everything back to space, and the volcanoes have stopped. Nothing is adding carbon to the air and nothing will, unless you do it. Get liquid water back.',
+    hint: 'Volcanoes are your only lever inside a snowball: weathering needs liquid water, so with the ice down to the equator there is no sink and every gram you erupt stays. Turn outgassing up and run the clock.',
+    // The volcanoes start DEAD, and that is the whole scenario.
+    //
+    // They used to start at Earth's rate, which made this a puzzle you won by
+    // waiting 200 kyr and touching nothing -- the same failure the Great
+    // Oxidation scenario below has a paragraph about. A player who did nothing
+    // was congratulated.
+    //
+    // It is worth being straight about why it was so easy, because the honest
+    // version is still easier than the real thing. This model deglaciates a
+    // snowball at about 10 mbar of CO2 where the literature needs 0.1-0.3 bar,
+    // and in a fifth of a megayear where the Marinoan took 4-15 -- both reported
+    // every run as GAP rows by tools/calibrate.mjs, and both traceable to the
+    // semi-grey scheme having no atmospheric window, so piling on CO2 always
+    // works and works too well. Starting the volcanoes dead makes this an act
+    // rather than a wait; it does not make the threshold right.
+    params: { ...EARTH, co2Bar: 1e-5, startT: 205, outgassing: 0 },
     limit: 2e8,
     check: (w) => w.diag.iceMean < 0.45 && w.diag.Tmean > 273,
     fail: (w) => w.diag.Tmean > 340,
@@ -20,8 +35,14 @@ export const SCENARIOS = [
     id: 'hold',
     name: 'Hold Back the Runaway',
     icon: '🔥',
-    brief: 'The star has brightened by a third and the oceans sit a whisker below the Simpson–Nakajima limit — pass it and no equilibrium exists at any temperature. Keep this world habitable for 100 million years while the carbon cycle does its worst.',
-    hint: 'You cannot dim the star, and the volcanoes are working against you. Strip the CO₂ and keep it stripped, brighten the ground, and remember that a drier planet radiates better than a wet one.',
+    brief: 'The star has brightened by a third and this world is already thirty watts per square metre PAST the Simpson–Nakajima limit — there is no equilibrium at this absorbed flux, and left alone the ocean is in the sky inside ten million years. The greenhouse carrying it over is the one thing here you can take away. Keep the planet habitable for 100 million years.',
+    hint: 'You cannot dim the star, and the volcanoes are working against you. Strip the CO₂ and keep it stripped — that alone is enough, and it is the whole lesson: the limit is on absorbed sunlight against what the atmosphere can radiate, so the way back under it is to stop absorbing. Brightening the ground and draining the sea both buy more.',
+    // The brief used to say this world sat "a whisker below" the limit. It does
+    // not and never did: at 1.30 S(+) with 1.2 mbar of CO2 the runaway margin
+    // reads -30.5 W/m^2 at t=0, and doing nothing gives a wet runaway in under
+    // ten million years. The setup is fine -- stripping the CO2 alone lands it
+    // at 39 C and habitable, and every further step in the hint buys more -- so
+    // what was wrong was the sentence, not the planet.
     params: { ...EARTH, insolation: 1.30, co2Bar: 1.2e-3, outgassing: 2.5, startT: 300 },
     limit: 1e8,
     check: (w) => w.time > 1e8 && classify(w).habitable,
@@ -100,12 +121,38 @@ export const SCENARIOS = [
     id: 'hotbranch',
     name: 'The Hot Ocean',
     icon: '♨️',
-    brief: 'A world with a full ocean under a brightening star. There is a stable climate on the far side of 60 °C — an ocean that stays an ocean at bath temperature — but the only way in is slowly. Get this planet above 55 °C with its sea intact, and hold it.',
-    hint: 'Push the star up in small steps and let each one settle. Cross the same distance in one jump and the ocean goes into the air, the albedo collapses, and there is no way back — the door only opens one way.',
-    params: { ...EARTH, insolation: 1.00, outgassing: 0, emissions: 0, fossilUsed: 0,
-              biosphere: 0, startT: 288 },
-    limit: 3e8,
-    check: (w) => w.diag.Tmean > 328 && w.water.ocean > 0.8,
+    brief: 'A world with a full ocean under a star you control. There is a stable climate on the far side of 50 °C — a sea that stays a sea at bath temperature — but the only way in is slowly, and the doorway is narrow. Get this planet past 50 °C with its ocean intact and still there sixty million years later.',
+    hint: 'Smooth starlight changes are already on, so one drag walks the star up over twenty million years instead of jumping — let the clock run first, because a change made at t = 0 still jumps. 1.30 S⊕ is not enough and stops at 40 °C. 1.36 is the door. 1.40 goes through it and does not stop, and any target at all reached in one jump takes the ocean into the sky, the albedo with it, and there is no way back.',
+    // Three things here, and none is decoration.
+    //
+    // The volcanoes run. They used to be dead, on the argument that a fixed CO2
+    // inventory made the starlight the only variable -- but weathering does not
+    // stop just because nothing is erupting, so the world stripped its own CO2
+    // and was 90% ice in EIGHT HUNDRED THOUSAND YEARS. Not a scenario, a trap:
+    // the fastest possible player lost. With the carbon cycle running it sits at
+    // 14 C indefinitely and waits to be played with.
+    //
+    // The cost of that is honesty about the target. With the thermostat working
+    // this model's hot branch tops out near 52 C rather than the 62 C a world
+    // with no volcanism reaches, so the goal is 50 C and the brief says 50 C.
+    // The literature is comfortably above both -- Wolf & Toon (2015) run to
+    // 362.8 K and Popp et al. (2016) sit above 330 K.
+    //
+    // `smoothInsolation` is on because the scenario is *about* the difference
+    // between walking and jumping, and until that control existed the only way
+    // to walk was sixteen manual drags. It can still be unticked, which is the
+    // fastest way to see the point.
+    //
+    // The sixty-million-year floor in `check` is what makes "hold it" mean
+    // something. A walk to 1.40 passes through 50 C in quasi-equilibrium on its
+    // way to a runaway and satisfied every instantaneous test -- temperature,
+    // ocean, even a closed energy balance, because a slow enough walk tracks
+    // equilibrium the whole way up. Only time tells the branch from the road to
+    // the cliff.
+    params: { ...EARTH, insolation: 1.00, outgassing: 1, emissions: 0, fossilUsed: 0,
+              biosphere: 0, smoothInsolation: true, startT: 288 },
+    limit: 1e8,
+    check: (w) => w.time > 6e7 && w.diag.Tmean > 323 && w.water.ocean > 0.8,
     fail: (w) => w.water.ocean < 0.5 && w.diag.Tmean > 400,
   },
 ];
