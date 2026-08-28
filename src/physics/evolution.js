@@ -131,8 +131,9 @@ export function evolvedParams(p, base, years) {
   }
 
   // The resurfacing pulse is deliberately independent of realisticGeology: it
-  // is an event you place, not a curve the world follows.
-  const boost = resurfacingBoost(p, startAge);
+  // is an event you place, not a curve the world follows -- and it is placed in
+  // elapsed time, `gyr`, rather than in the world's age. See resurfacingBoost.
+  const boost = resurfacingBoost(p, gyr);
   if (boost !== 1) out.outgassing = (base.outgassing ?? 0) * boost;
   return out;
 }
@@ -270,13 +271,26 @@ export function nonThermalEscape(p, d, xuvFlux, pTot = Infinity) {
 // with it had to go somewhere, and there was no ocean left to weather it back
 // down.
 //
+// Timed from the START OF THE RUN, not from the planet's formation, and that is
+// a correction rather than a preference. It used to be an age, which reads well
+// -- "Venus resurfaced at an age of 3.85 Gyr" is how the literature says it --
+// and is unusable as a control, because most worlds begin at an age of 4.567.
+// Setting it to 3.85 on one of those schedules an event eight hundred million
+// years before the clock starts, so it never happens and the control silently
+// does nothing. There is no way to tell from the interface that this is what
+// has occurred. Elapsed time cannot be in the past.
+//
+// The two only differ by `startAge`, so a preset that wants a real date still
+// gets one: Early Venus begins at 1.67 Gyr and asks for 2.182 elapsed, which is
+// the same 3.852 Gyr of age it always meant.
+//
 // Returned as a multiplier on volcanic outgassing, shaped as a smooth pulse so
 // that nothing in the solver meets a step change.
-export function resurfacingBoost(p, ageGyr) {
+export function resurfacingBoost(p, elapsedGyr) {
   const at = p.resurfacingAge;
   if (!(at > 0) || !(p.resurfacingBoost > 1)) return 1;
   const span = Math.max(p.resurfacingSpan ?? 50, 1) / 1000;   // Myr -> Gyr
-  const x = (ageGyr - at) / span;
+  const x = (elapsedGyr - at) / span;
   if (x < -3 || x > 3) return 1;
   return 1 + (p.resurfacingBoost - 1) * Math.exp(-x * x);
 }

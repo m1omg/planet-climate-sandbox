@@ -173,14 +173,15 @@ export const PRESETS = {
     landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288,
     // Way's Sim A is 2.9 Gya, so the planet is 4.567 - 2.9 Gyr old here.
     startAge: 1.67,
-    // And the resurfacing is armed, because it happened. 3.852 Gyr is 715 Myr
-    // ago -- the age Venus's crater population dates its global repaving to --
-    // and 60x is what it takes to put roughly its ninety-two bar into the air
-    // out of this planet's own mantle. Way's argument is that this, and not the
-    // Sun, is what ended Venus: brightening alone leaves the model's Venus
-    // habitable for billions of years too long, which is the same answer his
-    // GCM gives. Untick "resurfacing event" to watch that counterfactual.
-    resurfacingAge: 3.852, resurfacingBoost: 60, resurfacingSpan: 40,
+    // And the resurfacing is armed, because it happened. 2.182 Gyr after this
+    // world starts is an age of 3.852 -- 715 Myr ago, which is what Venus's
+    // crater population dates its global repaving to -- and 60x is what it
+    // takes to put roughly its ninety-two bar into the air out of this planet's
+    // own mantle. Way's argument is that this, and not the Sun, is what ended
+    // Venus: brightening alone leaves the model's Venus habitable for billions
+    // of years too long, which is the same answer his GCM gives. Untick
+    // "resurfacing event" to watch that counterfactual.
+    resurfacingAge: 2.182, resurfacingBoost: 60, resurfacingSpan: 40,
     // Same again: 3.45x today's XUV at an age of 1.67 Gyr.
     xuvFraction: 3.4e-6 * 3.45 } },
   // Mars in the Noachian, when the valley networks were being cut. The Sun was
