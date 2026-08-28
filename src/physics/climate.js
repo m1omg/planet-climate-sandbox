@@ -499,22 +499,63 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // state moves.
   const tend = tendency(w);
   const k = radiativeDamping(w);
-  const { dT } = tend;
+  const { dT, D } = tend;
   w._solve = { diag: dg, tend, k };
 
-  let worst = 0, eqDistance = 0, meanDamping = 0;
+  let worst = 0, meanDamping = 0;
   for (let i = 0; i < NBANDS; i++) {
     meanDamping += k[i] / NBANDS;
     // Allow a slightly coarser step on a very hot planet: one kelvin out of 900
     // is not a resolvable change, and it keeps a runaway affordable to watch.
     const allow = Math.max(maxDeltaT, 0.004 * w.T[i]);
     worst = Math.max(worst, Math.abs(dT[i]) / allow);
-    // How far this band still is from the equilibrium it is relaxing towards,
-    // in kelvin: rate of change times the local relaxation time.
-    eqDistance = Math.max(eqDistance, Math.abs(dT[i]) * dg.C[i] / Math.max(k[i], 0.05));
   }
   if (worst < 1e-18) return 5e6;
   let dt = clamp(1 / worst / YEAR, 2e-3, 5e6);
+
+  // How far the coupled climate is from the equilibrium of this linearisation.
+  // This is the infinite-step limit of the same tridiagonal system used by
+  // stepTemperature below. Using only its diagonal counts lateral transport as
+  // a local sink while silently holding the neighbours fixed. They are not
+  // fixed in the solve: transport cancels for a coherent warming mode, so the
+  // diagonal approximation can call a climate quasi-static while its whole
+  // temperature field is still moving together.
+  const B = scratch(w), wgt = B.wgt;
+  wgt[0] = wgt[NBANDS] = 0;
+  for (let j = 1; j < NBANDS; j++) {
+    const xe = -1 + DX * j;
+    wgt[j] = D * (1 - xe * xe) / (DX * DX);
+  }
+  const lo = B.lo, di = B.di, up = B.up, rhs = B.rhs;
+  for (let i = 0; i < NBANDS; i++) {
+    const wsum = wgt[i] + wgt[i + 1];
+    lo[i] = -wgt[i];
+    up[i] = -wgt[i + 1];
+    di[i] = Math.max(k[i], -0.4 * wsum - 0.05) + wsum;
+    rhs[i] = dg.C[i] * dT[i];
+  }
+  const cp = B.cp, dp = B.dp;
+  let regular = Math.abs(di[0]) > 1e-12 && isFinite(di[0]);
+  if (regular) { cp[0] = up[0] / di[0]; dp[0] = rhs[0] / di[0]; }
+  for (let i = 1; i < NBANDS && regular; i++) {
+    const m = di[i] - lo[i] * cp[i - 1];
+    regular = Math.abs(m) > 1e-12 && isFinite(m);
+    if (regular) {
+      cp[i] = up[i] / m;
+      dp[i] = (rhs[i] - lo[i] * dp[i - 1]) / m;
+    }
+  }
+  let eqDistance = Infinity;
+  if (regular) {
+    const dTeq = B.dTn;
+    dTeq[NBANDS - 1] = dp[NBANDS - 1];
+    eqDistance = Math.abs(dTeq[NBANDS - 1]);
+    for (let i = NBANDS - 2; i >= 0; i--) {
+      dTeq[i] = dp[i] - cp[i] * dTeq[i + 1];
+      eqDistance = Math.max(eqDistance, Math.abs(dTeq[i]));
+    }
+    if (!isFinite(eqDistance)) eqDistance = Infinity;
+  }
 
   // Quasi-static shortcut. Once every band sits within a kelvin or two of its
   // equilibrium, the temperatures are slaved to the slow reservoirs and the
@@ -748,7 +789,16 @@ export function stepTemperature(w, dtYears) {
   dTn[NBANDS - 1] = dp[NBANDS - 1];
   for (let i = NBANDS - 2; i >= 0; i--) dTn[i] = dp[i] - cp[i] * dTn[i + 1];
 
-  for (let i = 0; i < NBANDS; i++) w.T[i] = clamp(w.T[i] + dTn[i], 2, 4000);
+  // A solve that leaves the state used to linearise it is not a usable Newton
+  // step. Keep it inside a deliberately generous trust region, then tell the
+  // controller how far the raw solve overshot so the following step is
+  // shortened in proportion instead of repeatedly clipping the same move.
+  w.trustOver = 1;
+  for (let i = 0; i < NBANDS; i++) {
+    const allow = Math.max(25, 0.05 * w.T[i]);
+    w.trustOver = Math.max(w.trustOver, Math.abs(dTn[i]) / allow);
+    w.T[i] = clamp(w.T[i] + clamp(dTn[i], -allow, allow), 2, 4000);
+  }
 }
 
 // Largest step we may take: bounded by how fast anything is actually moving,
