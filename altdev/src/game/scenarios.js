@@ -35,17 +35,41 @@ export const SCENARIOS = [
     id: 'hold',
     name: 'Hold Back the Runaway',
     icon: '🔥',
-    brief: 'The star has brightened by a third and this world is already thirty watts per square metre PAST the Simpson–Nakajima limit — there is no equilibrium at this absorbed flux, and left alone the ocean is in the sky inside ten million years. The greenhouse carrying it over is the one thing here you can take away. Keep the planet habitable for 100 million years.',
-    hint: 'You cannot dim the star, and the volcanoes are working against you. Strip the CO₂ and keep it stripped — that alone is enough, and it is the whole lesson: the limit is on absorbed sunlight against what the atmosphere can radiate, so the way back under it is to stop absorbing. Brightening the ground and draining the sea both buy more.',
-    // The brief used to say this world sat "a whisker below" the limit. It does
-    // not and never did: at 1.30 S(+) with 1.2 mbar of CO2 the runaway margin
-    // reads -30.5 W/m^2 at t=0, and doing nothing gives a wet runaway in under
-    // ten million years. The setup is fine -- stripping the CO2 alone lands it
-    // at 39 C and habitable, and every further step in the hint buys more -- so
-    // what was wrong was the sentence, not the planet.
-    params: { ...EARTH, insolation: 1.30, co2Bar: 1.2e-3, outgassing: 2.5, startT: 300 },
-    limit: 1e8,
-    check: (w) => w.time > 1e8 && classify(w).habitable,
+    brief: 'A world sitting six watts per square metre under the Simpson–Nakajima limit — habitable, and with nothing to spare. Its star is heavier than the Sun and burning through its hydrogen three times as fast, so that margin is closing on its own and will not stop. Keep this planet habitable for a billion years.',
+    hint: 'You cannot dim the star and you cannot stop it brightening. What you can take away is the greenhouse: strip the CO₂ and keep it stripped, because 2.5× volcanism puts it back. If that stops being enough, remember that the limit is on absorbed sunlight against what the atmosphere can radiate — brighten the ground, and a drier planet radiates better than a wet one.',
+    // It now starts where the brief says it starts, which it did not before.
+    //
+    // The old setup was 1.30 S(+) and a fixed star, and the brief called that
+    // "a whisker below the Simpson-Nakajima limit". The runaway margin at t=0
+    // read -30.5 W/m^2: thirty watts PAST it, already committed, gone in under
+    // ten million years. It was also winnable -- stripping the CO2 lands it at
+    // 39 C -- so nothing was broken except the sentence, and a scenario whose
+    // premise is a lie about where the planet is standing is not much of a
+    // scenario.
+    //
+    // 1.15 S(+) settles at +6.0 W/m^2. That is the whisker.
+    //
+    // The star is what makes it a puzzle rather than a snapshot, and it took
+    // some finding: on a FIXED star, doing nothing simply wins. The
+    // carbonate-silicate thermostat is very good at this -- weathering draws the
+    // CO2 down as fast as the temperature climbs -- and every insolation from
+    // 1.12 to 1.22 sat out the full run at 37-39 C, habitable and untouched.
+    // That is not a flaw in the model; it is why Earth survived the Sun getting
+    // 40% brighter, and it is the same gradual-versus-abrupt hysteresis that
+    // "The Hot Ocean" is built on.
+    //
+    // So the star has to outrun the thermostat, and the number is measured
+    // rather than picked. Stripping the CO2 entirely holds a world to 1.30 S(+)
+    // and no further; draining it to a dune holds to 1.70. 0.26/Gyr carries
+    // 1.15 to 1.449 over the billion years, which is past the first and inside
+    // the second -- so the thermostat alone loses at 862 Myr, keeping the CO2
+    // stripped wins at 14 C, and there is somewhere left to go if that stops
+    // working. Three times the Sun's 0.074/Gyr, and the star is an F at 6500 K
+    // to match, because a star that brightens like that is not a G.
+    params: { ...EARTH, insolation: 1.15, co2Bar: 1.2e-3, outgassing: 2.5,
+              starTemp: 6500, brightening: 0.26, startT: 300 },
+    limit: 1e9,
+    check: (w) => w.time > 1e9 && classify(w).habitable,
     fail: (w) => w.diag.Tmean > 400 || w.water.lost > 0.25,
   },
   {
