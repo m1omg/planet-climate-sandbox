@@ -51,18 +51,93 @@ export function radiogenic(ageGyr) {
   return total;
 }
 
+// ---------------------------------------------------------------------------
+// How the star brightens.
+//
+// A main-sequence star fuses four hydrogen nuclei into one helium nucleus, so
+// the mean molecular weight of its core climbs and the core must contract and
+// heat to hold itself up. Luminosity rises the whole time. Gough (1981) fits
+// the Sun's track as
+//
+//     L(t)/L_now = 1 / (1 + 0.4 (1 - t/t_now))
+//
+// with t_now = 4.567 Gyr, which is 71% at zero age, 77% in the Archean, and
+// keeps steepening: 6.7%/Gyr then against 8.8%/Gyr now. This used to be a flat
+// 10%/Gyr compounded, and it was the wrong shape in both directions -- too fast
+// early, too slow late -- by enough to matter. Every solar preset here carries
+// a `startAge` picked off Gough's curve to match its own insolation, so running
+// them forward on a different curve left them missing the present day: the
+// Archean's 0.77 S(+) reached 1.067 rather than 1.000, and Noachian Mars's 0.32
+// reached 0.467 against the 0.431 Mars actually gets. On the real curve both
+// land exactly where the planet they represent is now.
+// ---------------------------------------------------------------------------
+
+const GOUGH_A = 0.4;                     // Gough's coefficient
+const SOLAR_MS_LIFE = 10.0;              // Gyr the Sun gets on the main sequence
+const SOLAR_TEMP = 5772;                 // K
+const SOLAR_FRAC = EARTH_AGE / SOLAR_MS_LIFE;   // how much of it is already spent
+
+// Main-sequence lifetime from effective temperature.
+//
+// t_ms ~ M/L ~ M^-2.5, and mass follows temperature as M ~ T^2.51 across the
+// dwarf sequence (fitted to Pecaut & Mamajek's M5V-through-A0V table), so the
+// lifetime goes as T^-6.28 -- a ferociously steep dependence, which is the
+// whole point. A 6500 K F star burns out in 4.8 Gyr and brightens visibly
+// inside a game; TRAPPIST-1 at 2566 K has 1500 Gyr and is, for every purpose
+// here, a constant star. That is why the M-dwarf presets carry no brightening:
+// not an omission, an answer.
+export function mainSequenceLife(tempK) {
+  const T = Math.max(tempK || SOLAR_TEMP, 1000);
+  return SOLAR_MS_LIFE * Math.pow(T / SOLAR_TEMP, -6.28);
+}
+
+// Gough's shape, in units of the fraction of a main sequence that is spent.
+function goughShape(frac) {
+  return 1 / (1 + GOUGH_A * (1 - frac / SOLAR_FRAC));
+}
+
+// The fractional brightening rate a star of this temperature has at this age,
+// per Gyr, straight off its own curve. This is what `brightening` should be set
+// to for a world that is meant to be real, and it is where the spectral-type
+// dependence lives: the same checkbox gives the Sun 8.8%/Gyr, an F5 at the same
+// age 21%/Gyr, and TRAPPIST-1 six ten-thousandths of a percent.
+export function naturalBrightening(tempK, ageGyr) {
+  const tau = mainSequenceLife(tempK);
+  const f = Math.max(ageGyr, 0) / tau;
+  const u = 1 + GOUGH_A * (1 - f / SOLAR_FRAC);
+  if (!(u > 0)) return 0;                 // past the end of the main sequence
+  return (GOUGH_A / SOLAR_FRAC) / (tau * u);
+}
+
+// The Sun's own present-day rate, which is what the "brightening star" checkbox
+// means by default.
+export const SOLAR_BRIGHTENING = naturalBrightening(SOLAR_TEMP, EARTH_AGE);
+
 // How much brighter the star is after `gyr` billion years, as a multiplier.
 //
-// Compounding, so 10%/Gyr over four and a half billion years is a factor 1.56.
-// The Sun's real track (Gough 1981) is L(t)/L_now = 1/(1 + 0.4(1 - t/t_now)),
-// which is a factor 1.4 across the same span -- about 7.4%/Gyr compounded, and
-// close to 10%/Gyr over the last billion years where the curve is steepest.
-// So the default here is the right number for the recent past and a little
-// generous for the deep past, which is the direction that makes the faint young
-// Sun problem harder rather than easier.
-export function brightnessAfter(ratePerGyr, gyr) {
-  if (!(ratePerGyr > 0) || !(gyr > 0)) return 1;
-  return Math.pow(1 + ratePerGyr, gyr);
+// `brightening` is now a multiplier on the star's OWN track rather than a rate
+// in fraction-per-Gyr, and 1 means "this star, brightening the way it does".
+// That is the change that makes the setting spectral-type-aware without the
+// player having to know any of the above: the same ticked box gives the Sun
+// 8.8%/Gyr, an F5 at 6500 K around 18%, and TRAPPIST-1 four ten-thousandths.
+// A rate could not do that, because one number cannot be right for two stars --
+// or, as it turns out, for one star at two different ages.
+//
+// Values other than 1 run the star's life fast or slow. A 3 is a star ageing
+// three times over, which is what a scenario that needs a brightening it can
+// watch inside a billion years is really asking for.
+export function brightnessAfter(p, gyr) {
+  const speed = p && p.brightening;
+  if (!(speed > 0) || !(gyr > 0)) return 1;
+  const tau = mainSequenceLife(p.starTemp);
+  const f0 = Math.max(p.startAge ?? EARTH_AGE, 0) / tau;
+  const f1 = f0 + speed * gyr / tau;
+  const g0 = goughShape(f0), g1 = goughShape(f1);
+  // Past the end of the main sequence the fit turns over and then inverts.
+  // Hold the last sane value rather than hand back a star of negative
+  // luminosity; a red giant is not what this model is for.
+  if (!(g0 > 0) || !(g1 > 0) || !isFinite(g1)) return 2.5 / Math.max(g0, 1e-6);
+  return g1 / g0;
 }
 
 // How the same star's XUV output falls as it spins down.
@@ -94,7 +169,7 @@ export function evolvedParams(p, base, years) {
   const gyr = Math.max(years, 0) / 1e9;
 
   if (p.brightening > 0 && base.insolation > 0) {
-    out.insolation = base.insolation * brightnessAfter(p.brightening, gyr);
+    out.insolation = base.insolation * brightnessAfter(p, gyr);
     // The same star calming down. Decoupled from the bolometric curve because
     // they go opposite ways: the star gets brighter and its XUV gets weaker,
     // and it is the second that decides whether an atmosphere survives.

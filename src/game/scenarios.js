@@ -64,10 +64,16 @@ export const SCENARIOS = [
     // 1.15 to 1.449 over the billion years, which is past the first and inside
     // the second -- so the thermostat alone loses at 862 Myr, keeping the CO2
     // stripped wins at 14 C, and there is somewhere left to go if that stops
-    // working. Three times the Sun's 0.074/Gyr, and the star is an F at 6500 K
-    // to match, because a star that brightens like that is not a G.
+    // working.
+    //
+    // The star is not given that rate any more; it is a star that HAS it. An F
+    // at 6500 K burns through its main sequence in 4.8 Gyr rather than the
+    // Sun's 10, and at 2.75 Gyr old it is brightening at 25%/Gyr off its own
+    // Gough curve -- carrying 1.15 to 1.446 across the billion years, which is
+    // the number this scenario was built around, now derived from the star
+    // instead of asserted over it.
     params: { ...EARTH, insolation: 1.15, co2Bar: 1.2e-3, outgassing: 2.5,
-              starTemp: 6500, brightening: 0.26, startT: 300 },
+              starTemp: 6500, startAge: 2.75, brightening: 1, startT: 300 },
     limit: 1e9,
     check: (w) => w.time > 1e9 && classify(w).habitable,
     fail: (w) => w.diag.Tmean > 400 || w.water.lost > 0.25,

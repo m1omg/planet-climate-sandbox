@@ -213,9 +213,22 @@ body.software-render #planet{image-rendering:auto}
 .play-btn.paused{color:#071018;background:var(--good);border-color:var(--good)}
 .play-btn.paused:hover{background:#6fdca2;border-color:#6fdca2}
 .icon-btn.busy{color:var(--accent-2);border-color:var(--accent-2)}
-.clock{display:flex;flex-direction:column;line-height:1.15;padding:0 6px;flex:none;min-width:104px}
-.clock .t-label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint)}
-#simtime{font:14px/1.2 var(--mono);color:var(--fg)}
+/* Three clocks, because "how long has this been running" is three different
+   questions. `age` is how old the object is including everything before the
+   simulation started -- a preset that begins in the Archean is already 1.15 Gyr
+   old at t=0 and saying "elapsed 2 Gyr" hides that. `elapsed` is the run.
+   `since` is time from the last milestone the player dropped, and it appears
+   only once there is one. */
+.clock{display:flex;flex-direction:column;line-height:1.1;padding:0 6px;flex:none;min-width:128px}
+.clock .t-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.clock .t-label{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--fg-faint);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:9ch}
+#simtime{font:13px/1.25 var(--mono);color:var(--fg)}
+#worldage{font:11px/1.25 var(--mono);color:var(--fg-dim)}
+#sincetime{font:11px/1.25 var(--mono);color:var(--accent-2)}
+#since-row .t-label{color:var(--accent-2);opacity:.75}
+.mark-btn{flex:none;padding:0 9px;font-size:14px;line-height:1}
+.mark-btn.has-mark{color:var(--accent-2);border-color:var(--accent-2)}
 .rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
 .rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
 .rate input{flex:1;min-width:60px}
@@ -318,6 +331,10 @@ body.software-render #planet{image-rendering:auto}
   #scenario-banner{width:min(280px,72vw);top:56px}
   #timebar{flex-wrap:wrap;gap:8px}
   .rate{order:5;width:100%;flex-basis:100%}
+  /* The clock is three rows now, so give it room to be narrow instead of tall:
+     at this width it shares the first row with four buttons and a checkbox. */
+  .clock{min-width:96px;padding:0 2px}
+  .clock .t-label{max-width:7ch}
 }
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
@@ -476,7 +493,36 @@ body.software-render #planet{image-rendering:auto}
   font:12px/1.3 var(--mono);cursor:pointer;
 }
 #rate-menu:focus{outline:none;border-color:var(--accent)}
-.rate-val{width:11ch;text-align:right}
+/* The typed rate. This was a bare <input> with no rules of its own, which in a
+   dark interface means the browser's own white box with a black caret in it --
+   the one obviously foreign thing on the page. It is two controls now: a number
+   and its unit, because "type 250000000" is not a reasonable thing to ask of
+   someone who wants a quarter of a billion years a second. */
+.rate-entry{display:flex;align-items:stretch;flex:none;
+  border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel-2)}
+.rate-entry:focus-within{border-color:var(--accent)}
+.rate-val{
+  width:5.5ch;text-align:right;background:transparent;border:0;color:var(--accent);
+  font:12px/1 var(--mono);padding:6px 2px 6px 8px;
+}
+.rate-val:focus{outline:none}
+.rate-val.throttled{color:var(--accent-2)}
+.rate-unit{
+  background:transparent;border:0;border-left:1px solid var(--line);color:var(--fg-dim);
+  font:11px/1 var(--mono);padding:0 4px 0 6px;cursor:pointer;
+}
+.rate-unit:focus{outline:none;color:var(--fg)}
+@media (pointer:coarse){ .rate-val{font-size:13px;padding:9px 2px 9px 9px}
+                         .rate-unit{font-size:12px} }
+
+/* The auto-ease switch, next to fast for the same reason: it decides how fast
+   this runs. Amber rather than blue because when it is on it is taking the
+   clock off the player, and that should look like a state and not a default. */
+.slow-toggle{border-style:dashed}
+.slow-toggle.active{border-style:solid;color:var(--accent-2);border-color:var(--accent-2);
+  background:rgba(255,190,120,.10)}
+.slow-toggle.easing{animation:easepulse 1.1s ease-in-out infinite}
+@keyframes easepulse{50%{background:rgba(255,190,120,.28)}}
 @media (pointer:coarse){ #rate-menu{padding:9px 10px;font-size:13px} }
 .ctl-stops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 2px}
 /* Touch targets: on a coarse pointer the chips get taller, because the whole
@@ -487,3 +533,18 @@ body.software-render #planet{image-rendering:auto}
    control, but it is a mode rather than a value -- hence the separator. */
 .fast-toggle{margin-left:auto;border-style:dashed}
 .fast-toggle.active{border-style:solid}
+
+/* ---------------- milestones ---------------- */
+/* One row per mark: what it was called, when it happened, and how long after
+   the mark before it -- which is the number the whole feature exists for. */
+.marks{display:flex;flex-direction:column;gap:4px}
+.mark-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;
+  background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:5px 7px}
+.mark-row input{background:transparent;border:0;color:var(--fg);font:12px/1.2 var(--sans,inherit);
+  min-width:0;padding:1px 2px;border-radius:4px}
+.mark-row input:focus{outline:none;background:rgba(255,255,255,.07)}
+.mark-when{font:10.5px/1.2 var(--mono);color:var(--fg-faint);white-space:nowrap}
+.mark-gap{font:10.5px/1.2 var(--mono);color:var(--accent-2);white-space:nowrap}
+.mark-drop{background:none;border:0;color:var(--fg-faint);cursor:pointer;font-size:13px;
+  line-height:1;padding:0 2px}
+.mark-drop:hover{color:var(--bad)}

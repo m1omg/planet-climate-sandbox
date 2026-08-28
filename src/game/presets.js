@@ -59,11 +59,13 @@ export const EARTH = {
 // tick. The invented worlds below keep them off: "what would this do" is a
 // different question from "what did this do", and it is the one they are for.
 //
-// 10%/Gyr is the Sun over the span these worlds live in. Gough's (1981) track
-// is 7.4%/Gyr compounded over the whole main sequence and steeper than that
-// recently, and every solar preset here carries a `startAge` consistent with
-// its own insolation on that curve -- the Archean's 0.77 S(+) is the Sun at
-// 1.15 Gyr, Noachian Mars's 0.32 is Mars at 0.6, Way's Early Venus is 2.9 Gya.
+// `brightening: 1` is the star's own Gough (1981) track rather than a flat rate,
+// and every solar preset here carries a `startAge` consistent with its own
+// insolation on that curve -- the Archean's 0.77 S(+) is the Sun at 1.15 Gyr,
+// Noachian Mars's 0.32 is Mars at 0.6, Way's Early Venus is 2.9 Gya. Running
+// them on the real curve is what makes those two facts agree: the Archean now
+// reaches exactly 1.000 S(+) at the present day and Noachian Mars exactly the
+// 0.431 Mars gets, where the old flat 10%/Gyr overshot both by 7-14%.
 // Venus has no dynamo and it is not unprotected.
 //
 // An unmagnetised planet with a thick ionosphere induces a magnetosphere of its
@@ -101,12 +103,14 @@ export const EARTH = {
 // settles at 91.5 bar against the 92 the planet actually has.
 export const INDUCED_MAGNETOSPHERE = 0.02;
 
-export const SOLAR_HISTORY = { brightening: 0.10, realisticGeology: true };
+export const SOLAR_HISTORY = { brightening: 1, realisticGeology: true };
 
 // The three worlds around M dwarfs get `realisticGeology` off and no
 // brightening at all, and both are the accurate choice rather than an omission.
-// An M dwarf is essentially a constant star: TRAPPIST-1 will sit where it is
-// for trillions of years, so 10%/Gyr would be pure fiction. And their interior
+// An M dwarf is essentially a constant star: the same curve gives TRAPPIST-1 a
+// 1500 Gyr main sequence and 0.04%/Gyr, so leaving it on would be an honest
+// nothing rather than a lie -- it is off only because the XUV decline rides on
+// the same switch, and these presets carry measured XUV rather than a track. And their interior
 // heat is tidal, not radiogenic -- 2.68 W/m^2 on TRAPPIST-1b and 80 on GJ 1132 b
 // come from eccentricity held by resonance, which does not decay on a
 // potassium-40 half-life. Running them down the radiogenic curve would cool
@@ -205,20 +209,29 @@ export const PRESETS = {
   // much as a question they did not ask. With the solar brightening on, which is
   // now the default here, it comes back out of it.
   earlyVenus: { name: 'Early Venus', icon: '🌤️', params: { ...EARTH, ...SOLAR_HISTORY, mass: 0.815, magneticField: INDUCED_MAGNETOSPHERE,
-    insolation: 1.40, rotationHours: 5832, obliquity: 2.6, o2Bar: 0, biosphere: 0,
+    // 1.524 rather than Way's 1.40, and for the same reason the Archean and
+    // Noachian Mars carry the numbers they do: a world that starts at an age of
+    // 1.67 Gyr and runs to the present has to ARRIVE at the insolation its
+    // planet actually gets. Venus gets 1.911 S(+); the Sun at 1.67 Gyr was at
+    // 79.8% of today on Gough's track; 1.911 x 0.798 is 1.524. Way's figure
+    // comes off a different solar model, and taking it literally left this
+    // world 8% short of Venus at the end of its own run -- which showed up as a
+    // planet forty degrees too cool under half the pressure.
+    insolation: 1.524, rotationHours: 5832, obliquity: 2.6, o2Bar: 0, biosphere: 0,
     n2Bar: 1.0126, co2Bar: 400e-6, ch4Bar: 1e-6, water: 0.108, landFraction: 0.10,
     landAlbedo: 0.2, outgassing: 1, internalHeat: 0.031, startT: 288,
     // Way's Sim A is 2.9 Gya, so the planet is 4.567 - 2.9 Gyr old here.
     startAge: 1.67,
     // And the resurfacing is armed, because it happened. 2.182 Gyr after this
     // world starts is an age of 3.852 -- 715 Myr ago, which is what Venus's
-    // crater population dates its global repaving to -- and 60x is what it
-    // takes to put roughly its ninety-two bar into the air out of this planet's
-    // own mantle. Way's argument is that this, and not the Sun, is what ended
+    // crater population dates its global repaving to -- and 70x is what it
+    // takes to put its ninety-two bar into the air out of this planet's own
+    // mantle. The run ends at 738.8 K under 93.5 bar with no water left in it,
+    // against the 737.2 K and 92 bar Venus has. Way's argument is that this, and not the Sun, is what ended
     // Venus: brightening alone leaves the model's Venus habitable for billions
     // of years too long, which is the same answer his GCM gives. Untick
     // "resurfacing event" to watch that counterfactual.
-    resurfacingAge: 2.182, resurfacingBoost: 60, resurfacingSpan: 40,
+    resurfacingAge: 2.182, resurfacingBoost: 70, resurfacingSpan: 40,
     // Same again: 3.45x today's XUV at an age of 1.67 Gyr.
     xuvFraction: 3.4e-6 * 3.45 } },
   // Mars in the Noachian, when the valley networks were being cut. The Sun was
@@ -237,7 +250,11 @@ export const PRESETS = {
   earlyMars: { name: 'Noachian Mars', icon: '🟠', params: { ...EARTH, ...SOLAR_HISTORY, mass: 0.107,
     insolation: 0.32, rotationHours: 24.6, obliquity: 25, o2Bar: 0, biosphere: 0,
     n2Bar: 0.3, co2Bar: 4, ch4Bar: 0.01, water: 0.06, landFraction: 0.70,
-    landAlbedo: 0.22, outgassing: 0.2, internalHeat: 0.06, startT: 280, magneticField: 0,
+    // Outgassing is pinned by where this run ENDS rather than picked for where
+    // it starts: 0.14 of Earth's carries four bar of Noachian CO2 down to 5.8
+    // mbar at the present day, against the 6.0 mbar Mars has. 0.2 left it at
+    // 11 and the planet finished twice as thick as the one out there.
+    landAlbedo: 0.22, outgassing: 0.14, internalHeat: 0.06, startT: 280, magneticField: 0,
     // The Sun at 0.6 Gyr was about twelve times as harsh in the extreme
     // ultraviolet as it is now (Ribas et al. 2005). A preset that starts in the
     // deep past has to carry the star of that epoch, not this one's.

@@ -462,7 +462,9 @@ export function escapeRates(w) {
   // Earth reads 4.00e-6 and the moist-greenhouse onset reads 1.00e-3: the same
   // two anchors, from saturation physics instead of a power law.
   const Tct = clamp(190 + 0.7997 * (dg.Tmean - 288), 120, 700);
-  const trapCeiling = clamp(COLD_TRAP_OVERSHOOT * psatH2O(Tct) / (pTot * 1e5), 0, 1);
+  // Deliberately NOT clamped to 1. How far above unity this runs is exactly the
+  // measure of how badly the trap has failed, and the blend below needs it.
+  const trapCeiling = Math.max(0, COLD_TRAP_OVERSHOOT * psatH2O(Tct) / (pTot * 1e5));
   let fStrat = 0;
   for (let i = 0; i < NBANDS; i++) {
     const x = clamp(dg.pH2O[i] / Math.max(dg.pTot[i], 1e-9), 0, 1);
@@ -473,13 +475,31 @@ export function escapeRates(w) {
     // Earth, the Archean and every anchor keep the number they had. The
     // ceiling only bites where the fit has stopped meaning anything: a cold
     // surface under an atmosphere that has been blown away.
+    const trapped = Math.min(clamp(0.0115 * Math.pow(x, 1.764) + x4 * x4, 0, 1),
+                             trapCeiling);
+
+    // ...and when the trap has failed outright, neither number means anything.
     //
-    // It also lifts out of the way by itself in a real runaway. At a 400 K
-    // surface the trap sits at 283 K and saturates at a kilopascal, so the
-    // ceiling is 5e-3 and the fit binds again -- which is correct, because a
-    // runaway greenhouse has no cold trap to speak of.
-    fStrat += Math.min(clamp(0.0115 * Math.pow(x, 1.764) + x4 * x4, 0, 1),
-                       trapCeiling) / NBANDS;
+    // A cold trap is a place where water condenses. Once the saturation mixing
+    // ratio at the tropopause exceeds the amount of water actually present,
+    // there is no such place anywhere in the column: nothing condenses at any
+    // altitude, the air is well mixed from the ground to the exobase, and the
+    // stratospheric mixing ratio is simply x. Kasting's power law is a fit to
+    // the regime where a trap exists, and extrapolating it past that point is
+    // what kept this model's Venus wet. In full runaway it has 22% water by
+    // pressure and the fit returned 7.6e-4 -- suppressing escape 290-fold, on
+    // behalf of a cold trap that is 300 K too warm to condense anything. Venus
+    // shed a third of its ocean in 650 Myr instead of all of it, arrived at the
+    // present under nineteen bar of steam, and sat at 928 K because steam is a
+    // far better greenhouse gas than the CO2 that is supposed to be doing the
+    // work. The planet was hot for the wrong reason.
+    //
+    // So the fit is the answer while the trap holds, x is the answer once it
+    // cannot, and the crossover is where the ceiling passes x. Smoothed over a
+    // factor of three in that ratio, because a discontinuity in escape at the
+    // exact moment a planet is running away is a step-size trap.
+    const failed = smoothstep(0.3, 1, trapCeiling / Math.max(x, 1e-12));
+    fStrat += (trapped + (x - trapped) * failed) / NBANDS;
   }
 
   // Diffusion-limited: 2.5e13 * f H atoms/cm^2/s  ->  kg/m^2/yr of water

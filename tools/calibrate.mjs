@@ -238,7 +238,7 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
 // the XUV history rather than being put in.
 {
   const mars = new Simulation({ ...PRESETS.earlyMars.params,
-    realisticGeology: true, brightening: 0.10 });
+    realisticGeology: true, brightening: 1 });
   let guard = 0;
   while (mars.world.time < (4.567 - 0.6) * 1e9 && guard++ < 400) {
     const before = mars.world.time;
