@@ -74,6 +74,16 @@ function scratch(w) {
 
 export function createWorld(params) {
   const w = {
+    // Off unless asked for.
+    //
+    // Two hooks, because the tools need to be able to grade the fast path and
+    // threading a flag through every construction site would be worse than
+    // this: `globalThis.__pcFast` for the browser and for a tool that can be
+    // imported, and PC_FAST in the environment for the ones whose entry point
+    // is guarded and cannot be. `PC_FAST=1 node tools/convergence.mjs` sweeps
+    // the fast path.
+    fastPhysics: !!(globalThis.__pcFast
+      || (typeof process !== 'undefined' && process.env && process.env.PC_FAST)),
     params: { ...params },
     T: new Float64Array(NBANDS),
     time: 0,                    // years

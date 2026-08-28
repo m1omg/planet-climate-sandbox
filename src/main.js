@@ -89,6 +89,25 @@ function atmosphereFromUrl() {
 // start of setting something up, and at a year a second the first decades of a
 // world you have not finished building are wasted ones. Remembered, because it
 // is a working habit rather than a property of any particular planet.
+// Fast physics, remembered between sessions the way the detail setting is.
+//
+// What it buys and what it costs are both written out on the button. The short
+// version: it stops re-deriving the eighteen-band radiative state in the middle
+// of a step, so the reservoirs -- weathering, escape, where the water is -- read
+// the temperature the step started from rather than the one it ended at. Every
+// rate in the step is then evaluated at one consistent state, which is a
+// perfectly ordinary explicit scheme; the default is a mixed one that is a
+// little more accurate and costs a whole extra radiative transfer.
+//
+// It is about 1.4x, it holds all 23 calibration anchors, and every world in
+// tools/convergence.mjs still converges under it. It is not free: the answers
+// move in the third or fourth digit, which is why it is a switch and not the
+// default.
+const FAST_KEY = `${NS}.fastPhysics.v1`;
+function fastPref() {
+  try { return localStorage.getItem(FAST_KEY) === 'on'; } catch { return false; }
+}
+
 const RESET_PAUSED_KEY = `${NS}.resetPaused.v1`;
 function resetPausedPref() {
   try { return localStorage.getItem(RESET_PAUSED_KEY) !== 'run'; } catch { return true; }
@@ -285,6 +304,39 @@ function buildSliders() {
     const input = wrap.querySelector('input[type=range]'), out = wrap.querySelector('input.val');
     els[d.key] = { input, out, def: d, editing: false, dragging: false };
 
+    // Values worth landing on exactly, as buttons.
+    //
+    // Every one of these sliders is logarithmic across four to nine decades,
+    // because that is the only way one control can cover Mars's six millibars
+    // and Venus's ninety-two bar. The cost is that a millimetre of thumb is a
+    // factor of ten, and on a phone the difference between Earth's sunlight and
+    // Venus's is a few pixels. So the values that mean something get a button
+    // and the slider is left for what lies between them.
+    //
+    // Named for the world or the epoch rather than the number, because "Archean"
+    // is what you are actually looking for when you reach for 0.1 bar of CO2.
+    if (d.stops) {
+      const row = document.createElement('div');
+      row.className = 'ctl-stops';
+      for (const st of d.stops) {
+        const c = document.createElement('button');
+        c.type = 'button'; c.className = 'stop';
+        c.textContent = st.n;
+        c.dataset.v = String(st.v);
+        c.title = `${d.label}: ${d.fmt(st.v)}`;
+        c.addEventListener('click', () => {
+          params[d.key] = st.v;
+          syncSliders();
+          applyParams(d.key);
+          markTouched();
+          toast(`${d.label} — ${st.n}, ${d.fmt(st.v)}`);
+        });
+        row.appendChild(c);
+      }
+      wrap.appendChild(row);
+      els[d.key].stopRow = row;
+    }
+
     // Real interiors, as one-click pairs. These set the heat *and* the
     // volcanism, because on an actual body the two are not independent -- see
     // INTERIOR_BODIES for where each number comes from and what `total` means.
@@ -379,6 +431,24 @@ function markBody() {
   }
 }
 
+// Light up whichever stop the control is currently sitting on.
+//
+// Compared as a fraction rather than as a difference, because these span nine
+// decades: an absolute tolerance that suits 92 bar of CO2 would light up every
+// stop below a millibar at once. A tenth of a percent is tight enough that two
+// neighbouring stops can never both match and loose enough to survive a value
+// that has been through a slider position and back.
+function markStops(d) {
+  const row = els[d.key]?.stopRow;
+  if (!row) return;
+  const v = params[d.key];
+  for (const b of row.children) {
+    const t = +b.dataset.v;
+    b.classList.toggle('active',
+      t === 0 ? Math.abs(v) < 1e-12 : Math.abs(v - t) <= Math.abs(t) * 1e-3);
+  }
+}
+
 function syncSliders() {
   for (const d of SLIDERS) {
     const e = els[d.key];
@@ -386,6 +456,7 @@ function syncSliders() {
     e.input.value = String(s);
     e.input.style.setProperty('--fill', `${s / 10}%`);
     e.out.value = d.fmt(params[d.key]);
+    markStops(d);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
   // The two evolution modes are checkboxes rather than sliders, so they are not
@@ -434,6 +505,7 @@ function syncLiveControls() {
     e.input.value = String(pos);
     e.input.style.setProperty('--fill', `${pos / 10}%`);
     e.out.value = d.fmt(v);
+    markStops(d);
   }
 }
 
@@ -1480,7 +1552,68 @@ function bindControls() {
     rateOut.textContent = `${fmtTime(sim.rate)} / s`;
     const lo = +rate.min, hi = +rate.max;
     rate.style.setProperty('--fill', `${((+rate.value - lo) / (hi - lo)) * 100}%`);
+    for (const b of rateStops.children) {
+      b.classList.toggle('active', Math.abs(+b.dataset.exp - +rate.value) < 0.02);
+    }
   };
+
+  // Tappable stops along the acceleration slider.
+  //
+  // The slider is logarithmic over nine decades, which is the only sensible way
+  // to cover "watch the industrial era" and "watch a star burn down" with one
+  // control -- and it means a millimetre of thumb is a factor of ten. On a phone
+  // that is unusable: half a million years a second and three hundred million a
+  // second are a few pixels apart. So the decades that matter get a button, and
+  // the slider is left for the values in between.
+  //
+  // Each one is a span of time you might actually want to sit through, named
+  // for what it is good for rather than for its number.
+  const RATE_STOPS = [
+    { v: 1, name: '1 yr', why: 'A year a second. Watch the industrial era happen.' },
+    { v: 1e2, name: '100 yr', why: 'A century a second — the whole fossil burn in under a minute.' },
+    { v: 1e4, name: '10 kyr', why: 'Ten thousand years a second: glacial cycles, and the long thaw after a carbon spike.' },
+    { v: 1e6, name: '1 Myr', why: 'A million years a second. The carbonate-silicate thermostat works on this timescale.' },
+    { v: 1e7, name: '10 Myr', why: 'Ten million a second — ice sheets, cold traps and the slow drift of a climate.' },
+    { v: 1e8, name: '100 Myr', why: 'A hundred million a second. Continents\u2019 worth of time per second.' },
+    { v: 5e8, name: '500 Myr', why: 'The fastest this goes: half a billion years a second. A planet\u2019s whole life in ten seconds, if it can keep up.' },
+  ];
+  const rateStops = $('#rate-stops');
+  for (const st of RATE_STOPS) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'stop';
+    b.textContent = st.name;
+    b.title = st.why;
+    b.dataset.exp = Math.log10(st.v).toFixed(5);
+    b.addEventListener('click', () => { rate.value = b.dataset.exp; applyRate(); });
+    rateStops.appendChild(b);
+  }
+  // ...and the accuracy/speed switch, at the end of the same row, because it is
+  // the other control over how fast this thing runs.
+  const fastBtn = document.createElement('button');
+  fastBtn.type = 'button'; fastBtn.className = 'stop fast-toggle';
+  fastBtn.textContent = 'fast';
+  const syncFast = () => {
+    fastBtn.classList.toggle('active', !!sim.world.fastPhysics);
+    fastBtn.setAttribute('aria-pressed', String(!!sim.world.fastPhysics));
+    fastBtn.title = sim.world.fastPhysics
+      ? 'Fast physics is ON: about 1.4x, and the reservoirs read the temperature '
+        + 'each step started from rather than the one it ended at. Holds every '
+        + 'calibration anchor; answers move in the third or fourth digit. Click to turn off.'
+      : 'Fast physics is OFF: full accuracy. Click for about 1.4x, at the cost of '
+        + 'the third or fourth digit — the same climates, slightly less exactly.';
+  };
+  fastBtn.addEventListener('click', () => {
+    sim.world.fastPhysics = !sim.world.fastPhysics;
+    try { localStorage.setItem(FAST_KEY, sim.world.fastPhysics ? 'on' : 'off'); } catch { }
+    syncFast();
+    toast(sim.world.fastPhysics
+      ? 'Fast physics on — about 1.4×, third-digit accuracy'
+      : 'Fast physics off — full accuracy');
+  });
+  rateStops.appendChild(fastBtn);
+  sim.world.fastPhysics = fastPref();
+  syncFast();
+
   rate.addEventListener('input', applyRate); applyRate();
 
   bindPlanetDrag();

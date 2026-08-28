@@ -2624,6 +2624,98 @@ export function run() {
     check('Dragging a slider to a value equals typing that value', !mismatch,
       mismatch || `${checked} slider positions`);
 
+    // ...and so does every value in every preset, which is the general form of
+    // the same bug and the one that was actually shipped. A preset that carries
+    // a number its own slider cannot represent shows the wrong value the moment
+    // it is loaded, and snaps the world somewhere else the first time anyone
+    // touches that control. Pre-industrial Earth's 0.8 ppm of methane and the
+    // Snowball's 10 ppm of CO2 were both doing this.
+    {
+      const bad = [];
+      for (const [id, preset] of Object.entries(PRESETS)) {
+        for (const d of SLIDERS) {
+          const v = preset.params[d.key];
+          if (typeof v !== 'number' || !isFinite(v)) continue;
+          if (v < d.min || v > d.max) { bad.push(`${id}.${d.key}=${v} out of range`); continue; }
+          const back = fromSlider(d, toSlider(d, v));
+          const rel = v === 0 ? Math.abs(back) : Math.abs(back - v) / Math.abs(v);
+          if (rel > 5e-3) bad.push(`${id}.${d.key} ${v} → ${back.toExponential(3)}`);
+        }
+      }
+      check('\u2026and every value in every preset is one its slider can hold',
+        bad.length === 0,
+        bad.length ? bad.slice(0, 5).join(', ') + (bad.length > 5 ? ` (+${bad.length - 5})` : '')
+          : `${Object.keys(PRESETS).length} presets across ${SLIDERS.length} controls`);
+    }
+
+    // Fast physics has to give the same planet, not merely a fast one.
+    //
+    // The switch stops re-deriving the radiative state in the middle of a step,
+    // so every rate in the step is evaluated at the state it began in. That is a
+    // real approximation and it moves the answers; what it must not do is move
+    // them somewhere else entirely. A mode that ran a world into a different
+    // climate would be worthless however fast it was, and "about the same, a bit
+    // quicker" is the whole of what is being offered.
+    //
+    // Graded on the two things a player would actually notice: what the world is
+    // called, and how warm it is. Five kelvin is generous against the hundreds
+    // that separate the climates this model has, and tight enough that a mode
+    // quietly walking a planet somewhere else could not hide in it.
+    {
+      const both = (id) => ['exact', 'fast'].map((m) => {
+        const sim = new Simulation({ ...PRESETS[id].params });
+        sim.world.fastPhysics = m === 'fast';
+        let g = 0;
+        while (sim.world.time < 2e7 && g++ < 2e5) {
+          sim.stepOnce(Math.min(maxStep(sim.world), 5e6, 2e7 - sim.world.time));
+        }
+        return sim.world;
+      });
+      const bad = [];
+      for (const id of ['earth', 'preindustrial', 'venus', 'mars', 'earlyEarth',
+                        'earlyVenus', 'earlyMars', 'snowball', 'dune', 'eyeball',
+                        'waterworld', 'titan', 'trappist1b', 'trappist1e',
+                        'gj1132b', 'superEarth']) {
+        const [a, b] = both(id);
+        const dT = Math.abs(a.diag.Tmean - b.diag.Tmean);
+        if (classify(a).id !== classify(b).id) {
+          bad.push(`${id} ${classify(a).name} → ${classify(b).name}`);
+        } else if (dT > 5) {
+          bad.push(`${id} ${dT.toFixed(1)} K apart`);
+        }
+      }
+      check('Fast physics lands on the same climate as exact physics',
+        bad.length === 0,
+        bad.length ? bad.join(', ')
+          : '16 presets, same state and within 5 K after 20 Myr');
+    }
+
+    // Every stop has to be a value its own slider can actually hold.
+    //
+    // A stop is a button that writes a number straight into the params and then
+    // asks the slider to show it. If that number is outside the slider's range,
+    // or lands between two of its thousand positions, the handle goes somewhere
+    // else and the button stops looking pressed the moment anything resyncs --
+    // which is the one way this feature can be quietly wrong.
+    {
+      const bad = [];
+      for (const d of SLIDERS) {
+        for (const st of d.stops || []) {
+          if (st.v < d.min || st.v > d.max) { bad.push(`${d.key}:${st.n} out of range`); continue; }
+          const back = fromSlider(d, toSlider(d, st.v));
+          const rel = st.v === 0 ? Math.abs(back) : Math.abs(back - st.v) / Math.abs(st.v);
+          // The same 0.1% the highlight uses, so a stop that passes here is a
+          // stop that stays lit.
+          if (rel > 1e-3) bad.push(`${d.key}:${st.n} ${st.v} → ${back}`);
+        }
+      }
+      const n = SLIDERS.reduce((a, d) => a + (d.stops ? d.stops.length : 0), 0);
+      check('Every slider stop is a value its own slider can hold',
+        bad.length === 0 && n > 20,
+        bad.length ? bad.join(', ') : `${n} stops across ` +
+          `${SLIDERS.filter((d) => d.stops).length} controls, all reachable`);
+    }
+
     check('Every control survives a slider round-trip', worst < 3e-3,
       `worst ${(worst * 100).toFixed(3)}% on ${worstKey}`);
   }

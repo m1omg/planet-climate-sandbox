@@ -154,7 +154,19 @@ export class Simulation {
     // expensive part of a step, and this saves a third of it.
     w.dtPrev = dt;          // the step actually taken, for the size controller
     stepTemperature(w, dt);
-    update(w, dt);
+    // Refresh the diagnostics before the reservoirs read them, so that
+    // weathering, escape and the water partition see the temperature the step
+    // just produced rather than the one it started from.
+    //
+    // Fast mode skips this, and the trade is a coherent one rather than a
+    // corner cut: it makes every rate in the step be evaluated at the state the
+    // step began in, which is a consistent explicit scheme, where the default
+    // is a mixed one that costs a whole extra radiative transfer over eighteen
+    // bands. The error it admits is bounded by the same thing everything else
+    // here is bounded by -- maxStep will not let a band move more than about
+    // two and a half kelvin in a step, so that is how stale the reservoirs' view
+    // of the temperature can be.
+    if (!w.fastPhysics) update(w, dt);
     stepVolatiles(w, dt);
     w.time += dt;
     // The star and the interior are functions of the world's age, so they are

@@ -64,7 +64,9 @@ export const SLIDERS = [
   { g: 'body', key: 'mass', label: 'Planet mass', min: 0.05, max: 5, log: true,
     fmt: (v) => `${v.toFixed(2)} M⊕`, units: { 'm': 1, 'me': 1, 'm⊕': 1, 'earth': 1, 'earths': 1 },
     note: 'Sets radius, gravity and how well the world holds its air.' },
-  { g: 'body', key: 'water', label: 'Water inventory', min: 0, max: 12, log: true, zero: true, live: 'water',
+  { g: 'body', key: 'water', stops: [
+      { v: 0, n: 'dry' }, { v: 0.02, n: 'Mars' },
+      { v: 0.108, n: 'Early Venus' }, { v: 1, n: 'Earth' }, { v: 6, n: 'ocean world' }], label: 'Water inventory', min: 0, max: 12, log: true, zero: true, live: 'water',
     // Below a thousandth of an ocean, "0.000 EO" says nothing; a global layer a
     // few centimetres deep says a great deal. Metres, then, at the dry end.
     // The precision thresholds sit just below the round numbers on purpose: a
@@ -81,11 +83,15 @@ export const SLIDERS = [
     fmt: (v) => `${(v * 100).toFixed(0)} % land`, units: { '%': 0.01 }, unitFor: () => '%',
     note: 'How much of this world would stand above the sea at Earth-like water. Actual coverage is worked out from the water it really has — see the readout.' },
 
-  { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 100, log: true,
+  { g: 'star', key: 'insolation', stops: [
+      { v: 0.32, n: 'Noachian Mars' }, { v: 0.43, n: 'Mars' },
+      { v: 0.77, n: 'Archean' }, { v: 1, n: 'Earth' },
+      { v: 1.40, n: 'Early Venus' }, { v: 1.91, n: 'Venus' },
+      { v: 4.15, n: 'TRAPPIST-1b' }, { v: 18.8, n: 'GJ 1132 b' }], label: 'Starlight received', min: 0.005, max: 100, log: true,
     live: 'insolation',
     fmt: (v) => `${v.toFixed(3)} S⊕`,
     units: { s: 1, 'se': 1, 's⊕': 1, 'w/m2': 1 / 1361, 'w/m²': 1 / 1361, w: 1 / 1361 },
-    note: 'Relative to Earth. 1 S⊕ = 1361 W/m². Runs to 100× because real planets do: GJ 1132 b takes 18.8 and Trappist-1b 4.15, and a slider that stopped at 4 could not represent two of the worlds shipped with it.',
+    note: 'Relative to Earth. 1 S⊕ = 1361 W/m². Four decades wide because real bodies are: Titan gets 0.011 and GJ 1132 b takes 18.8, and a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it.',
     // Main-sequence stars brighten as they burn: helium ash makes the core
     // denser, it contracts, and it fuses faster. The Sun has gained about 40%
     // since it formed (Gough 1981), which is 7.4% per billion years compounded
@@ -105,7 +111,7 @@ export const SLIDERS = [
           <input type="checkbox" id="chk-smooth-sun"> smooth changes
         </label>
       </div>` },
-  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2600, max: 9000, step: 10,
+  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2300, max: 9000, step: 1,
     fmt: (v) => `${v.toFixed(0)} K`, units: { k: 1 } },
   { g: 'star', key: 'xuvFraction', label: 'Stellar XUV activity', min: 1e-6, max: 1e-2, log: true,
     fmt: (v) => `${(v / 3.4e-6).toFixed(v / 3.4e-6 < 10 ? 1 : 0)}× Sun`,
@@ -121,19 +127,28 @@ export const SLIDERS = [
     // Rotation rate and synchronisation are different questions; the toggle
     // below the sliders asks the second one.
     note: 'Slow rotators grow a thick reflective cloud deck and move heat much more freely. Rotation alone does not make a world synchronous — Venus turns once every 243 days and still sees the sun everywhere. Use the tidal-lock switch for that.' },
-  { g: 'star', key: 'obliquity', label: 'Axial tilt', min: 0, max: 90, step: 0.5,
+  { g: 'star', key: 'obliquity', label: 'Axial tilt', min: 0, max: 90, step: 0.1,
     fmt: (v) => `${v.toFixed(1)}°`, units: { '°': 1, deg: 1, degrees: 1 } },
 
-  { g: 'atmo', key: 'n2Bar', label: 'Nitrogen & argon', min: 0, max: 20, log: true, zero: true, live: 'n2',
+  { g: 'atmo', key: 'n2Bar', stops: [
+      { v: 2e-4, n: 'Mars' }, { v: 0.78, n: 'Earth' },
+      { v: 1.5, n: 'Titan' }, { v: 3.5, n: 'Venus' }], label: 'Nitrogen & argon', min: 0, max: 20, log: true, zero: true, live: 'n2',
     fmt: fmtBar, units: PRESSURE_UNITS, unitFor: (v) => (v >= 1e-3 ? 'bar' : 'µbar'),
     note: 'The gas that neither condenses nor absorbs: 0.78 bar of it on Earth. Radiatively inert, but it broadens everything else’s absorption lines.' },
-  { g: 'atmo', key: 'o2Bar', label: 'Oxygen', min: 0, max: 2, log: true, zero: true, live: 'o2',
+  { g: 'atmo', key: 'o2Bar', stops: [
+      { v: 0, n: 'anoxic' }, { v: 0.021, n: '10% PAL' },
+      { v: 0.21, n: 'Earth' }, { v: 0.35, n: 'Carboniferous' }], label: 'Oxygen', min: 0, max: 2, log: true, zero: true, live: 'o2',
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'Made by life, consumed by volcanic gases and by weathering rock. Set the biosphere below the volcanoes and it stays at nothing however long you wait — that threshold is the Great Oxidation.' },
-  { g: 'atmo', key: 'co2Bar', label: 'Carbon dioxide', min: 0, max: 100, log: true, zero: true, live: 'co2',
+  { g: 'atmo', key: 'co2Bar', stops: [
+      { v: 280e-6, n: '280 ppm' }, { v: 427e-6, n: '427 ppm' },
+      { v: 1e-3, n: '1 mbar' }, { v: 0.1, n: 'Archean' },
+      { v: 1, n: '1 bar' }, { v: 88, n: 'Venus' }], label: 'Carbon dioxide', min: 0, max: 100, floor: 1e-7, log: true, zero: true, live: 'co2',
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'Evolves on its own: volcanoes add it, weathering removes it, cold traps freeze it out.' },
-  { g: 'atmo', key: 'ch4Bar', label: 'Methane', min: 0, max: 1, log: true, zero: true, live: 'ch4',
+  { g: 'atmo', key: 'ch4Bar', stops: [
+      { v: 0.8e-6, n: '0.8 ppm' }, { v: 1.9e-6, n: '1.9 ppm' },
+      { v: 1e-3, n: 'Archean' }, { v: 0.05, n: 'Titan' }], label: 'Methane', min: 0, max: 1, floor: 1e-9, log: true, zero: true, live: 'ch4',
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'What is in the air now, not what stays. Life makes most of it and the interior a little; oxygen cuts its life from twelve thousand years to ten, so an oxygenated world holds almost none.' },
 
@@ -319,10 +334,28 @@ export function snapToDisplay(d, v) {
   return d.fmt(typed) === label ? typed : v;
 }
 
+// The smallest non-zero value a log slider can hold.
+//
+// A log axis needs a bottom, and for a control whose minimum is a genuine zero
+// -- there is a separate "none" notch at the left for that -- the bottom used to
+// be a millionth of the maximum, always. Which put methane's floor at 1 ppm and
+// CO2's at 100 ppm, and both are values the model uses: pre-industrial Earth
+// carries 0.8 ppm of methane and the Snowball preset carries 10 ppm of CO2. The
+// sliders could not represent their own presets. Load Pre-Industrial Earth and
+// the methane handle sat pinned at the far left showing the wrong number, and
+// touching it snapped the world to 1 ppm.
+//
+// So a control may name its own floor. Six decades stays the default, because
+// for most of them it is right.
+function logFloor(d) {
+  if (d.floor) return d.floor;
+  return d.min <= 0 ? d.max * 1e-6 : d.min;
+}
+
 export function toSlider(d, v) {
   if (d.log) {
     if (d.zero && v <= 0) return 0;
-    const lo = Math.log(d.min <= 0 ? d.max * 1e-6 : d.min), hi = Math.log(d.max);
+    const lo = Math.log(logFloor(d)), hi = Math.log(d.max);
     const t = (Math.log(Math.max(v, Math.exp(lo))) - lo) / (hi - lo);
     return d.zero ? 8 + t * 992 : t * 1000;
   }
@@ -331,7 +364,7 @@ export function toSlider(d, v) {
 export function fromSlider(d, s) {
   if (d.log) {
     if (d.zero && s < 8) return 0;
-    const lo = Math.log(d.min <= 0 ? d.max * 1e-6 : d.min), hi = Math.log(d.max);
+    const lo = Math.log(logFloor(d)), hi = Math.log(d.max);
     const t = d.zero ? (s - 8) / 992 : s / 1000;
     return Math.exp(lo + t * (hi - lo));
   }
