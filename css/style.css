@@ -464,7 +464,20 @@ body.software-render #planet{image-rendering:auto}
 .stop:hover{color:var(--fg);border-color:var(--line-2)}
 .stop:active{background:rgba(30,40,64,.95)}
 .stop.active{color:var(--accent);border-color:var(--accent);background:rgba(127,212,255,.10)}
-.rate-stops{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;grid-column:1/-1}
+.rate-stops{display:flex;align-items:center;gap:8px;margin-top:6px;grid-column:1/-1}
+/* The acceleration menu. A dropdown rather than a row of chips because the row
+   did not fit a tablet: seven buttons wrapped to two lines and pushed the
+   timebar over the planet. A select is one line at any width, and on a phone or
+   tablet the platform opens it as a full-height list, which is the easiest
+   possible thing to hit with a thumb. */
+#rate-menu{
+  flex:1 1 auto;min-width:0;background:var(--panel-2);color:var(--fg);
+  border:1px solid var(--line);border-radius:7px;padding:6px 8px;
+  font:12px/1.3 var(--mono);cursor:pointer;
+}
+#rate-menu:focus{outline:none;border-color:var(--accent)}
+.rate-val{width:11ch;text-align:right}
+@media (pointer:coarse){ #rate-menu{padding:9px 10px;font-size:13px} }
 .ctl-stops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 2px}
 /* Touch targets: on a coarse pointer the chips get taller, because the whole
    point of them is to be hittable with a thumb. */
