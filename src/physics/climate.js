@@ -1,6 +1,6 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
          P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O } from './constants.js';
-import { olr, planetaryAlbedo, iceFraction, landIceFraction, ALB_SEABED,
+import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
@@ -36,6 +36,41 @@ const MIXED_LAYER = 60;        // m
 
 // Fraction of the surface under dry descending air, and how humid that air is.
 export const FIN_FRACTION = 0.18, RH_DRY = 0.20;
+
+// Scratch space, one set per world, reused for the life of it.
+//
+// update() alone used to allocate ten typed arrays every call and it is called
+// twice a step; tendency(), radiativeDamping() and stepTemperature() allocated
+// another dozen between them. Thirty short-lived allocations per step, at tens
+// of thousands of steps a second, is a lot of garbage to make and collect for
+// arrays whose contents are overwritten from scratch every time anyway.
+//
+// The seven arrays that end up inside `diag` are shared with it deliberately:
+// the diag OBJECT is still new on every call, which is what `w._solve`'s
+// identity check depends on, but its arrays are the same storage each time.
+// Nothing outside a single step holds a diag long enough to notice -- the
+// history keeps scalars, the snapshot keeps none of it, and the charts read it
+// between steps.
+function scratch(w) {
+  let b = w._buf;
+  if (!b) {
+    b = w._buf = {};
+    for (const key of ['S', 'demand', 'pH2O', 'pH2Odry', 'alb', 'out', 'cloud',
+                       'pTot', 'C', 'k', 'dT', 'lo', 'di', 'up', 'rhs', 'cp',
+                       'dp', 'dTn']) {
+      b[key] = new Float64Array(NBANDS);
+    }
+    b.flux = new Float64Array(NBANDS + 1);
+    b.wgt = new Float64Array(NBANDS + 1);
+    // The options object handed to planetaryAlbedo, and the result it writes
+    // into. Both are consumed inside the loop that fills them.
+    b.aOpt = { oceanFrac: 0, landAlbedo: 0, hasWater: false, waterCap: 0,
+               glaciated: 0, pH2O: 0, pTot: 0, slowness: 0, subStellar: 0,
+               cloudWhite: 1 };
+    b.aOut = { albedo: 0, cloud: 0 };
+  }
+  return b;
+}
 
 export function createWorld(params) {
   const w = {
@@ -127,11 +162,11 @@ function s2Coefficient(obliquityDeg) {
   return clamp(0.912 * (3 * s * s - 1), -0.95, 1.9);
 }
 
-export function insolationProfile(p) {
+export function insolationProfile(p, into = null) {
   const F = p.insolation * 1361;
   const lam = lockFactor(p);
   const s2 = s2Coefficient(p.obliquity);
-  const out = new Float64Array(NBANDS);
+  const out = into || new Float64Array(NBANDS);
   for (let i = 0; i < NBANDS; i++) {
     const x = X[i];
     const fast = F / 4 * (1 + s2 * 0.5 * (3 * x * x - 1));
@@ -245,7 +280,8 @@ export function update(w, dt) {
   const glaciatedShare = clamp(w.iceSheet, 0, 1);
 
   // Demanded vapour per band, then rescaled if the planet hasn't got the water
-  const demand = new Float64Array(NBANDS);
+  const B = scratch(w);
+  const demand = B.demand;
   let totalDemand = 0;
   for (let i = 0; i < NBANDS; i++) {
     demand[i] = RH * psatH2O(w.T[i]) / g;   // kg/m^2
@@ -254,8 +290,7 @@ export function update(w, dt) {
   const supply = clamp(availCol, 0, 1e12);
   const scale = totalDemand > supply ? supply / Math.max(totalDemand, 1e-30) : 1;
 
-  const pH2O = new Float64Array(NBANDS);
-  const pH2Odry = new Float64Array(NBANDS);
+  const pH2O = B.pH2O, pH2Odry = B.pH2Odry;
   let vapCol = 0;
   for (let i = 0; i < NBANDS; i++) {
     const col = demand[i] * scale;
@@ -284,7 +319,7 @@ export function update(w, dt) {
   const ch4SW = 1 - ch4Shortwave(pCH4);
   const swTrans = hazeSW * ch4SW;
 
-  const S = insolationProfile(p);
+  const S = insolationProfile(p, B.S);
   const lam = lockFactor(p);
   const slowness = clamp(smoothstep(24, 1500, p.rotationHours), 0, 1) * 0.5 + slowRotation(p) * 0.5;
   // How well cloud reflects this particular star's light. 1 for a G star, and
@@ -309,8 +344,7 @@ export function update(w, dt) {
   const aerAlb = clamp(Math.max(w.aerosol ?? 0, 0)
     / Math.max(sMean * swTrans, 1e-6), 0, 0.5);
 
-  const alb = new Float64Array(NBANDS), out = new Float64Array(NBANDS);
-  const cloud = new Float64Array(NBANDS), pTotArr = new Float64Array(NBANDS);
+  const alb = B.alb, out = B.out, cloud = B.cloud, pTotArr = B.pTot;
   const hasWater = totalWater > 1e-5;
   const waterCap = smoothstep(0.004, 0.12, totalWater);
   let Tmean = 0, iceMean = 0, iceArea = 0, absorbed = 0, emitted = 0, pTotMean = 0;
@@ -319,11 +353,12 @@ export function update(w, dt) {
     const pTot = pN2 + pCO2 + pCH4 + pO2 + pH2O[i];
     pTotArr[i] = pTot;
     const subStellar = lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;
-    const a = planetaryAlbedo(w.T[i], {
-      oceanFrac: flooded, landAlbedo: effLandAlbedo, hasWater, waterCap,
-      glaciated: glaciatedShare,
-      pH2O: pH2O[i], pTot, slowness, subStellar, cloudWhite,
-    });
+    const ao = B.aOpt;
+    ao.oceanFrac = flooded; ao.landAlbedo = effLandAlbedo; ao.hasWater = hasWater;
+    ao.waterCap = waterCap; ao.glaciated = glaciatedShare;
+    ao.pH2O = pH2O[i]; ao.pTot = pTot; ao.slowness = slowness;
+    ao.subStellar = subStellar; ao.cloudWhite = cloudWhite;
+    const a = planetaryAlbedoInto(w.T[i], ao, B.aOut);
     alb[i] = clamp(a.albedo + aerAlb, 0, 0.95); cloud[i] = a.cloud;
     const moistOLR = olr(w.T[i], pCO2, pH2O[i], pCH4, pTot);
     const dryOLR = olr(w.T[i], pCO2, pH2Odry[i], pCH4, pTot);
@@ -350,7 +385,7 @@ export function update(w, dt) {
   //   2. the atmosphere itself, which is enormous in a thick steam envelope
   //   3. latent heat: every extra kelvin evaporates more sea, and near the
   //      runaway that dwarfs everything else.
-  const C = new Float64Array(NBANDS);
+  const C = B.C;
   const oceanDepth = (w.water.ocean + w.water.seaIce) * d.eoColumn / RHO_WATER;
   for (let i = 0; i < NBANDS; i++) {
     const deep = MIXED_LAYER + Math.max(0, oceanDepth - MIXED_LAYER) * smoothstep(315, 350, w.T[i]);
@@ -428,8 +463,8 @@ export function tendency(w) {
   const dg = w.diag, p = w.params;
   const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
   const D = diffusionCoefficient(p, dg.pTotMean, pH2Omean);
-  const dT = new Float64Array(NBANDS);
-  const flux = new Float64Array(NBANDS + 1);
+  const B = scratch(w);
+  const dT = B.dT, flux = B.flux;
   for (let j = 1; j < NBANDS; j++) {
     const xe = -1 + DX * j;
     flux[j] = D * (1 - xe * xe) * (w.T[j] - w.T[j - 1]) / DX;
@@ -616,7 +651,8 @@ export function maxStep(w, maxDeltaT = 2.5) {
 // It enters the solver below as the off-diagonal terms it actually is.
 export function radiativeDamping(w) {
   const dg = w.diag;
-  const k = new Float64Array(NBANDS);
+  const B = scratch(w);
+  const k = B.k;
   for (let i = 0; i < NBANDS; i++) {
     const T = w.T[i];
     const h = 0.5;
@@ -641,12 +677,16 @@ export function radiativeDamping(w) {
     const ptHi = dg.pTot[i] - dg.pH2O[i] + pwHi, ptLo = dg.pTot[i] - dg.pH2O[i] + pwLo;
     const dOLR = (olr(T + h, dg.pCO2, pwHi, dg.pCH4, ptHi)
                 - olr(T - h, dg.pCO2, pwLo, dg.pCH4, ptLo)) / (2 * h);
-    const albAt = (t, pwx, ptx) => planetaryAlbedo(t, {
-      oceanFrac: dg.flooded, landAlbedo: dg.effLandAlbedo, hasWater: dg.hasWater,
-      waterCap: dg.waterCap, glaciated: dg.glaciatedShare * iceFraction(t),
-      pH2O: pwx, pTot: ptx, slowness: dg.slowness, cloudWhite: dg.cloudWhite,
-      subStellar: dg.lam > 0.01 ? clamp(X[i], 0, 1) : 0.35,
-    }).albedo;
+    const albAt = (t, pwx, ptx) => {
+      const ao = B.aOpt;
+      ao.oceanFrac = dg.flooded; ao.landAlbedo = dg.effLandAlbedo;
+      ao.hasWater = dg.hasWater; ao.waterCap = dg.waterCap;
+      ao.glaciated = dg.glaciatedShare * iceFraction(t);
+      ao.pH2O = pwx; ao.pTot = ptx; ao.slowness = dg.slowness;
+      ao.cloudWhite = dg.cloudWhite;
+      ao.subStellar = dg.lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;
+      return planetaryAlbedoInto(t, ao, B.aOut).albedo;
+    };
     const dABS = dg.S[i] * dg.swTrans * (albAt(T - h, pwLo, ptLo) - albAt(T + h, pwHi, ptHi)) / (2 * h);
     k[i] = dOLR - dABS;
   }
@@ -670,14 +710,14 @@ export function stepTemperature(w, dtYears) {
   const r = cached ? cached.k : radiativeDamping(w);
   w._solve = null;
 
-  const wgt = new Float64Array(NBANDS + 1);      // edge conductances
+  const B = scratch(w);
+  const wgt = B.wgt;              // edge conductances
   for (let j = 1; j < NBANDS; j++) {
     const xe = -1 + DX * j;
     wgt[j] = D * (1 - xe * xe) / (DX * DX);
   }
 
-  const lo = new Float64Array(NBANDS), di = new Float64Array(NBANDS);
-  const up = new Float64Array(NBANDS), rhs = new Float64Array(NBANDS);
+  const lo = B.lo, di = B.di, up = B.up, rhs = B.rhs;
   for (let i = 0; i < NBANDS; i++) {
     lo[i] = -wgt[i];
     up[i] = -wgt[i + 1];
@@ -686,7 +726,7 @@ export function stepTemperature(w, dtYears) {
   }
 
   // Thomas algorithm
-  const cp = new Float64Array(NBANDS), dp = new Float64Array(NBANDS);
+  const cp = B.cp, dp = B.dp;
   cp[0] = up[0] / di[0];
   dp[0] = rhs[0] / di[0];
   for (let i = 1; i < NBANDS; i++) {
@@ -694,7 +734,7 @@ export function stepTemperature(w, dtYears) {
     cp[i] = up[i] / m;
     dp[i] = (rhs[i] - lo[i] * dp[i - 1]) / m;
   }
-  const dTn = new Float64Array(NBANDS);
+  const dTn = B.dTn;
   dTn[NBANDS - 1] = dp[NBANDS - 1];
   for (let i = NBANDS - 2; i >= 0; i--) dTn[i] = dp[i] - cp[i] * dTn[i + 1];
 

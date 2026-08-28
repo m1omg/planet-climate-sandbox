@@ -411,7 +411,9 @@ export function basinWater(w) {
 export function escapeRates(w) {
   const p = w.params, dg = w.diag, d = dg.d;
   const pTot = Math.max(1e-6, dg.pTotMean);
-  const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
+  let pH2Omean = 0;
+  for (let i = 0; i < NBANDS; i++) pH2Omean += dg.pH2O[i];
+  pH2Omean /= NBANDS;
 
   // Stratospheric water mixing ratio. The cold trap suppresses it enormously,
   // but the suppression weakens as the lower atmosphere gets wetter. This power
@@ -426,7 +428,9 @@ export function escapeRates(w) {
   let fStrat = 0;
   for (let i = 0; i < NBANDS; i++) {
     const x = clamp(dg.pH2O[i] / Math.max(dg.pTot[i], 1e-9), 0, 1);
-    fStrat += clamp(0.0115 * Math.pow(x, 1.764) + Math.pow(x, 8), 0, 1) / NBANDS;
+    // x^8 written out: three multiplies against a call into pow's exp-and-log.
+    const x2 = x * x, x4 = x2 * x2;
+    fStrat += clamp(0.0115 * Math.pow(x, 1.764) + x4 * x4, 0, 1) / NBANDS;
   }
 
   // Diffusion-limited: 2.5e13 * f H atoms/cm^2/s  ->  kg/m^2/yr of water
