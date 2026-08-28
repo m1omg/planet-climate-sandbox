@@ -953,6 +953,23 @@ export function run() {
       // run starts, which never fires and gives the interface no way to say so.
       // Elapsed time has no such value. Every argument this function can be
       // given, from a world's first instant onward, is one it can still reach.
+      // Exactly one preset ships with the event armed, and it is the one the
+      // event belongs to. Modern Venus in particular must not: it starts at an
+      // age of 4.567, which is 715 Myr *after* the repaving happened, so an
+      // armed pulse there would be a second resurfacing the planet never had.
+      // Its mantle carbon is already in its atmosphere -- that is what the 88
+      // bar in the preset is.
+      {
+        const armed = Object.entries(PRESETS).filter(([, v]) =>
+          v.params.resurfacingAge > 0 && v.params.resurfacingBoost > 1);
+        check('Only Early Venus ships with a resurfacing event armed',
+          armed.length === 1 && armed[0][0] === 'earlyVenus'
+            && PRESETS.venus.params.resurfacingAge === 0
+            && PRESETS.venus.params.resurfacingBoost === 1,
+          armed.length === 1 ? `${armed[0][0]}, and nothing else`
+            : `armed on ${armed.map(([k]) => k).join(', ')}`);
+      }
+
       check('\u2026and it is placed ahead of the clock, never behind it',
         resurfacingBoost(p, 0) === 1 && SLIDERS.find((d) => d.key === 'resurfacingAge').min === 0
           && PRESETS.earlyVenus.params.resurfacingAge
