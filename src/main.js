@@ -14,6 +14,7 @@ import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, profileBandAtX } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
+import { NS } from './game/storage.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 
 const $ = (s) => document.querySelector(s);
@@ -52,21 +53,8 @@ const discovered = loadDiscovered();
 // Surface style. Generated albedo maps are the default; ?graphics=procedural
 // (or ?graphics=proc) selects the fully procedural look instead, and the button
 // in the view controls switches between them at any time.
-// Where this build's browser storage lives.
-//
-// localStorage is scoped to the ORIGIN, not to the path, so every copy of this
-// site served from m1omg.github.io -- the stable one at /, /dev/ and this one --
-// reads and writes the same keys unless they are told apart. They were not, and
-// the consequence was not academic: slot 1 is the autosave slot and it fires
-// every thirty seconds, so a minute spent in one build silently overwrote a
-// world saved from another. Worse, a slot holds full simulation state rather
-// than slider values and there is no version tag on it, so the world loaded
-// fine in the other build and then simulated differently. Silent wrong answers.
-//
-// Worlds still travel between builds the way they should: the URL hash and the
-// export file both carry parameters rather than physics state, so they mean the
-// same thing wherever they are opened.
-const NS = 'planetclimate.altdev';
+// The namespace every key in this build hangs off. See game/storage.js for
+// what it is for and what happened without it.
 
 // Rendering detail. High everywhere by default; Low is a manual choice for
 // hardware that still struggles, and it is remembered between visits.
