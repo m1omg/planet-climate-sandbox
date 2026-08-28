@@ -875,14 +875,20 @@ function updateReadout() {
   // the requested acceleration. Say so, rather than letting it look frozen.
   const rateOut = $('#rate-out');
   const achieved = sim.actualRate / 0.1;   // readout runs ten times a second
-  if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
-    rateOut.textContent = `${fmtTime(Math.max(achieved, 0))} / s`;
+  // It is a text field now, so it is written to with `value` -- and never while
+  // it has the caret in it, because overwriting what someone is halfway through
+  // typing ten times a second makes it impossible to type at all.
+  const typeAhead = 'Type a rate: 500 yr, 2 Myr, 1.5 Gyr. Per second is assumed.';
+  if (rateOut.editing) {
+    /* leave it alone */
+  } else if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
+    rateOut.value = `${fmtTime(Math.max(achieved, 0))} / s`;
     rateOut.classList.add('throttled');
     rateOut.title = 'The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.';
   } else {
-    rateOut.textContent = `${fmtTime(sim.rate)} / s`;
+    rateOut.value = `${fmtTime(sim.rate)} / s`;
     rateOut.classList.remove('throttled');
-    rateOut.title = '';
+    rateOut.title = typeAhead;
   }
 
   syncFossil();
@@ -1547,51 +1553,103 @@ function bindControls() {
   });
 
   const rate = $('#rate'), rateOut = $('#rate-out');
+  const rateMenu = $('#rate-menu');
+
+  // The rates worth jumping straight to.
+  //
+  // The slider is logarithmic over nearly nine decades, which is the only way
+  // one control covers "watch the industrial era" and "watch a star burn down"
+  // -- and it means a millimetre of thumb is a factor of ten. On a tablet the
+  // difference between half a million years a second and three hundred million
+  // is a few pixels. A row of buttons was the first answer and it was worse: at
+  // tablet width seven of them wrapped onto two lines and shoved the timebar up
+  // over the planet. A menu is one line at any width, and every platform opens
+  // it as a full-height list, which is the easiest thing there is to hit.
+  //
+  // Named for what the span is good for rather than for its number.
+  const RATE_STOPS = [
+    { v: 1, name: '1 yr / s', why: 'a year a second — watch the industrial era' },
+    { v: 10, name: '10 yr / s', why: 'a decade a second' },
+    { v: 1e2, name: '100 yr / s', why: 'a century a second — the whole fossil burn in a minute' },
+    { v: 1e3, name: '1 kyr / s', why: 'a thousand years a second' },
+    { v: 1e4, name: '10 kyr / s', why: 'glacial cycles, and the long thaw after a carbon spike' },
+    { v: 1e5, name: '100 kyr / s', why: 'a hundred thousand a second' },
+    { v: 1e6, name: '1 Myr / s', why: 'the carbonate-silicate thermostat works on this timescale' },
+    { v: 1e7, name: '10 Myr / s', why: 'ice sheets, cold traps, the slow drift of a climate' },
+    { v: 1e8, name: '100 Myr / s', why: 'a continent\u2019s worth of time per second' },
+    { v: 5e8, name: '500 Myr / s', why: 'the fastest this goes — a planet\u2019s whole life in ten seconds' },
+  ];
+  {
+    const custom = document.createElement('option');
+    custom.value = ''; custom.textContent = 'custom'; custom.hidden = true;
+    rateMenu.appendChild(custom);
+    for (const st of RATE_STOPS) {
+      const o = document.createElement('option');
+      o.value = String(Math.log10(st.v));
+      o.textContent = st.name;
+      o.title = st.why;
+      rateMenu.appendChild(o);
+    }
+  }
+
   const applyRate = () => {
     sim.rate = Math.pow(10, +rate.value);
-    rateOut.textContent = `${fmtTime(sim.rate)} / s`;
+    if (!rateOut.editing) rateOut.value = `${fmtTime(sim.rate)} / s`;
     const lo = +rate.min, hi = +rate.max;
     rate.style.setProperty('--fill', `${((+rate.value - lo) / (hi - lo)) * 100}%`);
-    for (const b of rateStops.children) {
-      b.classList.toggle('active', Math.abs(+b.dataset.exp - +rate.value) < 0.02);
+    // Show the menu entry the clock is actually on, or "custom" when the slider
+    // has been dragged somewhere between two of them.
+    const hit = RATE_STOPS.find((st) => Math.abs(Math.log10(st.v) - +rate.value) < 0.005);
+    rateMenu.value = hit ? String(Math.log10(hit.v)) : '';
+  };
+  rateMenu.addEventListener('change', () => {
+    if (rateMenu.value === '') return;
+    rate.value = rateMenu.value;
+    applyRate();
+  });
+
+  // Typing a rate. Accepts what the readout prints, so whatever it shows can be
+  // copied back in: "500 yr", "2 Myr", "1.5 Gyr / s". A bare number is years,
+  // because that is the unit the control is named in.
+  const RATE_UNITS = { yr: 1, y: 1, a: 1, kyr: 1e3, ky: 1e3, ka: 1e3,
+                       myr: 1e6, my: 1e6, ma: 1e6, gyr: 1e9, gy: 1e9, ga: 1e9,
+                       byr: 1e9, b: 1e9 };
+  const parseRate = (raw) => {
+    const t = String(raw).trim().toLowerCase().replace(',', '.').replace(/\/\s*s(ec(ond)?s?)?$/, '').trim();
+    const m = t.match(/^([-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?)\s*(.*)$/);
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    if (!isFinite(n) || n <= 0) return null;
+    const unit = m[2].replace(/[\s.]/g, '');
+    const mult = unit === '' ? 1 : RATE_UNITS[unit];
+    if (!mult) return null;
+    return n * mult;
+  };
+  const commitRate = () => {
+    rateOut.editing = false;
+    const v = parseRate(rateOut.value);
+    if (v == null) { applyRate(); return; }
+    const lo = +rate.min, hi = +rate.max;
+    rate.value = String(clamp(Math.log10(v), lo, hi));
+    applyRate();
+    const got = Math.pow(10, +rate.value);
+    // Say so rather than silently landing somewhere else, because the ends of
+    // this range are a long way apart and a typo is easy.
+    if (Math.abs(Math.log10(got / v)) > 0.01) {
+      toast(`Time acceleration runs from ${fmtTime(Math.pow(10, lo))} to ` +
+        `${fmtTime(Math.pow(10, hi))} a second — set to ${fmtTime(got)} / s`);
     }
   };
+  rateOut.addEventListener('focus', () => { rateOut.editing = true; rateOut.select(); });
+  rateOut.addEventListener('blur', commitRate);
+  rateOut.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { rateOut.blur(); }
+    else if (e.key === 'Escape') { rateOut.editing = false; applyRate(); rateOut.blur(); }
+  });
 
-  // Tappable stops along the acceleration slider.
-  //
-  // The slider is logarithmic over nine decades, which is the only sensible way
-  // to cover "watch the industrial era" and "watch a star burn down" with one
-  // control -- and it means a millimetre of thumb is a factor of ten. On a phone
-  // that is unusable: half a million years a second and three hundred million a
-  // second are a few pixels apart. So the decades that matter get a button, and
-  // the slider is left for the values in between.
-  //
-  // Each one is a span of time you might actually want to sit through, named
-  // for what it is good for rather than for its number.
-  const RATE_STOPS = [
-    { v: 1, name: '1 yr', why: 'A year a second. Watch the industrial era happen.' },
-    { v: 1e2, name: '100 yr', why: 'A century a second — the whole fossil burn in under a minute.' },
-    { v: 1e4, name: '10 kyr', why: 'Ten thousand years a second: glacial cycles, and the long thaw after a carbon spike.' },
-    { v: 1e6, name: '1 Myr', why: 'A million years a second. The carbonate-silicate thermostat works on this timescale.' },
-    { v: 1e7, name: '10 Myr', why: 'Ten million a second — ice sheets, cold traps and the slow drift of a climate.' },
-    { v: 1e8, name: '100 Myr', why: 'A hundred million a second. Continents\u2019 worth of time per second.' },
-    { v: 5e8, name: '500 Myr', why: 'The fastest this goes: half a billion years a second. A planet\u2019s whole life in ten seconds, if it can keep up.' },
-  ];
-  const rateStops = $('#rate-stops');
-  for (const st of RATE_STOPS) {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'stop';
-    b.textContent = st.name;
-    b.title = st.why;
-    b.dataset.exp = Math.log10(st.v).toFixed(5);
-    b.addEventListener('click', () => { rate.value = b.dataset.exp; applyRate(); });
-    rateStops.appendChild(b);
-  }
-  // ...and the accuracy/speed switch, at the end of the same row, because it is
-  // the other control over how fast this thing runs.
-  const fastBtn = document.createElement('button');
-  fastBtn.type = 'button'; fastBtn.className = 'stop fast-toggle';
-  fastBtn.textContent = 'fast';
+  // The accuracy/speed switch, beside the menu, because it is the other control
+  // over how fast this thing runs.
+  const fastBtn = $('#btn-fast');
   const syncFast = () => {
     fastBtn.classList.toggle('active', !!sim.world.fastPhysics);
     fastBtn.setAttribute('aria-pressed', String(!!sim.world.fastPhysics));
@@ -1610,7 +1668,6 @@ function bindControls() {
       ? 'Fast physics on — about 1.4×, third-digit accuracy'
       : 'Fast physics off — full accuracy');
   });
-  rateStops.appendChild(fastBtn);
   sim.world.fastPhysics = fastPref();
   syncFast();
 
