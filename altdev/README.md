@@ -279,6 +279,28 @@ armed runs its full hundred million years in ten seconds and never notices it is
 It is a governor on measured change, not a detector for two named events, so it also catches a CO₂
 collapse, a nightside freeze-out and anything else this model can do that a list would have missed.
 
+While it is holding the clock back the rate field shows **what the world is actually advancing at**,
+not what was asked for — a readout saying "10 Myr / s" while the planet crawls through a tipping is
+lying about the one moment you are watching most closely.
+
+### A sea does not freeze between two frames
+
+The drawn sea ice is a 25 K ramp and perfectly smooth *in temperature*. What is not smooth is how
+fast a planet crosses it: measured at 100 kyr/s, a world at the ice edge goes from open water to
+frozen over with a per-frame jump of **0.96** — the whole ramp inside one frame, because one frame is
+sixteen hundred simulated years. The planet really did freeze that fast; the picture teleporting is
+still wrong, and it is the same complaint as a runaway happening between two frames.
+
+So it eases at a fixed rate in **seconds**, not in simulated time: a full swing takes about two
+thirds of a second however fast the clock is running, and every readout keeps showing the true state
+throughout. Loading a different world re-seeds rather than eases, because a snowball must be a
+snowball on its first frame instead of freezing over in front of you.
+
+Below the **triple point** it is pinned frozen whatever the temperature says. There is no liquid
+water at any pressure under 611.7 Pa, so a basin down there is an ice field, and drawing it as open
+blue sea was the one thing the phase-limit physics exists to rule out. The readout switches from
+"land / ocean" to "land / ice" at the same line.
+
 ### Three clocks and a flag
 
 `age` is how old the object is *including everything before the simulation started* — an Archean
@@ -384,9 +406,34 @@ relief and drains the land (measured: 30% → 18% at the midpoint). A regional d
 point on the globe somebody's real coastline throughout, and holds the land fraction to within a
 point.
 
-Only Earth ships topography: it is the one body with a clean, redistributable grayscale DEM at a
-usable size, and a plausible-looking but wrong Mars would be worse than an honest procedural one.
-Sources and licences are in `assets/bodies/CREDITS.md`; the build is `tools/buildbodies.py`.
+**Mars carries its real topography too**, from the MOLA MEGDR grid — signed 16-bit metres above the
+areoid, straight off the NASA PDS, put through the same histogram match as Earth's. It checks out
+against the planet: 21171 m at 17.3 N, 227.0 E is Olympus Mons, −8177 m at 32.8 S, 62.2 E is the
+Hellas floor. Because the match preserves hypsometry, giving Noachian Mars an ocean floods the
+**northern lowlands** — Vastitas Borealis, where the shoreline hypothesis puts it — rather than an
+invented basin.
+
+The one non-obvious part is the longitude origin, and getting it wrong puts Olympus Mons in Elysium.
+MEGDR starts at 0 °E; the colour map is centred on 0, so its left edge is 180 °E, and the two are
+rolled half a width apart. That was settled by stacking the two images and looking. An
+albedo–elevation cross-correlation does **not** settle it: it answers 244 °E with a sharp peak and
+r = −0.40, because what varies across Mars's face is dust, not relief.
+
+Venus and Titan keep procedural relief under their real albedo — Magellan's altimetry is not a clean
+grayscale DEM at this size and Titan's is barely mapped — and a plausible-looking but wrong surface
+is worse than an honest invented one. Sources and licences are in `assets/bodies/CREDITS.md`; the
+build is `tools/buildbodies.py`.
+
+**Noachian Mars is Mars**, and now says so: it used to render as an invented world with a random
+seed. Almost everything on that map is older than the epoch — the crustal dichotomy, Hellas, Argyre
+and the whole cratered southern highlands are Noachian-aged — so the shape is right and the rust is
+the caveat, being billions of years of oxidation this world has not had yet.
+
+**Early Venus and the Archean deliberately get no map**, for the same reason in both cases: the real
+surface is *younger than the preset*. Every feature on the Magellan map post-dates Venus's global
+resurfacing 715 Myr ago, which that world has not reached yet and may never; and the Archean had
+perhaps a tenth of today's continental area, nowhere near where the coastlines are now. A procedural
+world is honest about not knowing. Earth's map on an Archean planet would be a claim, and a false one.
 
 #### Three that are not in this solar system
 
@@ -543,7 +590,7 @@ lava — which were generated with an image model and downscaled to 1024×512 JP
 albedo maps available stays fully procedural and says so, and on a device with only eight texture
 units the albedo path is compiled out entirely.
 
-Only **Earth, Mars, Venus and Titan** carry real photography, and only Earth carries real
+Only **Earth, Mars, Venus and Titan** carry real photography, and only Earth and Mars carry real
 topography. Sources and licences are in `assets/bodies/CREDITS.md`.
 
 ### Looking at it

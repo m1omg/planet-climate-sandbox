@@ -29,9 +29,25 @@ export const BODY_MAPS = {
   earth: { colour: 'earth.jpg', height: 'earth_height.png' },
   preindustrial: { colour: 'earth.jpg', height: 'earth_height.png' },
   futureEarth: { colour: 'earth.jpg', height: 'earth_height.png' },
-  mars: { colour: 'mars.jpg' },
+  mars: { colour: 'mars.jpg', height: 'mars_height.png' },
+  // Noachian Mars is Mars. Almost everything on that map is older than the
+  // epoch this preset is set in -- the crustal dichotomy, Hellas, Argyre and
+  // the whole cratered southern highlands are Noachian-aged -- so the shape of
+  // the planet is right, and it was rendering as an invented world with a
+  // random seed. The colour is the caveat: that rust is billions of years of
+  // oxidation this world has not had yet, and a wet Noachian Mars would have
+  // been darker and greyer. Shape right, palette anachronistic, and that is a
+  // better trade than a procedural planet that is not Mars at all.
+  earlyMars: { colour: 'mars.jpg', height: 'mars_height.png' },
   venus: { colour: 'venus.jpg' },
   titan: { colour: 'titan.jpg' },
+  // Early Venus and the Archean deliberately get NO map, and it is the same
+  // reason in both cases: the real surface is younger than the preset. Every
+  // feature on the Magellan map post-dates Venus's global resurfacing 715 Myr
+  // ago, which this world has not reached yet and may never; and the Archean
+  // had perhaps a tenth of today's continental area, nowhere near where the
+  // coastlines are now. A procedural world is honest about not knowing. Earth's
+  // map on an Archean planet would be a claim, and a false one.
 };
 const TEX_UNIFORMS = ['uTexRock', 'uTexDesert', 'uTexVeg', 'uTexIce', 'uTexOcean', 'uTexLava'];
 
@@ -51,6 +67,10 @@ export const QUALITY = {
 // face in one submit is 1.6 billion of them, which Android's GPU watchdog treats
 // as a hung driver and resets. Sixteen thousand texels is a few milliseconds on
 // any GPU that can run this at all.
+// How fast the drawn sea ice may change, per second of wall clock. 1.6 is a
+// full swing from open water to frozen over in about two thirds of a second.
+const ICE_EASE = 1.6;
+
 const TILE_TEXELS = 16384;
 const TILES_PER_FRAME = 4;
 
@@ -285,6 +305,12 @@ export class PlanetView {
     // NEAREST, because the 16-bit temperature is packed across two channels and
     // filtering them separately would corrupt every boundary.
     this.bandBytes = new Uint8Array(NBANDS * 4);
+    // The eased sea-ice value the shader actually sees. `null` until the first
+    // frame, which then seeds it with the true state instead of thawing the
+    // world from zero -- a snowball must not fade in from open ocean.
+    this.bandIce = new Float32Array(NBANDS);
+    this.bandIceSeeded = false;
+    this.iceSeed = null;
     this.bandTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.bandTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, NBANDS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.bandBytes);
@@ -714,7 +740,37 @@ export class PlanetView {
       : (1 - lam) * clamp(0.245 * Math.pow(24 / Math.max(p.rotationHours, 0.5), 0.35), 0.014, 0.63);
     this.spin = (this.spin + spinRate * dtReal) % (Math.PI * 2);
 
+    // How frozen each band's sea is, eased over wall-clock time rather than
+    // taken straight from the state.
+    //
+    // The number itself is a 25 K ramp and perfectly smooth in temperature.
+    // What is not smooth is how fast a planet crosses it: measured at 100
+    // kyr/s, a world at the ice edge goes from open water to fully frozen with
+    // a per-frame jump of 0.96 -- the whole ramp inside a single frame, because
+    // one frame is sixteen hundred simulated years. The planet really did
+    // freeze that fast. The picture teleporting is still wrong, and it is the
+    // same complaint as a runaway happening between two frames.
+    //
+    // So this eases at a fixed rate in SECONDS, not in simulated time: a full
+    // swing takes about two thirds of a second however fast the clock is
+    // running, and the readouts keep showing the true state throughout.
+    //
+    // Below the triple point it is pinned frozen whatever the temperature says.
+    // There is no liquid water at any pressure under 611.7 Pa, so a basin down
+    // there is an ice field, and drawing it as open blue sea was the one thing
+    // the phase-limit physics exists to rule out.
+    const noLiquid = 1 - (dg.liquidAllowed ?? 1);
+    // A different world is not a transition, it is a cut. Loading a snowball
+    // must show a snowball on its first frame rather than freezing over in
+    // front of the player, so a change of seed -- which is what every preset,
+    // save and reset does -- re-seeds the ease instead of easing across it.
+    if (this.iceSeed !== state.seed) { this.bandIceSeeded = false; this.iceSeed = state.seed; }
     for (let i = 0; i < NBANDS; i++) {
+      const target = dg.hasWater
+        ? Math.max(clamp(1 - (world.T[i] - 253) / 25, 0, 1), noLiquid) : 0;
+      if (!this.bandIceSeeded) this.bandIce[i] = target;   // see below
+      const eased = this.bandIce[i];
+      this.bandIce[i] = eased + clamp(target - eased, -ICE_EASE * dtReal, ICE_EASE * dtReal);
       // Truncate rather than round the low byte: rounding lets the residual
       // reach 256, which a byte stores as 0, decoding ~16 K too cold and
       // painting a flickering stripe across that band.
@@ -722,9 +778,10 @@ export class PlanetView {
       const hi = t >> 8;
       this.bandBytes[i * 4] = hi;
       this.bandBytes[i * 4 + 1] = t & 255;
-      this.bandBytes[i * 4 + 2] = 255 * (dg.hasWater ? clamp(1 - (world.T[i] - 253) / 25, 0, 1) : 0);
+      this.bandBytes[i * 4 + 2] = 255 * this.bandIce[i];
       this.bandBytes[i * 4 + 3] = 255;
     }
+    this.bandIceSeeded = true;
 
     const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
     const steam = steamOpacity(pH2Omean);

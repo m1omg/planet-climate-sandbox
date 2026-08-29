@@ -23,7 +23,10 @@ from math import sqrt, log
 
 Image.MAX_IMAGE_PIXELS = None
 SRC = sys.argv[1] if len(sys.argv) > 1 else '/tmp/tex'
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'bodies')
+# Two levels up, not one: /altdev and /dev are folders on main that share the
+# repository root's assets/ -- see the __assetBase in each index.html. Writing
+# one level up quietly created altdev/assets/bodies/ that nothing ever reads.
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'assets', 'bodies')
 W, H = 2048, 1024
 TERRAIN_MEAN, TERRAIN_SD = 0.4972, 0.05313     # matches src/render/terrain.js
 HEIGHT_LO, HEIGHT_HI = 0.30, 0.70              # the byte spans this much of the field
@@ -59,30 +62,69 @@ def save(im, name, **kw):
 
 os.makedirs(OUT, exist_ok=True)
 
+# Rebuild only what is actually downloaded. Every body here comes from a
+# different archive with a different licence, and needing all five present to
+# regenerate any one of them made adding the sixth harder than it had to be.
+def have(name):
+    if os.path.exists(os.path.join(SRC, name)):
+        return True
+    print(f'  skip   {name} not in {SRC}')
+    return False
+
 # --- colour ---------------------------------------------------------------
 for src, name in [('earth_color.jpg', 'earth.jpg'), ('mars_color.jpg', 'mars.jpg'),
                   ('venus_color.jpg', 'venus.jpg')]:
+    if not have(src):
+        continue
     save(Image.open(os.path.join(SRC, src)).convert('RGB').resize((W, H), Image.LANCZOS),
          name, quality=88, optimize=True, progressive=True)
 
 # Titan's global map is infrared and monochrome. Under its haze the world is
 # orange, so brightness is mapped onto a Titan palette rather than shipping a
 # grey moon: dark equatorial dune fields to bright highlands.
-t = np.asarray(Image.open(os.path.join(SRC, 'titan_color.jpg')).convert('L')
-               .resize((W, H), Image.LANCZOS)).astype(float) / 255
-lo, hi = np.array([0.24, 0.15, 0.10]), np.array([0.86, 0.70, 0.44])
-save(Image.fromarray((np.clip(lo + (hi - lo) * (t[..., None] ** 0.85), 0, 1) * 255).astype(np.uint8)),
-     'titan.jpg', quality=88, optimize=True, progressive=True)
+if have('titan_color.jpg'):
+  t = np.asarray(Image.open(os.path.join(SRC, 'titan_color.jpg')).convert('L')
+                 .resize((W, H), Image.LANCZOS)).astype(float) / 255
+  lo, hi = np.array([0.24, 0.15, 0.10]), np.array([0.86, 0.70, 0.44])
+  save(Image.fromarray((np.clip(lo + (hi - lo) * (t[..., None] ** 0.85), 0, 1) * 255).astype(np.uint8)),
+       'titan.jpg', quality=88, optimize=True, progressive=True)
 
-# --- Earth's topography, matched to the terrain distribution ---------------
-dem = np.asarray(Image.open(os.path.join(SRC, 'earth_height.png')).convert('L')
-                 .resize((W, H), Image.LANCZOS)).astype(np.float64)
+# --- topography, matched to the terrain distribution -----------------------
 area = np.repeat(np.sin((np.arange(H) + 0.5) / H * np.pi)[:, None], W, axis=1)
-order = np.argsort(dem, axis=None, kind='stable')
-cum = np.cumsum(area.ravel()[order])
-q = np.empty(dem.size)
-q[order] = (cum - 0.5 * area.ravel()[order]) / cum[-1]     # area-weighted rank
-g = TERRAIN_MEAN + TERRAIN_SD * probit(q)
-byte = np.clip((g - HEIGHT_LO) / (HEIGHT_HI - HEIGHT_LO), 0, 1) * 255
-save(Image.fromarray(byte.reshape(H, W).round().astype(np.uint8)), 'earth_height.png', optimize=True)
+
+# Both DEMs get the same treatment, so it is written once.
+def match_and_save(field, name):
+    order = np.argsort(field, axis=None, kind='stable')
+    cum = np.cumsum(area.ravel()[order])
+    q = np.empty(field.size)
+    q[order] = (cum - 0.5 * area.ravel()[order]) / cum[-1]   # area-weighted rank
+    g = TERRAIN_MEAN + TERRAIN_SD * probit(q)
+    byte = np.clip((g - HEIGHT_LO) / (HEIGHT_HI - HEIGHT_LO), 0, 1) * 255
+    save(Image.fromarray(byte.reshape(H, W).round().astype(np.uint8)), name, optimize=True)
+
+if have('earth_height.png'):
+    match_and_save(np.asarray(Image.open(os.path.join(SRC, 'earth_height.png')).convert('L')
+                              .resize((W, H), Image.LANCZOS)).astype(np.float64), 'earth_height.png')
+
+# --- Mars's topography, from MOLA, the same way -----------------------------
+#
+# megt90n000eb.img is the MOLA MEGDR global grid at 16 pixels/degree: 5760x2880
+# signed 16-bit big-endian metres above the areoid, straight off the PDS. It
+# checks out against the planet -- 21171 m at 17.3N 227.0E is Olympus Mons and
+# -8177 m at 32.8S 62.2E is the Hellas floor.
+#
+# The one thing that is not obvious is the longitude origin, and getting it
+# wrong puts Olympus Mons in Elysium. MEGDR starts at 0 E on its left edge; the
+# Solar System Scope colour map is centred on 0, so its left edge is 180 E, and
+# the two have to be rolled half a width apart. That was settled by looking at
+# them stacked -- the albedo's Olympus ring lands on the DEM's Olympus peak only
+# at this offset. An albedo-elevation cross-correlation does NOT settle it and
+# confidently answers 244 E: Mars's brightness is dust, not relief.
+if have('megt90n000eb.img'):
+    mola = np.fromfile(os.path.join(SRC, 'megt90n000eb.img'), dtype='>i2')
+    mola = mola.reshape(2880, 5760).astype(np.float64)
+    mola = np.roll(mola, -mola.shape[1] // 2, axis=1)       # 0 E origin -> 180 E
+    match_and_save(np.asarray(Image.fromarray(mola).resize((W, H), Image.LANCZOS))
+                   .astype(np.float64), 'mars_height.png')
+
 print(f'\n  matched to N({TERRAIN_MEAN}, {TERRAIN_SD}); byte spans {HEIGHT_LO}..{HEIGHT_HI}')

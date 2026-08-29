@@ -136,5 +136,69 @@ check('…and reaches both of them about equally',
     `${(moved * 100).toFixed(0)}% of a Venus-like planet changes when the map is switched on`);
 }
 
+// Mars's DEM has to be Mars, in the right place, the right way up.
+//
+// A height map that is rolled, flipped or simply someone else's planet passes
+// every other check in this repo: it loads, it has relief, the coastline lands
+// at the requested fraction because the histogram match guarantees that much.
+// What it cannot fake is WHERE the low ground is. Mars's crustal dichotomy puts
+// almost all of it in the northern hemisphere, so giving Noachian Mars an ocean
+// has to flood Vastitas Borealis -- the Oceanus Borealis the shoreline
+// hypothesis argues for -- and leave the southern highlands dry. That falls out
+// of the real hypsometry and out of nothing else.
+{
+  const { readFileSync } = await import('node:fs');
+  const png = readFileSync(new URL('../../assets/bodies/mars_height.png', import.meta.url));
+  // Minimal grayscale-PNG read: IHDR for the size, then inflate and un-filter.
+  const { inflateSync } = await import('node:zlib');
+  const W2 = png.readUInt32BE(16), H2 = png.readUInt32BE(20);
+  const bitDepth = png[24], colourType = png[25];
+  let idat = [];
+  for (let o = 8; o < png.length;) {
+    const len = png.readUInt32BE(o), type = png.toString('ascii', o + 4, o + 8);
+    if (type === 'IDAT') idat.push(png.subarray(o + 8, o + 8 + len));
+    o += len + 12;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const chans = colourType === 0 ? 1 : colourType === 2 ? 3 : colourType === 4 ? 2 : 4;
+  const stride = W2 * chans * (bitDepth / 8);
+  const img = new Uint8Array(W2 * H2);
+  const prior = new Uint8Array(stride), line = new Uint8Array(stride);
+  for (let y = 0, p2 = 0; y < H2; y++) {
+    const ft = raw[p2++];
+    for (let i = 0; i < stride; i++) {
+      const x = raw[p2 + i];
+      const a = i >= chans ? line[i - chans] : 0, b = prior[i];
+      const c = i >= chans ? prior[i - chans] : 0;
+      let v;
+      if (ft === 0) v = x; else if (ft === 1) v = x + a; else if (ft === 2) v = x + b;
+      else if (ft === 3) v = x + ((a + b) >> 1);
+      else { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
+             v = x + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c); }
+      line[i] = v & 255;
+    }
+    p2 += stride;
+    for (let x = 0; x < W2; x++) img[y * W2 + x] = line[x * chans];
+    prior.set(line);
+  }
+  // Flood the lowest 30% by area, which is Noachian Mars's own land fraction.
+  const area = new Float64Array(H2);
+  for (let y = 0; y < H2; y++) area[y] = Math.sin((y + 0.5) / H2 * Math.PI);
+  const idx = Array.from(img.keys()).sort((a, b) => img[a] - img[b]);
+  let total = 0;
+  for (const i of idx) total += area[(i / W2) | 0];
+  let acc = 0, thr = 255;
+  for (const i of idx) { acc += area[(i / W2) | 0]; if (acc >= 0.30 * total) { thr = img[i]; break; } }
+  let north = 0, south = 0;
+  for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
+    if (img[y * W2 + x] <= thr) (y < H2 / 2 ? (north += area[y]) : (south += area[y]));
+  }
+  const share = north / (north + south);
+  check('Mars\u2019s ocean lands in the northern lowlands, as the real planet\u2019s shape demands',
+    share > 0.80 && W2 === 2048 && H2 === 1024,
+    `${(share * 100).toFixed(0)}% of a 30% ocean is north of the equator ` +
+    `(${W2}x${H2}) — the crustal dichotomy, not a coincidence`);
+}
+
 console.log(failed ? `\n${failed} problem(s) with the body maps` : '\nreal surface maps reach both surface styles');
 process.exit(failed ? 1 : 0);
