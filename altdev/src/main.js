@@ -816,7 +816,13 @@ function updateReadout() {
       `${(dg.landFrac * 100).toFixed(0)}<small> %</small> / ${(dg.flooded * 100).toFixed(0)}<small> %</small>`,
       dg.landFrac > 0.98 && w.water.lost > 0.02 ? 'warn' : '') +
     stat('Sea ice / land ice', `${(dg.seaIceFrac * 100).toFixed(0)}<small> %</small> / ${(dg.landIceFrac * 100).toFixed(0)}<small> %</small>`) +
-    stat('Ice cover', `${(dg.iceMean * 100).toFixed(0)}<small> %</small>`) +
+    // iceArea, not iceMean. They are two different questions and this label is
+    // the second one: iceMean is how much of the surface is BELOW FREEZING,
+    // iceArea is how much of it is actually under ice. On Mars those are 100%
+    // and 1.9%, and the honest one -- which was already being computed one line
+    // below the other and shown to nobody -- is the one that matches the caps
+    // the planet really has, about a percent of its surface.
+    stat('Ice cover', `${(dg.iceArea * 100).toFixed(dg.iceArea < 0.1 ? 1 : 0)}<small> %</small>`) +
     stat('Cloud cover', `${(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS * 100).toFixed(0)}<small> %</small>`) +
     stat('Surface pressure', `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +
     stat('CO₂', dg.pCO2 >= 0.01 ? `${dg.pCO2.toFixed(2)}<small> bar</small>` : `${(dg.pCO2 * 1e6).toFixed(0)}<small> ppm</small>`) +

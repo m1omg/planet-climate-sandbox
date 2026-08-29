@@ -401,7 +401,10 @@ export function renderPlanet(rgba, W, H, s) {
         const sheet = clamp(ice*(0.70 + 0.60*snowline) - 0.18*f[3], 0, 1) * s.glaciated * land;
         const seaIceM = smoothstep(0.06, 0.52, seaIce);
         const sheetM = smoothstep(0.06, 0.52, sheet);
-        const frostM = clamp(ice, 0, 1) * land * (1 - sheetM) * 0.55;
+        // The 0.55 has waterCap on it for the same reason planet.frag does:
+        // frost needs water to deposit, radiation.js:338 has always said so,
+        // and this port had the term missing in exactly the same way.
+        const frostM = clamp(ice, 0, 1) * land * (1 - sheetM) * 0.55 * s.waterCap;
         cr = mix(cr, 0.66, frostM); cg = mix(cg, 0.66, frostM); cb = mix(cb, 0.68, frostM);
         cr = mix(cr, mix(0.72, 0.90, f[3]), seaIceM);
         cg = mix(cg, mix(0.82, 0.95, f[3]), seaIceM);

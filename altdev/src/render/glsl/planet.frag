@@ -233,8 +233,27 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
 
   // Frozen ground with no ice sheet still frosts over: paler than summer rock,
   // nothing like an ice cap.
+  //
+  // ...but only if there is water to frost WITH, and that factor was missing
+  // here while the physics has had it all along. radiation.js:338 reads
+  //
+  //     frost = landAlbedo + (ALB_FROST - landAlbedo) * waterCap
+  //
+  // -- "a bone-dry frozen world stays the colour of its dust" -- and this line
+  // is the same statement about the same quantity with the last term dropped.
+  // The two then described different planets: a globally frosted Mars runs at
+  // 197.6 K against the 212.2 K the model actually computes and the 210 K Mars
+  // has. On screen it painted 98% of the disc 55% of the way to grey, which is
+  // what "why is Mars a featureless pink ball" turned out to be. It was not
+  // even adding the polar caps it looked like it was adding: mars.jpg already
+  // carries them at the right latitude and area, and the wash was flattening
+  // them from both ends, taking the disc's contrast from 14.1:1 to 2.86:1.
+  //
+  // waterCap multiplies the STRENGTH rather than the area, because that is
+  // where radiation.js puts it -- the ground keeps its own colour and moves
+  // toward frost only as far as its water allows.
   float frostMask = clamp(ice, 0.0, 1.0) * land * (1.0 - smoothstep(0.06,0.52,sheetAmt));
-  col = mix(col, mix(col, vec3(0.66,0.66,0.68), 0.55), frostMask);
+  col = mix(col, mix(col, vec3(0.66,0.66,0.68), 0.55 * uWaterCap), frostMask);
 
   col = mix(col, seaIceCol, seaIceMask);
   col = mix(col, sheetCol, sheetMask);
@@ -321,8 +340,9 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
   float snowline = smoothstep(-0.06, 0.22, elev);
   float seaIceAmt = clamp(ice*1.05 - 0.16*floe, 0.0, 1.0) * mix(0.25, 1.0, uWaterCap);
   float sheetAmt  = clamp(ice*(0.70 + 0.60*snowline) - 0.18*floe, 0.0, 1.0) * uGlaciated;
+  // Same water gate as the procedural path above, for the same reason.
   float frostMask = clamp(ice,0.0,1.0) * land * (1.0 - smoothstep(0.06,0.52,sheetAmt));
-  col = mix(col, mix(col, vec3(0.66,0.66,0.68), 0.55), frostMask);
+  col = mix(col, mix(col, vec3(0.66,0.66,0.68), 0.55 * uWaterCap), frostMask);
   col = mix(col, tIce, smoothstep(0.06,0.52,seaIceAmt) * (1.0 - land));
   col = mix(col, tIce, smoothstep(0.06,0.52,sheetAmt) * land);
 
