@@ -164,7 +164,11 @@ export function reasonText(w, st) {
     // in latitude on anything that is not tidally locked.
     bits.push(`equator ${(dg.Tmax - 273.15).toFixed(0)} °C, poles ${(dg.Tmin - 273.15).toFixed(0)} °C`);
   }
-  if (dg.iceMean > 0.01) bits.push(`${(dg.iceMean * 100).toFixed(0)}% ice`);
+  // Same distinction as the readout's "Ice cover": what is UNDER ice, not what
+  // is below freezing. Modern Mars is 100% of the second and 1.9% of the first,
+  // and the subtitle claiming "100% ice" for a planet whose caps are a percent
+  // of its surface was the same overstatement the renderer was making.
+  if (dg.iceArea > 0.01) bits.push(`${(dg.iceArea * 100).toFixed(0)}% ice`);
   if (Math.abs(dg.imbalance) > 0.5) bits.push(`${dg.imbalance > 0 ? '+' : ''}${dg.imbalance.toFixed(1)} W/m² imbalance`);
   if (esc.fStrat > 1e-4 && dg.totalWater > 0) {
     const perGyr = (w.escape.water * 1e9) / dg.d.eoColumn;

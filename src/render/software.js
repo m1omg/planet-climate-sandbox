@@ -154,7 +154,15 @@ export class SoftwareView {
       this.bandIceSeeded = false;
     }
     const bandT = new Float32Array(NBANDS), bandIce = this.bandIce;
-    const noLiquid = 1 - (dg.liquidAllowed ?? 1);
+    // Below the triple point the basin is ice rather than open water, whatever
+    // its temperature -- but ONLY if it is cold enough to be ice at all. Above
+    // freezing under a sub-triple-point sky that water is VAPOUR, and
+    // partitionWater sends it there; flooring the drawn ice regardless put a
+    // 14% grey wash on a +27 C thin-aired world for frost that cannot exist.
+    // The gate is the same condition partitionWater itself uses, graded.
+    let coldest = Infinity;
+    for (let i = 0; i < NBANDS; i++) if (world.T[i] < coldest) coldest = world.T[i];
+    const noLiquid = (1 - (dg.liquidAllowed ?? 1)) * clamp((273.16 - coldest) / 5, 0, 1);
     const step = ICE_EASE * (dtReal || 0);
     for (let i = 0; i < NBANDS; i++) {
       bandT[i] = world.T[i];

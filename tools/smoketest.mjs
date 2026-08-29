@@ -391,6 +391,89 @@ if (app && app.graphicsFromUrl) {
   }
 }
 
+// The picture and the physics have to agree about how frosted a world is.
+//
+// This is the check that was missing, and its absence is how the bug shipped.
+// Everything already tested asked whether the map LOADS: BODY_MAPS names it,
+// the file exists, setBody uploads it, bodycheck renders a frame with it. All
+// of it passed while modern Mars drew as a featureless grey-pink ball, because
+// the shader then washed 98% of the disc 55% of the way to grey and buried it.
+//
+// bodycheck could not have caught it for a sharper reason than "it only tests
+// warm worlds": both worlds it builds have band ice identically 0.000, so the
+// frost path has never executed in any frame that tool has ever rendered -- and
+// its metric is a count of pixels that CHANGED when the map was switched on,
+// which reads the same 18% whether the map is shown at full strength or at 45%.
+// The missing measurement is amplitude, not presence.
+//
+// So this compares the two directly, and needs no GL. radiation.js has always
+// graded frost by how much water there is to deposit; the renderers did not.
+// Both are asked how far toward frost they take the ground, and their answers
+// have to move together.
+{
+  const { Simulation } = await import('../src/sim/clock.js');
+  const { PRESETS } = await import('../src/game/presets.js');
+  const { surfaceAlbedo, iceFraction } = await import('../src/physics/radiation.js');
+  const { readFileSync } = await import('node:fs');
+  const cl = (x, a, b) => Math.max(a, Math.min(b, x));
+  const ss = (a, b, x) => { const t = cl((x - a) / (b - a || 1e-12), 0, 1); return t * t * (3 - 2 * t); };
+
+  const fragSrc = readFileSync(new URL('../src/render/glsl/planet.frag', import.meta.url), 'utf8');
+  const frostStrength = (fragSrc.match(/vec3\(0\.66,0\.66,0\.68\),\s*([^)]*)\)/) || [, ''])[1];
+
+  const off = [], rows = [];
+  for (const key of Object.keys(PRESETS)) {
+    const w = new Simulation({ ...PRESETS[key].params }).world, d = w.diag;
+    const la = PRESETS[key].params.landAlbedo ?? 0.25;
+    const g = d.glaciatedShare ?? 0, wc = d.waterCap ?? 0;
+    // How far the PHYSICS moves the ground toward frost, as a fraction of the
+    // way it would go on a world with water to spare.
+    const albAt = (cap) => surfaceAlbedo(d.Tmean, d.flooded, la, d.hasWater, g, cap);
+    const dry = albAt(0), wet = albAt(1), span = wet - dry;
+    if (Math.abs(span) < 1e-6) continue;             // no frost either way
+    const physFrac = (albAt(wc) - dry) / span;
+    // ...and how far the RENDERER does, from the expression in planet.frag and
+    // its two ports. Written out rather than imported because it lives in GLSL.
+    const ice = d.hasWater ? cl(1 - (d.Tmean - 253) / 25, 0, 1) : 0;
+    const land = 1 - d.flooded;
+    const sheetAmt = cl(ice * 0.70, 0, 1) * g;
+    const frostMask = cl(ice, 0, 1) * land * (1 - ss(0.06, 0.52, sheetAmt));
+    if (frostMask < 0.02) continue;                  // nothing painted, nothing to compare
+    // ...read out of the shader itself, so this measures the renderer rather
+    // than restating what it is supposed to do. If the water term goes missing
+    // the renderer frosts every world all the way, and Mars's two answers come
+    // apart by the factor of nineteen that started this.
+    const rendFrac = /uWaterCap/.test(frostStrength) ? wc : 1;
+    rows.push(`${key} ${(physFrac * 100).toFixed(0)}/${(rendFrac * 100).toFixed(0)}`);
+    if (Math.abs(physFrac - rendFrac) > 0.05) {
+      off.push(`${key}: physics frosts ${(physFrac * 100).toFixed(0)}% of the way, `
+        + `the renderer ${(rendFrac * 100).toFixed(0)}% (waterCap ${wc.toFixed(3)}, `
+        + `${(frostMask * 100).toFixed(0)}% of the disc)`);
+    }
+  }
+  if (off.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  the picture and the physics disagree about frost: ${off.join('; ')}`);
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  every frosted world is frosted the same amount in the physics `
+      + `and in the picture  \u2014  ${rows.join(', ')}`);
+  }
+
+  // ...and the term that makes that true has to survive in all three renderers.
+  // The mask arithmetic is written out four times with no shared constant, so a
+  // runtime check on one of them cannot notice another losing it.
+  const cpu = readFileSync(new URL('../src/render/cpushade.js', import.meta.url), 'utf8');
+  const fragSites = (fragSrc.match(/vec3\(0\.66,0\.66,0\.68\), 0\.55 \* uWaterCap\)/g) || []).length;
+  const cpuGated = /const frostM = [^;]*\* s\.waterCap;/.test(cpu);
+  if (fragSites !== 2 || !cpuGated) {
+    console.log(`\x1b[31mFAIL\x1b[0m  frost lost its water gate in a renderer `
+      + `(planet.frag ${fragSites}/2 sites, cpushade ${cpuGated})`);
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  frost keeps its water gate in both shader paths and the CPU port');
+  }
+}
+
 // A milestone the player dropped has to travel in the save. It is not physics,
 // so captureWorld knows nothing about it, and a save format that silently drops
 // half a feature is the kind of thing that only shows up weeks later when

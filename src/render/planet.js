@@ -759,7 +759,15 @@ export class PlanetView {
     // There is no liquid water at any pressure under 611.7 Pa, so a basin down
     // there is an ice field, and drawing it as open blue sea was the one thing
     // the phase-limit physics exists to rule out.
-    const noLiquid = 1 - (dg.liquidAllowed ?? 1);
+    // Below the triple point the basin is ice rather than open water, whatever
+    // its temperature -- but ONLY if it is cold enough to be ice at all. Above
+    // freezing under a sub-triple-point sky that water is VAPOUR, and
+    // partitionWater sends it there; flooring the drawn ice regardless put a
+    // 14% grey wash on a +27 C thin-aired world for frost that cannot exist.
+    // The gate is the same condition partitionWater itself uses, graded.
+    let coldest = Infinity;
+    for (let i = 0; i < NBANDS; i++) if (world.T[i] < coldest) coldest = world.T[i];
+    const noLiquid = (1 - (dg.liquidAllowed ?? 1)) * clamp((273.16 - coldest) / 5, 0, 1);
     // A different world is not a transition, it is a cut. Loading a snowball
     // must show a snowball on its first frame rather than freezing over in
     // front of the player, so a change of seed -- which is what every preset,
