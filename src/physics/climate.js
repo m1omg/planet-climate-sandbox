@@ -57,7 +57,7 @@ function scratch(w) {
     b = w._buf = {};
     for (const key of ['S', 'demand', 'pH2O', 'pH2Odry', 'alb', 'out', 'cloud',
                        'pTot', 'C', 'k', 'dT', 'lo', 'di', 'up', 'rhs', 'cp',
-                       'dp', 'dTn']) {
+                       'dp', 'dTn', 'Tbase', 'Cbase']) {
       b[key] = new Float64Array(NBANDS);
     }
     b.flux = new Float64Array(NBANDS + 1);
@@ -500,7 +500,11 @@ export function maxStep(w, maxDeltaT = 2.5) {
   const tend = tendency(w);
   const k = radiativeDamping(w);
   const { dT, D } = tend;
-  w._solve = { diag: dg, tend, k };
+  // Every field the object will ever carry, declared here. Adding `lineSearch`
+  // and `denseFallback` to it later gave it three hidden classes instead of
+  // one, and V8 charged the rotating worlds most of ten percent for the
+  // megamorphic property access in the hottest loop in the model.
+  w._solve = { diag: dg, tend, k, lineSearch: false, denseFallback: false };
 
   let worst = 0, meanDamping = 0;
   for (let i = 0; i < NBANDS; i++) {
@@ -557,6 +561,33 @@ export function maxStep(w, maxDeltaT = 2.5) {
     if (!isFinite(eqDistance)) eqDistance = Infinity;
   }
 
+  // On a locked world, global humidity and ice diagnostics can make the
+  // radiative Jacobian materially non-local. The tridiagonal approximation is
+  // still the cheap first grade, but when it alone would reject a stable long
+  // step, measure the full coupled Jacobian before falling back to raw
+  // accuracy-bound stepping. This remains the same A*dTeq = C*dT test; only A
+  // now includes the cross-band terms the real diagnostic update contains.
+  let denseGrade = false;
+  if (w.params.tidallyLocked && eqDistance >= 6 && meanDamping >= 0.45) {
+    const Tbase = B.Tbase, Cbase = B.Cbase;
+    const dTbase = B.dTbase || (B.dTbase = new Float64Array(NBANDS));
+    const kbase = B.kbase || (B.kbase = new Float64Array(NBANDS));
+    for (let i = 0; i < NBANDS; i++) {
+      Tbase[i] = w.T[i];
+      Cbase[i] = dg.C[i];
+      dTbase[i] = dT[i];
+      kbase[i] = k[i];
+    }
+    denseGrade = denseTemperatureCorrection(w, B, Tbase, Cbase, rhs, Infinity);
+    if (denseGrade) {
+      eqDistance = 0;
+      for (let i = 0; i < NBANDS; i++) eqDistance = Math.max(eqDistance, Math.abs(B.dTn[i]));
+    }
+    B.dT.set(dTbase);
+    B.k.set(kbase);
+    w._solve.diag = w.diag;
+  }
+
   // Quasi-static shortcut. Once every band sits within a kelvin or two of its
   // equilibrium, the temperatures are slaved to the slow reservoirs and the
   // unconditionally stable solver can stride over millennia at a time without
@@ -572,7 +603,18 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // -- melting ice darkens them -- while transport from everywhere else holds
   // them stable, and judging by the worst band alone made the solver crawl
   // through exactly the epoch a player most wants to watch.
-  const quasi = smoothstep(6, 1, eqDistance) * smoothstep(0.10, 0.45, meanDamping);
+  const dampingGate = smoothstep(0.10, 0.45, meanDamping);
+  const quasi = smoothstep(6, 1, eqDistance) * dampingGate;
+  // Locked worlds only, and that gate is measured rather than assumed. The
+  // residual check below costs one extra update+tendency per backtrack, and on
+  // a rotating world it almost never finds anything: the tridiagonal Jacobian
+  // is a good approximation there because the diagnostics that couple every
+  // band to every other one -- global humidity, ice cover -- are small terms.
+  // Ungated it bought the Locked Eyeball 4.8x and TRAPPIST-1e eighteen hundred,
+  // and charged Early Venus 6.9x, Titan 2.7x and the Dune World 1.6x for a
+  // check that came back clean every time.
+  w._solve.lineSearch = !!w.params.tidallyLocked && (quasi > 0 || dampingGate < 1);
+  w._solve.denseFallback = dampingGate < 1;
   if (quasi > 0) dt = Math.min(dt * (1 + quasi * 4000), 5e6);
 
   // The other half of the trust region in stepTemperature. If the last step's
@@ -744,6 +786,97 @@ export function radiativeDamping(w) {
   return k;
 }
 
+// Evaluate the full nonlinear backward-Euler residual after applying a trial
+// fraction of a temperature correction. The heat capacity is the one that
+// defined the step at its starting state; the radiative/transport flux is
+// recomputed at the trial state.
+function temperatureTrialResidual(w, B, Tbase, Cbase, correction, dt, alpha) {
+  for (let i = 0; i < NBANDS; i++) {
+    const allow = Math.max(25, 0.05 * Tbase[i]);
+    w.T[i] = clamp(Tbase[i] + alpha * clamp(correction[i], -allow, allow), 2, 4000);
+  }
+  update(w, 0);
+  const trial = tendency(w).dT;
+  let residualNorm = 0;
+  for (let i = 0; i < NBANDS; i++) {
+    const transient = Cbase[i] * (w.T[i] - Tbase[i]) / dt;
+    const residual = w.diag.C[i] * trial[i] - transient;
+    residualNorm += residual * residual;
+  }
+  return residualNorm;
+}
+
+// The cheap Jacobian above is tridiagonal because radiation is locally
+// linearised and transport couples neighbours. Some diagnostics inside update
+// are global, however: water supply, ice cover and humidity can couple every
+// band to every other one. Usually those terms are negligible. When the cheap
+// Newton direction is not a descent direction, measure the actual dense
+// Jacobian and solve it with partial pivoting instead of repeatedly taking a
+// bad tridiagonal correction.
+function denseTemperatureCorrection(w, B, Tbase, Cbase, Fbase, dt) {
+  const n = NBANDS;
+  const matrix = B.dense || (B.dense = new Float64Array(n * n));
+  const vector = B.denseRhs || (B.denseRhs = new Float64Array(n));
+  const plus = B.Fplus || (B.Fplus = new Float64Array(n));
+  const h = 0.05;
+
+  for (let j = 0; j < n; j++) {
+    w.T.set(Tbase);
+    w.T[j] += h;
+    update(w, 0);
+    let shifted = tendency(w).dT;
+    for (let i = 0; i < n; i++) plus[i] = w.diag.C[i] * shifted[i];
+
+    w.T.set(Tbase);
+    w.T[j] -= h;
+    update(w, 0);
+    shifted = tendency(w).dT;
+    for (let i = 0; i < n; i++) {
+      const minus = w.diag.C[i] * shifted[i];
+      matrix[i * n + j] = -(plus[i] - minus) / (2 * h);
+    }
+  }
+  w.T.set(Tbase);
+  update(w, 0);
+  for (let i = 0; i < n; i++) {
+    matrix[i * n + i] += Cbase[i] / dt;
+    vector[i] = Fbase[i];
+  }
+
+  // Gaussian elimination with partial pivoting. Eighteen bands make the dense
+  // fallback tiny; its cost is the finite-difference diagnostics above.
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(matrix[row * n + col]) > Math.abs(matrix[pivot * n + col])) pivot = row;
+    }
+    const pv = matrix[pivot * n + col];
+    if (!(Math.abs(pv) > 1e-12) || !isFinite(pv)) return false;
+    if (pivot !== col) {
+      for (let j = col; j < n; j++) {
+        const swap = matrix[col * n + j];
+        matrix[col * n + j] = matrix[pivot * n + j];
+        matrix[pivot * n + j] = swap;
+      }
+      const swap = vector[col]; vector[col] = vector[pivot]; vector[pivot] = swap;
+    }
+    for (let row = col + 1; row < n; row++) {
+      const factor = matrix[row * n + col] / matrix[col * n + col];
+      for (let j = col; j < n; j++) matrix[row * n + j] -= factor * matrix[col * n + j];
+      vector[row] -= factor * vector[col];
+    }
+  }
+
+  const correction = B.dTn;
+  for (let row = n - 1; row >= 0; row--) {
+    let value = vector[row];
+    for (let j = row + 1; j < n; j++) value -= matrix[row * n + j] * correction[j];
+    correction[row] = value / matrix[row * n + row];
+    if (!isFinite(correction[row])) return false;
+  }
+  return true;
+}
+
 // Backward-Euler step on the full coupled system, solved as the tridiagonal
 // problem it is (Thomas algorithm, 18 bands -- trivially cheap). Writing
 //
@@ -759,9 +892,22 @@ export function stepTemperature(w, dtYears) {
   const cached = w._solve && w._solve.diag === dg ? w._solve : null;
   const { dT, D } = cached ? cached.tend : tendency(w);
   const r = cached ? cached.k : radiativeDamping(w);
+  const lineSearch = cached && cached.lineSearch && !w.fastPhysics && dtYears > 1;
+  const allowDenseFallback = cached && cached.denseFallback;
   w._solve = null;
 
   const B = scratch(w);
+  const Tbase = B.Tbase, Cbase = B.Cbase;
+  // Only the line search needs the starting state kept, and only locked worlds
+  // run one. Copying thirty-six doubles unconditionally is invisible on its own
+  // and this is the hottest loop in the model: it cost the rotating worlds 11%
+  // for a buffer they never read.
+  if (lineSearch) {
+    for (let i = 0; i < NBANDS; i++) {
+      Tbase[i] = w.T[i];
+      Cbase[i] = dg.C[i];
+    }
+  }
   const wgt = B.wgt;              // edge conductances
   for (let j = 1; j < NBANDS; j++) {
     const xe = -1 + DX * j;
@@ -793,12 +939,67 @@ export function stepTemperature(w, dtYears) {
   // step. Keep it inside a deliberately generous trust region, then tell the
   // controller how far the raw solve overshot so the following step is
   // shortened in proportion instead of repeatedly clipping the same move.
+  // w.T is still the starting state here, so it and Tbase are the same thing --
+  // and on the path that does not keep Tbase, it is the only one there is.
   w.trustOver = 1;
   for (let i = 0; i < NBANDS; i++) {
     const allow = Math.max(25, 0.05 * w.T[i]);
     w.trustOver = Math.max(w.trustOver, Math.abs(dTn[i]) / allow);
-    w.T[i] = clamp(w.T[i] + clamp(dTn[i], -allow, allow), 2, 4000);
   }
+
+  if (!lineSearch) {
+    for (let i = 0; i < NBANDS; i++) {
+      const allow = Math.max(25, 0.05 * w.T[i]);
+      w.T[i] = clamp(w.T[i] + clamp(dTn[i], -allow, allow), 2, 4000);
+    }
+    return;
+  }
+
+  // A long implicit step is a Newton correction to the backward-Euler
+  // equation. Check the cheap tridiagonal direction against the actual coupled
+  // residual. If modest backtracking cannot make it descend, the global terms
+  // omitted by that Jacobian matter here and the dense coupled fallback above
+  // supplies the direction instead.
+  let initialResidual = 0;
+  for (let i = 0; i < NBANDS; i++) initialResidual += rhs[i] * rhs[i];
+  let alpha = 1, halves = 0;
+  let trialResidual = temperatureTrialResidual(w, B, Tbase, Cbase, dTn, dt, alpha);
+  while (trialResidual > initialResidual * (1 - 1e-4 * alpha) && halves < 3) {
+    alpha *= 0.5;
+    halves++;
+    trialResidual = temperatureTrialResidual(w, B, Tbase, Cbase, dTn, dt, alpha);
+  }
+
+  let denseFallback = false, denseHalves = 0;
+  if (trialResidual > initialResidual * (1 - 1e-4 * alpha)) {
+    let approximate = null;
+    if (allowDenseFallback) {
+      approximate = B.approxCorrection || (B.approxCorrection = new Float64Array(NBANDS));
+      approximate.set(dTn);
+      denseFallback = denseTemperatureCorrection(w, B, Tbase, Cbase, rhs, dt);
+    }
+    if (denseFallback) {
+      // No trust bookkeeping here: everything on this path ends with
+      // trustOver reset to 1 below, and recomputing it against the dense
+      // correction only to throw it away read like it meant something.
+      alpha = 1;
+      trialResidual = temperatureTrialResidual(w, B, Tbase, Cbase, dTn, dt, alpha);
+      while (trialResidual > initialResidual * (1 - 1e-4 * alpha) && denseHalves < 7) {
+        alpha *= 0.5;
+        denseHalves++;
+        trialResidual = temperatureTrialResidual(w, B, Tbase, Cbase, dTn, dt, alpha);
+      }
+    } else {
+      if (approximate) dTn.set(approximate);
+      alpha = 1 / 128;
+      temperatureTrialResidual(w, B, Tbase, Cbase, dTn, dt, alpha);
+    }
+  }
+  // The trust penalty is for a raw correction that had to be clipped. A
+  // residual-checked line search has already reduced and accepted the applied
+  // correction; carrying the unscaled proposal into the next step would punish
+  // it a second time and recreate the crawl the line search removed.
+  w.trustOver = 1;
 }
 
 // Largest step we may take: bounded by how fast anything is actually moving,
