@@ -2455,6 +2455,31 @@ export function run() {
         least > 1e4, `smallest step ${least.toExponential(1)} yr`);
     }
 
+    // A stable climate mode near a tipping point must not be turned into an
+    // alternating numerical mode by a long backward-Euler step. Early Venus
+    // approaches its moist-greenhouse transition with a positive-definite
+    // coupled Jacobian, yet the old radiative-mean gate forced raw steps that
+    // reversed the temperature tendency almost every time. It took thousands
+    // of solves to make one kelvin of net progress while every individual move
+    // was only hundredths of a kelvin.
+    {
+      const venus = new Simulation({ ...PRESETS.earlyVenus.params });
+      venus.runYears(2.145e9, 5e6);
+      const vw = venus.world, t0 = vw.time;
+      let reversals = 0, previous = 0, T0 = vw.diag.Tmean;
+      for (let i = 0; i < 1000; i++) {
+        venus.stepOnce(Math.min(maxStep(vw), 5e6));
+        const direction = Math.sign(vw.diag.Tmean - T0);
+        if (direction && previous && direction !== previous) reversals++;
+        if (direction) previous = direction;
+        T0 = vw.diag.Tmean;
+      }
+      const advanced = vw.time - t0;
+      check('A stable climate transition advances instead of chattering',
+        reversals < 100 && advanced > 5e6,
+        `${reversals} reversals in 1000 steps, ${advanced.toExponential(1)} yr advanced`);
+    }
+
     // ...and so must a tidally locked world that is not doing anything.
     //
     // FAILING, and left failing deliberately. What follows is the whole of an
