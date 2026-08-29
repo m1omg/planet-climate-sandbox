@@ -807,7 +807,13 @@ function updateReadout() {
         stat('Night side', `${(st.Tanti - 273.15).toFixed(0)}<small> °C</small>`,
           st.Tanti < 195 && dg.pCO2 > 0 ? 'warn' : '')
       : stat('Range', `${(dg.Tmin - 273.15).toFixed(0)} → ${(dg.Tmax - 273.15).toFixed(0)}<small> °C</small>`)) +
-    stat('Land / ocean', `${(dg.landFrac * 100).toFixed(0)}<small> %</small> / ${(dg.flooded * 100).toFixed(0)}<small> %</small>`,
+    // "Ocean" is the basin, ice included, which is right for Earth -- the poles
+    // are frozen and it is still the sea. Below the triple point it is not: no
+    // liquid water exists at any temperature under 611.7 Pa, so what is down
+    // there is an ice field and calling it ocean is the one thing the phase
+    // limit is in the model to rule out.
+    stat(`Land / ${(dg.liquidAllowed ?? 1) < 0.5 ? 'ice' : 'ocean'}`,
+      `${(dg.landFrac * 100).toFixed(0)}<small> %</small> / ${(dg.flooded * 100).toFixed(0)}<small> %</small>`,
       dg.landFrac > 0.98 && w.water.lost > 0.02 ? 'warn' : '') +
     stat('Sea ice / land ice', `${(dg.seaIceFrac * 100).toFixed(0)}<small> %</small> / ${(dg.landIceFrac * 100).toFixed(0)}<small> %</small>`) +
     stat('Ice cover', `${(dg.iceMean * 100).toFixed(0)}<small> %</small>`) +
@@ -896,13 +902,25 @@ function updateReadout() {
   const typeAhead = 'Type a rate: 500 yr, 2 Myr, 1.5 Gyr. Per second is assumed.';
   if (rateOut.editing) {
     /* leave it alone */
+  } else if (!sim.paused && !settling && sim.autoEase && sim.easeFactor < 0.9) {
+    // Auto-ease is deliberately holding the clock back. Show what the world is
+    // actually advancing at, not what was asked for -- a field reading
+    // "10 Myr / s" while the planet crawls through a tipping is the readout
+    // lying about the one moment the player is watching most closely.
+    showRate(Math.max(achieved, 0));
+    rateOut.classList.add('eased');
+    rateOut.classList.remove('throttled');
+    rateOut.title = 'Auto-ease is holding the clock back so this tipping can be '
+      + `watched — ${fmtTime(sim.rate)} / s was asked for. Turn off "ease" to run at full speed.`;
   } else if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
     showRate(Math.max(achieved, 0));
+    rateOut.classList.remove('eased');
     rateOut.classList.add('throttled');
     rateOut.title = 'The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.';
   } else {
     showRate(sim.rate);
     rateOut.classList.remove('throttled');
+    rateOut.classList.remove('eased');
     rateOut.title = typeAhead;
   }
 

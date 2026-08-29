@@ -789,6 +789,41 @@ export function run() {
         `${sunAt(3).toFixed(4)} — and steepening, ${(firstGyr * 100).toFixed(1)}% in the ` +
         `first Gyr against ${(thirdGyr * 100).toFixed(1)}% in the third`);
 
+      // ...and it never runs backwards, and never off the end of the world.
+      //
+      // Gough's fit has a pole at 1.6 main-sequence lifetimes. Past it the
+      // curve inverts, and the guard that was supposed to catch that divided by
+      // Math.max(negative, 1e-6). Dragging the star temperature to 7265 K --
+      // an A star, whose main sequence is shorter than the default startAge --
+      // took the world to 1009838 S(+) and a magma ocean at 3727 C.
+      {
+        let worst = 0, backwards = null, seen = 0;
+        for (const T of [2300, 3000, 4000, 5772, 6500, 7265, 8000, 9500, 12000]) {
+          for (const startAge of [0.1, 1, 4.567, 10]) {
+            let prev = 0;
+            for (const gyr of [0.1, 1, 3, 6, 12, 50]) {
+              const f = brightnessAfter({ brightening: 1, startAge, starTemp: T }, gyr);
+              seen++;
+              if (!(f >= 1) || !isFinite(f)) backwards = backwards
+                ?? `${T} K at ${startAge} Gyr, +${gyr}: ${f}`;
+              if (f < prev - 1e-12) backwards = backwards
+                ?? `${T} K at ${startAge} Gyr dimmed between ${gyr} and the step before`;
+              prev = f;
+              worst = Math.max(worst, f);
+            }
+          }
+        }
+        // 2.67 is not a fudge, it is the whole main sequence: Gough puts a
+        // zero-age star at 0.714 of its present luminosity and the end of its
+        // hydrogen burning at 1.908, and 1.908/0.714 is 2.67. Nothing this
+        // model can be asked for may exceed the span of a stellar lifetime.
+        check('A star brightens, monotonically, and stops at the end of its life',
+          !backwards && worst <= 2.68,
+          backwards ?? `${seen} star-age-span combinations, brightest ` +
+          `${worst.toFixed(3)}x against the 2.67 a whole main sequence is worth ` +
+          `— where the old guard returned 2.5e+6`);
+      }
+
       // Absolute functions of age, not rates integrated alongside the climate:
       // the answer must not depend on how the clock happened to chop the run up.
       const coarse = new Simulation({ ...EARTH, brightening: 1, realisticGeology: true,

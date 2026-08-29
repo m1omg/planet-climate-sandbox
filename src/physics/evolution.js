@@ -91,6 +91,9 @@ export function mainSequenceLife(tempK) {
   return SOLAR_MS_LIFE * Math.pow(T / SOLAR_TEMP, -6.28);
 }
 
+// The end of the main sequence, in units of the fraction of one that is spent.
+const MS_END = 1;
+
 // Gough's shape, in units of the fraction of a main sequence that is spent.
 function goughShape(frac) {
   return 1 / (1 + GOUGH_A * (1 - frac / SOLAR_FRAC));
@@ -130,14 +133,34 @@ export function brightnessAfter(p, gyr) {
   const speed = p && p.brightening;
   if (!(speed > 0) || !(gyr > 0)) return 1;
   const tau = mainSequenceLife(p.starTemp);
-  const f0 = Math.max(p.startAge ?? EARTH_AGE, 0) / tau;
-  const f1 = f0 + speed * gyr / tau;
-  const g0 = goughShape(f0), g1 = goughShape(f1);
-  // Past the end of the main sequence the fit turns over and then inverts.
-  // Hold the last sane value rather than hand back a star of negative
-  // luminosity; a red giant is not what this model is for.
-  if (!(g0 > 0) || !(g1 > 0) || !isFinite(g1)) return 2.5 / Math.max(g0, 1e-6);
-  return g1 / g0;
+  // Both ends clamped to the main sequence, and that clamp is the whole of the
+  // fix for a bug that turned a slider into a catastrophe.
+  //
+  // Gough's fit has a pole: 1 + 0.4(1 - x) is zero at x = 3.5, which in these
+  // units is 1.6 main-sequence lifetimes. Past it the curve inverts, so a star
+  // ran BACKWARDS -- an F at 6500 K was 1.496x after a billion years and 1.392x
+  // after twelve -- and past the pole again it came out negative, where a guard
+  // written as 2.5 / Math.max(g0, 1e-6) turned a negative g0 into 1e-6 and
+  // handed back a brightening of two and a half MILLION. Dragging the star
+  // temperature to 7265 K did exactly that: an A star has a 2.4 Gyr main
+  // sequence, the default startAge of 4.567 is already past the end of it, and
+  // the world arrived at 1009838 S(+) and a magma ocean at 3727 C.
+  //
+  // A star that has burned its hydrogen leaves the main sequence, and this
+  // model has no giant branch. So the track stops where the main sequence does.
+  // goughShape(1) is 1.91, which is about where a G star's luminosity really
+  // ends up, and holding it there is the honest answer for a model that cannot
+  // follow what happens next.
+  const f0 = clamp(Math.max(p.startAge ?? EARTH_AGE, 0) / tau, 0, MS_END);
+  const f1 = clamp(f0 + speed * gyr / tau, 0, MS_END);
+  return goughShape(f1) / goughShape(f0);
+}
+
+// Whether this star has already left the main sequence at this age, so the
+// interface can say so rather than quietly doing nothing.
+export function pastMainSequence(p) {
+  if (!p) return false;
+  return (p.startAge ?? EARTH_AGE) > mainSequenceLife(p.starTemp);
 }
 
 // How the same star's XUV output falls as it spins down.

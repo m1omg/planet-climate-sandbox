@@ -360,6 +360,37 @@ if (app && app.graphicsFromUrl) {
   }
 }
 
+// Every map BODY_MAPS names has to be a file that is really there, at the path
+// the page will really ask for.
+//
+// Nothing else catches this. bodycheck loads maps through a stub that happily
+// invents one for any URL, and a missing texture in the browser is a silent
+// fallback to procedural terrain -- the planet still draws, just as the wrong
+// world. Mars's new DEM was generated one directory too high on the first try,
+// into an altdev/assets/ that nothing reads, and every other check passed.
+{
+  const { readFileSync, existsSync } = await import('node:fs');
+  const { BODY_MAPS } = await import('../src/render/planet.js');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const base = (html.match(/__assetBase\s*=\s*["']([^"']+)["']/) || [, 'assets/'])[1];
+  const missing = [];
+  for (const [world, maps] of Object.entries(BODY_MAPS)) {
+    for (const file of Object.values(maps)) {
+      const url = new URL(`${base}bodies/${file}`, import.meta.url.replace('/tools/', '/'));
+      if (!existsSync(url)) missing.push(`${world}:${file}`);
+    }
+  }
+  if (missing.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  BODY_MAPS names files that are not at ${base}bodies/: `
+      + [...new Set(missing)].join(', '));
+    failed++;
+  } else {
+    const files = new Set(Object.values(BODY_MAPS).flatMap((m) => Object.values(m)));
+    console.log(`\x1b[32mPASS\x1b[0m  every surface map exists where the page asks for it `
+      + `(${files.size} files across ${Object.keys(BODY_MAPS).length} worlds)`);
+  }
+}
+
 // A milestone the player dropped has to travel in the save. It is not physics,
 // so captureWorld knows nothing about it, and a save format that silently drops
 // half a feature is the kind of thing that only shows up weeks later when

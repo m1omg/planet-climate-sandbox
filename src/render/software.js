@@ -14,6 +14,10 @@ import { seaLevelForLand } from './terrain.js';
 // It shares its shading with the GPU path's CPU port in cpushade.js, so this is
 // the same terrain, biomes, ice and lighting, just evaluated in JavaScript at a
 // lower resolution and refresh rate. The simulation is completely unaffected.
+// Matches ICE_EASE in planet.js: a full swing from open water to frozen over
+// in about two thirds of a second, however fast the simulated clock is running.
+const ICE_EASE = 1.6;
+
 export class SoftwareView {
   constructor(canvas) {
     this.canvas = canvas;
@@ -140,11 +144,26 @@ export class SoftwareView {
       this.skyKey = skyKey;
     }
 
-    const bandT = new Float32Array(NBANDS), bandIce = new Float32Array(NBANDS);
+    // Eased over wall-clock seconds, and pinned frozen below the triple point.
+    // Both for the reasons written out over the matching loop in planet.js: a
+    // world at the ice edge crosses the whole 25 K ramp inside one frame, and
+    // there is no liquid water at all under 611.7 Pa.
+    if (!this.bandIce || this.iceSeed !== state.seed) {
+      this.bandIce = new Float32Array(NBANDS);
+      this.iceSeed = state.seed;
+      this.bandIceSeeded = false;
+    }
+    const bandT = new Float32Array(NBANDS), bandIce = this.bandIce;
+    const noLiquid = 1 - (dg.liquidAllowed ?? 1);
+    const step = ICE_EASE * (dtReal || 0);
     for (let i = 0; i < NBANDS; i++) {
       bandT[i] = world.T[i];
-      bandIce[i] = dg.hasWater ? clamp(1 - (world.T[i] - 253) / 25, 0, 1) : 0;
+      const target = dg.hasWater
+        ? Math.max(clamp(1 - (world.T[i] - 253) / 25, 0, 1), noLiquid) : 0;
+      bandIce[i] = this.bandIceSeeded
+        ? bandIce[i] + clamp(target - bandIce[i], -step, step) : target;
     }
+    this.bandIceSeeded = true;
     const pH2O = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
     const cloud = cloudLook(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS, pH2O);
     const sc = SoftwareView.starColor(p.starTemp);

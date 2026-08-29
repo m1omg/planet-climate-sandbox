@@ -507,6 +507,11 @@ body.software-render #planet{image-rendering:auto}
 }
 .rate-val:focus{outline:none}
 .rate-val.throttled{color:var(--accent-2)}
+/* Eased reads as a deliberate act rather than a struggle, so it gets the same
+   amber as the switch that caused it but says so with a flag, not an hourglass. */
+.rate-val.eased{color:var(--accent-2)}
+.rate-entry:has(.rate-val.eased){border-color:var(--accent-2)}
+.rate-entry:has(.rate-val.throttled){border-color:var(--accent-2)}
 .rate-unit{
   background:transparent;border:0;border-left:1px solid var(--line);color:var(--fg-dim);
   font:11px/1 var(--mono);padding:0 4px 0 6px;cursor:pointer;
