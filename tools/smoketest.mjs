@@ -334,7 +334,11 @@ if (app && app.graphicsFromUrl) {
     console.log('\x1b[32mPASS\x1b[0m  a paused clock stops the settle too');
   }
   const end = src.slice(src.indexOf('function endSettle'), src.indexOf('function endSettle') + 260);
-  const restores = /classList\.remove\('busy'\)/.test(end) && /textContent = 'Settle'/.test(end);
+  // The label goes through the translator now, so the guard has to accept
+  // `t('Settle')` as well as the bare string -- what it is checking is that
+  // endSettle puts the button back at all, not how the word gets there.
+  const restores = /classList\.remove\('busy'\)/.test(end)
+    && /textContent = t?\(?'Settle'\)?/.test(end);
   if (!restores || /\{ settling = false; return; \}/.test(src)) {
     console.log('\x1b[31mFAIL\x1b[0m  stopping a settle leaves the button reading "Stop"');
     failed++;
@@ -577,6 +581,86 @@ if (created < 20) {
     failed++;
   } else {
     console.log('\x1b[32mPASS\x1b[0m  every storage key is namespaced to this build');
+  }
+}
+
+// The translation has to cover the things that are keyed by id, because those
+// are the ones that cannot fall back to a sensible English sentence: a preset
+// chip with no Slovak name is a Slovak page with an English word on it, and the
+// only way anyone finds out is by looking. Adding a state or a scenario without
+// translating it fails here rather than shipping half a language.
+{
+  const { SK } = await import('../src/game/sk.js');
+  const { STATES } = await import('../src/physics/classify.js');
+  const { PRESETS } = await import('../src/game/presets.js');
+  const { SCENARIOS } = await import('../src/game/scenarios.js');
+  const missing = [];
+  for (const id of Object.keys(STATES)) {
+    if (!SK.states[id] || !SK.states[id].name || !SK.states[id].blurb) missing.push(`state ${id}`);
+  }
+  for (const id of Object.keys(PRESETS)) if (!SK.presets[id]) missing.push(`preset ${id}`);
+  for (const sc of SCENARIOS) {
+    const e = SK.scenarios[sc.id];
+    if (!e || !e.name || !e.brief || !e.hint) missing.push(`scenario ${sc.id}`);
+  }
+  // …and nothing translated that no longer exists, which is how a dictionary
+  // quietly rots: the entry stays, the id it belonged to is gone.
+  const orphan = [
+    ...Object.keys(SK.states).filter((id) => !STATES[id]).map((id) => `state ${id}`),
+    ...Object.keys(SK.presets).filter((id) => !PRESETS[id]).map((id) => `preset ${id}`),
+    ...Object.keys(SK.scenarios).filter((id) => !SCENARIOS.some((x) => x.id === id))
+      .map((id) => `scenario ${id}`),
+  ];
+  if (missing.length || orphan.length) {
+    console.log('\x1b[31mFAIL\x1b[0m  Slovak dictionary out of step: '
+      + [...missing.map((m) => `missing ${m}`), ...orphan.map((o) => `orphan ${o}`)].join(', '));
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  Slovak covers every state, preset and scenario  —  `
+      + `${Object.keys(SK.states).length} + ${Object.keys(SK.presets).length} + `
+      + `${Object.keys(SK.scenarios).length}, and ${Object.keys(SK.ui).length} UI strings`);
+  }
+}
+
+// And the lookup itself, both ways. A dictionary that is present but not wired
+// up looks exactly like one that works, until someone presses the button.
+{
+  const i18n = await import('../src/game/i18n.js');
+  const { SK } = await import('../src/game/sk.js');
+  const en0 = i18n.t('Settle');
+  i18n.setLang('sk');
+  const sk = i18n.t('Settle');
+  const stateSk = i18n.tx('states', 'snowball', 'name');
+  const miss = i18n.t('a string nothing will ever translate');
+  i18n.setLang('en');
+  const back = i18n.t('Settle');
+  const stateEn = i18n.tx('states', 'snowball', 'name');
+  const ok = en0 === 'Settle' && sk === 'Ustáliť' && back === 'Settle'
+    && stateSk === SK.states.snowball.name && stateEn === null
+    && miss === 'a string nothing will ever translate';
+  if (!ok) {
+    console.log(`\x1b[31mFAIL\x1b[0m  the translator does not switch cleanly: `
+      + `${en0} → ${sk} → ${back}, snowball ${stateSk}`);
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  the translator switches both ways and falls back to English  —  `
+      + `Settle → ${sk} → Settle`);
+  }
+}
+
+// The switch has to be in the markup, or the language is whatever the browser
+// guessed and there is no way to disagree with it.
+{
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const ok = /id="btn-lang"/.test(html) && /btn-lang'\)\.addEventListener/.test(src)
+    && /setLang\(nextLang\(\)\)/.test(src);
+  if (!ok) {
+    console.log('\x1b[31mFAIL\x1b[0m  no manual language switch wired up');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  the language switch exists and is wired to setLang');
   }
 }
 

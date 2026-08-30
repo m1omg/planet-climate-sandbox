@@ -272,6 +272,8 @@ body.software-render #planet{image-rendering:auto}
   background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
 
 .about p{font-size:11.5px;line-height:1.6;color:var(--fg-dim);margin:0 0 9px}
+/* Two letters, same footprint as the renderer button beside it. */
+.lang-btn{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em}
 /* The GPL asks an interactive program to show the notice; it is a footnote to the
    panel rather than part of the argument, so it sits a size down and behind a rule. */
 .about p.licence{font-size:10.5px;opacity:.78;border-top:1px solid var(--line);padding-top:8px}

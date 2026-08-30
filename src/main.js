@@ -16,6 +16,7 @@ import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, profile
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
 import { NS } from './game/storage.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
+import { t, tp, tx, applyStatic, setLang, currentLang, nextLang, onLang, LANGS } from './game/i18n.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -112,9 +113,9 @@ function updateAtmoButton() {
   const real = !!view.realistic;
   b.setAttribute('aria-pressed', String(real));
   b.textContent = real ? '◉' : '◍';
-  b.title = real
+  b.title = t(real
     ? 'Atmosphere: realistic — true scale height, and an opaque one hides the ground'
-    : 'Atmosphere: stylised — the shell is exaggerated so you can see it change';
+    : 'Atmosphere: stylised — the shell is exaggerated so you can see it change');
 }
 function qualityFromUrl() {
   const q = (new URLSearchParams(location.search).get('quality') || '').toLowerCase();
@@ -185,7 +186,7 @@ async function useRenderer(kind) {
   } else if (view.software) {
     view.setQuality(qualityFromUrl());
     $('#btn-gfx').disabled = true;
-    $('#btn-gfx').title = 'Surface maps need WebGL2';
+    $('#btn-gfx').title = t('Surface maps need WebGL2');
   }
   view.realistic = atmosphereFromUrl();
   updateRendererButton();
@@ -220,7 +221,7 @@ async function recoverRenderer(why) {
     let ok = await useRenderer(next);
     if ((!ok || view.failed) && next !== 'software') ok = await useRenderer('software');
     if (view.software) {
-      toast('The GPU dropped out — drawing on the CPU instead. The simulation is unaffected.', 7000);
+      toast(t('The GPU dropped out — drawing on the CPU instead. The simulation is unaffected.'), 7000);
     }
   } finally {
     recovering = false;
@@ -315,13 +316,13 @@ function buildSliders() {
         c.type = 'button'; c.className = 'stop';
         c.textContent = st.n;
         c.dataset.v = String(st.v);
-        c.title = `${d.label}: ${d.fmt(st.v)}`;
+        c.title = `${t(d.label)}: ${d.fmt(st.v)}`;
         c.addEventListener('click', () => {
           params[d.key] = st.v;
           syncSliders();
           applyParams(d.key);
           markTouched();
-          toast(`${d.label} — ${st.n}, ${d.fmt(st.v)}`);
+          toast(`${t(d.label)} — ${t(st.n)}, ${d.fmt(st.v)}`);
         });
         row.appendChild(c);
       }
@@ -340,9 +341,10 @@ function buildSliders() {
         c.className = 'chip'; c.dataset.body = b.id;
         c.textContent = b.name;
         const heat = b.heat < 1 ? `${(b.heat * 1e3).toFixed(0)} mW/m²` : `${b.heat} W/m²`;
-        const volc = b.total === 0 ? 'no carbon outgassing'
-          : `${b.total < 1 ? b.total : b.total.toFixed(b.total < 10 ? 1 : 0)}× Earth’s outgassing`;
-        c.title = `${heat} · ${volc}\n${b.note}`;
+        const volc = b.total === 0 ? t('no carbon outgassing')
+          : tp('{0}× Earth’s outgassing',
+               b.total < 1 ? b.total : b.total.toFixed(b.total < 10 ? 1 : 0));
+        c.title = `${heat} · ${volc}\n${t(b.note)}`;
         c.addEventListener('click', () => {
           params.internalHeat = b.heat;
           params.outgassing = b.outgassing;
@@ -350,7 +352,7 @@ function buildSliders() {
           applyParams('internalHeat');
           applyParams('outgassing');
           markBody();
-          toast(`${b.name} — ${heat}, ${volc}`);
+          toast(`${t(b.name)} — ${heat}, ${volc}`);
         });
         row.appendChild(c);
       }
@@ -379,12 +381,12 @@ function buildSliders() {
 
   // tidal locking toggle
   const host = $('#sliders-star');
-  const t = document.createElement('div');
-  t.className = 'toggle';
-  t.innerHTML = `<label for="lock">Tidally locked</label>
+  const wrap = document.createElement('div');
+  wrap.className = 'toggle';
+  wrap.innerHTML = `<label for="lock">Tidally locked</label>
     <button id="lock" class="switch" role="switch" aria-pressed="false"></button>`;
-  host.appendChild(t);
-  const btn = t.querySelector('#lock');
+  host.appendChild(wrap);
+  const btn = wrap.querySelector('#lock');
   btn.addEventListener('click', () => {
     params.tidallyLocked = !params.tidallyLocked;
     btn.setAttribute('aria-pressed', String(params.tidallyLocked));
@@ -406,7 +408,7 @@ function commitTyped(d) {
   if (Math.abs(clamped - v) > Math.abs(v) * 1e-6) {
     e.out.classList.add('bad');
     setTimeout(() => e.out.classList.remove('bad'), 900);
-    toast(`${d.label} limited to ${d.fmt(clamped)}`);
+    toast(tp('{0} limited to {1}', t(d.label), d.fmt(clamped)));
   }
   applyParams(d.key);
 }
@@ -435,9 +437,9 @@ function markStops(d) {
   if (!row) return;
   const v = params[d.key];
   for (const b of row.children) {
-    const t = +b.dataset.v;
+    const stopV = +b.dataset.v;
     b.classList.toggle('active',
-      t === 0 ? Math.abs(v) < 1e-12 : Math.abs(v - t) <= Math.abs(t) * 1e-3);
+      stopV === 0 ? Math.abs(v) < 1e-12 : Math.abs(v - stopV) <= Math.abs(stopV) * 1e-3);
   }
 }
 
@@ -540,10 +542,11 @@ function applyParams(key) {
 // ---------------------------------------------------------------------------
 function buildPresets() {
   const host = $('#presets');
+  host.innerHTML = '';
   for (const [id, p] of Object.entries(PRESETS)) {
     const b = document.createElement('button');
     b.className = 'chip'; b.dataset.preset = id;
-    b.innerHTML = `<span>${p.icon}</span>${p.name}`;
+    b.innerHTML = `<span>${p.icon}</span>${tx('presets', id) || p.name}`;
     b.addEventListener('click', () => loadPreset(id));
     host.appendChild(b);
   }
@@ -597,17 +600,21 @@ function loadPreset(id) {
   markTouched();
   rememberStart();
   closeScenario();
+  const pname = tx('presets', id) || PRESETS[id].name;
   toast(BODY_MAPS[id] && view.bodyCapable
-    ? `${PRESETS[id].icon} ${PRESETS[id].name} — real surface map`
-    : `${PRESETS[id].icon} ${PRESETS[id].name}`);
+    ? `${PRESETS[id].icon} ${pname} — ${t('real surface map')}`
+    : `${PRESETS[id].icon} ${pname}`);
 }
 
 function buildScenarios() {
   const host = $('#scenarios');
+  host.innerHTML = '';
   for (const s of SCENARIOS) {
     const b = document.createElement('button');
     b.className = 'chip'; b.dataset.scenario = s.id;
-    b.innerHTML = `<span>${s.icon}</span><span><b>${s.name}</b><span>${s.brief.slice(0, 78)}…</span></span>`;
+    const nm = tx('scenarios', s.id, 'name') || s.name;
+    const br = tx('scenarios', s.id, 'brief') || s.brief;
+    b.innerHTML = `<span>${s.icon}</span><span><b>${nm}</b><span>${br.slice(0, 78)}…</span></span>`;
     b.addEventListener('click', () => startScenario(s.id));
     host.appendChild(b);
   }
@@ -624,9 +631,10 @@ function startScenario(id) {
   const banner = $('#scenario-banner');
   banner.hidden = false;
   banner.querySelector('.sc-icon').textContent = s.icon;
-  banner.querySelector('.sc-name').textContent = s.name;
-  banner.querySelector('.sc-brief').textContent = s.brief;
-  toast(`${s.icon} ${s.name} — ${s.hint}`, 7000);
+  banner.querySelector('.sc-name').textContent = tx('scenarios', s.id, 'name') || s.name;
+  banner.querySelector('.sc-brief').textContent = tx('scenarios', s.id, 'brief') || s.brief;
+  toast(`${s.icon} ${tx('scenarios', s.id, 'name') || s.name} — ` +
+    `${tx('scenarios', s.id, 'hint') || s.hint}`, 7000);
 }
 function closeScenario() {
   activeScenario = null; scenarioResult = null;
@@ -708,15 +716,15 @@ function composition(dg) {
     // The background reservoir is every gas that neither condenses nor absorbs
     // much -- nitrogen, oxygen and argon together -- so it is labelled for what
     // it is rather than pretending Earth's is pure nitrogen.
-    ['N₂', dg.pN2, '#7f9ccc', 'nitrogen and argon: the gas that neither condenses nor absorbs'],
-    ['CO₂', dg.pCO2, '#e0894a', 'carbon dioxide'],
-    ['H₂O', pH2O * (1 - (dg.superFrac || 0)), '#4fa8d8', 'water vapour'],
-    ['H₂O·sc', pH2O * (dg.superFrac || 0), '#c98ad0', 'water past its critical point: neither liquid nor gas'],
-    ['O₂', dg.pO2, '#6fc7a0', 'free oxygen: made by life, or left behind when a lost ocean\u2019s hydrogen escaped'],
-    ['CH₄', dg.pCH4, '#c9b04a', 'methane'],
+    ['N₂', dg.pN2, '#7f9ccc', t('nitrogen and argon: the gas that neither condenses nor absorbs')],
+    ['CO₂', dg.pCO2, '#e0894a', t('carbon dioxide')],
+    ['H₂O', pH2O * (1 - (dg.superFrac || 0)), '#4fa8d8', t('water vapour')],
+    ['H₂O·sc', pH2O * (dg.superFrac || 0), '#c98ad0', t('water past its critical point: neither liquid nor gas')],
+    ['O₂', dg.pO2, '#6fc7a0', t('free oxygen: made by life, or left behind when a lost ocean\u2019s hydrogen escaped')],
+    ['CH₄', dg.pCH4, '#c9b04a', t('methane')],
   ];
   const total = parts.reduce((a, p) => a + Math.max(p[1], 0), 0);
-  if (!(total > 0)) return '<span class="comp-none">no atmosphere</span>';
+  if (!(total > 0)) return `<span class="comp-none">${t('no atmosphere')}</span>`;
 
   // A share as a percentage, kept honest at the small end: 0.04% CO₂ is the
   // whole of the modern greenhouse and rounding it to 0% would be absurd.
@@ -748,9 +756,9 @@ function lifeText(w) {
   const L = w.life || { pro: 0, euk: 0 };
   const room = w.lifeRoom || { pro: 0, euk: 0 };
   const row = (label, have, could, colour, title) => {
-    const pct = have <= 0 ? 'none'
-      : have < 0.01 ? 'traces'
-      : `${(have * 100).toFixed(0)}% of the surface`;
+    const pct = have <= 0 ? t('none')
+      : have < 0.01 ? t('traces')
+      : tp('{0}% of the surface', (have * 100).toFixed(0));
     const behind = could - have > 0.02 && have < 0.995
       ? `<i class="life-room" style="width:${(could * 100).toFixed(1)}%"></i>` : '';
     return `<div class="life-row" title="${title}">` +
@@ -759,10 +767,10 @@ function lifeText(w) {
       `<i class="life-fill" style="width:${(Math.max(have, 0) * 100).toFixed(1)}%;background:${colour}"></i>` +
       `</span><span class="life-v">${pct}</span></div>`;
   };
-  return row('prokaryotes', L.pro, room.pro, '#6fc7a0',
-      'Cells without a nucleus. Liquid water and an electron donor is the whole requirement: −20 °C to 122 °C, no oxygen needed, no light needed.') +
-    row('eukaryotes', L.euk, room.euk, '#c9a0e0',
-      'Cells with a nucleus and mitochondria, so: aerobes. They need free oxygen — a percent or so of Earth\u2019s is enough — and they give out around 60 °C, far short of what a bacterium will take.');
+  return row(t('prokaryotes'), L.pro, room.pro, '#6fc7a0',
+      t('Cells without a nucleus. Liquid water and an electron donor is the whole requirement: −20 °C to 122 °C, no oxygen needed, no light needed.')) +
+    row(t('eukaryotes'), L.euk, room.euk, '#c9a0e0',
+      t('Cells with a nucleus and mitochondria, so: aerobes. They need free oxygen — a percent or so of Earth\u2019s is enough — and they give out around 60 °C, far short of what a bacterium will take.'));
 }
 
 function stat(k, v, cls = '') { return `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
@@ -774,12 +782,14 @@ function updateReadout() {
   const banner = $('#state-banner');
   banner.querySelector('.swatch').style.background = st.color;
   banner.querySelector('.swatch').style.color = st.color;
-  banner.querySelector('.txt').textContent = st.name;
+  banner.querySelector('.txt').textContent = tx('states', st.id, 'name') || st.name;
   banner.querySelector('.state-reason').textContent = reasonText(w, st);
 
   if (!discovered.has(st.id)) {
     discovered.add(st.id); saveDiscovered(discovered);
-    if (markFound($('#statelog'), st.id)) toast(`New climate discovered — ${st.name}`, 4200);
+    if (markFound($('#statelog'), st.id)) {
+      toast(tp('New climate discovered — {0}', tx('states', st.id, 'name') || st.name), 4200);
+    }
     $('#found-count').textContent = String(discovered.size);
   }
 
@@ -791,7 +801,7 @@ function updateReadout() {
   const margin = rl.flux - (dg.absorbed + dg.Fint);
 
   $('#stats').innerHTML =
-    stat('Mean surface', `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`) +
+    stat(t('Mean surface'), `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`) +
     // On a locked world the mean is a number no part of the planet has. It sits
     // between a day side that never sets and a night side that never sees the
     // star, and on TRAPPIST-1b those are 237 °C and −186 °C -- so a mean of
@@ -803,34 +813,34 @@ function updateReadout() {
     // eyeball, lobster and twilight states, so the readout and the label cannot
     // disagree about which side is which.
     (dg.lam > 0.5
-      ? stat('Day side', `${(st.Tsub - 273.15).toFixed(0)}<small> °C</small>`) +
-        stat('Night side', `${(st.Tanti - 273.15).toFixed(0)}<small> °C</small>`,
+      ? stat(t('Day side'), `${(st.Tsub - 273.15).toFixed(0)}<small> °C</small>`) +
+        stat(t('Night side'), `${(st.Tanti - 273.15).toFixed(0)}<small> °C</small>`,
           st.Tanti < 195 && dg.pCO2 > 0 ? 'warn' : '')
-      : stat('Range', `${(dg.Tmin - 273.15).toFixed(0)} → ${(dg.Tmax - 273.15).toFixed(0)}<small> °C</small>`)) +
+      : stat(t('Range'), `${(dg.Tmin - 273.15).toFixed(0)} → ${(dg.Tmax - 273.15).toFixed(0)}<small> °C</small>`)) +
     // "Ocean" is the basin, ice included, which is right for Earth -- the poles
     // are frozen and it is still the sea. Below the triple point it is not: no
     // liquid water exists at any temperature under 611.7 Pa, so what is down
     // there is an ice field and calling it ocean is the one thing the phase
     // limit is in the model to rule out.
-    stat(`Land / ${(dg.liquidAllowed ?? 1) < 0.5 ? 'ice' : 'ocean'}`,
+    stat((dg.liquidAllowed ?? 1) < 0.5 ? t('Land / ice') : t('Land / ocean'),
       `${(dg.landFrac * 100).toFixed(0)}<small> %</small> / ${(dg.flooded * 100).toFixed(0)}<small> %</small>`,
       dg.landFrac > 0.98 && w.water.lost > 0.02 ? 'warn' : '') +
-    stat('Sea ice / land ice', `${(dg.seaIceFrac * 100).toFixed(0)}<small> %</small> / ${(dg.landIceFrac * 100).toFixed(0)}<small> %</small>`) +
+    stat(t('Sea ice / land ice'), `${(dg.seaIceFrac * 100).toFixed(0)}<small> %</small> / ${(dg.landIceFrac * 100).toFixed(0)}<small> %</small>`) +
     // iceArea, not iceMean. They are two different questions and this label is
     // the second one: iceMean is how much of the surface is BELOW FREEZING,
     // iceArea is how much of it is actually under ice. On Mars those are 100%
     // and 1.9%, and the honest one -- which was already being computed one line
     // below the other and shown to nobody -- is the one that matches the caps
     // the planet really has, about a percent of its surface.
-    stat('Ice cover', `${(dg.iceArea * 100).toFixed(dg.iceArea < 0.1 ? 1 : 0)}<small> %</small>`) +
-    stat('Cloud cover', `${(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS * 100).toFixed(0)}<small> %</small>`) +
-    stat('Surface pressure', `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +
-    stat('CO₂', dg.pCO2 >= 0.01 ? `${dg.pCO2.toFixed(2)}<small> bar</small>` : `${(dg.pCO2 * 1e6).toFixed(0)}<small> ppm</small>`) +
-    stat('Composition', composition(dg), 'wide') +
+    stat(t('Ice cover'), `${(dg.iceArea * 100).toFixed(dg.iceArea < 0.1 ? 1 : 0)}<small> %</small>`) +
+    stat(t('Cloud cover'), `${(dg.cloud.reduce((a, b) => a + b, 0) / NBANDS * 100).toFixed(0)}<small> %</small>`) +
+    stat(t('Surface pressure'), `${dg.pTotMean >= 1 ? dg.pTotMean.toFixed(2) : (dg.pTotMean * 1e3).toFixed(1)}<small> ${dg.pTotMean >= 1 ? 'bar' : 'mbar'}</small>`) +
+    stat(t('CO₂'), dg.pCO2 >= 0.01 ? `${dg.pCO2.toFixed(2)}<small> bar</small>` : `${(dg.pCO2 * 1e6).toFixed(0)}<small> ppm</small>`) +
+    stat(t('Composition'), composition(dg), 'wide') +
     // What is left in the mantle and crust. Worth showing once a world has
     // started seriously outgassing -- it is what stops the CO2.
     (w.carbonDeep != null && w.carbonDeep < 0.97 * carbonBudget(w.params.mass)
-      ? stat('Carbon left below',
+      ? stat(t('Carbon left below'),
           `${(w.carbonDeep / carbonBudget(w.params.mass) * 100).toFixed(0)}<small> %</small>`,
           w.carbonDeep < 0.02 * carbonBudget(w.params.mass) ? 'warn' : '')
       : '') +
@@ -841,9 +851,9 @@ function updateReadout() {
     (() => {
       const start = FOSSIL_TOTAL * (1 - (w.params.fossilUsed ?? 0));
       const left = w.fossil ?? start;
-      if (w.params.fossilInfinite) return stat('Fossil carbon left', 'unlimited', 'warn');
+      if (w.params.fossilInfinite) return stat(t('Fossil carbon left'), 'unlimited', 'warn');
       if (!((w.params.emissions ?? 0) > 0 || left < FOSSIL_TOTAL - 1e-6)) return '';
-      return stat('Fossil carbon left',
+      return stat(t('Fossil carbon left'),
         left > 1e-6 ? `${(left / FOSSIL_TOTAL * 100).toFixed(0)}<small> %</small>` : 'exhausted',
         left <= 1e-6 ? 'warn' : '');
     })() +
@@ -851,7 +861,7 @@ function updateReadout() {
     // control says -- which is exactly while a smooth change is walking, and is
     // the thing that made the control look broken when nothing showed it.
     (w.insolationTarget != null
-      ? stat('Starlight now', `${w.params.insolation.toFixed(3)}<small> → ${(+w.insolationTarget.toPrecision(4))} S⊕</small>`, 'warn')
+      ? stat(t('Starlight now'), `${w.params.insolation.toFixed(3)}<small> → ${(+w.insolationTarget.toPrecision(4))} S⊕</small>`, 'warn')
       : '') +
     // How old this planet is, which is the age at start plus however far the
     // clock has run. Worth its own line whenever anything is keyed to it: the
@@ -859,19 +869,19 @@ function updateReadout() {
     // control is set in ages and not in elapsed time.
     ((w.params.realisticGeology || w.params.resurfacingAge > 0
       || (w.params.startAge ?? 4.567) !== 4.567)
-      ? stat('Planet age', `${((w.params.startAge ?? 4.567) + w.time / 1e9).toFixed(3)}<small> Gyr</small>`)
+      ? stat(t('Planet age'), `${((w.params.startAge ?? 4.567) + w.time / 1e9).toFixed(3)}<small> Gyr</small>`)
       : '') +
     // Who lives here. Only shown once there is something to say -- a bare rock
     // does not need a line telling it that it is sterile.
     ((w.life && (w.life.pro > 1e-3 || w.lifeRoom?.pro > 1e-3))
-      ? stat('Life', lifeText(w), 'wide')
+      ? stat(t('Life'), lifeText(w), 'wide')
       : '') +
-    stat('Absorbed', `${dg.absorbed.toFixed(1)}<small> W/m²</small>`) +
-    stat('Emitted', `${dg.emitted.toFixed(1)}<small> W/m²</small>`) +
+    stat(t('Absorbed'), `${dg.absorbed.toFixed(1)}<small> W/m²</small>`) +
+    stat(t('Emitted'), `${dg.emitted.toFixed(1)}<small> W/m²</small>`) +
     // Shown against Earth's, because the absolute number means little on its
     // own: 2 W/m2 sounds negligible next to 240 of sunlight and is twenty times
     // Earth's interior, enough to keep Io permanently molten.
-    stat('Internal heat', (() => {
+    stat(t('Internal heat'), (() => {
       const f = dg.Fint, rel = f / 0.092;
       const mag = f <= 0 ? 'none'
         : f >= 1 ? `${f.toFixed(f < 10 ? 2 : 0)}<small> W/m²</small>`
@@ -879,13 +889,13 @@ function updateReadout() {
       if (f <= 0) return mag;
       return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
-    stat('Runaway margin', `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
+    stat(t('Runaway margin'), `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
       margin < 0 ? 'bad' : margin < 15 ? 'warn' : '') +
-    stat('Water left', `${(dg.totalWater).toFixed(dg.totalWater < 1 ? 3 : 2)}<small> EO</small>`,
+    stat(t('Water left'), `${(dg.totalWater).toFixed(dg.totalWater < 1 ? 3 : 2)}<small> EO</small>`,
       w.water.lost > 0.02 ? 'warn' : '') +
-    stat('Water loss', lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : 'negligible',
+    stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : t('negligible'),
       lossGyr > 0.05 ? 'bad' : lossGyr > 1e-3 ? 'warn' : '') +
-    stat('Stratospheric H₂O', `${(w.escape?.fStrat ?? 0).toExponential(1)}`,
+    stat(t('Stratospheric H₂O'), `${(w.escape?.fStrat ?? 0).toExponential(1)}`,
       (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '');
 
   $('#derived').innerHTML =
@@ -905,7 +915,7 @@ function updateReadout() {
   // It is a text field now, so it is written to with `value` -- and never while
   // it has the caret in it, because overwriting what someone is halfway through
   // typing ten times a second makes it impossible to type at all.
-  const typeAhead = 'Type a rate: 500 yr, 2 Myr, 1.5 Gyr. Per second is assumed.';
+  const typeAhead = t('Type a rate: 500 yr, 2 Myr, 1.5 Gyr. Per second is assumed.');
   if (rateOut.editing) {
     /* leave it alone */
   } else if (!sim.paused && !settling && sim.autoEase && sim.easeFactor < 0.9) {
@@ -916,13 +926,13 @@ function updateReadout() {
     showRate(Math.max(achieved, 0));
     rateOut.classList.add('eased');
     rateOut.classList.remove('throttled');
-    rateOut.title = 'Auto-ease is holding the clock back so this tipping can be '
-      + `watched — ${fmtTime(sim.rate)} / s was asked for. Turn off "ease" to run at full speed.`;
+    rateOut.title = tp('Auto-ease is holding the clock back so this tipping can be watched — '
+      + '{0} / s was asked for. Turn off "ease" to run at full speed.', fmtTime(sim.rate));
   } else if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
     showRate(Math.max(achieved, 0));
     rateOut.classList.remove('eased');
     rateOut.classList.add('throttled');
-    rateOut.title = 'The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.';
+    rateOut.title = t('The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.');
   } else {
     showRate(sim.rate);
     rateOut.classList.remove('throttled');
@@ -974,18 +984,21 @@ function updateReadout() {
       if (scenarioResult === 'win') { sim.paused = true; endSettle(); syncPlay(); }
     }
     el.className = 'sc-status' + (scenarioResult ? ' ' + scenarioResult : '');
-    if (scenarioResult === 'win') { el.textContent = `✓ Complete — ${fmtTime(w.time)} elapsed`; }
-    else if (scenarioResult === 'lose') { el.textContent = `✕ Failed — ${fmtTime(w.time)} elapsed. Reset to try again.`; }
-    else el.textContent = `${fmtTime(w.time)} / ${fmtTime(activeScenario.limit)} — in progress`;
+    if (scenarioResult === 'win') { el.textContent = tp('✓ Complete — {0} elapsed', fmtTime(w.time)); }
+    else if (scenarioResult === 'lose') {
+      el.textContent = tp('✕ Failed — {0} elapsed. Reset to try again.', fmtTime(w.time));
+    } else {
+      el.textContent = tp('{0} / {1} — in progress', fmtTime(w.time), fmtTime(activeScenario.limit));
+    }
   }
 }
 
 let toastTimer;
 function toast(msg, ms = 2600) {
-  const t = $('#toast');
-  t.textContent = msg; t.classList.add('show');
+  const box = $('#toast');
+  box.textContent = msg; box.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  toastTimer = setTimeout(() => box.classList.remove('show'), ms);
 }
 
 // ---------------------------------------------------------------------------
@@ -1023,7 +1036,7 @@ function syncClocks(w) {
   row.hidden = !last;
   if (last) {
     $('#since-label').textContent = last.name;
-    $('#since-label').title = `Marked at ${fmtTime(last.t)} elapsed`;
+    $('#since-label').title = tp('Marked at {0} elapsed', fmtTime(last.t));
     $('#sincetime').textContent = fmtTime(Math.max(0, w.time - last.t));
   }
   const btn = $('#btn-mark');
@@ -1055,19 +1068,19 @@ function renderMarks() {
     const when = document.createElement('span');
     when.className = 'mark-when';
     when.textContent = fmtTime(m.t);
-    when.title = 'Elapsed time when this was marked';
+    when.title = t('Elapsed time when this was marked');
 
     const gap = document.createElement('span');
     gap.className = 'mark-gap';
     if (i > 0) {
       gap.textContent = `+${fmtTime(m.t - marks[i - 1].t)}`;
-      gap.title = `after “${marks[i - 1].name}”`;
+      gap.title = tp('after “{0}”', marks[i - 1].name);
     }
 
     const drop = document.createElement('button');
     drop.type = 'button'; drop.className = 'mark-drop';
     drop.textContent = '\u00d7';
-    drop.title = 'Remove this milestone';
+    drop.title = t('Remove this milestone');
     drop.addEventListener('click', () => {
       marks.splice(i, 1);
       renderMarks(); syncClocks(sim.world);
@@ -1133,9 +1146,9 @@ function applyWorldState(s) {
   // Going back along a world's own history un-happens everything after where
   // you land, milestones included: a mark on an event that this branch has not
   // reached yet would be a note about a future that was just dropped.
-  const t = s.world?.time ?? s.time;
-  if (isFinite(t)) {
-    const kept = marks.filter((m) => m.t <= t + 1);
+  const when = s.world?.time ?? s.time;
+  if (isFinite(when)) {
+    const kept = marks.filter((m) => m.t <= when + 1);
     if (kept.length !== marks.length) { marks = kept; renderMarks(); }
   }
   // The live params object is handed through rather than replaced: the sliders
@@ -1177,21 +1190,21 @@ function buildSlots() {
     b.addEventListener('click', () => {
       if (armedToSave) {
         try { localStorage.setItem(slotKey(i), JSON.stringify(snapshot())); }
-        catch { toast('Could not save — storage is full or blocked'); return; }
+        catch { toast(t('Could not save — storage is full or blocked')); return; }
         armedToSave = false;
         if (i === AUTOSAVE_SLOT) { dirty = false; lastAutosave = Date.now(); }
         syncSlots();
-        toast(`Saved to slot ${i}`);
+        toast(tp('Saved to slot {0}', i));
         return;
       }
       const s = readSlot(i);
-      if (!s) { toast(`Slot ${i} is empty — press Save… first`); return; }
+      if (!s) { toast(tp('Slot {0} is empty — press Save… first', i)); return; }
       restore(s);
       // Freshly loaded and unchanged: nothing to write back yet, and the clock
       // has not moved. Marking it clean here is what stops loading slot 3 from
       // copying itself into slot 1 a moment later.
       dirty = false; lastAutosave = Date.now();
-      toast(`Loaded slot ${i} — ${s.name}, ${fmtTime(s.time || 0)} in`);
+      toast(tp('Loaded slot {0} — {1}, {2} in', i, s.name, fmtTime(s.time || 0)));
     });
   }
   syncSlots();
@@ -1210,15 +1223,16 @@ function syncSlots() {
     // The badge span is emitted on every slot, empty where it does not apply, so
     // all five keep the same four grid columns and the elapsed time stays in
     // line down the row.
-    const auto = `<span class="slot-auto">${i === AUTOSAVE_SLOT ? 'auto' : ''}</span>`;
+    const auto = `<span class="slot-auto">${i === AUTOSAVE_SLOT ? t('auto') : ''}</span>`;
     b.innerHTML = `<span class="slot-n">${i}</span>` + (s
       ? `<span class="slot-name">${s.name}</span>${auto}` +
         `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
-      : `<span class="slot-name">empty</span>${auto}<span class="slot-sub">—</span>`);
+      : `<span class="slot-name">${t('empty')}</span>${auto}<span class="slot-sub">—</span>`);
     const note = i === AUTOSAVE_SLOT
-      ? '\nKept up to date on its own, every 30 s and when you leave the page.' : '';
-    b.title = (s ? `${s.name} — ${fmtTime(s.time || 0)} elapsed, saved ${new Date(s.at).toLocaleString()}`
-                 : `Slot ${i} is empty`) + note;
+      ? '\n' + t('Kept up to date on its own, every 30 s and when you leave the page.') : '';
+    b.title = (s ? tp('{0} — {1} elapsed, saved {2}', s.name, fmtTime(s.time || 0),
+                      new Date(s.at).toLocaleString())
+                 : tp('Slot {0} is empty', i)) + note;
   }
   const btn = $('#btn-slot-save');
   if (btn) { btn.textContent = armedToSave ? 'pick a slot' : 'Save…'; btn.classList.toggle('busy', armedToSave); }
@@ -1290,7 +1304,7 @@ function exportSaves() {
     const s = readSlot(i);
     if (s) worlds.push({ slot: i, ...s });
   }
-  if (!worlds.length) { toast('Nothing to export — every slot is empty'); return; }
+  if (!worlds.length) { toast(t('Nothing to export — every slot is empty')); return; }
   const doc = buildSaveFile(worlds, Date.now());
   const blob = new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1306,11 +1320,11 @@ function exportSaves() {
 
 function importSaves(text) {
   const worlds = parseSaveFile(text);
-  if (!worlds) { toast('That file has no worlds in it'); return; }
+  if (!worlds) { toast(t('That file has no worlds in it')); return; }
   const { writes, skipped } = planImport(worlds, (i) => !readSlot(i), SLOTS);
   for (const { slot, world } of writes) {
     try { localStorage.setItem(slotKey(slot), JSON.stringify(world)); }
-    catch { toast('Could not import — storage is full or blocked'); syncSlots(); return; }
+    catch { toast(t('Could not import — storage is full or blocked')); syncSlots(); return; }
   }
   // An imported slot 1 is not the running world, so do not let the autosave
   // write over it a moment later.
@@ -1402,7 +1416,7 @@ function bindScrub() {
     if (!dragging) return;
     dragging = false;
     scrubTo(timeAt(e), true);
-    toast(`Back to ${fmtTime(sim.world.time)} — change something, then press play`);
+    toast(tp('Back to {0} — change something, then press play', fmtTime(sim.world.time)));
   };
   cv.addEventListener('pointerup', end);
   cv.addEventListener('pointercancel', end);
@@ -1543,9 +1557,9 @@ function syncFossil() {
 
 function syncPlay() {
   const b = $('#btn-play');
-  b.textContent = sim.paused ? '▶  Play' : '❚❚  Pause';
+  b.textContent = sim.paused ? `▶  ${t('Play')}` : `❚❚  ${t('Pause')}`;
   b.classList.toggle('paused', sim.paused);
-  b.title = sim.paused ? 'Resume the simulation (space)' : 'Pause the simulation (space)';
+  b.title = t(sim.paused ? 'Resume the simulation (space)' : 'Pause the simulation (space)');
 }
 
 function updateQualityButton() {
@@ -1553,7 +1567,7 @@ function updateQualityButton() {
   const low = view.quality === 'low';
   b.textContent = low ? '◇' : '◆';
   b.setAttribute('aria-pressed', String(low));
-  b.title = low ? 'Detail: low — click for high' : 'Detail: high — click for low';
+  b.title = t(low ? 'Detail: low — click for high' : 'Detail: high — click for low');
 }
 
 function updateGfxButton() {
@@ -1561,8 +1575,8 @@ function updateGfxButton() {
   const on = view.wantTextures && view.texturesLoaded;
   b.textContent = on ? '🛰' : '◍';
   b.setAttribute('aria-pressed', String(on));
-  b.title = on ? 'Surface: generated maps — click for procedural'
-               : 'Surface: procedural — click for generated maps';
+  b.title = t(on ? 'Surface: generated maps — click for procedural'
+                 : 'Surface: procedural — click for generated maps');
 }
 
 function bindControls() {
@@ -1595,21 +1609,21 @@ function bindControls() {
     if (!f) return;
     const r = new FileReader();
     r.onload = () => importSaves(String(r.result || ''));
-    r.onerror = () => toast('Could not read that file');
+    r.onerror = () => toast(t('Could not read that file'));
     r.readAsText(f);
   });
 
   $('#btn-slot-save').addEventListener('click', () => {
     armedToSave = !armedToSave;
     syncSlots();
-    if (armedToSave) toast('Pick a slot to save into');
+    if (armedToSave) toast(t('Pick a slot to save into'));
   });
 
   // --- the fossil reserve ---------------------------------------------------
   $('#btn-fossil-reset').addEventListener('click', () => {
     sim.world.fossil = FOSSIL_TOTAL;
     syncFossil();
-    toast('Fossil carbon put back in the ground');
+    toast(t('Fossil carbon put back in the ground'));
   });
   $('#chk-fossil-inf').addEventListener('change', (e) => {
     params.fossilInfinite = e.target.checked;
@@ -1690,7 +1704,7 @@ function bindControls() {
     // able to show.
     if (sim.paused) { sim.paused = false; syncPlay(); }
     $('#btn-settle').classList.add('busy');
-    $('#btn-settle').textContent = 'Stop';
+    $('#btn-settle').textContent = t('Stop');
   });
 
   const rate = $('#rate'), rateOut = $('#rate-out');
@@ -1728,7 +1742,7 @@ function bindControls() {
 
   {
     const custom = document.createElement('option');
-    custom.value = ''; custom.textContent = 'custom'; custom.hidden = true;
+    custom.value = ''; custom.textContent = t('custom'); custom.hidden = true;
     rateMenu.appendChild(custom);
     for (const st of RATE_STOPS) {
       const o = document.createElement('option');
@@ -1763,8 +1777,8 @@ function bindControls() {
                        myr: 1e6, my: 1e6, ma: 1e6, gyr: 1e9, gy: 1e9, ga: 1e9,
                        byr: 1e9, b: 1e9 };
   const parseRate = (raw) => {
-    const t = String(raw).trim().toLowerCase().replace(',', '.').replace(/\/\s*s(ec(ond)?s?)?$/, '').trim();
-    const m = t.match(/^([-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?)\s*(.*)$/);
+    const txt = String(raw).trim().toLowerCase().replace(',', '.').replace(/\/\s*s(ec(ond)?s?)?$/, '').trim();
+    const m = txt.match(/^([-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?)\s*(.*)$/);
     if (!m) return null;
     const n = parseFloat(m[1]);
     if (!isFinite(n) || n <= 0) return null;
@@ -1821,7 +1835,7 @@ function bindControls() {
     const st = classify(w);
     marks.push({ t: w.time, name: st.name });
     syncClocks(w); renderMarks();
-    toast(`Marked “${st.name}” at ${fmtTime(w.time)}`);
+    toast(tp('Marked “{0}” at {1}', tx('states', st.id, 'name') || st.name, fmtTime(w.time)));
   });
 
   // Auto-ease. Off by default: it takes the clock off the player, and a control
@@ -1880,7 +1894,8 @@ function bindControls() {
   $('#btn-spin').addEventListener('click', () => {
     view.spinPaused = !view.spinPaused;
     $('#btn-spin').setAttribute('aria-pressed', String(view.spinPaused));
-    $('#btn-spin').title = view.spinPaused ? "Resume the planet's rotation" : "Pause the planet's rotation";
+    $('#btn-spin').title = t(view.spinPaused
+      ? 'Resume the planet’s rotation' : 'Pause the planet’s rotation');
   });
   $('#btn-view').addEventListener('click', () => {
     view.yaw = 0; view.pitch = 0; view.spinVel = 0; view.zoom = 1;
@@ -1909,7 +1924,7 @@ function bindControls() {
     b.disabled = false;
     if (!ok || view.failed) {
       await useRenderer('software');
-      toast('No GPU rendering available here — staying in software');
+      toast(t('No GPU rendering available here — staying in software'));
     } else {
       const why = skipped.length ? `  ·  skipped ${skipped[0]}` : '';
       toast(LABELS[next] + why + '  ·  reload returns to the best available');
@@ -1934,7 +1949,7 @@ function bindControls() {
       : 'Stylised atmosphere — the shell is exaggerated so you can watch it change.', 6000);
   });
   $('#btn-gfx').addEventListener('click', () => {
-    if (!view.texturesLoaded) { toast('Surface maps are not available in this build'); return; }
+    if (!view.texturesLoaded) { toast(t('Surface maps are not available in this build')); return; }
     view.wantTextures = !view.wantTextures;
     updateGfxButton();
     toast(view.wantTextures ? 'Generated surface maps' : 'Procedural graphics');
@@ -2105,7 +2120,7 @@ function advanceSettle() {
   const quiet = Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05;
   if (quiet || settleRounds > 4000) {
     endSettle();
-    toast(`Settled at ${fmtTime(w.time)}`);
+    toast(tp('Settled at {0}', fmtTime(w.time)));
   }
 }
 
@@ -2115,7 +2130,7 @@ function advanceSettle() {
 function endSettle() {
   settling = false;
   $('#btn-settle').classList.remove('busy');
-  $('#btn-settle').textContent = 'Settle';
+  $('#btn-settle').textContent = t('Settle');
 }
 
 let last = performance.now(), chartClock = 0, reportedError = false;
@@ -2186,13 +2201,75 @@ bindProfile();
 bindWorldName();
 syncSliders();
 bindControls();
-buildLogUI($('#statelog'), discovered, (id) => {
+function selectState(id) {
   $('#state-detail').innerHTML = discovered.has(id)
-    ? `<strong style="color:${STATES[id].color}">${STATES[id].name}</strong><br>${STATES[id].blurb}`
-    : 'Not yet discovered — build a world that reaches this state.';
-});
+    ? `<strong style="color:${STATES[id].color}">${tx('states', id, 'name') || STATES[id].name}` +
+      `</strong><br>${tx('states', id, 'blurb') || STATES[id].blurb}`
+    : t('Not yet discovered — build a world that reaches this state.');
+}
+buildLogUI($('#statelog'), discovered, selectState);
 $('#found-count').textContent = String(discovered.size);
 $('#total-count').textContent = String(Object.keys(STATES).length);
+
+// Language.
+//
+// Everything above is built in English and then translated in place, which is
+// deliberate: the static markup, the slider labels and their notes all become
+// ordinary text nodes, and i18n.js caches the English on each one before
+// touching it. So a switch is a re-translate rather than a rebuild, nothing
+// needs a data-i18n attribute, and a string with no entry keeps its English
+// instead of going blank. What cannot work that way is anything assembled from
+// data after boot -- preset and scenario chips, the climate log, every readout
+// -- and that is what relabel() rebuilds.
+function relabel() {
+  const lang = currentLang();
+  document.documentElement.lang = lang;
+  const btn = $('#btn-lang');
+  if (btn) {
+    const next = LANGS.find((l) => l.id === nextLang());
+    btn.textContent = (LANGS.find((l) => l.id === lang) || LANGS[0]).tag;
+    btn.title = `${t('Language')}: ${next ? t(`Switch to ${next.name === 'Slovenčina' ? 'Slovak' : 'English'}`) : ''}`;
+  }
+  applyStatic();
+  // Assembled attributes rather than markup: applyStatic can only restore what
+  // was in the DOM as written, and these were built by string concatenation.
+  for (const d of SLIDERS) {
+    const e = els[d.key];
+    if (!e) continue;
+    e.out.setAttribute('aria-label', tp('{0} value, type to set exactly', t(d.label)));
+    e.input.setAttribute('aria-label', t(d.label));
+    if (e.stopRow) {
+      [...e.stopRow.children].forEach((c, i) => {
+        const st = d.stops[i];
+        if (!st) return;
+        c.textContent = t(st.n);
+        c.title = `${t(d.label)}: ${d.fmt(st.v)}`;
+      });
+    }
+  }
+  updateAtmoButton();
+  updateQualityButton();
+  updateGfxButton();
+  buildPresets();
+  buildScenarios();
+  setPresetActive(activePreset);
+  if (activeScenario) {
+    const b = $(`[data-scenario="${activeScenario.id}"]`);
+    if (b) b.classList.add('active');
+    const banner = $('#scenario-banner');
+    banner.querySelector('.sc-name').textContent =
+      tx('scenarios', activeScenario.id, 'name') || activeScenario.name;
+    banner.querySelector('.sc-brief').textContent =
+      tx('scenarios', activeScenario.id, 'brief') || activeScenario.brief;
+  }
+  buildLogUI($('#statelog'), discovered, selectState);
+  syncSlots();
+  syncPlay();
+  updateReadout();
+}
+onLang(relabel);
+$('#btn-lang').addEventListener('click', () => setLang(nextLang()));
+relabel();
 if (Object.keys(paramsFromHash()).length === 0) {
   setPresetActive('earth');
   activeBody = 'earth';       // the app opens on Earth, so it opens on Earth's map
@@ -2223,10 +2300,10 @@ async function start() {
         const forced = wanted === kind;
         const why = rendererLog.length ? `  (${rendererLog[0].reason})` : '';
         toast(kind === 'software'
-          ? `Software rendering — drawn on the CPU. The simulation is unaffected.${forced ? '' : why}`
+          ? `${t('Software rendering — drawn on the CPU. The simulation is unaffected.')}${forced ? '' : why}`
           : forced
-            ? 'WebGL1, as requested — the same shaders at full detail.'
-            : `WebGL2 unavailable — drawing with WebGL1, at full detail.${why}`, 8000);
+            ? t('WebGL1, as requested — the same shaders at full detail.')
+            : `${t('WebGL2 unavailable — drawing with WebGL1, at full detail.')}${why}`, 8000);
       }
       return;
     }
