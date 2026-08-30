@@ -105,17 +105,21 @@ export const INDUCED_MAGNETOSPHERE = 0.02;
 
 export const SOLAR_HISTORY = { brightening: 1, realisticGeology: true };
 
-// The three worlds around M dwarfs get `realisticGeology` off and no
-// brightening at all, and both are the accurate choice rather than an omission.
-// An M dwarf is essentially a constant star: the same curve gives TRAPPIST-1 a
-// 1500 Gyr main sequence and 0.04%/Gyr, so leaving it on would be an honest
-// nothing rather than a lie -- it is off only because the XUV decline rides on
-// the same switch, and these presets carry measured XUV rather than a track. And their interior
-// heat is tidal, not radiogenic -- 2.68 W/m^2 on TRAPPIST-1b and 80 on GJ 1132 b
-// come from eccentricity held by resonance, which does not decay on a
-// potassium-40 half-life. Running them down the radiogenic curve would cool
-// worlds that are being kneaded, not worlds that are cooling.
-export const DWARF_HISTORY = { brightening: 0, realisticGeology: false };
+// The three worlds around M dwarfs get no brightening at all, and that is the
+// accurate choice rather than an omission. An M dwarf is essentially a constant
+// star: the same curve gives TRAPPIST-1 a 1500 Gyr main sequence and 0.04%/Gyr,
+// so leaving it on would be an honest nothing rather than a lie -- it is off
+// because the XUV decline rides on that switch, and these presets carry
+// measured XUV rather than a track.
+//
+// `realisticGeology` is now on here too, and what makes that correct is
+// `tidalHeat`. Their interior heat is tidal, not radiogenic -- 2.68 W/m^2 on
+// TRAPPIST-1b and 80 on GJ 1132 b come from an eccentricity held by resonance,
+// which does not decay on a potassium-40 half-life -- so the decay is applied
+// to the radiogenic part only and these worlds keep the flux they are measured
+// to have. Before that split the whole switch had to be off, which also cost
+// them the dynamo's decline for no reason.
+export const DWARF_HISTORY = { brightening: 0, realisticGeology: true };
 
 export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
 
@@ -265,7 +269,7 @@ export const PRESETS = {
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },
   waterworld: { name: 'Waterworld', icon: '💧', params: { ...EARTH, mass: 1.6, water: 6, landFraction: 0.0, insolation: 1.0, startT: 290 } },
-  titan:   { name: 'Titan-like', icon: '🟤', params: { ...EARTH, o2Bar: 0, biosphere: 0, mass: 0.15, insolation: 0.011, water: 0.5, landFraction: 0.6, n2Bar: 1.5, ch4Bar: 0.05, co2Bar: 1e-6, outgassing: 0.1, startT: 95 } },
+  titan:   { name: 'Titan-like', icon: '🟤', params: { ...EARTH, realisticGeology: true, o2Bar: 0, biosphere: 0, mass: 0.15, insolation: 0.011, water: 0.5, landFraction: 0.6, n2Bar: 1.5, ch4Bar: 0.05, co2Bar: 1e-6, outgassing: 0.1, startT: 95 } },
 
   // ---- three planets that actually exist ----------------------------------
   //
@@ -288,7 +292,7 @@ export const PRESETS = {
     mass: 1.374, insolation: 4.153, starTemp: 2566, tidallyLocked: true,
     rotationHours: 36.3, obliquity: 0, water: 0, landFraction: 1,
     n2Bar: 1e-4, o2Bar: 0, co2Bar: 1e-5, ch4Bar: 0, biosphere: 0,
-    internalHeat: 2.68, outgassing: 1.5, xuvFraction: 7e-4,
+    internalHeat: 2.68, tidalHeat: 2.68, outgassing: 1.5, xuvFraction: 7e-4,
     landAlbedo: 0.12, startT: 500 } },
 
   // 0.646 S(+), and the one in the system that sits squarely in the habitable
@@ -307,7 +311,7 @@ export const PRESETS = {
     mass: 0.692, insolation: 0.646, starTemp: 2566, tidallyLocked: true,
     rotationHours: 146.4, obliquity: 0, water: 1.0, landFraction: 0.3,
     n2Bar: 1.0, o2Bar: 0, co2Bar: 1.0, ch4Bar: 0, biosphere: 0,
-    internalHeat: 0.18, outgassing: 1.0, xuvFraction: 7e-4, startT: 280 } },
+    internalHeat: 0.18, tidalHeat: 0.18, outgassing: 1.0, xuvFraction: 7e-4, startT: 280 } },
 
   // 19 S(+), and the one Swain et al. 2021 model at 80 W/m^2 of tidal heat --
   // a thousand times Earth's, from an eccentricity of only 0.01 held by
@@ -325,7 +329,7 @@ export const PRESETS = {
     mass: 1.66, insolation: 18.8, starTemp: 3270, tidallyLocked: true,
     rotationHours: 39.1, obliquity: 0, water: 0, landFraction: 1,
     n2Bar: 0.01, o2Bar: 0, co2Bar: 0.1, ch4Bar: 0, biosphere: 0,
-    internalHeat: 80, outgassing: 1, xuvFraction: 2e-4,
+    internalHeat: 80, tidalHeat: 80, outgassing: 1, xuvFraction: 2e-4,
     landAlbedo: 0.12, startT: 600 } },
   // 0.9 S-earth and Earth-like specific volcanism, both of which are
   // corrections rather than taste.
@@ -351,5 +355,10 @@ export const PRESETS = {
   // oxygen -- a thinner oxygen atmosphere than Earth's because its volcanism
   // eats most of what its biosphere makes.
   superEarth: { name: 'Super-Earth', icon: '🪐', params: { ...EARTH, mass: 3.5, water: 2, n2Bar: 3, co2Bar: 1e-3, insolation: 0.9, outgassing: 1.0, startT: 290 } },
-  futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, insolation: 1.09, startT: 292 } },
+  // Earth's own interior, a billion years further down its curve -- so this one
+  // needs `startAge` as well as the switch, or it would run the decay from today
+  // rather than from where this world already is. Brightening stays off: the
+  // 1.09 is the Gough value at 5.567 Gyr and is the point of the preset.
+  futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, realisticGeology: true,
+    startAge: 5.567, insolation: 1.09, startT: 292 } },
 };

@@ -214,8 +214,20 @@ export function evolvedParams(p, base, years) {
     const start = p.startAge ?? EARTH_AGE;
     const now = radiogenic(start);
     if (now > 0) {
-      out.internalHeat = (base.internalHeat ?? 0)
-        * clamp(radiogenic(startAge) / now, 0, 1);
+      // Only the radiogenic part runs down. Tidal heat does not: it comes from
+      // an eccentricity held by a resonance with the neighbouring planets, and
+      // it is set by the orbit rather than by how much potassium-40 is left --
+      // TRAPPIST-1b's 2.68 W/m2 and GJ 1132 b's 80 are the same today as they
+      // were three billion years ago, while Earth's 0.092 is a third of what it
+      // was. Decaying a kneaded world on a half-life curve would cool a planet
+      // that is not cooling, which is why these three used to have the whole
+      // switch turned off; `tidalHeat` lets the switch be on and still be right.
+      // Anything the player adds on top of the published tidal flux is treated
+      // as radiogenic and decays.
+      const total = base.internalHeat ?? 0;
+      const tidal = clamp(p.tidalHeat ?? 0, 0, total);
+      out.internalHeat = tidal
+        + (total - tidal) * clamp(radiogenic(startAge) / now, 0, 1);
     }
     // ...and the dynamo goes out when the core stops convecting. Smoothed over
     // the last tenth of its life rather than switched off, because a field that

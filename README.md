@@ -11,7 +11,7 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 250 physics, coverage, determinism and control checks
+node src/selftest.js            # 253 physics, coverage, determinism and control checks
 node tools/calibrate.mjs        # 23 observational anchors + 3 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
@@ -255,7 +255,7 @@ touching them. Click any value to type it exactly, with units — `420ppm`, `0.5
 
 Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · ice-free hothouse ·
 temperate · waterbelt/slushball · hard snowball · eyeball · lobster · twilight world ·
-nightside-trapped desert · dune/desert world · waterworld · Mars-like collapse · nightside collapse ·
+nightside-trapped desert · dune/desert world · waterworld · Mars-like collapse · partial nightside freeze-out ·
 nightside freeze-out · Titan-like · thin cold desert · baked desert · frozen desert · airless rock.
 
 Twenty-two names down a nineteen-branch chain — `frozen` is reachable three ways — and **the exact
@@ -575,10 +575,10 @@ rotation row above.
 sharing a name. The interesting one is the first: a TRAPPIST-1e at 66 Myr with 0.38 bar of CO₂ lying
 on its dark side and 134 mbar left in the air, its day side at 122 °C with a liquid sea and a
 biosphere on it — a habitable world quietly losing its atmosphere behind it, which is the whole
-reason **Nightside Collapse** is worth a state of its own. The end of that same road has no sea at
+reason **Partial Nightside Freeze-Out** is worth a state of its own. The end of that same road has no sea at
 all: the air is dry ice on the hemisphere that never sees the star, the water is glacier ice beside
 it, and the day side is bare. That is a **Nightside Freeze-Out**, and it needed splitting off
-because the collapse blurb *promises* a working ocean — text that was simply false on a world whose
+because the partial state's blurb *promises* a working ocean — text that was simply false on a world whose
 water had all frozen out. The condition is now the promise: liquid water, and enough of it to be a
 sea rather than a damp patch (`liquidShare > 0.02` and `flooded > 0.01`). Neither is the
 **Nightside-Trapped Desert** above, where the air is intact and only the water has migrated.
@@ -815,6 +815,41 @@ would give GJ 1132 b 870× Earth's volcanism and empty its entire carbon budget 
 Weathering is deliberately *not* scaled with it. It shares the same mass normalisation, and boosting
 both would move source and sink together — an error that leaves the equilibrium looking untouched. A
 test pins it.
+
+### An interior is not a constant, and tidal heat is not radiogenic heat
+
+**Every real world and every scenario now runs with the interior ageing** — `realisticGeology` on by
+default, for Earth, Venus, Mars, Titan, the Archean, Early Venus, Noachian Mars, Earth +1 Gyr, all
+three exoplanets and all eight scenarios. Radiogenic heat falls with the potassium, thorium and
+uranium that make it — Earth's interior ran at three times today's flux when it was half a billion
+years old — and because outgassing goes as `√(F/F_earth)`, the volcanoes come down with it without
+being told to. Holding that still across a billion-year puzzle would be the one place this model
+lied about time, which is its whole subject.
+
+The reason the three M-dwarf worlds used to have the switch **off** is that theirs is a different
+kind of heat. TRAPPIST-1b's 2.68 W/m² and GJ 1132 b's 80 come from an eccentricity held by a
+resonance with a neighbouring planet: it is set by the orbit, not by how much potassium-40 is left,
+and it is the same now as it was three billion years ago. Running those worlds down a half-life
+curve would have cooled planets that are not cooling.
+
+So the decay now applies to the **radiogenic part only**. A preset can declare `tidalHeat`, the share
+of its interior flux that comes from being kneaded, and that share is held while the rest runs down;
+anything the player adds on top of the published tidal flux is treated as radiogenic and decays. That
+is what lets the switch be on everywhere and still be right, and it gives those three worlds the
+dynamo decline they were also missing. Measured over 3 Gyr with the switch on for both: GJ 1132 b
+holds 80.0 W/m², Earth falls from 92 to 59 mW/m².
+
+What it costs the scenarios is small and in the honest direction — the interior fades over the run,
+so the volcanoes do too:
+
+| | Break the Snowball | Hold Back the Runaway | Terraform | Eye of the Red Dwarf | Undo Venus |
+|---|---|---|---|---|---|
+| span | 200 Myr | 1 Gyr | 500 Myr | 1 Gyr | 1 Gyr |
+| interior at the end | ×0.96 | **×0.76** | ×0.91 | ×0.84 | ×0.84 |
+| volcanism at the end | ×0.98 | ×0.87 | ×0.96 | ×0.92 | ×0.92 |
+
+"Hold Back the Runaway" moves most, because it is the one that starts young — 2.75 Gyr — and it moves
+in the player's favour: the 2.5× volcanism that keeps putting the CO₂ back is 13% weaker by the end.
 
 ### Real interiors, as one-click pairs
 
