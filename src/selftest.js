@@ -16,7 +16,8 @@ import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
-import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B } from './render/terrain.js';
+import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B, vegetationColor,
+         SOLAR_VEGETATION, stellarVegetation } from './render/terrain.js';
 import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE, dynamoLifetime,
          windExposure, nonThermalEscape, resurfacingBoost, xuvAtAge } from './physics/evolution.js';
 import { bakeTerrain } from './render/cpushade.js';
@@ -85,6 +86,34 @@ export function run() {
   const mars = settle(PRESETS.mars.params, 1e5);
   check('Mars settles near 215 K ± 25',
     near(mars.world.diag.Tmean, 215, 25), `${mars.world.diag.Tmean.toFixed(0)} K`);
+
+  const moon = new Simulation(PRESETS.moon.params).world;
+  check('The Moon preset is the real airless, dry lunar body',
+    near(moon.params.mass, 0.0123, 1e-6)
+      && moon.diag.pTotMean < 1e-5 && moon.diag.totalWater === 0
+      && moon.params.rotationHours > 655 && moon.params.rotationHours < 656
+      && classify(moon).id === 'airless',
+    `${moon.params.mass} M⊕, ${moon.params.rotationHours.toFixed(2)} h day, ${classify(moon).name}`);
+
+  // Campbell's one-atmosphere alien-plant predictions are deliberately not a
+  // simple warm/cool hue ramp. Pin the distinctive anchors, and the important
+  // compatibility rule: Earth under its actual Sun keeps its existing greens.
+  {
+    const a = vegetationColor(9600), f = vegetationColor(7300);
+    const g = vegetationColor(5772), k = vegetationColor(4590);
+    const m = vegetationColor(3200), late = vegetationColor(2500);
+    check('Vegetation colour follows the host star’s spectral class',
+      a[0] > a[1] && f[2] > 1.8*f[0]
+        && g[1] > 3*g[0] && k[0] > 2.5*k[1]
+        && m[2] > m[0] && Math.max(...late) - Math.min(...late) < 0.13,
+      'A brown · F blue-violet · G2 green · K orange · M violet/blue to pale tan');
+    const leaf = [0.11, 0.26, 0.11];
+    const solarLeaf = stellarVegetation(leaf, SOLAR_VEGETATION);
+    const orangeLeaf = stellarVegetation(leaf, k);
+    check('Earth stays naturally green at 5772 K, and changes when its star does',
+      solarLeaf.every((v, i) => v === leaf[i]) && orangeLeaf[0] > orangeLeaf[1],
+      `solar ${solarLeaf.map((v) => v.toFixed(2)).join('/')} · K4 ${orangeLeaf.map((v) => v.toFixed(2)).join('/')}`);
+  }
 
   // Water an ocean world cannot put anywhere is not an ocean.
   //
@@ -400,6 +429,38 @@ export function run() {
       as.id !== 'twilight',
       `${as.name}; day-night contrast ${(aqua.world.diag.Tmax - aqua.world.diag.Tmin).toFixed(0)} K ` +
       `against the land planet's ${(lw.diag.Tmax - lw.diag.Tmin).toFixed(0)} K`);
+  }
+
+  // ---- 3e2. hot locked water worlds do not chatter --------------------------
+  // Regression from the exact shared URL in the Orion's Arm feedback. The
+  // quasi-static shortcut was multiplying a sub-year accuracy step into a few
+  // hundred years while a nightside ice sheet was still steering humidity and
+  // albedo. The accepted nonlinear solve descended, but the repeated oversized
+  // steps made the world alternate between Twilight and Baked Desert for ever.
+  // A short fixed-fine trace stays on the Twilight branch; the adaptive trace
+  // has to do the same without paying fixed-fine cost everywhere else.
+  {
+    const sim = new Simulation({ ...PRESETS.earth.params,
+      water: 0.0327, insolation: 1.06, rotationHours: 912,
+      tidallyLocked: true, obliquity: 0,
+      n2Bar: 0.779428, o2Bar: 0.140816, co2Bar: 0.239721,
+      ch4Bar: 2.23125e-7, emissions: 1, fossilUsed: 0.098,
+      internalHeat: 0.0816658, realisticGeology: true });
+    const w = sim.world, end = 4e5, warm = 1e5;
+    let steps = 0, flips = 0, previous = null, maxMove = 0;
+    while (w.time < end && steps < 30000) {
+      const before = w.diag.Tmean;
+      sim.stepOnce(Math.min(maxStep(w), end - w.time));
+      steps++;
+      if (w.time < warm) continue;
+      const state = classify(w).id;
+      if (previous && state !== previous) flips++;
+      previous = state;
+      maxMove = Math.max(maxMove, Math.abs(w.diag.Tmean - before));
+    }
+    check('A hot, wet locked world does not chatter across a climate boundary',
+      flips <= 1 && maxMove < 1.25 && steps < 30000,
+      `${flips} state flips, ${maxMove.toFixed(2)} K largest mean step, ${steps} steps / 400 kyr`);
   }
 
   // ---- 3f. a sea has to be deep enough to be a sea --------------------------
@@ -898,7 +959,7 @@ export function run() {
       // …and every world whose interior is a real one runs it. A preset or a
       // scenario that quietly holds its interior still for a billion years is
       // the one place this model would be lying about time.
-      const REAL = ['earth', 'preindustrial', 'venus', 'mars', 'titan', 'earlyEarth',
+      const REAL = ['earth', 'moon', 'preindustrial', 'venus', 'mars', 'titan', 'earlyEarth',
                     'earlyVenus', 'earlyMars', 'futureEarth',
                     'trappist1b', 'trappist1e', 'gj1132b'];
       const noDecay = REAL.filter((k) => !PRESETS[k].params.realisticGeology);
@@ -1652,14 +1713,16 @@ export function run() {
       off.length === 0,
       off.length ? off.map((b) => b.name).join(', ') : 'all nine land where they say');
 
-    // And the two that are also world presets must agree with them, or picking
+    // And the bodies that are also world presets must agree with them, or picking
     // Venus from the presets and Venus from this row gives two different Venuses.
     const agrees = (id, key) => {
       const b = INTERIOR_BODIES.find((x) => x.id === id), p = PRESETS[key].params;
       return b.heat === p.internalHeat && b.outgassing === p.outgassing;
     };
-    check('\u2026and Venus, Mars and GJ 1132 b agree with their world presets',
-      agrees('venus', 'venus') && agrees('mars', 'mars') && agrees('gj1132b', 'gj1132b'),
+    check('\u2026and Moon, Venus, Mars and GJ 1132 b agree with their world presets',
+      agrees('moon', 'moon') && agrees('venus', 'venus')
+        && agrees('mars', 'mars') && agrees('gj1132b', 'gj1132b'),
+      `Moon ${PRESETS.moon.params.internalHeat} W/m² × ${PRESETS.moon.params.outgassing}, ` +
       `Venus ${PRESETS.venus.params.internalHeat} W/m² × ${PRESETS.venus.params.outgassing}, ` +
       `GJ 1132 b ${PRESETS.gj1132b.params.internalHeat} × ${PRESETS.gj1132b.params.outgassing}`);
 
@@ -3048,7 +3111,7 @@ export function run() {
         return sim.world;
       });
       const bad = [];
-      for (const id of ['earth', 'preindustrial', 'venus', 'mars', 'earlyEarth',
+      for (const id of ['earth', 'moon', 'preindustrial', 'venus', 'mars', 'earlyEarth',
                         'earlyVenus', 'earlyMars', 'snowball', 'dune', 'eyeball',
                         'waterworld', 'titan', 'trappist1b', 'trappist1e',
                         'gj1132b', 'superEarth']) {
@@ -3063,7 +3126,7 @@ export function run() {
       check('Fast physics lands on the same climate as exact physics',
         bad.length === 0,
         bad.length ? bad.join(', ')
-          : '16 presets, same state and within 5 K after 20 Myr');
+          : '17 presets, same state and within 5 K after 20 Myr');
     }
 
     // Every stop has to be a value its own slider can actually hold.

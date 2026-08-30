@@ -58,6 +58,56 @@ export function seaLevelForLand(landFraction) {
 }
 
 // ---------------------------------------------------------------------------
+// Photosynthetic surface colour under different stellar spectra.
+//
+// These are representative mid-concentration colours from the one-atmosphere,
+// high-sun row of Luke Campbell's "Colors of Alien Plants" model. That model
+// tunes its absorption heuristic to reproduce chlorophyll under a G2 sun, then
+// predicts the visible colour under other spectral classes. The result is not a
+// monotonic red-to-blue ramp: A stars are brown, F stars blue-violet, the Sun's
+// G2 point green, K stars orange, and M stars pass through violet and blue to a
+// pale late-M tan. Interpolating in effective temperature makes the star slider
+// continuous while retaining those actual spectral anchors.
+const VEGETATION_STOPS = [
+  [2500, [181, 180, 152]], // M8
+  [3200, [ 70,  95, 125]], // M4
+  [3850, [ 65,  51,  88]], // M0
+  [4590, [161,  57,  13]], // K4
+  [5772, [ 36, 122,  24]], // G2, the solar/chlorophyll anchor
+  [7300, [ 35,  35,  72]], // F0
+  [9600, [ 96,  41,  21]], // A0
+];
+export const SOLAR_VEGETATION = VEGETATION_STOPS[4][1].map((v) => v / 255);
+
+export function vegetationColor(Teff) {
+  const T = Number.isFinite(Teff) ? Teff : 5772;
+  let hi = 1;
+  while (hi < VEGETATION_STOPS.length && T > VEGETATION_STOPS[hi][0]) hi++;
+  if (hi >= VEGETATION_STOPS.length) hi = VEGETATION_STOPS.length - 1;
+  const lo = Math.max(0, hi - 1);
+  const [Ta, a] = VEGETATION_STOPS[lo], [Tb, b] = VEGETATION_STOPS[hi];
+  const f = Ta === Tb ? 0 : Math.min(Math.max((T - Ta) / (Tb - Ta), 0), 1);
+  return a.map((v, i) => (v + (b[i] - v) * f) / 255);
+}
+
+// Recolour vegetation while preserving the source texture's brightness and
+// fine detail. At exactly the solar anchor the source is returned byte-for-byte;
+// this keeps Earth photography natural under its own Sun while allowing even a
+// mapped Earth to respond when the star-temperature control moves.
+export function stellarVegetation(source, target) {
+  const lum = (c) => 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2];
+  const d = Math.hypot(target[0] - SOLAR_VEGETATION[0],
+                       target[1] - SOLAR_VEGETATION[1],
+                       target[2] - SOLAR_VEGETATION[2]);
+  const shift = Math.min(Math.max(d * 2.5, 0), 1);
+  const scale = lum(source) / Math.max(lum(target), 1e-4);
+  return source.map((v, i) => {
+    const tinted = Math.min(Math.max(target[i] * scale, 0), 1);
+    return v + (tinted - v) * shift;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // How brightly a surface at temperature T glows in visible light, normalised
 // so that 1500 K is 1.0.
 //

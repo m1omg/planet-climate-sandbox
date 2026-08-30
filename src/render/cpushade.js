@@ -1,4 +1,4 @@
-import { seaLevelForLand, thermalGlow } from './terrain.js';
+import { seaLevelForLand, thermalGlow, SOLAR_VEGETATION, stellarVegetation } from './terrain.js';
 // A CPU implementation of the planet shading, for machines where WebGL2 is
 // unavailable. This is not a toy stand-in: it is the same terrain, the same
 // biome rules, the same ice and the same lighting as the GPU path, evaluated in
@@ -307,6 +307,7 @@ export function renderPlanet(rgba, W, H, s) {
   const cSphere = roDot - 1;
   const Ra = 1 + atmo, cAtmo = roDot - Ra*Ra;
   const time = s.time || 0;
+  const vegRgb = stellarVegetation([0.42, 0.45, 0.22], s.vegColor || SOLAR_VEGETATION);
 
   // Only the disc is shaded; the rest of the buffer stays transparent and the
   // cached sky layer shows through. The disc covers about an eighth of the
@@ -369,9 +370,9 @@ export function renderPlanet(rgba, W, H, s) {
         const veg = smoothstep(0.12, 0.50, life);
         const rockT = smoothstep(0.12, 0.34, elev);
         const shade = 0.85 + 0.3*detail;
-        let gr = mix(mix(0.70, 0.42, veg), 0.34, rockT) * shade;
-        let gg = mix(mix(0.53, 0.45, veg), 0.30, rockT) * shade;
-        let gb = mix(mix(0.31, 0.22, veg), 0.25, rockT) * shade;
+        let gr = mix(mix(0.70, vegRgb[0], veg), 0.34, rockT) * shade;
+        let gg = mix(mix(0.53, vegRgb[1], veg), 0.30, rockT) * shade;
+        let gb = mix(mix(0.31, vegRgb[2], veg), 0.25, rockT) * shade;
 
         // ocean, graded by depth the way the shader does
         const depth = smoothstep(0, -0.26, h);

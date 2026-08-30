@@ -29,9 +29,54 @@ check('bake.vert', read('bake.vert'));
 check('bake.frag', splice(read('bake.frag')));
 check('cloudbake.frag', splice(read('cloudbake.frag')));
 
-// --- every function the runtime shader calls must actually be defined --------
-// Comments are stripped first: prose is full of words followed by a bracket.
+// Comments are stripped before source-shape checks: prose is full of words
+// followed by a bracket and must not masquerade as executable GLSL.
 const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+
+// --- real-world maps must preserve geography and climate --------------------
+// A normal equirectangular map stores longitude in x. With the camera looking
+// down +Z, atan(x,z) makes east move to screen-right; swapping the arguments
+// mirrors every continent. The source photographs themselves are correctly
+// oriented, so this belongs at the lookup rather than in every asset.
+{
+  const src = decomment(read('planet.frag'));
+  const eastRight = /atan\s*\(\s*d\.x\s*,\s*d\.z\s*\)/.test(src);
+  if (!eastRight) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  body-map longitude is mirrored (east must move to screen-right)');
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  body-map longitude keeps east on screen-right');
+  }
+
+  // A photograph's blue ocean is only the ocean at the map's reference sea
+  // level. When the simulated sea retreats, its DEM must expose modelled seabed
+  // instead of treating those blue pixels as land colour.
+  const masksSourceSea = /uBodySeaLevel/.test(src)
+    && /sourceLand/.test(src)
+    && /bodyGround\s*\([^)]*sourceLand/.test(src);
+  if (!masksSourceSea) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  a dry mapped Earth still paints the photograph\'s blue oceans on exposed ground');
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  mapped source oceans reveal modelled seabed when the sea retreats');
+  }
+
+  // Vegetation is a stellar-spectrum colour, not a permanently green texture.
+  // Pin both procedural/generated terrain and green pixels in real photographs:
+  // otherwise Earth responds while the default texture path (or vice versa)
+  // quietly stays green.
+  const stellarVeg = /uniform\s+vec3\s+uVegColor\s*;/.test(src)
+    && /stellarVegetation\s*\(/.test(src)
+    && /bodyGround[\s\S]*stellarVegetation\s*\(/.test(src);
+  if (!stellarVeg) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  vegetation is not recoloured from the host star in every surface path');
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  procedural, textured and photographed vegetation share the stellar palette');
+  }
+}
+
+// --- every function the runtime shader calls must actually be defined --------
 {
   const src = decomment(splice(read('planet.frag')));
   const defined = new Set([...src.matchAll(/^\s*(?:[a-z0-9]+\s+)?(?:vec[234]|float|int|mat[234]|void|bool)\s+(\w+)\s*\(/gm)].map((m) => m[1]));

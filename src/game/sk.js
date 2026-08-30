@@ -482,6 +482,7 @@ export const SK = {
   // ---- predvolené svety ----------------------------------------------------
   presets: {
     earth: 'Zem',
+    moon: 'Mesiac',
     preindustrial: 'Predindustriálna Zem',
     earthlike: 'Zemi podobná',
     venus: 'Venuša',
