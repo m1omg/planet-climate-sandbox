@@ -361,4 +361,64 @@ export const PRESETS = {
   // 1.09 is the Gough value at 5.567 Gyr and is the point of the preset.
   futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, realisticGeology: true,
     startAge: 5.567, insolation: 1.09, startT: 292 } },
+
+  // ---- two hot oceans and one that does not stay one ----------------------
+  //
+  // A pair, and the pair is the point: these two worlds sit at the SAME
+  // temperature and have nothing else in common. One is hot because of what is
+  // in its air, the other because of how much light falls on it, and the
+  // carbonate-silicate thermostat is what makes them opposites rather than
+  // variations. A world heated from outside weathers faster the hotter it gets,
+  // so it strips its own greenhouse away and bakes anyway; a world heated from
+  // inside has to keep erupting the greenhouse back or it cools.
+  //
+  //   heated by      starlight   volcanism   equilibrium CO2   surface
+  //   its air        1.00 S(+)   20x         0.0563 bar        37.3 C
+  //   its star       1.28 S(+)    1x         2.22 ppm          37.4 C
+  //
+  // A tenth of a degree apart, twenty-five THOUSAND times apart in CO2. Both
+  // measured at 100 Myr with the imbalance at -0.01 and -0.15 W/m2, so both are
+  // settled rather than passing through.
+  //
+  // Neither has a biosphere, and that is a modelling choice rather than a claim
+  // that nothing could live at 37 C: photosynthesis would put methane and oxygen
+  // into both of these atmospheres and the comparison is about carbon dioxide.
+  hotCarbon: { name: 'Hot Ocean · CO₂', icon: '♨️', params: { ...EARTH, realisticGeology: true,
+    // 20x is the slider's ceiling and it is where this world has to live: the
+    // thermostat is strong, and 8x Earth's volcanism buys only 29 C. Getting a
+    // sea to bath temperature on carbon alone is *hard*, which is itself worth
+    // seeing -- Earth is not one small nudge away from this.
+    insolation: 1.0, outgassing: 20, co2Bar: 0.0563, biosphere: 0,
+    emissions: 0, fossilUsed: 0, startT: 310.45 } },
+
+  // The same temperature from the other direction, and the giveaway is the air:
+  // 2.22 ppm of CO2, a hundred and twenty times LESS than pre-industrial Earth.
+  // Weathering runs away with the carbon on a world this warm, and the planet
+  // stays hot regardless, because the starlight was never the thermostat's to
+  // control. Being on the hot branch is what makes it stable rather than a stop
+  // on the way to a runaway -- see "The Hot Ocean" scenario, which is about
+  // walking a world onto this branch rather than being handed one.
+  hotStar: { name: 'Hot Ocean · Starlight', icon: '🔆', params: { ...EARTH, realisticGeology: true,
+    insolation: 1.28, outgassing: 1, co2Bar: 2.22e-6, biosphere: 0,
+    emissions: 0, fossilUsed: 0, startT: 310.55 } },
+
+  // And the same world with the star turned up until there is no equilibrium
+  // left. The edge is at ONE PART IN THIRTEEN HUNDRED: at 1.338 S(+) this planet
+  // holds a 47.2 C ocean for a hundred million years; at 1.339 it loses the
+  // whole ocean in 13,400 years and ends at 603 C under a steam atmosphere.
+  //
+  // It is worth watching rather than reading, because for its first millennium
+  // it looks like the two above -- a warm sea, no ice, nothing obviously wrong.
+  // Absorbed sunlight is simply past what the atmosphere can radiate at any
+  // temperature (the Simpson-Nakajima limit, 282 W/m2, which this model
+  // reproduces rather than imposes), so every kelvin evaporates more ocean,
+  // which absorbs more, and the only stopping point is an empty sea bed. Latent
+  // heat is why it takes thousands of years instead of happening at once: the
+  // 6.6e12 J/m2 needed to boil an ocean divided by the net flux.
+  //
+  // Turn the ease switch on and slow the clock, or it is over between two frames
+  // at anything above 10 kyr/s.
+  brink: { name: 'Over the Edge', icon: '🌡️', params: { ...EARTH, realisticGeology: true,
+    insolation: 1.339, outgassing: 1, co2Bar: 1.2e-6, biosphere: 0,
+    emissions: 0, fossilUsed: 0, startT: 313.5 } },
 };
