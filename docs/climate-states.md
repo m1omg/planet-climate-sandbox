@@ -171,9 +171,48 @@ Ice deep into the tropics, a narrow band of open equatorial ocean surviving.
 
 ### 15. Dune / Desert World
 ```
-water < 0.12 EO  AND  250 K < T < 340 K
+(water < 0.12 EO  OR  flooded < 0.01)  AND  250 K < T < 340 K
 ```
-A land planet with a working climate but little surface water.
+A land planet with a working climate but little surface water — and there are two ways to be
+one. Either the world *has* little water, or it has water and nowhere to put it: `flooded`
+comes from the basin geometry, and a planet whose ground is all high has no sea at any
+inventory. Both look identical from orbit, bare rock with no coastline anywhere, and until
+the second clause was added such a world classified as **Temperate & Habitable** with the
+globe drawing 100% land. It was found on a terraformed Venus, whose preset shipped with
+basin geometry at 1.
+
+The temperature bounds are what keep this honest on a boiling world: there `flooded` is zero
+because the ocean is in the sky rather than because there is nowhere to put it, and the
+runaway branches above have already claimed that planet.
+
+#### The Dune World preset, exactly
+
+Five fields differ from `EARTH`; everything else is inherited.
+
+| field | Dune World | EARTH |
+| --- | --- | --- |
+| `landFraction` | **0.98** | 0.3 |
+| `water` | **0.03** EO | 1 |
+| `insolation` | **1.25** S⊕ | 1 |
+| `landAlbedo` | **0.30** | 0.25 |
+| `startT` | **300** K | 288.3 |
+
+Inherited unchanged: `mass` 1 M⊕ · `starTemp` 5772 K · `xuvFraction` 3.4e-6 · `rotationHours`
+24 · `tidallyLocked` false · `obliquity` 23.5° · `n2Bar` 0.78 · `o2Bar` 0.21 · `co2Bar`
+427 ppm · `ch4Bar` 1.9 ppm · `biosphere` 1 · `outgassing` 1 · `internalHeat` 0.092 W/m² ·
+`magneticField` 1 · `emissions` 0 · `brightening` 0 · `realisticGeology` false · `startAge`
+4.567 Gyr.
+
+Where it settles after 10 Myr: **17.3 °C**, 0.83% of the surface flooded, no ice, 13 ppm CO₂,
+0.897 bar total, and it classifies **Dune / Desert World, habitable**. Note the CO₂: the
+thermostat has drawn it down to a thirtieth of Earth's, because a warm dry planet weathers
+fast — the same mechanism that makes *Hot Ocean · Starlight* sit at 2.22 ppm.
+
+The point of the numbers is the pairing of 1.25 S⊕ with 0.03 EO. That flux would put an
+ocean world into a moist greenhouse; this one is temperate on it, because unsaturated air
+radiates above the classical runaway limit and a dry stratosphere throttles water loss
+(Abe et al. 2011). `landFraction` 0.98 is doing as much work as the water: with Earth-like
+basins the same 0.03 EO spreads into wide shallow seas and the air goes wet again.
 
 ### 16. Frozen Desert (cold catch-all)
 ```
