@@ -11,7 +11,7 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 256 physics, coverage, determinism and control checks
+node src/selftest.js            # 259 physics, coverage, determinism and control checks
 node tools/calibrate.mjs        # 23 observational anchors + 3 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
@@ -439,6 +439,21 @@ climate simply drifted — and it was inconsistent, since the oxygen sink alread
 oxidation for exactly the same reason. The split is normalised so Earth's total is unchanged; a
 waterworld settles warmer and more carbon-rich than a continental world, and can now climb back out
 of a snowball, which it previously could not.
+
+**Basin geometry of 1 means a world that can never have a sea**, and that is a trap rather than a
+setting. `floodedFraction` multiplies by `(1 − landFraction)`, so a planet whose ground is all high
+has no ocean at *any* inventory — and until this was reported, such a world classified as
+**Temperate & Habitable** while the globe drew 100% land and the readout agreed with the globe. It
+was found on a terraformed Venus, which is exactly the case: that preset shipped with basin geometry
+at 1, so cooling it and pouring in a full Earth ocean left a bare ball with a habitable label on it.
+
+Two things changed. Venus's basin geometry is **0.8**, which is its real hypsometry — roughly a fifth
+of the planet is lowland plain, Atalanta and Lavinia and Guinevere, and that is where an ocean would
+go. It is not what makes Venus dry; `water: 0` does that, and the shipped world is unchanged at 734 K
+with 0.00% flooded. And the classifier now reads the **surface** rather than the inventory: water
+with nowhere to be is a *Dune / Desert World*, which is what it looks like. The temperature bounds on
+that branch are what keep it honest over a boiling world, where `flooded` is zero because the ocean
+is in the sky and the runaway branches have already claimed it.
 
 `W_basin` counts liquid ocean **plus sea ice**, because ice floats and still fills its basin, but
 **not** water vapour. So boiling an ocean uncovers its floor and land climbs to 100%, while freezing
