@@ -55,7 +55,7 @@ pTot < 0.0015 bar  AND  water < 0.05 EO
 ```
 Both are required — a thin atmosphere over a wet world is not airless.
 
-### 3. Nightside Collapse / Nightside Freeze-Out / Mars-Like Collapse
+### 3. Partial Nightside Freeze-Out / Nightside Freeze-Out / Mars-Like Collapse
 ```
 collapsed  AND  pTot < 0.2 bar  AND  T < 265 K
     → not locked                                     : 'marslike'
@@ -67,7 +67,7 @@ rotating world freezes its air onto the *winter* pole and gets it back in spring
 equilibrium against seasonal caps), a locked world freezes it onto a hemisphere that never
 sees the star and nothing ever brings it back.
 
-The second split is how far the collapse has got. **Nightside Collapse** is the state while
+The second split is how far the collapse has got. **Partial Nightside Freeze-Out** is the state while
 it is under way, and its day side still has a sea — which is what makes it worth a name of
 its own, and is now a condition rather than a hope: the state's own text promises a working
 ocean, so the test requires one. **Nightside Freeze-Out** is the end of that same process —

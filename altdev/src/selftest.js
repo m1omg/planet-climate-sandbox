@@ -596,7 +596,7 @@ export function run() {
 
     // A collapse under way and a collapse that has finished are two different
     // planets, and they were sharing a name and a description. The description
-    // is the specific problem: Nightside Collapse says the day side "can stay
+    // is the specific problem: the partial state says the day side "can stay
     // warm, wet and inhabited the whole time ... a planet with a working ocean
     // under its sun", which is exactly why the state is worth having -- and it
     // was being shown to worlds whose water was entirely frozen onto the dark
@@ -605,7 +605,7 @@ export function run() {
     // TRAPPIST-1e is both worlds, one flux apart. At its own 0.646 S(+) the
     // collapse is under way and the promise holds: 49 C day side with a sea on
     // it. Dim the star to 0.5 and the same planet has no liquid water at all --
-    // and before this split it still read Nightside Collapse.
+    // and before this split it still read as the partial state, ocean and all.
     const wetSide = settle({ ...PRESETS.trappist1e.params }, 6.6e7).world;
     const frozen = settle({ ...PRESETS.trappist1e.params, insolation: 0.5 }, 6.6e7).world;
     const share = (w) => (w.diag.totalWater > 1e-9 ? w.water.ocean / w.diag.totalWater : 0);
@@ -802,6 +802,50 @@ export function run() {
         `${(heat0 * 1e3).toFixed(0)} mW/m² and ${melt0.toFixed(2)}× melt at 0.5 Gyr → ` +
         `${(young.world.params.internalHeat * 1e3).toFixed(1)} mW/m² and ` +
         `${meltBoost(young.world.params).toFixed(2)}× at ${EARTH_AGE} Gyr`);
+
+      // Tidal heat is not radiogenic heat and must not run down the same curve.
+      // GJ 1132 b's 80 W/m² comes from an eccentricity of 0.01 held by a
+      // resonance with GJ 1132 c: it is set by the orbit, not by how much
+      // potassium-40 is left, so it is the same today as it was three billion
+      // years ago while Earth's 0.092 is a third of what it was. Both worlds run
+      // with the decay switched on here; only one of them cools.
+      const kneaded = new Simulation({ ...PRESETS.gj1132b.params });
+      const cooling = new Simulation({ ...EARTH, realisticGeology: true, internalHeat: 0.092 });
+      const heatK0 = kneaded.world.params.internalHeat;
+      const heatC0 = cooling.world.params.internalHeat;
+      kneaded.runYears(3e9, 5e6);
+      cooling.runYears(3e9, 5e6);
+      check('Tidal heat does not decay on a half-life, and radiogenic heat does',
+        Math.abs(kneaded.world.params.internalHeat - heatK0) < 1e-6
+          && cooling.world.params.internalHeat < 0.75 * heatC0,
+        `GJ 1132 b ${heatK0.toFixed(1)} → ${kneaded.world.params.internalHeat.toFixed(1)} W/m² · ` +
+        `Earth ${(heatC0 * 1e3).toFixed(0)} → ` +
+        `${(cooling.world.params.internalHeat * 1e3).toFixed(0)} mW/m² over 3 Gyr`);
+
+      // …and every world whose interior is a real one runs it. A preset or a
+      // scenario that quietly holds its interior still for a billion years is
+      // the one place this model would be lying about time.
+      const REAL = ['earth', 'preindustrial', 'venus', 'mars', 'titan', 'earlyEarth',
+                    'earlyVenus', 'earlyMars', 'futureEarth',
+                    'trappist1b', 'trappist1e', 'gj1132b'];
+      const noDecay = REAL.filter((k) => !PRESETS[k].params.realisticGeology);
+      const flatScenarios = SCENARIOS.filter((s) => !s.params.realisticGeology);
+      check('Every real world, and every scenario, ages its interior',
+        noDecay.length === 0 && flatScenarios.length === 0,
+        noDecay.length || flatScenarios.length
+          ? `missing on ${[...noDecay, ...flatScenarios.map((s) => s.id)].join(', ')}`
+          : `${REAL.length} real worlds, ${SCENARIOS.length} scenarios`);
+      // The tidal presets have to name a flux they actually carry, or the split
+      // above silently decays something it should not, or nothing at all.
+      const badTidal = ['trappist1b', 'trappist1e', 'gj1132b'].filter((k) => {
+        const q = PRESETS[k].params;
+        return !(q.tidalHeat > 0) || q.tidalHeat > q.internalHeat + 1e-12;
+      });
+      check('…and the tidally heated worlds declare how much of that heat is tidal',
+        badTidal.length === 0,
+        badTidal.length ? badTidal.join(', ')
+          : ['trappist1b', 'trappist1e', 'gj1132b']
+              .map((k) => `${k} ${PRESETS[k].params.tidalHeat} W/m²`).join(' · '));
 
       // Brightening moves the control, not just the sum inside the model -- the
       // point of it is watching the star change -- and it follows the star's own
