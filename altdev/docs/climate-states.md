@@ -55,15 +55,25 @@ pTot < 0.0015 bar  AND  water < 0.05 EO
 ```
 Both are required — a thin atmosphere over a wet world is not airless.
 
-### 3. Nightside Collapse / Mars-Like Collapse
+### 3. Nightside Collapse / Nightside Freeze-Out / Mars-Like Collapse
 ```
 collapsed  AND  pTot < 0.2 bar  AND  T < 265 K
-    → 'nightfrost' if locked, else 'marslike'
+    → not locked                                     : 'marslike'
+    → locked, liquidShare > 0.02 AND flooded > 0.01  : 'nightfrost'
+    → locked, otherwise                              : 'nightfrozen'
 ```
-The air itself has frozen onto the ground. The split is geometric, not thermal: a rotating
-world freezes its air onto the *winter* pole and gets it back in spring (a pressure
+The air itself has frozen onto the ground. The first split is geometric, not thermal: a
+rotating world freezes its air onto the *winter* pole and gets it back in spring (a pressure
 equilibrium against seasonal caps), a locked world freezes it onto a hemisphere that never
 sees the star and nothing ever brings it back.
+
+The second split is how far the collapse has got. **Nightside Collapse** is the state while
+it is under way, and its day side still has a sea — which is what makes it worth a name of
+its own, and is now a condition rather than a hope: the state's own text promises a working
+ocean, so the test requires one. **Nightside Freeze-Out** is the end of that same process —
+air on the dark hemisphere as dry ice, water frozen beside it, no liquid water anywhere and a
+bare day side. It is not row 11, *Nightside-Trapped Desert*, where the atmosphere is intact
+and only the water has migrated.
 
 `T < 265` on the locked branch is admittedly the wrong quantity — the mean of a +58 °C day
 and a −145 °C night is a number nowhere on the planet. It stays because it is what makes
@@ -211,8 +221,9 @@ band the 1-D model cannot fully resolve.
   branch at step 8 has to come first.
 - **No hysteresis anywhere.** Thresholds are hard except where `smoothstep` softens the
   underlying quantity (`iceFraction`, `warmSub`). Flicker at a boundary is expected.
-- **Five states are unreachable on a rotating world** — `twilight`, `eyeball`, `lobster`,
-  `trapped` and `nightfrost` — and `lockFactor` is a hard 0-or-1 on `p.tidallyLocked` —
+- **Six states are unreachable on a rotating world** — `twilight`, `eyeball`, `lobster`,
+  `trapped`, `nightfrost` and `nightfrozen` — and `lockFactor` is a hard 0-or-1 on `p.tidallyLocked` —
   a slowly rotating world is never partially locked as far as the classifier is concerned.
-- **The README's list at "Climate states it recognises" is incomplete** — it omits
-  `twilight`, `nightfrost`, `thincold`, `baked` and `frozen`.
+- **The README's list at "Climate states it recognises" used to be incomplete** — it omitted
+  `twilight`, `nightfrost`, `thincold`, `baked` and `frozen`. It now carries all twenty-two names
+  and points here for the conditions.
