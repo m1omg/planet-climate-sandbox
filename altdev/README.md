@@ -11,7 +11,7 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 253 physics, coverage, determinism and control checks
+node src/selftest.js            # 256 physics, coverage, determinism and control checks
 node tools/calibrate.mjs        # 23 observational anchors + 3 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
@@ -488,6 +488,41 @@ a quarter of the globe iced and most of its ocean liquid: an eyeball with a wide
 which is what the GCM literature gets for it too (Turbet et al. 2018 model exactly this 1 bar case).
 Those GCMs manage it on far less CO₂, because a locked world grows a thick cloud deck over the
 substellar point that this model only approximates. A bar is at the thick end of plausible.
+
+#### Two hot oceans that are hot for opposite reasons, and one that stops being an ocean
+
+**Hot Ocean · CO₂** and **Hot Ocean · Starlight** are the same temperature and have nothing else in
+common. Both are settled — measured at 100 Myr with the imbalance at −0.01 and −0.15 W/m² — and both
+still have their seas:
+
+| heated by | starlight | volcanism | equilibrium CO₂ | surface |
+|---|---|---|---|---|
+| **its own air** | 1.00 S⊕ | 20× | **0.0563 bar** | 37.3 °C |
+| **its star** | 1.28 S⊕ | 1× | **2.22 ppm** | 37.4 °C |
+
+A tenth of a degree apart, **twenty-five thousand times** apart in carbon dioxide — and the second
+world is running on *a hundred and twenty times less* CO₂ than pre-industrial Earth. That is the
+carbonate–silicate thermostat seen from both sides. Heat a planet from outside and it weathers
+faster, strips its own greenhouse away, and bakes anyway; heat one from inside and the greenhouse
+has to be erupted back continuously or the planet cools. Which is also why the first one needs the
+outgassing slider at its **ceiling**: the thermostat is strong, 8× Earth's volcanism buys only 29 °C,
+and a sea at bath temperature is genuinely hard to build out of carbon. Earth is not one nudge away
+from this.
+
+**Over the Edge** is that second world with the star turned up until there is no equilibrium left,
+and the edge turns out to be **one part in thirteen hundred**:
+
+| | 1.338 S⊕ | 1.339 S⊕ |
+|---|---|---|
+| after 100 Myr | 47.2 °C, ocean intact | — |
+| after 13,400 yr | — | **ocean gone**, 603 °C |
+
+For its first millennium it looks like the two above — a warm sea, no ice, nothing visibly wrong.
+Then absorbed sunlight is past what the atmosphere can radiate at any temperature, every kelvin
+evaporates more ocean, and the only stopping point is an empty sea bed. It takes thousands of years
+rather than happening at once because boiling an ocean costs 6.6×10¹² J/m² of latent heat, and the
+transient is that divided by the net flux. **Turn the ease switch on**, or at anything above 10 kyr/s
+it happens between two frames.
 
 ### Stars that brighten the way stars brighten
 

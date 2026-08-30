@@ -86,6 +86,44 @@ export function run() {
   check('Mars settles near 215 K ± 25',
     near(mars.world.diag.Tmean, 215, 25), `${mars.world.diag.Tmean.toFixed(0)} K`);
 
+  // Two hot oceans that are hot for opposite reasons, and the point of the pair
+  // is that the temperature is the same and nothing else is. Each has to still
+  // be a sea at 100 Myr, or the preset is a transient wearing a preset's name.
+  {
+    const co2 = settle(PRESETS.hotCarbon.params, 1e8).world;
+    const sun = settle(PRESETS.hotStar.params, 1e8).world;
+    check('A hot ocean can be made by its air or by its star, at the same temperature',
+      Math.abs(co2.diag.Tmean - sun.diag.Tmean) < 3
+        && co2.diag.Tmean > 305 && co2.water.ocean > 0.9 && sun.water.ocean > 0.9,
+      `CO₂-heated ${(co2.diag.Tmean - 273.15).toFixed(1)} °C at ${co2.diag.pCO2.toFixed(4)} bar · ` +
+      `star-heated ${(sun.diag.Tmean - 273.15).toFixed(1)} °C at ` +
+      `${(sun.diag.pCO2 * 1e6).toFixed(2)} ppm`);
+    // …and the thermostat is what makes them opposites: the bright world
+    // weathers its own greenhouse away and stays hot regardless, which is the
+    // whole reason the second one is not simply the first one with a brighter
+    // star. Three orders of magnitude is the claim, so test for three.
+    check('…and the bright one gets there having stripped its own greenhouse away',
+      co2.diag.pCO2 / sun.diag.pCO2 > 1e3,
+      `${(co2.diag.pCO2 / sun.diag.pCO2).toExponential(1)}× more CO₂ on the world ` +
+      `whose air is doing the work`);
+  }
+
+  // One thousandth of starlight from that branch there is no equilibrium at all.
+  // 1.338 S⊕ holds its ocean for 100 Myr; the preset sits at 1.339 and loses the
+  // whole thing in about 13 kyr. Both halves matter: a preset called Over the
+  // Edge that quietly settled would be a lie, and an edge that is not an edge --
+  // one where the stable neighbour also cooks -- would be a different lie.
+  {
+    const over = settle(PRESETS.brink.params, 3e4).world;
+    const under = settle({ ...PRESETS.brink.params, insolation: 1.338 }, 1e8).world;
+    check('A world a thousandth over the limit crosses it, and its neighbour does not',
+      over.water.ocean < 0.05 && over.diag.Tmean > 500
+        && under.water.ocean > 0.9 && under.diag.Tmean < 340,
+      `1.339 S⊕ → ${(over.diag.Tmean - 273.15).toFixed(0)} °C, ocean ` +
+      `${(over.water.ocean * 100).toFixed(0)}% · 1.338 S⊕ → ` +
+      `${(under.diag.Tmean - 273.15).toFixed(1)} °C, ocean ${(under.water.ocean * 100).toFixed(0)}%`);
+  }
+
   // ---- 3. the runaway, and how long it takes -------------------------------
   {
     const s = new Simulation({ ...EARTH, insolation: 2.6, xuvFraction: 1e-4 });
