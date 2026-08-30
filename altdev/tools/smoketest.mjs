@@ -375,12 +375,16 @@ if (app && app.graphicsFromUrl) {
 {
   const { readFileSync, existsSync } = await import('node:fs');
   const { BODY_MAPS } = await import('../src/render/planet.js');
+  const { PRESETS } = await import('../src/game/presets.js');
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const base = (html.match(/__assetBase\s*=\s*["']([^"']+)["']/) || [, 'assets/'])[1];
   const missing = [];
+  if (!PRESETS.moon) missing.push('moon:preset');
+  if (!BODY_MAPS.moon?.colour) missing.push('moon:real surface map');
   for (const [world, maps] of Object.entries(BODY_MAPS)) {
-    for (const file of Object.values(maps)) {
-      const url = new URL(`${base}bodies/${file}`, import.meta.url.replace('/tools/', '/'));
+    const mapBase = maps.local ? 'assets/' : base;
+    for (const file of [maps.colour, maps.height].filter(Boolean)) {
+      const url = new URL(`${mapBase}bodies/${file}`, import.meta.url.replace('/tools/', '/'));
       if (!existsSync(url)) missing.push(`${world}:${file}`);
     }
   }
@@ -389,7 +393,7 @@ if (app && app.graphicsFromUrl) {
       + [...new Set(missing)].join(', '));
     failed++;
   } else {
-    const files = new Set(Object.values(BODY_MAPS).flatMap((m) => Object.values(m)));
+    const files = new Set(Object.values(BODY_MAPS).flatMap((m) => [m.colour, m.height].filter(Boolean)));
     console.log(`\x1b[32mPASS\x1b[0m  every surface map exists where the page asks for it `
       + `(${files.size} files across ${Object.keys(BODY_MAPS).length} worlds)`);
   }

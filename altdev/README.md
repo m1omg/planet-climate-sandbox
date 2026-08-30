@@ -321,6 +321,13 @@ quasi-static shortcut that strides over quiet epochs — gated off wherever the 
 negative, since that is exactly a runaway and striding over it would invent equilibria the planet
 does not have.
 
+There is a second gate for **hot, tidally locked land planets with a small water inventory**. A
+reported 0.0327-ocean world had a formally quiet temperature solve while its nightside ice sheet was
+still moving humidity and albedo between two branches. The shortcut multiplied a 0.37-year accuracy
+step into 253 years and made it cycle forever between Twilight and Baked Desert. That narrow regime
+now limits the shortcut to 46× rather than 4000×: the 400 kyr regression stays on the fixed-fine
+Twilight trajectory with no state flips, while ordinary locked ocean worlds keep the fast path.
+
 ### Watching a tipping instead of skipping over it
 
 At the 10 Myr/s this is mostly played at, a runaway greenhouse takes **0.05 seconds** of wall clock
@@ -470,7 +477,9 @@ imposes exactly that, and it binds only below a couple of thousandths of an ocea
 
 ### Real worlds
 
-Earth, Mars, Venus and Titan carry their **actual surface maps**, loaded when you pick that preset.
+Earth, the Moon, Mars, Venus and Titan carry their **actual surface maps**, loaded when you pick that
+preset. The Moon uses NASA SVS's 2048×1024 LRO WAC natural-colour mosaic and keeps its map inside this
+altdev build.
 
 Geography is not a function of climate — warming Earth does not move its continents — so the map
 stays put while you drag every slider, and only changes when you load a different world. Nothing has
@@ -482,6 +491,15 @@ lands where it belongs: asking for 29% land draws 29.0%, with all ten test landm
 Kansas, the Amazon, mid-Pacific, Antarctica and the rest — on the right side of the water. Because
 the map keeps its bathymetry (70% of the globe spread across the sub-sea levels, not clipped flat),
 **sea level really moves**: drain the oceans and the continental shelves appear.
+
+The photograph's ocean is not treated as permanent blue paint. Its reference shoreline is recovered
+from the same DEM; wherever the simulated sea has retreated below it, the renderer reveals modelled
+dark seabed instead. This is why a zero-ocean Earth no longer keeps blue copies of the Indian and
+Atlantic oceans on what the model correctly says is dry ground.
+
+Equirectangular longitude is sampled as `atan(x,z)`: with the default camera looking down +Z, east
+therefore moves to screen-right. The old `atan(z,x)` exchanged the axes and mirrored every continent,
+which is why India appeared west of Africa even though the source JPEG itself was correct.
 
 Switching between a real world and an invented one **dissolves region by region** rather than
 blending everywhere, following the terrain's own detail field. That is not a stylistic choice. Two
@@ -767,8 +785,17 @@ lava — which were generated with an image model and downscaled to 1024×512 JP
 albedo maps available stays fully procedural and says so, and on a device with only eight texture
 units the albedo path is compiled out entirely.
 
-Only **Earth, Mars, Venus and Titan** carry real photography, and only Earth and Mars carry real
-topography. Sources and licences are in `assets/bodies/CREDITS.md`.
+Only **Earth, the Moon, Mars, Venus and Titan** carry real photography, and only Earth and Mars carry
+real topography. Shared sources and licences are in `../assets/bodies/CREDITS.md`; the altdev-only
+lunar source is in `assets/bodies/CREDITS.md`.
+
+Vegetation is not permanently green. The renderer interpolates representative one-atmosphere colours
+from Luke Campbell's *Colors of Alien Plants*: A-star brown, F-star blue-violet, solar G2 green,
+K-star orange, and M-star violet/blue grading to pale tan at late M. It recolours procedural biomes,
+the generated vegetation material and vegetation pixels in real Earth photography alike, while
+preserving each texture's brightness and detail. At exactly 5772 K the transform is identity, so
+Earth under the real Sun remains natural; move Earth's star-temperature control and its plants change
+with every other planet's.
 
 ### Looking at it
 
@@ -970,7 +997,7 @@ ninety.
 
 A button lights up only when *both* controls sit on it; half a pair is not that body. The self-test
 checks that every stated total really is the slider value times the melt boost, that all nine survive
-the slider round trip, and that Venus, Mars and GJ 1132 b agree with their world presets — so
+the slider round trip, and that the Moon, Venus, Mars and GJ 1132 b agree with their world presets — so
 picking Venus from the presets and Venus from this row cannot give two different Venuses.
 
 ### How much carbon a planet has

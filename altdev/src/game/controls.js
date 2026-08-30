@@ -61,8 +61,12 @@ export const INTERIOR_BODIES = [
 ];
 
 export const SLIDERS = [
-  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.05, max: 5, log: true,
-    fmt: (v) => `${v.toFixed(2)} M⊕`, units: { 'm': 1, 'me': 1, 'm⊕': 1, 'earth': 1, 'earths': 1 },
+  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.01, max: 5, log: true,
+    // Precision boundaries sit half a displayed unit below the next range, so
+    // a label can always be typed back to exactly the value the slider shows.
+    // Four decimals retain the Moon's 0.0123 M⊕ rather than rounding it away.
+    fmt: (v) => `${v < 0.01995 ? v.toFixed(4) : v < 0.0995 ? v.toFixed(3) : v.toFixed(2)} M⊕`,
+    units: { 'm': 1, 'me': 1, 'm⊕': 1, 'earth': 1, 'earths': 1 },
     note: 'Sets radius, gravity and how well the world holds its air.' },
   { g: 'body', key: 'water', stops: [
       { v: 0, n: 'dry' }, { v: 0.02, n: 'Mars' },
@@ -111,7 +115,7 @@ export const SLIDERS = [
           <input type="checkbox" id="chk-smooth-sun"> smooth changes
         </label>
       </div>` },
-  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2300, max: 9000, step: 1,
+  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2300, max: 10000, step: 1,
     fmt: (v) => `${v.toFixed(0)} K`, units: { k: 1 } },
   { g: 'star', key: 'xuvFraction', label: 'Stellar XUV activity', min: 1e-6, max: 1e-2, log: true,
     fmt: (v) => `${(v / 3.4e-6).toFixed(v / 3.4e-6 < 10 ? 1 : 0)}× Sun`,

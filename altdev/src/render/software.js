@@ -2,7 +2,7 @@ import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js'
 import { NBANDS } from '../physics/climate.js';
 import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
 import { atmosphereLook, cloudLook } from './atmosphere.js';
-import { seaLevelForLand } from './terrain.js';
+import { seaLevelForLand, vegetationColor } from './terrain.js';
 
 // A software renderer, used when the machine cannot give us WebGL2.
 //
@@ -182,6 +182,7 @@ export class SoftwareView {
       yaw: this.yaw, pitch: this.pitch, spin: this.spin, zoom: this.zoom,
       tilt: (1 - lam) * (p.obliquity || 0) * Math.PI / 180,
       sun: [0.62, 0.28, 0.73], starColor: sc,
+      vegColor: vegetationColor(p.starTemp),
       terrain: this.terrain, bandT, bandIce,
       oceanFrac: dg.flooded ?? dg.oceanFrac,
       seaLevel: seaLevelForLand(1 - (dg.flooded ?? dg.oceanFrac)),

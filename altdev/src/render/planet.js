@@ -2,7 +2,7 @@ import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
 import { atmosphereLook, cloudLook } from './atmosphere.js';
-import { seaLevelForLand } from './terrain.js';
+import { seaLevelForLand, vegetationColor } from './terrain.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
 // fragment shader. No geometry, no dependencies, and complete control over the
@@ -26,9 +26,12 @@ function assetBase() {
 }
 
 export const BODY_MAPS = {
-  earth: { colour: 'earth.jpg', height: 'earth_height.png' },
-  preindustrial: { colour: 'earth.jpg', height: 'earth_height.png' },
-  futureEarth: { colour: 'earth.jpg', height: 'earth_height.png' },
+  earth: { colour: 'earth.jpg', height: 'earth_height.png', sourceLand: 0.30 },
+  preindustrial: { colour: 'earth.jpg', height: 'earth_height.png', sourceLand: 0.30 },
+  futureEarth: { colour: 'earth.jpg', height: 'earth_height.png', sourceLand: 0.30 },
+  // Kept inside altdev rather than the shared root asset set: this preset and
+  // its NASA LRO map belong to this alternative build only.
+  moon: { colour: 'moon.jpg', local: true },
   mars: { colour: 'mars.jpg', height: 'mars_height.png' },
   // Noachian Mars is Mars. Almost everything on that map is older than the
   // epoch this preset is set in -- the crustal dichotomy, Hellas, Argyre and
@@ -142,6 +145,7 @@ export class PlanetView {
     // The real-world maps need two more units on top of the albedo set.
     this.bodyCapable = this.maxTexUnits >= 12;
     this.body = null; this.bodyMix = 0; this.bodyTarget = 0; this.bodyHasHeight = 0;
+    this.bodySeaLevel = -1;
 
     // Mobile browsers throw the GPU context away when the tab goes to the
     // background, and every program, buffer, texture and framebuffer dies with
@@ -292,11 +296,11 @@ export class PlanetView {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
     this.u = {};
-    for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uSeed', 'uLandFrac',
+    for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uVegColor', 'uSeed',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
       'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
       'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt', 'uSeaLevel', 'uBio',
-      'uBodyMap', 'uBodyHeight', 'uBodyMix', 'uBodyHasHeight',
+      'uBodyMap', 'uBodyHeight', 'uBodyMix', 'uBodyHasHeight', 'uBodySeaLevel',
       'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
       this.u[name] = gl.getUniformLocation(this.prog, name);
     }
@@ -621,10 +625,12 @@ export class PlanetView {
   async setBody(name) {
     if (!this.bodyCapable || this.failed) return false;
     const def = name ? BODY_MAPS[name] : null;
-    if (!def) { this.body = null; this.bodyTarget = 0; return false; }
+    if (!def) { this.body = null; this.bodyTarget = 0; this.bodySeaLevel = -1; return false; }
     if (this.body === name) { this.bodyTarget = 1; return true; }
     const gl = this.gl;
-    const base = new URL(`${assetBase()}bodies/`, location.href);
+    const base = def.local
+      ? new URL('assets/bodies/', location.href)
+      : new URL(`${assetBase()}bodies/`, location.href);
     try {
       const [colour, height] = await Promise.all([
         decodeOnce(new URL(def.colour, base).href),
@@ -648,12 +654,13 @@ export class PlanetView {
       this.bodyColourTex = upload(colour, 10, this.bodyColourTex);
       if (height) this.bodyHeightTex = upload(height, 11, this.bodyHeightTex);
       this.bodyHasHeight = height ? 1 : 0;
+      this.bodySeaLevel = def.sourceLand == null ? -1 : seaLevelForLand(def.sourceLand);
       this.body = name;
       this.bodyTarget = 1;
       return true;
     } catch (e) {
       console.warn('body map unavailable, staying procedural:', e.message);
-      this.body = null; this.bodyTarget = 0;
+      this.body = null; this.bodyTarget = 0; this.bodySeaLevel = -1;
       return false;
     }
   }
@@ -804,6 +811,7 @@ export class PlanetView {
     // edge is invisible.
     const glow = smoothstep(650, 750, dg.Tmax);
     const sc = PlanetView.starColor(p.starTemp);
+    const vc = vegetationColor(p.starTemp);
     const atmo = atmosphereLook(world, steam, this.realistic);
 
     gl.uniform2f(this.u.uRes, this.canvas.width, this.canvas.height);
@@ -811,8 +819,8 @@ export class PlanetView {
     gl.uniform1f(this.u.uSpin, this.spin);
     gl.uniform3f(this.u.uSunDir, 0.62, 0.28, 0.73);
     gl.uniform3f(this.u.uStarColor, sc[0], sc[1], sc[2]);
+    gl.uniform3f(this.u.uVegColor, vc[0], vc[1], vc[2]);
     gl.uniform1f(this.u.uSeed, state.seed);
-    gl.uniform1f(this.u.uLandFrac, p.landFraction);
     const flooded = dg.flooded ?? dg.oceanFrac;
     gl.uniform1f(this.u.uOceanFrac, flooded);
     gl.uniform1f(this.u.uSeaLevel, seaLevelForLand(1 - flooded));
@@ -831,6 +839,7 @@ export class PlanetView {
       gl.uniform1i(this.u.uBodyHeight, 11);
       gl.uniform1f(this.u.uBodyMix, this.bodyMix);
       gl.uniform1f(this.u.uBodyHasHeight, this.bodyHasHeight);
+      gl.uniform1f(this.u.uBodySeaLevel, this.bodySeaLevel);
     }
     gl.uniform1f(this.u.uGlaciated, dg.glaciatedShare ?? 1);
     gl.uniform1f(this.u.uWaterCap, dg.waterCap);

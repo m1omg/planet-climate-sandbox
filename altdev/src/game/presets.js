@@ -133,6 +133,17 @@ export const PRESETS = {
   // preset from Pre-Industrial Earth's 280 ppm to 427. Pre-Industrial Earth has
   // the lot, because nobody had touched it yet.
   earth:   { name: 'Earth', icon: '🌍', params: { ...EARTH, ...SOLAR_HISTORY, emissions: 1, fossilUsed: 0.098 } },
+  // The Moon is locked to Earth, not to the Sun. `tidallyLocked` therefore stays
+  // off: in this model that switch means one face permanently sees the star.
+  // Its 655.7-hour sidereal rotation still gives it the real lunar day. With no
+  // atmosphere, ocean, biosphere or active carbon volcanism, the preset is the
+  // present airless Moon rather than an invented terraforming starting point.
+  moon: { name: 'Moon', icon: '🌕', params: { ...EARTH, ...SOLAR_HISTORY,
+    mass: 0.0123, landFraction: 1, water: 0, insolation: 1,
+    rotationHours: 655.72, tidallyLocked: false, obliquity: 6.68,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0,
+    emissions: 0, fossilUsed: 0, outgassing: 0, internalHeat: 0.011,
+    landAlbedo: 0.12, startT: 220, startAge: 4.51, magneticField: 0 } },
   preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL, ...SOLAR_HISTORY } },
   // Earth's physics without Earth's biography: no industry, no real coastlines,
   // and a fresh set of continents every time you load it. For trying something

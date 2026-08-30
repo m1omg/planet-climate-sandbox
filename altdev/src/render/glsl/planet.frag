@@ -9,8 +9,8 @@ uniform float uTime;
 uniform float uSpin;        // planet rotation phase
 uniform vec3  uSunDir;
 uniform vec3  uStarColor;
+uniform vec3  uVegColor;    // photosynthetic surface colour under this star
 uniform float uSeed;
-uniform float uLandFrac;
 uniform float uOceanFrac;
 uniform float uSeaLevel;
 uniform float uBio;    // threshold on the baked height that puts the coast in the right place
@@ -19,6 +19,7 @@ uniform sampler2D uBodyMap;     // a real world's albedo, equirectangular
 uniform sampler2D uBodyHeight;  // its topography, matched to the terrain distribution
 uniform float uBodyMix;         // 0 = procedural, 1 = the real thing
 uniform float uBodyHasHeight;   // not every body has a usable DEM
+uniform float uBodySeaLevel;    // source photograph's shoreline; < 0 = none
 #endif
 uniform float uWaterCap;    // 0 = bone dry, 1 = plenty of water for snow/sea
 uniform float uGlaciated;   // share of frozen land carrying an ice sheet
@@ -102,12 +103,21 @@ mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1.0,0.0,0.0, 0.0,c,s, 0
 // Unpack the 16-bit height the bake wrote across two channels.
 float unpack16(vec2 c){ return (c.x*255.0*256.0 + c.y*255.0) / 65535.0; }
 
+const vec3 SOLAR_VEG = vec3(0.14117647, 0.47843137, 0.09411765);
+vec3 stellarVegetation(vec3 source){
+  float sourceLum = dot(source, vec3(0.2126,0.7152,0.0722));
+  float targetLum = max(dot(uVegColor, vec3(0.2126,0.7152,0.0722)), 0.0001);
+  vec3 tinted = clamp(uVegColor * sourceLum / targetLum, 0.0, 1.0);
+  float shift = clamp(length(uVegColor - SOLAR_VEG) * 2.5, 0.0, 1.0);
+  return mix(source, tinted, shift);
+}
+
 #ifdef BODY_MAP
 // Equirectangular lookup for a real world's maps. `sp` is planet-fixed, so the
 // map turns with the planet and leans with its obliquity like everything else.
 vec2 bodyUV(vec3 sp){
   vec3 d = normalize(sp);
-  return vec2(atan(d.z, d.x) * 0.15915494 + 0.5, acos(clamp(d.y, -1.0, 1.0)) * 0.31830989);
+  return vec2(atan(d.x, d.z) * 0.15915494 + 0.5, acos(clamp(d.y, -1.0, 1.0)) * 0.31830989);
 }
 // How much of the real world shows through at this point. Not a flat dissolve:
 // it sweeps across the globe following the terrain's own detail field, so a
@@ -126,18 +136,26 @@ float bodyBlend(float detail){
 // because the coastline must not move when you toggle between them, and
 // because a real world showing on only one of them is what happened when the
 // textured path had its own copy of this and never got the map.
-float bodyHeight(float raw, vec2 buv, float bm){
-  return mix(raw, mix(raw, 0.30 + 0.40*texture(uBodyHeight, buv).r, uBodyHasHeight), bm);
+float bodyHeight(float raw, vec2 buv, float bm, out float sourceLand){
+  float mapped = 0.30 + 0.40*texture(uBodyHeight, buv).r;
+  sourceLand = uBodySeaLevel < 0.0 ? 1.0
+    : smoothstep(-0.010, 0.026, mapped - uBodySeaLevel);
+  return mix(raw, mix(raw, mapped, uBodyHasHeight), bm);
 }
-vec3 bodyGround(vec3 ground, vec2 buv, float bm, float life){
+vec3 bodyGround(vec3 ground, vec2 buv, float bm, float life, float sourceLand){
   if(bm <= 0.0) return ground;
   vec3 real = texture(uBodyMap, buv).rgb;
+  // The photo's ocean is not permanent paint. Its DEM says which pixels were
+  // below the reference shoreline; if the model has since exposed them, show
+  // the procedural seabed underneath instead of blue "land".
+  real = mix(ground, real, sourceLand);
   // Only the *vegetation* in a photograph is climate-dependent, and only the
   // green in it says vegetation. Muting the whole map wherever life was scarce
   // turned Mars and Venus grey -- their colour is rock, and rock does not care
   // whether anything is growing on it. Earth's forests still brown off when the
   // climate stops supporting them, which is the point.
-  float green  = clamp((real.g - max(real.r, real.b) * 0.94) * 4.0, 0.0, 1.0);
+  float green  = clamp((real.g - max(real.r, real.b) * 0.94) * 4.0, 0.0, 1.0) * sourceLand;
+  real = mix(real, stellarVegetation(real), green);
   float wither = green * (1.0 - smoothstep(0.08, 0.45, life));
   vec3 dead = mix(real, vec3(dot(real, vec3(0.38,0.44,0.18))) * vec3(1.12,0.98,0.76), 0.85);
   return mix(ground, mix(real, dead, wither), bm);
@@ -162,7 +180,8 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   // both and a blend of the two keeps the land fraction it started with.
   float bm = bodyBlend(detail);
   vec2 buv = bodyUV(sp);
-  raw = bodyHeight(raw, buv, bm);
+  float sourceLand;
+  raw = bodyHeight(raw, buv, bm, sourceLand);
 #endif
   float h = raw - thr;
   height = h;
@@ -193,7 +212,7 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   float life   = warmth * wet * lush * (1.0 - smoothstep(0.10,0.30,elev));
 
   vec3 arid   = mix(sand, sandHi, smoothstep(0.05,0.22,elev));
-  vec3 living = mix(steppe, forest, smoothstep(0.25,0.75,life));
+  vec3 living = mix(stellarVegetation(steppe), stellarVegetation(forest), smoothstep(0.25,0.75,life));
   vec3 ground = mix(arid, living, smoothstep(0.12,0.50,life));
   ground = mix(ground, mix(rock, rockHi, mount), smoothstep(0.12,0.34,elev));
   ground = mix(ground, rock*0.85, smoothstep(0.06,-0.02,h)*0.5);
@@ -207,7 +226,7 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
 #ifdef BODY_MAP
   // The real map supplies the *ground*, not the water: the sea is drawn by the
   // model, because the model is what decides where the sea is.
-  ground = bodyGround(ground, buv, bm, life);
+  ground = bodyGround(ground, buv, bm, life, sourceLand);
 #endif
 
   vec3 col = mix(sea, ground, land);
@@ -305,7 +324,8 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
 #ifdef BODY_MAP
   float bm = bodyBlend(detail);
   vec2 buv = bodyUV(sp);
-  raw = bodyHeight(raw, buv, bm);
+  float sourceLand;
+  raw = bodyHeight(raw, buv, bm, sourceLand);
 #endif
   float h = raw - uSeaLevel;
   float land = smoothstep(-0.010, 0.026, h);
@@ -322,12 +342,13 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
   float lush   = smoothstep(0.02, 0.55, uBio);
   float life   = warmth * wet * lush * (1.0 - smoothstep(0.10,0.30,elev));
 
+  tVeg = stellarVegetation(tVeg);
   vec3 ground = mix(tSand, tVeg, smoothstep(0.12,0.50,life));
   ground = mix(ground, tRock, smoothstep(0.12,0.34,elev));
 #ifdef BODY_MAP
   // This is the default surface style, so leaving the real map out here meant a
   // real world only appeared if you switched to the procedural one.
-  ground = bodyGround(ground, buv, bm, life);
+  ground = bodyGround(ground, buv, bm, life, sourceLand);
 #endif
 
   float depth = smoothstep(0.0,-0.26,h);

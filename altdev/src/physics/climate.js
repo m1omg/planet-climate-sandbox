@@ -605,6 +605,15 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // through exactly the epoch a player most wants to watch.
   const dampingGate = smoothstep(0.10, 0.45, meanDamping);
   const quasi = smoothstep(6, 1, eqDistance) * dampingGate;
+  // Opt-in instrumentation for transition diagnostics. Kept off the hot-path
+  // solve object so ordinary runs retain its single hidden class; a caller that
+  // supplies `_gradeStats = {}` gets the actual grade behind each chosen step.
+  if (w._gradeStats) {
+    const s = w._gradeStats;
+    s.calls = (s.calls || 0) + 1;
+    s.denseGrades = (s.denseGrades || 0) + (denseGrade ? 1 : 0);
+    s.last = { rawDt: dt, eqDistance, meanDamping, dampingGate, quasi, denseGrade };
+  }
   // Locked worlds only, and that gate is measured rather than assumed. The
   // residual check below costs one extra update+tendency per backtrack, and on
   // a rotating world it almost never finds anything: the tridiagonal Jacobian
@@ -615,7 +624,18 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // check that came back clean every time.
   w._solve.lineSearch = !!w.params.tidallyLocked && (quasi > 0 || dampingGate < 1);
   w._solve.denseFallback = dampingGate < 1;
-  if (quasi > 0) dt = Math.min(dt * (1 + quasi * 4000), 5e6);
+  // A hot locked land planet with only a few hundredths of an ocean is not
+  // quasi-static merely because its temperature solve is near equilibrium.
+  // Its slow nightside ice sheet is still moving water, humidity and albedo
+  // between two climate branches. On the reported 0.0327-EO world the normal
+  // 4000x shortcut turned a 0.37-year accuracy step into 253 years and drove an
+  // artificial Twilight/Baked-Desert cycle; accepted steps capped to 46x stay
+  // on the fixed-fine trajectory without charging ordinary locked ocean worlds.
+  const hotLockedColdTrap = !!w.params.tidallyLocked && dg.hasWater
+    && dg.totalWater > 0.015 && dg.totalWater < 0.12
+    && dg.Tmax > 340 && dg.Tmin < 273.16;
+  const quasiGain = hotLockedColdTrap ? 46 : 4000;
+  if (quasi > 0) dt = Math.min(dt * (1 + quasi * quasiGain), 5e6);
 
   // The other half of the trust region in stepTemperature. If the last step's
   // solve wanted to move a band further than it was allowed to, the step it was
