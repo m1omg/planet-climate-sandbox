@@ -267,6 +267,48 @@ negation of everything above it; it has **no memory**, so a world sitting exactl
 flickers between two names; and `ice` is a statement about *temperature* while `water` is a statement
 about *inventory*, which is why the dry branch has to be tested before the frozen ones.
 
+### Slovenčina, and how the translation is arranged
+
+The page ships in **English and Slovak**. Which one you get is decided in this order: a choice you
+made before (kept in this build's own storage), then `navigator.languages` — the browser's list, in
+preference order — then English. The **EN / SK** button beside the renderer switches it at any time
+and remembers the choice; it does not reload, reset or otherwise disturb the running world.
+
+Only the first language in the list that this page can actually speak is taken, and a near miss does
+not count: a browser asking for `cs, en` gets English, not Slovak. Guessing across languages because
+they look similar is how Czechs get served Slovak.
+
+Two kinds of lookup, because there are two kinds of string:
+
+```js
+t('Settle')                        // UI text, keyed by the English itself
+tx('states', 'snowball', 'name')   // content, keyed by the id it belongs to
+```
+
+Keying the UI by its own English source means there is no `ui.timebar.settle` indirection to read
+past and no key file to keep in step; a string with no entry falls through to English, which is a
+usable page rather than a blank one. Content — climate states, presets, scenarios — is keyed by id,
+because a preset's name is a name rather than a label, and because two states may share an English
+word and must not be forced to share a Slovak one.
+
+**The model does not know a language exists.** Nothing under `src/physics/` is touched: `classify()`
+still returns `id: 'snowball'` with its English name beside it, and every assertion in `selftest.js`
+still reads that. Translation happens where text meets the screen. A dictionary that reached into the
+physics would make two hundred and fifty checks language-dependent, which is a poor trade for a model
+whose entire output is prose about planets.
+
+The static page translates **in place**: `applyStatic()` walks the text nodes and the
+`title`/`aria-label`/`placeholder` attributes, caching the English on each one the first time it sees
+it. So switching back is a restore rather than a second translation, no markup needs a `data-i18n`
+attribute, and the slider labels and their notes come along without being enumerated anywhere. What
+cannot work that way is anything assembled from data after boot — the preset and scenario chips, the
+climate log, every line of the readout — and that is what `relabel()` rebuilds.
+
+`smoketest.mjs` fails if the Slovak dictionary falls out of step with the model: a state, preset or
+scenario with no translation, or a translation for an id that no longer exists. It also checks that
+the switch is wired, and that the translator actually switches both ways and falls back to English on
+a string it does not know.
+
 ### Frame-rate independence
 
 Physics advances on simulated time only. Elapsed real time buys *credit*; steps are sized purely

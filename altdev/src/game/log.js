@@ -1,5 +1,6 @@
 import { STATES } from '../physics/classify.js';
 import { key, adopt } from './storage.js';
+import { t, tx } from './i18n.js';
 
 // Namespaced, and it was not.
 //
@@ -31,8 +32,8 @@ export function buildLogUI(container, discovered, onSelect) {
     el.className = 'state-card' + (discovered.has(id) ? ' found' : '');
     el.dataset.id = id;
     el.innerHTML = `<span class="dot" style="background:${s.color}"></span>
-      <span class="nm">${discovered.has(id) ? s.name : '???'}</span>`;
-    el.title = discovered.has(id) ? s.blurb : 'Not yet discovered';
+      <span class="nm">${discovered.has(id) ? (tx('states', id, 'name') || s.name) : '???'}</span>`;
+    el.title = discovered.has(id) ? (tx('states', id, 'blurb') || s.blurb) : t('Not yet discovered');
     el.addEventListener('click', () => onSelect(id));
     container.appendChild(el);
   }
@@ -42,8 +43,8 @@ export function markFound(container, id) {
   const el = container.querySelector(`[data-id="${id}"]`);
   if (el && !el.classList.contains('found')) {
     el.classList.add('found', 'just-found');
-    el.querySelector('.nm').textContent = STATES[id].name;
-    el.title = STATES[id].blurb;
+    el.querySelector('.nm').textContent = tx('states', id, 'name') || STATES[id].name;
+    el.title = tx('states', id, 'blurb') || STATES[id].blurb;
     setTimeout(() => el.classList.remove('just-found'), 2200);
     return true;
   }
