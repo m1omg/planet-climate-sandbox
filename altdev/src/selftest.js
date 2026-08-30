@@ -86,6 +86,41 @@ export function run() {
   check('Mars settles near 215 K ± 25',
     near(mars.world.diag.Tmean, 215, 25), `${mars.world.diag.Tmean.toFixed(0)} K`);
 
+  // Water an ocean world cannot put anywhere is not an ocean.
+  //
+  // `flooded` comes from the basin geometry, and floodedFraction multiplies by
+  // (1 - landFraction): a world whose ground is all high has no sea at any
+  // inventory. Such a world used to classify as Temperate & Habitable with the
+  // globe drawing 100% land and the readout agreeing -- reported on a
+  // terraformed Venus, which is exactly the case, because that preset shipped
+  // with basin geometry at 1.
+  {
+    const nowhere = settle({ ...EARTH, landFraction: 1, water: 1, startT: 288 }, 1e6).world;
+    const st = classify(nowhere);
+    check('A world with water and nowhere to put it is a desert, not an ocean',
+      st.id === 'dune' && nowhere.diag.flooded < 0.01,
+      `${nowhere.diag.totalWater.toFixed(2)} EO, ` +
+      `${(nowhere.diag.flooded * 100).toFixed(0)}% of the surface flooded → ${st.name}`);
+
+    // …and Venus can now be terraformed into something that looks terraformed.
+    // Its basin geometry is 0.8 because about a fifth of the planet is lowland
+    // plain, which is where an ocean would go; at 1 it could not have one.
+    const cooled = settle({ ...PRESETS.venus.params, insolation: 1.0, water: 1,
+      co2Bar: 3e-4, startT: 288 }, 3e6).world;
+    const cs = classify(cooled);
+    check('…and a cooled, watered Venus gets a sea rather than a bare ball',
+      cooled.diag.flooded > 0.1 && cs.id === 'temperate',
+      `${(cooled.diag.Tmean - 273.15).toFixed(1)} °C, ` +
+      `${(cooled.diag.flooded * 100).toFixed(0)}% ocean → ${cs.name}`);
+
+    // The dry Venus that ships is untouched by that, which is the point of
+    // deriving coverage from water rather than from the slider.
+    const dry = settle(PRESETS.venus.params, 1e5).world;
+    check('…while Venus as it ships is exactly as dry as it was',
+      dry.diag.flooded < 1e-6 && classify(dry).id === 'dryRunaway',
+      `${(dry.diag.flooded * 100).toFixed(2)}% flooded, ${dry.diag.Tmean.toFixed(0)} K`);
+  }
+
   // Two hot oceans that are hot for opposite reasons, and the point of the pair
   // is that the temperature is the same and nothing else is. Each has to still
   // be a sea at 100 Myr, or the preset is a transient wearing a preset's name.

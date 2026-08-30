@@ -140,7 +140,15 @@ export const PRESETS = {
   // still there if you want them -- the control does not go away, it just starts
   // at nothing.
   earthlike: { name: 'Earth-like', icon: '🌐', params: { ...PREINDUSTRIAL, co2Bar: 280e-6, emissions: 0, fossilUsed: 0 } },
-  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: INDUCED_MAGNETOSPHERE, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
+  // Basin geometry is 0.8 rather than 1, and it is not what makes this world dry
+  // -- `water: 0` does that, and the coverage is derived from the water there
+  // actually is. What 1 did was make Venus *permanently* dry: `floodedFraction`
+  // multiplies by (1 - landFraction), so a world with no basins has no sea at
+  // any inventory, and cooling this planet and pouring an ocean onto it left a
+  // bare ball reading "Temperate & Habitable". 0.8 is the real hypsometry:
+  // about a fifth of Venus is lowland plain -- Atalanta, Lavinia, Guinevere --
+  // and that is where an ocean would go.
+  venus:   { name: 'Venus', icon: '🌋', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: INDUCED_MAGNETOSPHERE, o2Bar: 0, biosphere: 0, internalHeat: 0.031, mass: 0.815, insolation: 1.91, water: 0.0, landFraction: 0.8, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, outgassing: 1.2, landAlbedo: 0.15, startT: 700 } },
   mars:    { name: 'Mars', icon: '🔴', params: { ...EARTH, ...SOLAR_HISTORY, magneticField: 0, o2Bar: 0, biosphere: 0, internalHeat: 0.02, mass: 0.107, insolation: 0.43, water: 0.02, landFraction: 0.95, n2Bar: 0.0002, co2Bar: 0.006, rotationHours: 24.6, outgassing: 0.2, landAlbedo: 0.25, startT: 215 } },
   // 0.10 bar of CO2, and it has been raised for the same reason twice now.
   //

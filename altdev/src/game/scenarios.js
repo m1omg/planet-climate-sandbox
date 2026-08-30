@@ -149,7 +149,7 @@ export const SCENARIOS = [
     icon: '🌋',
     brief: 'A dry runaway greenhouse: 90 bar of CO₂, 460 °C, and the water long since photolysed and blown away. Cool it below boiling.',
     hint: 'The water is gone and is not coming back — but the inventory slider is yours. Bury the CO₂ and give the weathering thermostat something to work with.',
-    params: { ...EARTH, realisticGeology: true, mass: 0.815, insolation: 1.91, water: 0, landFraction: 1, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, landAlbedo: 0.15, startT: 735 },
+    params: { ...EARTH, realisticGeology: true, mass: 0.815, insolation: 1.91, water: 0, landFraction: 0.8, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, landAlbedo: 0.15, startT: 735 },
     limit: 1e9,
     check: (w) => w.diag.Tmean < 373,
     fail: null,
