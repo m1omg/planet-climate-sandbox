@@ -593,6 +593,39 @@ export function run() {
       thin.air < 1e-6 && thick.air > 1,
       `0.1 bar \u2192 ${thin.air.toExponential(1)} bar left (night ${thin.night.toFixed(0)} K), ` +
       `2 bar \u2192 ${thick.air.toFixed(2)} bar left (night ${thick.night.toFixed(0)} K)`);
+
+    // A collapse under way and a collapse that has finished are two different
+    // planets, and they were sharing a name and a description. The description
+    // is the specific problem: Nightside Collapse says the day side "can stay
+    // warm, wet and inhabited the whole time ... a planet with a working ocean
+    // under its sun", which is exactly why the state is worth having -- and it
+    // was being shown to worlds whose water was entirely frozen onto the dark
+    // side. Reported by a player, who was right.
+    //
+    // TRAPPIST-1e is both worlds, one flux apart. At its own 0.646 S(+) the
+    // collapse is under way and the promise holds: 49 C day side with a sea on
+    // it. Dim the star to 0.5 and the same planet has no liquid water at all --
+    // and before this split it still read Nightside Collapse.
+    const wetSide = settle({ ...PRESETS.trappist1e.params }, 6.6e7).world;
+    const frozen = settle({ ...PRESETS.trappist1e.params, insolation: 0.5 }, 6.6e7).world;
+    const share = (w) => (w.diag.totalWater > 1e-9 ? w.water.ocean / w.diag.totalWater : 0);
+    const ws = classify(wetSide), fs = classify(frozen);
+    check('A nightside collapse with a sea and one without are not the same state',
+      ws.id === 'nightfrost' && fs.id === 'nightfrozen',
+      `0.646 S\u2295 \u2192 ${ws.name} (day ${(ws.Tsub - 273.15).toFixed(0)} \u00b0C, ` +
+      `${(share(wetSide) * 100).toFixed(0)}% of its water liquid) \u00b7 ` +
+      `0.5 S\u2295 \u2192 ${fs.name} (day ${(fs.Tsub - 273.15).toFixed(0)} \u00b0C, ` +
+      `${(share(frozen) * 100).toFixed(1)}% liquid)`);
+    // And the promise itself, checked against the world rather than against the
+    // branch: any state whose blurb claims liquid water has to have some.
+    check('\u2026and a state that promises a working ocean only appears on a world with one',
+      !/working ocean/.test(ws.blurb) || share(wetSide) > 0.02,
+      `${ws.name}: ${(share(wetSide) * 100).toFixed(0)}% liquid, ` +
+      `${(wetSide.diag.flooded * 100).toFixed(0)}% of the surface flooded`);
+    check('\u2026while the finished one says the water is frozen out, and it is',
+      /no liquid water anywhere/.test(fs.blurb) && share(frozen) < 0.02,
+      `${fs.name}: ${(share(frozen) * 100).toFixed(2)}% liquid, ` +
+      `${(frozen.diag.pTotMean * 1000).toFixed(1)} mbar of air left`);
   }
 
   // ---- 3j. what the atmosphere actually looks like --------------------------

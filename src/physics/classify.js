@@ -19,8 +19,9 @@ export const STATES = {
   waterbelt:  { name: 'Waterbelt / Slushball', color: '#8fd8d0', blurb: 'Ice reaches deep into the tropics but a narrow band of open equatorial ocean survives. A genuine stable state, and a far softer landing than a hard snowball.' },
   snowball:   { name: 'Hard Snowball',        color: '#cfe8f5', blurb: 'Runaway ice–albedo feedback has frozen the planet pole to pole. Weathering stops, so volcanic CO2 accumulates unopposed for 5–50 Myr until 0.1–0.3 bar finally breaks the ice.' },
   marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'The air itself has frozen onto the ground. Below the CO2 frost point the atmosphere condenses onto the winter pole faster than volcanoes can resupply it, and the pressure falls until what is left is in equilibrium with the caps. It is escapable: enough outgassing thickens the air, warms the poles above the frost point and puts the atmosphere back where it belongs.' },
-  nightfrost: { name: 'Nightside Collapse',   color: '#8c6fa8', blurb: 'The atmosphere is snowing out onto the dark side. A tidally locked world has a hemisphere that never sees its star, and if that face falls below the CO2 frost point the air condenses there permanently — no season ever brings it back, which is exactly what separates this from a Mars. The pressure falls until what is left balances against the night-side deposit, and the day side can stay warm, wet and inhabited the whole time: this is a planet with a working ocean under its sun and its atmosphere quietly draining away behind it. What stops it is heat transport. Thick enough air carries enough warmth to the night side to hold it above the frost point, so the collapse is self-limiting on a massive atmosphere and a trap for a thin one (Joshi et al. 1997; Wordsworth 2015; Turbet et al. 2018 for the TRAPPIST-1 planets).' },
-  titan:      { name: 'Titan-Like',           color: '#c9a86a', blurb: 'A frigid world under a thick nitrogen–methane haze, far too cold for liquid water but warm enough for other liquids to run on the surface.' },
+  nightfrost: { name: 'Nightside Collapse',   color: '#8c6fa8', blurb: 'The atmosphere is snowing out onto the dark side. A tidally locked world has a hemisphere that never sees its star, and if that face falls below the CO2 frost point the air condenses there permanently — no season ever brings it back, which is exactly what separates this from a Mars. The pressure falls until what is left balances against the night-side deposit, and the day side is still warm, wet and habitable while it happens: this is a planet with a working ocean under its sun and its atmosphere quietly draining away behind it. That sea is part of the state rather than a likely accompaniment to it — when the last of it goes, the world is a Nightside Freeze-Out instead. What stops it is heat transport. Thick enough air carries enough warmth to the night side to hold it above the frost point, so the collapse is self-limiting on a massive atmosphere and a trap for a thin one (Joshi et al. 1997; Wordsworth 2015; Turbet et al. 2018 for the TRAPPIST-1 planets).' },
+  nightfrozen:{ name: 'Nightside Freeze-Out', color: '#6f6a8f', blurb: 'The collapse has finished. Most of the atmosphere is lying on the hemisphere that never sees the star as dry ice, and what water the planet has is frozen beside it — so there is no liquid water anywhere, and the day side is a bare desert under whatever thin remnant of air is left. It is the end state of a Nightside Collapse rather than a different mechanism, and the difference between the two is the sea: while there is one, the world is habitable and quietly losing its air behind it; once it is gone, there is nothing left to lose. Distinct from a Nightside-Trapped Desert, where the air is intact and only the water has migrated.' },
+  titan:      { name: 'Titan-Like',         color: '#c9a86a', blurb: 'A frigid world under a thick nitrogen–methane haze, far too cold for liquid water but warm enough for other liquids to run on the surface.' },
   frozen:     { name: 'Frozen Desert',        color: '#a8b8c8', blurb: 'Cold, dry and still. Not enough water for a true snowball and not enough greenhouse to thaw.' },
   thincold:   { name: 'Thin Cold Desert',     color: '#b08a6e', blurb: 'A thin, frigid, desiccated atmosphere over bare ground — Mars today. The air has not collapsed: it is simply all there is. Turn up the volcanoes and it will thicken, warm, and eventually hold liquid water again.' },
   baked:      { name: 'Baked Desert',         color: '#e08a3a', blurb: 'A hot, waterless world of bare rock. Whatever water it had is long gone, so nothing moderates the surface and the day side simply bakes.' },
@@ -77,7 +78,21 @@ export function classify(w) {
   // night is a number nowhere on the planet. It stays because it is what makes
   // this a *collapse* rather than an ordinary eyeball with a cold trap: the
   // whole world has to be cold on balance, not just the far side.
-  else if (collapsed && pTot < 0.2 && T < 265) id = lam > 0.5 ? 'nightfrost' : 'marslike';
+  //
+  // And the locked branch is itself two states, which is the same mistake one
+  // level down. A collapse that is under way still has a sea on the day side --
+  // that is the whole reason it is worth a name of its own, and the blurb says
+  // so. A collapse that has finished has none: the air is dry ice on the dark
+  // hemisphere, the water is glacier ice beside it, and the day side is bare.
+  // Telling someone their planet has a working ocean while it does not is not a
+  // shade of meaning, and the condition here is exactly the promise the text
+  // makes -- there has to be liquid water, and it has to be enough of it to be
+  // a sea rather than a damp patch the hypsometry rounds to nothing.
+  else if (collapsed && pTot < 0.2 && T < 265) {
+    id = lam > 0.5
+      ? (liquidShare > 0.02 && dg.flooded > 0.01 ? 'nightfrost' : 'nightfrozen')
+      : 'marslike';
+  }
   else if (T > 470 && water < 0.06 * Math.max(initialWater, 0.05)) id = 'dryRunaway';
   else if (T > 420) id = 'wetRunaway';
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';

@@ -11,8 +11,8 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 144 physics, coverage, determinism and control checks
-node tools/calibrate.mjs        # 21 observational anchors + 2 reported known gaps
+node src/selftest.js            # 250 physics, coverage, determinism and control checks
+node tools/calibrate.mjs        # 23 observational anchors + 3 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # compiles them on a real GL driver
@@ -31,13 +31,23 @@ against `https://m1omg.github.io/planet-climate-sandbox/`, because a "built"
 status is not proof the change is out there. See `CLAUDE.md`.
 
 All eleven, before pushing — `calibrate.mjs` above all, because a change that
-fixes one anchor almost always moves three others, and the two `GAP` rows are
+fixes one anchor almost always moves three others, and the three `GAP` rows are
 known deviations that report every run rather than failing. `node --check` parses files as CommonJS and will happily
 miss ESM-only errors, which is exactly how a duplicate declaration once shipped a
 blank page; the smoke test loads the real module graph and fails on it. The shader
 lives in `src/render/glsl/` as real GLSL rather than a JavaScript template literal
 for the same reason — a stray backtick there breaks the whole module silently.
 Open with `?selftest=1` to run the same suite in the browser console.
+
+Four more tools are **diagnostics rather than checks** — they measure and report, and nothing fails:
+`tools/track.mjs <preset>` traces a world from its own start age to the present day every 250 Myr
+(this is what the real-planet presets are tuned against, because their endpoints are observations);
+`tools/throughput.mjs` reports simulated years per wall-clock second per preset, which is the number
+the player actually feels and the one µs/step cannot tell you; `tools/bench.mjs` and
+`tools/convergence.mjs` do the same for step cost and step-size independence.
+
+`docs/climate-states.md` (and the same table as `docs/climate-states.ods`) writes down the exact
+condition for every climate state the model can name.
 
 ---
 
@@ -73,8 +83,10 @@ A single power law fitted Venus and got Earth badly wrong: it made **every doubl
 the last** (7.9, 9.6, 11.4 W/m²…), which tipped the planet into a runaway at 1.8% CO₂ — an outcome
 the literature places a hundred times further out.
 
-`tools/calibrate.mjs` checks twenty-one anchors against published values in one run, and reports
-two known gaps that are deliberately not fixed:
+`tools/calibrate.mjs` checks twenty-three anchors against published values in one run, and reports
+three known gaps that are deliberately not fixed — snowball deglaciation CO₂ (0.010 bar against a
+literature 0.08–0.4), snowball duration (0.22 Myr against 3–60) and the warmest a 0.35 S⊕ world can
+be forced to (+67.7 °C, where the maximum greenhouse says it should not reach 0 °C):
 
 | Anchor | Literature | Model |
 |---|---|---|
@@ -242,8 +254,18 @@ touching them. Click any value to type it exactly, with units — `420ppm`, `0.5
 ### Climate states it recognises
 
 Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · ice-free hothouse ·
-temperate · waterbelt/slushball · hard snowball · eyeball · lobster · nightside-trapped desert ·
-dune/desert world · waterworld · Mars-like collapse · Titan-like · airless rock.
+temperate · waterbelt/slushball · hard snowball · eyeball · lobster · twilight world ·
+nightside-trapped desert · dune/desert world · waterworld · Mars-like collapse · nightside collapse ·
+nightside freeze-out · Titan-like · thin cold desert · baked desert · frozen desert · airless rock.
+
+Twenty-two names down a nineteen-branch chain — `frozen` is reachable three ways — and **the exact
+condition for every one is written down** in
+[`docs/climate-states.md`](docs/climate-states.md) — with `docs/climate-states.ods` as the same
+table in a spreadsheet. Three things about `classify()` are worth knowing before reading any single
+condition: it is **one ordered chain and the first match wins**, so every branch carries the implicit
+negation of everything above it; it has **no memory**, so a world sitting exactly on a threshold
+flickers between two names; and `ice` is a statement about *temperature* while `water` is a statement
+about *inventory*, which is why the dry branch has to be tested before the frozen ones.
 
 ### Frame-rate independence
 
@@ -296,10 +318,16 @@ thirds of a second however fast the clock is running, and every readout keeps sh
 throughout. Loading a different world re-seeds rather than eases, because a snowball must be a
 snowball on its first frame instead of freezing over in front of you.
 
-Below the **triple point** it is pinned frozen whatever the temperature says. There is no liquid
-water at any pressure under 611.7 Pa, so a basin down there is an ice field, and drawing it as open
-blue sea was the one thing the phase-limit physics exists to rule out. The readout switches from
-"land / ocean" to "land / ice" at the same line.
+Below the **triple point** a cold basin is drawn as an ice field however the temperature ramp reads.
+There is no liquid water at any pressure under 611.7 Pa, so drawing one as open blue sea was the one
+thing the phase-limit physics exists to rule out. The readout switches from "land / ocean" to
+"land / ice" at the same line.
+
+The first version of that floor said *whatever the temperature says*, full stop, and that was wrong
+in the other direction: it pinned Mars's drawn ice at 0.268 at any temperature, including +27 °C,
+where 620 Pa of air holds its water as **vapour** — which is exactly where `partitionWater()` sends
+it. The floor now carries the same condition the physics does, graded on the coldest band, so it
+binds on a cold thin world and lets go of a warm one.
 
 ### Three clocks and a flag
 
@@ -543,6 +571,18 @@ to collapse than the GCMs — a one-dimensional scheme moves heat to the night s
 than a real circulation does, which is the same limitation that shows up in the habitable-zone
 rotation row above.
 
+**A collapse under way and a collapse that has finished are two different planets**, and they were
+sharing a name. The interesting one is the first: a TRAPPIST-1e at 66 Myr with 0.38 bar of CO₂ lying
+on its dark side and 134 mbar left in the air, its day side at 122 °C with a liquid sea and a
+biosphere on it — a habitable world quietly losing its atmosphere behind it, which is the whole
+reason **Nightside Collapse** is worth a state of its own. The end of that same road has no sea at
+all: the air is dry ice on the hemisphere that never sees the star, the water is glacier ice beside
+it, and the day side is bare. That is a **Nightside Freeze-Out**, and it needed splitting off
+because the collapse blurb *promises* a working ocean — text that was simply false on a world whose
+water had all frozen out. The condition is now the promise: liquid water, and enough of it to be a
+sea rather than a damp patch (`liquidShare > 0.02` and `flooded > 0.01`). Neither is the
+**Nightside-Trapped Desert** above, where the air is intact and only the water has migrated.
+
 ### What a hot surface looks like, and what it does not
 
 The night side used to be painted with a glow taken from the planet's **mean** temperature. A mean
@@ -575,6 +615,51 @@ always had its own cracked-crust detail.
 The GLSL cannot import the JS, so the curve is written twice and `tools/glslcheck.mjs` pins the two
 to the same constants. A machine on the software fallback must not see a different planet from one
 with WebGL.
+
+### Frost is only as strong as the world is wet
+
+Same class of mistake, found by someone asking why Mars did not look like Mars. It has its real
+photograph and its real topography, both loaded, and it still drew as a pale featureless ball —
+because the shader painted frost over 98% of the disc and buried the map underneath it:
+
+```glsl
+frostMask = clamp(ice, 0.0, 1.0) * land * (1.0 - sheetMask);
+col = mix(col, mix(col, vec3(0.66, 0.66, 0.68), 0.55), frostMask);
+```
+
+`ice` is a pure function of temperature, and Mars's *warmest* band is 223.5 K — twenty-nine kelvin
+past the end of that ramp — so it is 1.000 in all eighteen, while `uGlaciated` is 0.000 and the
+sheet term that was supposed to suppress it does nothing. Measured on the real `mars.jpg`, that wash
+cost **55% of its contrast and 57% of its chroma**: mean rgb (0.717, 0.386, 0.280) became
+(0.686, 0.537, 0.500). Noachian Mars sits at 280 K, so its `ice` is 0.02 and the same file shows in
+full — same map, same loader, opposite outcome.
+
+**The physics had the missing term all along.** `radiation.js` computes the frosted albedo as
+`landAlbedo + (ALB_FROST − landAlbedo) · waterCap`, commented *a bone-dry frozen world stays the
+colour of its dust*, and names Mars. The three renderers were that same statement with the last
+factor dropped, so the picture and the model were describing planets **14.5 K apart** — a globally
+frosted Mars runs at 197.6 K against the 212.2 K the model computes and the 210 K the planet has.
+`waterCap` multiplies the *strength* rather than the area, because that is where the physics puts it.
+
+Mars's `waterCap` is 0.052, so this changes Mars nineteenfold and **no other preset by more than
+0.007** — every water-bearing world sits at 0.97 or above and the term is a no-op there. It was not
+adding the polar caps it appeared to be adding, either: the map already carries them at the right
+latitude and area, and the wash was flattening them from both ends.
+
+The readouts overstated it in exactly the same way, and the honest number was being computed one
+line below the one being shown. **`iceMean` is how much of the surface is below freezing; `iceArea`
+is how much is under ice.** On Mars those are 100% and 1.9% — and 1.9% is about the perennial caps
+the planet really has. Both the "Ice cover" stat and the state subtitle print `iceArea` now.
+
+What was missing was not a test that the map loads; everything already asked that and all of it
+passed. `bodycheck.mjs` could not have caught it for a sharper reason than "it only tests warm
+worlds": both worlds it builds have band ice identically 0.000, so the frost path has never run in
+any frame that tool has rendered, and its metric counts pixels that *changed* when the map was
+switched on — which reads 18% whether the map is at full strength or at 45%. The missing measurement
+was amplitude. The smoke test now asks the physics and the picture how far each takes the ground
+toward frost and requires the same answer, reading the shader source for the renderer's half so it
+measures the renderer rather than restating it. It needs no GL, which matters, because `bodycheck`
+skips silently wherever headless GL is not installed and that is how this shipped.
 
 ### Where the surface comes from
 
@@ -1481,30 +1566,6 @@ model does not enter.
 
 Stated plainly, because a model that hides these is less useful:
 
-* **The carbon cycle has a cliff at about 2.7× Earth's outgassing, and it is not defensible.** An
-  Earth-like world at 2.6× sits at 3100 ppm and 19.8 °C indefinitely. At 2.8× it holds 3400 ppm and
-  20 °C for *fourteen million years* while CO₂ creeps up 50 ppm/Myr — then the last ice melts, the
-  albedo feedback releases ~7 K, and the world staggers: partially re-glaciating to 61 % ice at
-  −17 °C, recovering, overshooting to **1147 °C**, and finally settling at 521 °C in a steam
-  greenhouse it cannot leave, because κ — the ocean-and-crust carbon buffer — has collapsed from 50
-  to 1 and put fifty times the airborne carbon into the air at once.
-
-  The **endpoint** is step-independent: 530.7 °C at a 2-Myr step cap, 532.5 °C at a 5000-year one.
-  So the hot attractor is real. The **path** is not — different step sequences swing through
-  different intermediate states, and a 1147 °C overshoot on the way to 521 °C is not physics.
-  Endpoint robustness is not evidence that the transition is well posed.
-
-  Nor is the threshold merely arguable. It tips at ~21,000 ppm, about 48× present. Goldblatt et al.
-  (2013) put a *conceivable* CO₂-driven runaway at ~100× present; Wolf & Toon (2015) have Earth
-  stable against runaway to 1.21× solar forcing, with a moist greenhouse arriving first — a stable
-  state that loses its water over 10⁸ years, not a jump to 521 °C. This model offers no
-  moist-greenhouse landing here at all; it goes straight to steam. Real Earth ran the Cretaceous and
-  the Eocene at elevated outgassing and did not do this.
-
-  It is a thermostat problem rather than a heat one, and fixing it means the atmospheric window this
-  scheme does not have. It long predates internal heat — but internal heat is how you now meet it,
-  since a melt boost of 2.7× arrives at **0.67 W/m²**, a seventh of Io's. A test pins it.
-
 * **There is no outer edge to the habitable zone.** Kasting et al. (1993) put it at 1.67 AU — 0.36
   S⊕ — and it is set by a *maximum greenhouse*: CO₂ Rayleigh-scatters about 2.5× better than air, so
   past a few bar the scattering overtakes the greenhouse and adding more CO₂ **cools** the planet.
@@ -1685,7 +1746,7 @@ Stated plainly, because a model that hides these is less useful:
   nearly flat where Earth sits, which is right; what is missing is the shift in cloud altitude and
   optical depth that supplies most of the observed positive feedback.
 * **The Twilight World's land-planet requirement is imposed, not derived.** In this model a locked
-  aquaplanet still comes out with a 164 K day-night contrast against a land planet's 198 K — a real
+  aquaplanet still comes out with a 163 K day-night contrast against a land planet's 201 K — a real
   difference, in the right direction, but nowhere near enough to close the habitable band on its
   own. A few hundredths of an ocean already saturate the air over a boiling eye, so the humidity
   limiter never binds and the two atmospheres stay within a factor of 1.6 in vapour. Closing the gap
@@ -1697,13 +1758,40 @@ Stated plainly, because a model that hides these is less useful:
   assumptions, so the model sits on the conservative side of a genuine disagreement in the
   literature rather than outside it.
 
-Two deviations recorded in earlier versions have since been **fixed** rather than excused: the
+* **Titan's real map is buried under drawn frost**, 66% of its disc, the same overpaint Mars had —
+  and `waterCap` cannot rescue this one, because Titan carries half an Earth ocean of water and sits
+  at 1.000. The physics agrees its ground is frost-albedo, so suppressing the frost there would make
+  the picture disagree with the model rather than agree with it. What it wants is a decision about
+  what this model thinks Titan's surface *is* — water ice under organics is not the bright water
+  frost the albedo term assumes — and that is a physics question, not a shader tweak.
+* **Ice sheets largely collapse when a world freezes over.** `iceSheetTarget` is gated on
+  `smoothstep(0, 0.05, openOcean + vapourShare)`, so a planet with no open water has nothing to
+  evaporate and grows no sheet: measured, one peaking at 0.252 falls to **0.033** as the ocean
+  closes. It is defensible — a hard snowball is a desert, which is the Dry Valleys argument made
+  two sections above — but it also means the coldest worlds get the least white and the most bare
+  grey, and it feeds `ALB_SNOW` in the albedo, so changing it would move the snowball anchors. It is
+  recorded rather than adjusted for that reason.
+
+Three deviations recorded in earlier versions have since been **fixed** rather than excused: the
 runaway inner edge now falls at 1.3–1.4 S⊕ (literature 1.2–1.4), and a dune world stays habitable
 about 0.35 S⊕ further in than an ocean world, which is the Abe et al. (2011) result. Both were
 symptoms of an integrator bug — the implicit step damped the global mean with the diffusion
 coefficient, which only moves heat between latitudes and cannot slow uniform warming — that made
 the whole planet heat thousands of times too slowly. It is now solved as the tridiagonal system it
 actually is.
+
+The third is **the carbon cliff at 2.7× outgassing**, which used to head this list: an Earth-like
+world that sat at 3400 ppm for fourteen million years and then staggered into a 521 °C steam
+greenhouse by way of a 1147 °C overshoot. It was diagnosed here as a thermostat problem needing the
+atmospheric window this scheme does not have, and reported on that basis. **That diagnosis was
+wrong**, and the giveaway was in the trace the whole time: CO₂ was *falling* while the temperature
+exploded. It was methane — three times Earth's volcanism outruns an Earth-like biosphere's oxygen,
+the air goes anoxic, methane's sink goes with it, and methane had no ceiling because it was
+longwave-only. Give it the shortwave absorption it really has and the ladder is habitable end to
+end (15, 19, 20, 13, 16, 20, 26 °C from 1× to 8×). What is left at the same place is a real
+transition and a modest one: the air still goes anoxic between 2.6× and 2.8×, and the world gets
+about **seven kelvin colder**, which is the direction Byrne & Goldblatt and Eager-Nash give. See
+*What it was breaking*, above.
 
 ## References
 
