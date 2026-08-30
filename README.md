@@ -1604,4 +1604,33 @@ planets) · Draper 1847 (the temperature at which solids begin to glow visibly).
 
 ## Licence
 
-MIT
+**GNU General Public License, version 3 or later** (GPL-3.0-or-later). The full text is in
+[`LICENSE`](LICENSE); `LICENSE` at the repository root governs every build in it.
+
+    Planet Climate Sandbox — a terrestrial climate model you can play with
+    Copyright (C) 2026 m1omg
+
+    This program is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License as published by the Free Software Foundation,
+    either version 3 of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with this
+    program. If not, see <https://www.gnu.org/licenses/>.
+
+It was MIT until this commit. Copyleft is the deliberate choice: this model is worth
+reading and worth arguing with, and a fork that improves the physics should come back
+readable rather than disappear into something closed. Because the whole program is
+plain ES modules served as source, every visitor already receives the corresponding
+source of the version they are running.
+
+**The surface maps are not covered by this.** `assets/bodies/` carries third-party
+imagery, and it keeps its own terms — none of it becomes GPL by sitting in this
+repository. Per file, in [`assets/bodies/CREDITS.md`](assets/bodies/CREDITS.md):
+the Earth, Mars and Venus colour maps are **CC BY 4.0** (Solar System Scope, from NASA
+imagery), the Earth height map is **CC BY-SA 4.0**, and Titan's Cassini mosaic and Mars's
+MOLA topography are **public domain** as NASA works. Attribution for the first four is a
+condition of using them; keep `CREDITS.md` with any copy.
