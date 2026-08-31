@@ -65,12 +65,14 @@ const solid = (rgba) => {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   return t;
 };
-view.bodyColourTex = solid([255, 0, 255, 255]);
+const testColour = solid([255, 0, 255, 255]);
+view.bodyColourTex = testColour;
 // Just above sea level, not high ground. The map is deliberately desaturated
 // where the climate cannot support its colours, and that test keys off
 // elevation -- so a flat *high* body would wash the map out everywhere and hide
 // the very thing being measured.
-view.bodyHeightTex = solid([166, 166, 166, 255]);
+const testHeight = solid([166, 166, 166, 255]);
+view.bodyHeightTex = testHeight;
 view.bodyHasHeight = 1;
 view.body = 'test';
 
@@ -115,6 +117,53 @@ check('the real map reaches the generated-texture surface', tex > 0.10,
 check('…and reaches both of them about equally',
   proc > 0 && tex > 0 && Math.max(proc, tex) / Math.min(proc, tex) < 2.5,
   `${(proc * 100).toFixed(0)}% procedural against ${(tex * 100).toFixed(0)}% textured`);
+
+// A colour map without a matching DEM must be allowed to speak for itself.
+// Laying the random generated world's slope lighting over the Moon photograph
+// makes its maria and real craters barely legible through invented ridges. A
+// mapped body with no height texture should therefore render exactly as it
+// does when relief is explicitly disabled; Earth and Mars keep relief because
+// they carry matching height maps.
+{
+  const airless = createWorld({ ...EARTH, mass: 0.0123, landFraction: 1, water: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, startT: 220 });
+  update(airless, 0);
+  view.bodyColourTex = solid([150, 145, 140, 255]);
+  view.bodyHasHeight = 0;
+  view.bodyTarget = 1; view.bodyMix = 1;
+  view.texturesLoaded = false; view.wantTextures = false; view.useTextures = 0;
+  view.render(airless, { time: 0, seed: 12.3 }, 0);
+  const withDefaultRelief = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, withDefaultRelief);
+
+  gl.useProgram(view.prog);
+  gl.uniform1f(view.u.uRelief, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const withReliefOff = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, withReliefOff);
+
+  const inventedRelief = shifted(withDefaultRelief, withReliefOff);
+  check('a mapped body without a DEM is not shaded by invented terrain',
+    inventedRelief === 0,
+    `${(inventedRelief * 100).toFixed(1)}% of visible pixels changed by procedural relief`);
+
+  // Put the synthetic matching map pair back and prove this is not a blanket
+  // loss of relief for Earth and Mars.
+  view.bodyColourTex = testColour;
+  view.bodyHeightTex = testHeight;
+  view.bodyHasHeight = 1;
+  view.render(airless, { time: 0, seed: 12.3 }, 0);
+  const withMappedRelief = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, withMappedRelief);
+  gl.useProgram(view.prog);
+  gl.uniform1f(view.u.uRelief, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const mappedReliefOff = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, mappedReliefOff);
+  const matchingRelief = shifted(withMappedRelief, mappedReliefOff);
+  check('a mapped body with its own DEM keeps relief', matchingRelief > 0,
+    `${(matchingRelief * 100).toFixed(1)}% of visible pixels carry mapped relief`);
+}
 
 // Venus, Mars and Titan have no life anywhere, and the map's colour is their
 // rock. Keying the whole photograph off how habitable the place is muted them
