@@ -32,6 +32,7 @@ export const BODY_MAPS = {
   // Kept inside altdev rather than the shared root asset set: this preset and
   // its NASA LRO map belong to this alternative build only.
   moon: { colour: 'moon.jpg', local: true },
+  earlyMoon: { colour: 'moon.jpg', local: true },
   mars: { colour: 'mars.jpg', height: 'mars_height.png' },
   // Noachian Mars is Mars. Almost everything on that map is older than the
   // epoch this preset is set in -- the crustal dichotomy, Hellas, Argyre and

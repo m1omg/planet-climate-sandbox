@@ -50,6 +50,12 @@ export const EARTH = {
   // A resurfacing event, off unless placed: the age it happens at, how much it
   // multiplies volcanic outgassing by, and how long it lasts.
   resurfacingAge: 0, resurfacingBoost: 1, resurfacingSpan: 50,
+  // Optional history constraints used by specific real-world presets. They are
+  // inert everywhere else: secondary N2 released during a resurfacing event,
+  // a hot-start inventory placed in steam rather than an ocean, a measured
+  // escape-rate correction, and oxidation by a hot dry crust.
+  resurfacingN2Bar: 0, startWithSteam: false, escapeScale: 1,
+  hotRockOxidation: 0,
 };
 
 // The modes that turn a preset from a snapshot into a history, switched on for
@@ -144,6 +150,20 @@ export const PRESETS = {
     n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0,
     emissions: 0, fossilUsed: 0, outgassing: 0, internalHeat: 0.011,
     landAlbedo: 0.12, startT: 220, startAge: 4.51, magneticField: 0 } },
+  // Needham & Kring (2017): mare volcanism around 3.5 Ga briefly supported a
+  // roughly 1 kPa atmosphere, dominated by CO and sulfur with water third.
+  // This model has no CO/S reservoirs, so radiatively weak N2 is the explicit
+  // proxy for that background gas. 1.5e-7 Earth oceans is inside their total
+  // vented-water range (0.36-1.86e-7 EO). Their escape calculation gives a
+  // roughly 70 Myr lifetime; escapeScale corrects the generic N2/CO2 law for
+  // this composition rather than pretending the proxy is chemically nitrogen.
+  earlyMoon: { name: 'Ancient Moon', icon: '🌒', params: { ...EARTH, ...SOLAR_HISTORY,
+    mass: 0.0123, landFraction: 1, water: 1.5e-7, insolation: 0.765376,
+    rotationHours: 655.72, tidallyLocked: false, obliquity: 6.68,
+    n2Bar: 0.01, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0,
+    emissions: 0, fossilUsed: 0, outgassing: 0, internalHeat: 0.03,
+    landAlbedo: 0.12, startT: 250, startAge: 1.067, magneticField: 0,
+    xuvFraction: 3.4e-6 * 5.98004, escapeScale: 0.01 } },
   preindustrial: { name: 'Pre-Industrial Earth', icon: '🏞️', params: { ...PREINDUSTRIAL, ...SOLAR_HISTORY } },
   // Earth's physics without Earth's biography: no industry, no real coastlines,
   // and a fresh set of continents every time you load it. For trying something
@@ -247,16 +267,37 @@ export const PRESETS = {
     startAge: 1.67,
     // And the resurfacing is armed, because it happened. 2.182 Gyr after this
     // world starts is an age of 3.852 -- 715 Myr ago, which is what Venus's
-    // crater population dates its global repaving to -- and 70x is what it
+    // crater population dates its global repaving to -- and 66x is what it
     // takes to put its ninety-two bar into the air out of this planet's own
-    // mantle. The run ends at 738.8 K under 93.5 bar with no water left in it,
+    // mantle. The run ends at 737.7 K under 92.0 bar with no water left in it,
     // against the 737.2 K and 92 bar Venus has. Way's argument is that this, and not the Sun, is what ended
     // Venus: brightening alone leaves the model's Venus habitable for billions
     // of years too long, which is the same answer his GCM gives. Untick
     // "resurfacing event" to watch that counterfactual.
-    resurfacingAge: 2.182, resurfacingBoost: 70, resurfacingSpan: 40,
+    resurfacingAge: 2.182, resurfacingBoost: 66, resurfacingSpan: 40,
+    resurfacingN2Bar: 2.65, hotRockOxidation: 1,
     // Same again: 3.45x today's XUV at an age of 1.67 Gyr.
     xuvFraction: 3.4e-6 * 3.45 } },
+  // The alternative hot-start Venus. Turbet et al. (2021) found that water
+  // vapour heated on the dayside condenses preferentially into nightside
+  // clouds whose net greenhouse prevents an initially steamy Venus from ever
+  // reaching ocean condensation, even under the faint young Sun. Constantinou
+  // et al. (2024) independently constrain the later volcanic gas to at most 6%
+  // H2O, consistent with a mantle left dry after an approximately 100 Myr magma
+  // ocean. We therefore begin immediately after that epoch with <0.1 EO as
+  // steam, never seed a surface ocean, and let escape plus dry volcanism carry
+  // the same planet to modern Venus. This is a scenario-level representation,
+  // not a replacement for Turbet's 3-D cloud circulation.
+  dryVenus: { name: 'Never-Wet Venus', icon: '☁️', params: { ...EARTH, ...SOLAR_HISTORY,
+    mass: 0.815, magneticField: INDUCED_MAGNETOSPHERE,
+    insolation: 1.37359, rotationHours: 5832, obliquity: 2.6,
+    n2Bar: 1.0, o2Bar: 0, co2Bar: 0.01, ch4Bar: 0, water: 0.06,
+    landFraction: 0.8, landAlbedo: 0.135, biosphere: 0,
+    emissions: 0, fossilUsed: 0, outgassing: 0.371, internalHeat: 0.12,
+    startT: 650, startAge: 0.1, startWithSteam: true,
+    resurfacingAge: 3.752, resurfacingBoost: 70, resurfacingSpan: 40,
+    resurfacingN2Bar: 3.32, hotRockOxidation: 1,
+    xuvFraction: 3.4e-6 * 109.988 } },
   // Mars in the Noachian, when the valley networks were being cut. The Sun was
   // at 75% of today's, so this world gets less than a third of Earth's light,
   // and warming it is the oldest unsolved problem in the subject: CO2 alone
@@ -392,10 +433,10 @@ export const PRESETS = {
   // inside has to keep erupting the greenhouse back or it cools.
   //
   //   heated by      starlight   volcanism   equilibrium CO2   surface
-  //   its air        1.00 S(+)   20x         0.0563 bar        37.3 C
-  //   its star       1.28 S(+)    1x         2.22 ppm          37.4 C
+  //   its air        1.000 S(+)   4.5x        0.091 bar        49.5 C
+  //   its star       1.256 S(+)     0x        ~0 ppm           49.0 C
   //
-  // A tenth of a degree apart, twenty-five THOUSAND times apart in CO2. Both
+  // Half a degree apart and effectively all the carbon on the first. Both
   // measured at 100 Myr with the imbalance at -0.01 and -0.15 W/m2, so both are
   // settled rather than passing through.
   //
@@ -403,23 +444,22 @@ export const PRESETS = {
   // that nothing could live at 37 C: photosynthesis would put methane and oxygen
   // into both of these atmospheres and the comparison is about carbon dioxide.
   hotCarbon: { name: 'Hot Ocean · CO₂', icon: '♨️', params: { ...EARTH, realisticGeology: true,
-    // 20x is the slider's ceiling and it is where this world has to live: the
-    // thermostat is strong, and 8x Earth's volcanism buys only 29 C. Getting a
-    // sea to bath temperature on carbon alone is *hard*, which is itself worth
-    // seeing -- Earth is not one small nudge away from this.
-    insolation: 1.0, outgassing: 20, co2Bar: 0.0563, biosphere: 0,
-    emissions: 0, fossilUsed: 0, startT: 310.45 } },
+    // With no continents, seafloor weathering is the only carbon thermostat.
+    // Four and a half times Earth's volcanism holds this global ocean near
+    // 50 C without exhausting the finite mantle reservoir over the test run.
+    insolation: 1.0, outgassing: 4.5, co2Bar: 0.091, biosphere: 0,
+    water: 1, landFraction: 0, emissions: 0, fossilUsed: 0, startT: 322.6 } },
 
   // The same temperature from the other direction, and the giveaway is the air:
-  // 2.22 ppm of CO2, a hundred and twenty times LESS than pre-industrial Earth.
+  // essentially no CO2 at all.
   // Weathering runs away with the carbon on a world this warm, and the planet
   // stays hot regardless, because the starlight was never the thermostat's to
   // control. Being on the hot branch is what makes it stable rather than a stop
   // on the way to a runaway -- see "The Hot Ocean" scenario, which is about
   // walking a world onto this branch rather than being handed one.
   hotStar: { name: 'Hot Ocean · Starlight', icon: '🔆', params: { ...EARTH, realisticGeology: true,
-    insolation: 1.28, outgassing: 1, co2Bar: 2.22e-6, biosphere: 0,
-    emissions: 0, fossilUsed: 0, startT: 310.55 } },
+    insolation: 1.256, outgassing: 0, co2Bar: 1e-7, biosphere: 0,
+    water: 1, landFraction: 0, emissions: 0, fossilUsed: 0, startT: 322.1 } },
 
   // And the same world with the star turned up until there is no equilibrium
   // left. The edge is at ONE PART IN THIRTEEN HUNDRED: at 1.338 S(+) this planet

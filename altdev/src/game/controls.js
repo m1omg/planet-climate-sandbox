@@ -70,7 +70,7 @@ export const SLIDERS = [
     note: 'Sets radius, gravity and how well the world holds its air.' },
   { g: 'body', key: 'water', stops: [
       { v: 0, n: 'dry' }, { v: 0.02, n: 'Mars' },
-      { v: 0.108, n: 'Early Venus' }, { v: 1, n: 'Earth' }, { v: 6, n: 'ocean world' }], label: 'Water inventory', min: 0, max: 12, log: true, zero: true, live: 'water',
+      { v: 0.108, n: 'Early Venus' }, { v: 1, n: 'Earth' }, { v: 6, n: 'ocean world' }], label: 'Water inventory', min: 0, max: 12, floor: 1e-8, log: true, zero: true, live: 'water',
     // Below a thousandth of an ocean, "0.000 EO" says nothing; a global layer a
     // few centimetres deep says a great deal. Metres, then, at the dry end.
     // The precision thresholds sit just below the round numbers on purpose: a
@@ -78,10 +78,11 @@ export const SLIDERS = [
     // choosing the three-decimal branch, and the label would then disagree with
     // itself.
     fmt: (v) => v <= 0 ? 'none'
+      : v < 1e-6 ? `${(v * 2.75e6).toFixed(v * 2.75e6 < 0.9995 ? 3 : 2)} mm`
       : v < 1e-3 ? `${(v * 2750).toFixed(v * 2750 < 0.9995 ? 3 : 2)} m`
       : `${v.toFixed(v < 0.09995 ? 4 : v < 0.9995 ? 3 : 2)} EO`,
-    units: { eo: 1, ocean: 1, oceans: 1, m: 1 / 2750, km: 1000 / 2750 },
-    unitFor: (v) => (v > 0 && v < 1e-3 ? 'm' : 'EO'),
+    units: { eo: 1, ocean: 1, oceans: 1, mm: 1 / 2.75e6, m: 1 / 2750, km: 1000 / 2750 },
+    unitFor: (v) => (v > 0 && v < 1e-6 ? 'mm' : v < 1e-3 ? 'm' : 'EO'),
     note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water.' },
   { g: 'body', key: 'landFraction', label: 'Basin geometry', min: 0, max: 1,
     fmt: (v) => `${(v * 100).toFixed(0)} % high ground`, units: { '%': 0.01 }, unitFor: () => '%',

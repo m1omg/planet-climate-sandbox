@@ -405,6 +405,16 @@ export function resurfacingBoost(p, elapsedGyr) {
   return 1 + (p.resurfacingBoost - 1) * Math.exp(-x * x);
 }
 
+// Cumulative share of material delivered by the resurfacing event. Unlike the
+// Gaussian outgassing multiplier, this is an exact 0-to-1 ledger, so adding a
+// fixed atmospheric inventory is independent of the solver's step sequence.
+export function resurfacingProgress(p, elapsedGyr) {
+  const at = p.resurfacingAge;
+  if (!(at > 0) || !(p.resurfacingBoost > 1)) return 0;
+  const span = Math.max(p.resurfacingSpan ?? 50, 1) / 1000;
+  return smoothstepLocal(at - 3 * span, at + 3 * span, elapsedGyr);
+}
+
 // ---------------------------------------------------------------------------
 // Moving a control without kicking the planet.
 //
