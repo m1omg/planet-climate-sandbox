@@ -11,7 +11,7 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 259 physics, coverage, determinism and control checks
+node src/selftest.js            # 269 physics, coverage, determinism and control checks
 node tools/calibrate.mjs        # 23 observational anchors + 3 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
@@ -422,12 +422,12 @@ collapsing, which is the bistability Forget et al. describe for Mars (no collaps
 ### Land and ocean coverage
 
 How much of a planet is under water is **derived, not chosen**. The control sets the *basin
-geometry* — how much of this world would stand above the sea at Earth-like water — and the actual
-coverage follows from the water that is really there, through a hypsometric curve
-(`src/physics/hypsometry.js`):
+geometry* — a reference high-ground share at Earth-like water — and the actual coverage follows
+from the water that is really there, through a hypsometric curve (`src/physics/hypsometry.js`):
 
 ```
-flooded = (1 − L) · (W_basin / 1 EO)^0.25
+broad   = (1 − L) · (W_basin / 1 EO)^0.25
+flooded = clamp(max(min(broad, W_basin / (ρ · 50 m)), W_basin / (ρ · 20 km)), 0, 1)
 ```
 
 Sea level on the globe is then the matching quantile of the baked height field, worked out on the
@@ -447,20 +447,17 @@ oxidation for exactly the same reason. The split is normalised so Earth's total 
 waterworld settles warmer and more carbon-rich than a continental world, and can now climb back out
 of a snowball, which it previously could not.
 
-**Basin geometry of 1 means a world that can never have a sea**, and that is a trap rather than a
-setting. `floodedFraction` multiplies by `(1 − landFraction)`, so a planet whose ground is all high
-has no ocean at *any* inventory — and until this was reported, such a world classified as
-**Temperate & Habitable** while the globe drew 100% land and the readout agreed with the globe. It
-was found on a terraformed Venus, which is exactly the case: that preset shipped with basin geometry
-at 1, so cooling it and pouring in a full Earth ocean left a bare ball with a habitable label on it.
+The two depth bounds prevent opposite absurdities. Fifty metres stops a trace inventory spreading
+into a planet-wide film; twenty kilometres stops any inventory being hidden in a zero-area,
+infinite-depth basin. The latter is deliberately generous rocky-world relief. It leaves every
+shipped starting state unchanged, but a maximally continental Earth-size world now floods 13.7% at
+1 EO and is entirely submerged by 7.3 EO. The `100%` control endpoint therefore means maximum
+**high-ground bias**, not magical terrain that can contain unlimited water without a surface.
 
-Two things changed. Venus's basin geometry is **0.8**, which is its real hypsometry — roughly a fifth
-of the planet is lowland plain, Atalanta and Lavinia and Guinevere, and that is where an ocean would
-go. It is not what makes Venus dry; `water: 0` does that, and the shipped world is unchanged at 734 K
-with 0.00% flooded. And the classifier now reads the **surface** rather than the inventory: water
-with nowhere to be is a *Dune / Desert World*, which is what it looks like. The temperature bounds on
-that branch are what keep it honest over a boiling world, where `flooded` is zero because the ocean
-is in the sky and the runaway branches have already claimed it.
+Venus's basin geometry remains **0.8**, matching its broad lowland plains, and its dry preset remains
+dry because `water: 0` is what makes Venus dry. Classification and continental weathering follow the
+derived surface: once water overtops the reference continents, the world is labelled from the ocean
+actually shown and submerged rock no longer weathers as exposed land.
 
 `W_basin` counts liquid ocean **plus sea ice**, because ice floats and still fills its basin, but
 **not** water vapour. So boiling an ocean uncovers its floor and land climbs to 100%, while freezing
@@ -472,8 +469,8 @@ range, and taken to the limit it is badly wrong: it floods 1.6% of a planet with
 ocean, which works out at twenty centimetres deep. Since the renderer draws whatever fraction this
 returns as open water, a world the model itself called bone dry came out with blue seas along its
 terminator. The deepest basin has a finite area, so as the water goes the flooded fraction must fall
-in proportion to the volume rather than to its fourth root; requiring a mean depth of at least 50 m
-imposes exactly that, and it binds only below a couple of thousandths of an ocean.
+in proportion to the volume rather than to its fourth root. Requiring a mean depth of at least 50 m
+imposes that dry-end limit; the 20 km ceiling is its wet-end counterpart.
 
 ### Real worlds
 

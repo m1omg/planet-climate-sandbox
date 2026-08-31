@@ -84,8 +84,8 @@ export const SLIDERS = [
     unitFor: (v) => (v > 0 && v < 1e-3 ? 'm' : 'EO'),
     note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water.' },
   { g: 'body', key: 'landFraction', label: 'Basin geometry', min: 0, max: 1,
-    fmt: (v) => `${(v * 100).toFixed(0)} % land`, units: { '%': 0.01 }, unitFor: () => '%',
-    note: 'How much of this world would stand above the sea at Earth-like water. Actual coverage is worked out from the water it really has — see the readout.' },
+    fmt: (v) => `${(v * 100).toFixed(0)} % high ground`, units: { '%': 0.01 }, unitFor: () => '%',
+    note: 'Reference high-ground share at one Earth ocean. Basins have finite depth, so enough water overtops even the maximum setting. Actual coverage is in the readout.' },
 
   { g: 'star', key: 'insolation', stops: [
       { v: 0.32, n: 'Noachian Mars' }, { v: 0.43, n: 'Mars' },

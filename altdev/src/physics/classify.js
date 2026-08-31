@@ -144,14 +144,10 @@ export function classify(w) {
   else if (pTot < 0.05 && T < 265 && water < 0.35) id = 'thincold';
   else if (ice > 0.93) id = water < 0.1 ? 'frozen' : 'snowball';
   else if (ice > 0.55) id = 'waterbelt';
-  // A land planet, and there are two ways to be one. Either the world has
-  // little water, or it has water and nowhere to put it: `flooded` is derived
-  // from the basin geometry, and a world whose ground is all high has no sea
-  // however full its inventory is. Both look the same from orbit -- bare rock
-  // and no coastline -- and until this test read the surface rather than the
-  // inventory, the second kind came out "Temperate & Habitable" with the globe
-  // showing 100% land and the readout agreeing. Reported on a terraformed
-  // Venus: cooled, watered, and still a dry-looking ball.
+  // A land planet has little water on its surface. Basin geometry can keep a
+  // small inventory confined, but it cannot hide an arbitrarily deep ocean:
+  // finite relief eventually overtops. Reading `flooded` rather than the raw
+  // inventory keeps this branch honest while that happens.
   //
   // The temperature bounds are what keep this honest on a boiling world. There
   // `flooded` is zero because the ocean is in the sky rather than because there
@@ -159,7 +155,11 @@ export function classify(w) {
   // claimed it.
   else if ((water < 0.12 || dg.flooded < 0.01) && T > 250 && T < 340) id = 'dune';
   else if (T < 250) id = 'frozen';
-  else if (p.landFraction < 0.04 && T > 258 && T < 335) id = 'waterworld';
+  // Classification follows the surface the renderer and diagnostics show, not
+  // the reference high-ground control. Enough water can drown nominally
+  // continental terrain, and that world is a waterworld once less than four
+  // percent of its actual surface remains exposed.
+  else if (dg.landFrac < 0.04 && T > 258 && T < 335) id = 'waterworld';
   else if (ice < 0.02 && T > 296) id = 'hothouse';
   else id = 'temperate';
 

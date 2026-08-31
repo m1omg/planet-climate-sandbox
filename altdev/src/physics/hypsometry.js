@@ -14,9 +14,9 @@ import { clamp } from './constants.js';
 //
 //     W = ∫₀^φ (z(φ) − z(f)) df = H · a/(a+1) · φ^(a+1)
 //
-// which inverts in closed form. Normalising so that a planet holding one Earth
-// ocean is flooded to exactly (1 − L) removes H and a in favour of one
-// exponent and the basin-geometry control:
+// which inverts in closed form. Normalising the broad-basin branch so that a
+// planet holding one Earth ocean is flooded to (1 − L) removes H and a in
+// favour of one exponent and the basin-geometry control:
 //
 //     flooded(W) = (1 − L) · (W / W_ref)^n,        n = 1/(a+1)
 //
@@ -41,6 +41,13 @@ export const HYPSOMETRIC_EXPONENT = 0.25;
 // imposes exactly that, and it binds only below a couple of thousandths of an
 // ocean -- Earth, a waterworld and a dune world are all untouched.
 export const MIN_SEA_DEPTH = 50;     // metres, area-averaged
+// The other end needs a bound too. Without one, basin geometry of 1 makes the
+// broad branch exactly zero and hides any amount of liquid in a zero-area,
+// infinite-depth "ocean". Twenty kilometres is a deliberately generous full
+// peak-to-trough relief for a rocky world. It does not touch Earth, Venus, Mars,
+// Dune World, or any shipped starting state; it only rejects geometries whose
+// implied average basin depth is larger than the terrain itself.
+export const MAX_BASIN_DEPTH = 20000; // metres, area-averaged upper bound
 const RHO_WATER = 1000;              // kg/m^3
 
 // Fraction of the surface under water (or under sea ice, which floats and so
@@ -49,20 +56,26 @@ const RHO_WATER = 1000;              // kg/m^3
 // caller passing that planet's own reference column.
 export function floodedFraction(basinWater, landFraction, refWater) {
   const seaShare = clamp(1 - landFraction, 0, 1);
-  if (seaShare <= 0 || basinWater <= 0 || refWater <= 0) return 0;
+  if (basinWater <= 0 || refWater <= 0) return 0;
   const broad = seaShare * Math.pow(basinWater / refWater, HYPSOMETRIC_EXPONENT);
   const deepEnough = basinWater / (RHO_WATER * MIN_SEA_DEPTH);
-  return clamp(Math.min(broad, deepEnough), 0, 1);
+  const notTooDeep = basinWater / (RHO_WATER * MAX_BASIN_DEPTH);
+  return clamp(Math.max(Math.min(broad, deepEnough), notTooDeep), 0, 1);
 }
 
 // The inverse: how much water it would take to flood a given fraction. Used by
 // the UI to say what a world would look like with a different inventory.
 export function waterForFlooded(flooded, landFraction, refWater) {
   const seaShare = clamp(1 - landFraction, 0, 1);
-  if (seaShare <= 0 || flooded <= 0) return 0;
+  if (flooded <= 0 || refWater <= 0) return 0;
   const f = clamp(flooded, 0, 1);
-  // Invert whichever branch is in force: the broad power law, or the shallow
-  // limit where the sea is only as wide as its volume can keep deep.
-  const broad = refWater * Math.pow(f / seaShare, 1 / HYPSOMETRIC_EXPONENT);
-  return Math.max(broad, f * RHO_WATER * MIN_SEA_DEPTH);
+  // The old two-branch envelope reaches f only once both the broad power law
+  // and the minimum-depth limit do. The new maximum-depth floor reaches f on
+  // its own, so the inverse is the earlier of those two water inventories.
+  const broad = seaShare > 0
+    ? refWater * Math.pow(f / seaShare, 1 / HYPSOMETRIC_EXPONENT)
+    : Infinity;
+  const broadAndDeep = Math.max(broad, f * RHO_WATER * MIN_SEA_DEPTH);
+  const finiteBasin = f * RHO_WATER * MAX_BASIN_DEPTH;
+  return Math.min(broadAndDeep, finiteBasin);
 }
