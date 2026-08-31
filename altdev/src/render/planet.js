@@ -119,7 +119,7 @@ export class PlanetView {
     // on restore() after a context loss, and zeroing these there threw the
     // viewpoint away every time the tab came back or the renderer was swapped.
     this.spin = 0; this.yaw = 0; this.pitch = 0; this.zoom = 1;
-    this.spinVel = 0; this.spinPaused = false;
+    this.spinVel = 0; this.spinPaused = false; this.simPaused = false;
     this.useTextures = 0;      // fades 0 -> 1 as the maps arrive
     this.wantTextures = true;
     // WebGL2 first, then WebGL1. The second is refused far less often -- older,
@@ -744,7 +744,7 @@ export class PlanetView {
     // Spin visually, at a rate suggesting the rotation period but always
     // watchable: real time, not simulated time, and independent of frame rate.
     const lam = dg.lam;
-    const spinRate = this.spinPaused ? 0
+    const spinRate = (this.spinPaused || this.simPaused) ? 0
       : (1 - lam) * clamp(0.245 * Math.pow(24 / Math.max(p.rotationHours, 0.5), 0.35), 0.014, 0.63);
     this.spin = (this.spin + spinRate * dtReal) % (Math.PI * 2);
 

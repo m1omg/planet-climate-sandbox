@@ -11,7 +11,7 @@ import { runawayLimit, iceFraction } from './physics/radiation.js';
 import { NBANDS, lockFactor, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
-import { PAN_SPEEDS, nextPanSpeed, wheelZoomFactor, panRadiansPerPixel } from './render/camera.js';
+import { DEFAULT_PAN_SPEED, PAN_SPEEDS, wheelZoomFactor, panRadiansPerPixel } from './render/camera.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, profileBandAtX } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
@@ -42,7 +42,7 @@ function nullView() {
   return {
     failed: false, ready: false, software: false, api: null, quality: 'high',
     wantTextures: false, texturesLoaded: false,
-    yaw: 0, pitch: 0, spin: 0, spinVel: 0, spinPaused: false,
+    yaw: 0, pitch: 0, spin: 0, spinVel: 0, spinPaused: false, simPaused: false,
     async init() { return false; }, async loadTextures() { return false; },
     render() {}, setQuality() {}, refreshAfterResume() {}, forgetGpuState() {},
     async restore() {},
@@ -67,17 +67,17 @@ const PAN_KEY = `${NS}.panSpeed.v1`;
 function panSpeedPref() {
   try {
     const value = Number(localStorage.getItem(PAN_KEY));
-    return PAN_SPEEDS.includes(value) ? value : 1;
-  } catch { return 1; }
+    return PAN_SPEEDS.includes(value) ? value : DEFAULT_PAN_SPEED;
+  } catch { return DEFAULT_PAN_SPEED; }
 }
 let panSpeed = panSpeedPref();
 
-function updatePanButton() {
-  const b = $('#btn-pan');
-  if (!b) return;
-  b.textContent = `${panSpeed}×`;
-  b.title = t(`Panning speed: ${panSpeed}×`);
-  b.setAttribute('aria-label', b.title);
+function updatePanSelect() {
+  const select = $('#pan-speed');
+  if (!select) return;
+  select.value = String(panSpeed);
+  select.title = t(`Panning speed: ${panSpeed}×`);
+  select.setAttribute('aria-label', select.title);
 }
 
 // Stylised by default. A real atmosphere is a hairline -- Earth's is 0.7% of its
@@ -188,6 +188,7 @@ async function useRenderer(kind) {
   // carry the viewpoint across so the swap is not disorienting
   view.yaw = old.yaw ?? 0; view.pitch = old.pitch ?? 0;
   view.spin = old.spin ?? 0; view.spinPaused = old.spinPaused ?? false;
+  view.simPaused = sim.paused;
   view.spinVel = old.spinVel ?? 0;
   view.zoom = old.zoom ?? 1;
   if (activeBody) view.setBody?.(activeBody);
@@ -1578,6 +1579,20 @@ function syncPlay() {
   b.textContent = sim.paused ? `▶  ${t('Play')}` : `❚❚  ${t('Pause')}`;
   b.classList.toggle('paused', sim.paused);
   b.title = t(sim.paused ? 'Resume the simulation (space)' : 'Pause the simulation (space)');
+  syncSpin();
+}
+
+// The main clock pause freezes the globe too, but it is a temporary override:
+// a user who separately paused rotation still has it paused after Play resumes.
+function syncSpin() {
+  view.simPaused = !!sim.paused;
+  const b = $('#btn-spin');
+  if (!b) return;
+  b.disabled = !!sim.paused;
+  b.setAttribute('aria-pressed', String(!!sim.paused || !!view.spinPaused));
+  b.title = t(sim.paused
+    ? 'Planet rotation is paused with the simulation'
+    : view.spinPaused ? 'Resume the planet’s rotation' : "Pause the planet's rotation");
 }
 
 function updateQualityButton() {
@@ -1911,19 +1926,19 @@ function bindControls() {
 
   $('#btn-spin').addEventListener('click', () => {
     view.spinPaused = !view.spinPaused;
-    $('#btn-spin').setAttribute('aria-pressed', String(view.spinPaused));
-    $('#btn-spin').title = t(view.spinPaused
-      ? 'Resume the planet’s rotation' : 'Pause the planet’s rotation');
+    syncSpin();
   });
   $('#btn-view').addEventListener('click', () => {
     view.yaw = 0; view.pitch = 0; view.spinVel = 0; view.zoom = 1;
     if (view.software) view.skyKey = '';
   });
-  updatePanButton();
-  $('#btn-pan').addEventListener('click', () => {
-    panSpeed = nextPanSpeed(panSpeed);
+  updatePanSelect();
+  $('#pan-speed').addEventListener('change', (e) => {
+    const selected = Number(e.currentTarget.value);
+    if (!PAN_SPEEDS.includes(selected)) { updatePanSelect(); return; }
+    panSpeed = selected;
     try { localStorage.setItem(PAN_KEY, String(panSpeed)); } catch { }
-    updatePanButton();
+    updatePanSelect();
     toast(`Panning speed ${panSpeed}×`);
   });
   // Cycle through every renderer, so each can be seen on any machine.
@@ -2273,7 +2288,7 @@ function relabel() {
   updateAtmoButton();
   updateQualityButton();
   updateGfxButton();
-  updatePanButton();
+  updatePanSelect();
   buildPresets();
   buildScenarios();
   setPresetActive(activePreset);
