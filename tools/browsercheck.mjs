@@ -138,15 +138,55 @@ try {
   const renderer = await evaluate('({ api: __app.view.api, software: __app.view.software, failed: __app.view.failed, diagnose: __app.diagnose() })');
   ok(!renderer.failed, 'Chrome has a live planet renderer', `${renderer.software ? 'CPU' : renderer.api} · ${version.product}`);
 
-  const initialPan = await evaluate("document.querySelector('#btn-pan').textContent.trim()");
-  ok(initialPan === '1×', 'Panning starts at the normal speed', initialPan);
-  const fastPan = await evaluate("document.querySelector('#btn-pan').click(); document.querySelector('#btn-pan').textContent.trim()");
-  ok(fastPan === '2×', 'The panning control cycles to fast', fastPan);
+  const pauseRotation = await evaluate(`(() => {
+    const play = document.querySelector('#btn-play');
+    const spin = document.querySelector('#btn-spin');
+    if (__app.sim.paused) play.click();
+    if (__app.view.spinPaused) spin.click();
+    __app.view.spin = 0;
+    play.click();
+    const disabledWhilePaused = spin.disabled;
+    const before = __app.view.spin;
+    __app.tick(1);
+    const whilePaused = __app.view.spin;
+    play.click();
+    __app.tick(1);
+    const afterResume = __app.view.spin;
+    spin.click();
+    const manualBefore = __app.view.spin;
+    play.click(); play.click();
+    __app.tick(1);
+    const manualAfter = __app.view.spin;
+    spin.click();
+    return { disabledWhilePaused, before, whilePaused, afterResume, manualBefore, manualAfter };
+  })()`);
+  ok(pauseRotation.disabledWhilePaused
+    && pauseRotation.whilePaused === pauseRotation.before
+    && pauseRotation.afterResume !== pauseRotation.whilePaused,
+    'Main Pause freezes visual rotation and Play resumes it');
+  ok(pauseRotation.manualAfter === pauseRotation.manualBefore,
+    'Main Pause preserves a manual rotation pause');
+
+  const panMenu = await evaluate(`(() => {
+    const s = document.querySelector('#pan-speed');
+    return s && { tag: s.tagName, value: s.value,
+      options: [...s.options].map((o) => o.value) };
+  })()`);
+  ok(panMenu?.tag === 'SELECT' && panMenu.value === '1'
+    && panMenu.options.join(',') === '0.5,1,2',
+    'Panning uses a directly selectable menu and defaults to normal',
+    panMenu ? `${panMenu.options.join('× · ')}×` : 'menu missing');
+  const slowPan = await evaluate(`(() => {
+    const s = document.querySelector('#pan-speed');
+    s.value = '0.5'; s.dispatchEvent(new Event('change', { bubbles: true }));
+    return s.value;
+  })()`);
+  ok(slowPan === '0.5', 'Slow panning can be selected directly', `${slowPan}×`);
   await call('Page.reload', { ignoreCache: true }, sessionId);
   await waitFor("document.readyState === 'complete' && !!window.__app?.view");
   await waitFor('window.__app.view.ready || window.__app.view.software', 30_000);
-  const persistedPan = await evaluate("document.querySelector('#btn-pan').textContent.trim()");
-  ok(persistedPan === '2×', 'Panning speed survives a reload', persistedPan);
+  const persistedPan = await evaluate("document.querySelector('#pan-speed').value");
+  ok(persistedPan === '0.5', 'Panning speed survives a reload', `${persistedPan}×`);
 
   const rect = await evaluate("(() => { const r = document.querySelector('#planet').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()");
   await evaluate('__app.view.zoom = 1');
@@ -163,9 +203,17 @@ try {
   const wheelIn = await evaluate('__app.view.zoom');
   ok(wheelOut > 1 && wheelIn < 1, 'Mouse-wheel direction matches maps and browsers', `out ${wheelOut.toFixed(3)}× · in ${wheelIn.toFixed(3)}×`);
 
-  await evaluate('__app.view.yaw = 0; __app.view.spinVel = 0');
+  await evaluate(`(() => {
+    const s = document.querySelector('#pan-speed');
+    s.value = '2'; s.dispatchEvent(new Event('change', { bubbles: true }));
+    __app.view.yaw = 0; __app.view.spinVel = 0;
+  })()`);
   const yawFast = await drag(rect, 50);
-  await evaluate("document.querySelector('#btn-pan').click(); __app.view.yaw = 0; __app.view.spinVel = 0");
+  await evaluate(`(() => {
+    const s = document.querySelector('#pan-speed');
+    s.value = '0.5'; s.dispatchEvent(new Event('change', { bubbles: true }));
+    __app.view.yaw = 0; __app.view.spinVel = 0;
+  })()`);
   const yawSlow = await drag(rect, 50);
   const panRatio = Math.abs(yawFast / yawSlow);
   // One animation frame may coast the fast drag before CDP reads it back, so

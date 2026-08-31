@@ -117,7 +117,11 @@
     <div id="view-controls">
       <button id="btn-spin" class="icon-btn" title="Pause the planet's rotation" aria-pressed="false">⟳</button>
       <button id="btn-view" class="icon-btn" title="Recentre the view">⌖</button>
-      <button id="btn-pan" class="icon-btn renderer-btn" title="Panning speed: 1×" aria-label="Panning speed: 1×">1×</button>
+      <select id="pan-speed" class="icon-btn renderer-btn pan-select" title="Panning speed: 1×" aria-label="Panning speed: 1×">
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+      </select>
       <button id="btn-gfx" class="icon-btn" title="Surface graphics" aria-pressed="true">🛰</button>
       <button id="btn-quality" class="icon-btn" title="Detail: high" aria-pressed="false">◆</button>
       <button id="btn-atmo" class="icon-btn" title="Atmosphere: stylised" aria-pressed="false">◍</button>

@@ -825,10 +825,14 @@ with every other planet's.
 ### Looking at it
 
 Drag to orbit the camera — the star, the terminator and the ice caps stay where they belong and you
-simply look from somewhere else. The **0.5× / 1× / 2×** view button cycles drag sensitivity and
-remembers it. **Scroll out to zoom out, scroll in to zoom in**, or pinch; double-click resets. Zoom moves the
+simply look from somewhere else. The **0.5× / 1× / 2×** selector chooses drag sensitivity directly
+and remembers it; 1× is the default. **Scroll out to zoom out, scroll in to zoom in**, or pinch; double-click resets. Zoom moves the
 camera rather than narrowing the lens, so the planet keeps its perspective and the atmosphere's limb
 still reads correctly; drag sensitivity also scales with camera distance.
+
+The main **Pause** control freezes the globe's automatic visual rotation as well as simulated time.
+Play continues it from the same longitude, unless the separate rotation button was already paused;
+that manual choice is preserved.
 
 **Axial tilt is drawn.** The spin axis leans by the obliquity and the whole planet leans with it —
 bands, ice caps and surface together — so the terminator cuts across the latitudes at an angle

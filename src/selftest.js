@@ -23,7 +23,7 @@ import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE, dynamo
          windExposure, nonThermalEscape, resurfacingBoost, resurfacingProgress,
          xuvAtAge } from './physics/evolution.js';
 import { bakeTerrain } from './render/cpushade.js';
-import { PAN_SPEEDS, nextPanSpeed, panRadiansPerPixel, wheelZoomFactor } from './render/camera.js';
+import { DEFAULT_PAN_SPEED, PAN_SPEEDS, panRadiansPerPixel, wheelZoomFactor } from './render/camera.js';
 
 let pass = 0, fail = 0;
 const log = [];
@@ -101,11 +101,11 @@ export function run() {
   check('Mouse-wheel zoom follows the usual direction',
     wheelZoomFactor(120) > 1 && wheelZoomFactor(-120) < 1,
     `wheel out ${wheelZoomFactor(120).toFixed(3)}× · wheel in ${wheelZoomFactor(-120).toFixed(3)}× camera distance`);
-  check('Panning offers slow, normal and fast persistent multipliers',
-    PAN_SPEEDS.join(',') === '0.5,1,2' && nextPanSpeed(0.5) === 1
-      && nextPanSpeed(1) === 2 && nextPanSpeed(2) === 0.5
+  check('Panning offers directly selectable slow, normal and fast multipliers',
+    PAN_SPEEDS.join(',') === '0.5,1,2' && DEFAULT_PAN_SPEED === 1
+      && near(panRadiansPerPixel(1, 0.5), 0.5 * panRadiansPerPixel(1, 1), 1e-12)
       && near(panRadiansPerPixel(1, 2), 2 * panRadiansPerPixel(1, 1), 1e-12),
-    `${PAN_SPEEDS.join('× · ')}×`);
+    `${PAN_SPEEDS.join('× · ')}× · ${DEFAULT_PAN_SPEED}× default`);
 
   check('The historical Moon and both Venus climate paths are available',
     !!PRESETS.earlyMoon && !!PRESETS.dryVenus,

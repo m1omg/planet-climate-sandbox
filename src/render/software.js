@@ -30,7 +30,7 @@ export class SoftwareView {
     this.quality = 'high';
     this.realistic = false;
     this.spin = 0; this.yaw = 0; this.pitch = 0; this.spinVel = 0; this.zoom = 1;
-    this.spinPaused = false;
+    this.spinPaused = false; this.simPaused = false;
     this.bakedSeed = null;
     this.terrain = null;
     this.accum = 0;
@@ -100,7 +100,7 @@ export class SoftwareView {
 
     const p = world.params, dg = world.diag;
     const lam = dg.lam;
-    const spinRate = this.spinPaused ? 0
+    const spinRate = (this.spinPaused || this.simPaused) ? 0
       : (1 - lam) * clamp(0.245 * Math.pow(24 / Math.max(p.rotationHours, 0.5), 0.35), 0.014, 0.63);
     this.spin = (this.spin + spinRate * dtReal) % (Math.PI * 2);
 

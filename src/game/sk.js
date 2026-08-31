@@ -54,6 +54,7 @@ export const SK = {
     'Pause the planet’s rotation': 'Zastaviť rotáciu planéty',
     "Pause the planet's rotation": 'Zastaviť rotáciu planéty',
     'Resume the planet’s rotation': 'Znova spustiť rotáciu planéty',
+    'Planet rotation is paused with the simulation': 'Rotácia planéty je zastavená spolu so simuláciou',
     'Recentre the view': 'Vycentrovať pohľad',
     'Panning speed: 0.5×': 'Rýchlosť otáčania pohľadu: 0,5×',
     'Panning speed: 1×': 'Rýchlosť otáčania pohľadu: 1×',
