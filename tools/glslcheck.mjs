@@ -4,6 +4,7 @@
 // mobile cannot silently creep back.
 import { parse } from '/home/mroz/.nvm/versions/node/v20.20.2/lib/node_modules/@shaderfrog/glsl-parser/parser/parser.js';
 import { readFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,38 @@ const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const read = (f) => readFileSync(join(root, 'src/render/glsl', f), 'utf8');
 const noise = read('noise.glsl');
 const splice = (src) => src.replace('//__NOISE__', noise);
+
+function readGrayPng(path) {
+  const png = readFileSync(path);
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+  const bitDepth = png[24], colourType = png[25], idat = [];
+  for (let o = 8; o < png.length;) {
+    const len = png.readUInt32BE(o), type = png.toString('ascii', o + 4, o + 8);
+    if (type === 'IDAT') idat.push(png.subarray(o + 8, o + 8 + len));
+    o += len + 12;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const chans = colourType === 0 ? 1 : colourType === 2 ? 3 : colourType === 4 ? 2 : 4;
+  const stride = width * chans * (bitDepth / 8), pixels = new Uint8Array(width * height);
+  const prior = new Uint8Array(stride), line = new Uint8Array(stride);
+  for (let y = 0, p = 0; y < height; y++) {
+    const ft = raw[p++];
+    for (let i = 0; i < stride; i++) {
+      const x = raw[p + i], a = i >= chans ? line[i - chans] : 0, b = prior[i];
+      const c = i >= chans ? prior[i - chans] : 0;
+      let v;
+      if (ft === 0) v = x; else if (ft === 1) v = x + a; else if (ft === 2) v = x + b;
+      else if (ft === 3) v = x + ((a + b) >> 1);
+      else { const pp = a + b - c, pa = Math.abs(pp-a), pb = Math.abs(pp-b), pc = Math.abs(pp-c);
+             v = x + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c); }
+      line[i] = v & 255;
+    }
+    p += stride;
+    for (let x = 0; x < width; x++) pixels[y * width + x] = line[x * chans];
+    prior.set(line);
+  }
+  return { width, height, pixels };
+}
 
 let failed = 0;
 const check = (name, src) => {
@@ -59,6 +92,57 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
     console.log('\x1b[31mFAIL\x1b[0m  a dry mapped Earth still paints the photograph\'s blue oceans on exposed ground');
   } else {
     console.log('\x1b[32mPASS\x1b[0m  mapped source oceans reveal modelled seabed when the sea retreats');
+  }
+
+  const narrowMappedCoasts = /BODY_COAST_LOW\s*=\s*-0\.002/.test(src)
+    && /BODY_COAST_HIGH\s*=\s*0\.003/.test(src)
+    && /smoothstep\s*\(\s*BODY_COAST_LOW\s*,\s*BODY_COAST_HIGH/.test(src);
+  if (!narrowMappedCoasts) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  mapped DEM coastlines still flood low continental plains');
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  mapped DEM coastlines use their measured narrow shoreline ramp');
+  }
+
+  const dynamicMappedCoasts = (src.match(
+    /land\s*=\s*mix\s*\(\s*land\s*,\s*bodyCoast\s*\(\s*h\s*\)/g) || []).length === 2;
+  if (!dynamicMappedCoasts) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  mapped coastlines are frozen to the photographed sea level');
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  mapped coastlines still move when the model floods or drains them');
+  }
+
+  const exactGlobalOcean = /float\s+floodLand\s*\(/.test(src)
+    && (src.match(/land\s*=\s*floodLand\s*\(\s*land\s*\)/g) || []).length === 2;
+  if (!exactGlobalOcean) {
+    failed++;
+    console.log('\x1b[31mFAIL\x1b[0m  a 100% ocean can leave quantile-clamped mountaintops exposed');
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  a 100% ocean draws no residual mapped or procedural land');
+  }
+
+  const { BODY_COAST_LOW, BODY_COAST_HIGH, seaLevelForLand } =
+    await import('../src/render/terrain.js');
+  const { width, height, pixels } = readGrayPng(join(root, '../assets/bodies/earth_height.png'));
+  const level = seaLevelForLand(0.30);
+  const ramp = (a, b, x) => { const q = Math.max(0, Math.min(1, (x-a)/(b-a))); return q*q*(3-2*q); };
+  let area = 0, narrow = 0, broad = 0;
+  for (let y = 0; y < height; y++) {
+    const weight = Math.sin((y + 0.5) / height * Math.PI);
+    for (let x = 0; x < width; x++) {
+      const h = 0.30 + 0.40 * pixels[y * width + x] / 255 - level;
+      area += weight;
+      narrow += weight * ramp(BODY_COAST_LOW, BODY_COAST_HIGH, h);
+      broad += weight * ramp(-0.010, 0.026, h);
+    }
+  }
+  narrow /= area; broad /= area;
+  if (Math.abs(narrow - 0.30) >= 0.01 || broad >= narrow - 0.025) {
+    failed++;
+    console.log(`\x1b[31mFAIL\x1b[0m  Earth DEM shoreline area ${100*narrow}% narrow, ${100*broad}% broad`);
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  Earth DEM keeps ${(100*narrow).toFixed(1)}% effective land (broad ramp flooded it to ${(100*broad).toFixed(1)}%)`);
   }
 
   // Vegetation is a stellar-spectrum colour, not a permanently green texture.

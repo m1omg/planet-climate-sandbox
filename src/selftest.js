@@ -20,8 +20,10 @@ import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
 import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B, vegetationColor,
          SOLAR_VEGETATION, stellarVegetation } from './render/terrain.js';
 import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE, dynamoLifetime,
-         windExposure, nonThermalEscape, resurfacingBoost, xuvAtAge } from './physics/evolution.js';
+         windExposure, nonThermalEscape, resurfacingBoost, resurfacingProgress,
+         xuvAtAge } from './physics/evolution.js';
 import { bakeTerrain } from './render/cpushade.js';
+import { PAN_SPEEDS, nextPanSpeed, panRadiansPerPixel, wheelZoomFactor } from './render/camera.js';
 
 let pass = 0, fail = 0;
 const log = [];
@@ -95,6 +97,36 @@ export function run() {
       && moon.params.rotationHours > 655 && moon.params.rotationHours < 656
       && classify(moon).id === 'airless',
     `${moon.params.mass} M⊕, ${moon.params.rotationHours.toFixed(2)} h day, ${classify(moon).name}`);
+
+  check('Mouse-wheel zoom follows the usual direction',
+    wheelZoomFactor(120) > 1 && wheelZoomFactor(-120) < 1,
+    `wheel out ${wheelZoomFactor(120).toFixed(3)}× · wheel in ${wheelZoomFactor(-120).toFixed(3)}× camera distance`);
+  check('Panning offers slow, normal and fast persistent multipliers',
+    PAN_SPEEDS.join(',') === '0.5,1,2' && nextPanSpeed(0.5) === 1
+      && nextPanSpeed(1) === 2 && nextPanSpeed(2) === 0.5
+      && near(panRadiansPerPixel(1, 2), 2 * panRadiansPerPixel(1, 1), 1e-12),
+    `${PAN_SPEEDS.join('× · ')}×`);
+
+  check('The historical Moon and both Venus climate paths are available',
+    !!PRESETS.earlyMoon && !!PRESETS.dryVenus,
+    `early Moon ${PRESETS.earlyMoon ? 'present' : 'missing'} · dry Venus ${PRESETS.dryVenus ? 'present' : 'missing'}`);
+
+  if (PRESETS.earlyMoon) {
+    const lunar = new Simulation({ ...PRESETS.earlyMoon.params });
+    lunar.runYears(1e6, 1e5);
+    const p1 = lunar.world.diag.pTotMean;
+    lunar.runYears(69e6, 5e5);
+    check('Ancient lunar volcanism makes a thin, transient atmosphere',
+      PRESETS.earlyMoon.params.n2Bar >= 0.008 && PRESETS.earlyMoon.params.n2Bar <= 0.012
+        && PRESETS.earlyMoon.params.water >= 0.36e-7
+        && PRESETS.earlyMoon.params.water <= 1.86e-7
+        && p1 > 0.005 && lunar.world.diag.pTotMean < 0.001
+        && lunar.world.diag.totalWater > 1e-7,
+      `${(PRESETS.earlyMoon.params.n2Bar * 1000).toFixed(0)} mbar initially · `
+      + `${(p1 * 1000).toFixed(1)} mbar at 1 Myr · `
+      + `${(lunar.world.diag.pTotMean * 1000).toFixed(2)} mbar at 70 Myr · `
+      + `${lunar.world.diag.totalWater.toExponential(2)} EO water retained`);
+  }
 
   // Campbell's one-atmosphere alien-plant predictions are deliberately not a
   // simple warm/cool hue ramp. Pin the distinctive anchors, and the important
@@ -172,7 +204,10 @@ export function run() {
     const sun = settle(PRESETS.hotStar.params, 1e8).world;
     check('A hot ocean can be made by its air or by its star, at the same temperature',
       Math.abs(co2.diag.Tmean - sun.diag.Tmean) < 3
-        && co2.diag.Tmean > 305 && co2.water.ocean > 0.9 && sun.water.ocean > 0.9,
+        && co2.diag.Tmean > 320 && co2.water.ocean > 0.9 && sun.water.ocean > 0.9
+        && PRESETS.hotCarbon.params.landFraction === 0
+        && PRESETS.hotStar.params.landFraction === 0
+        && co2.diag.flooded > 0.995 && sun.diag.flooded > 0.995,
       `CO₂-heated ${(co2.diag.Tmean - 273.15).toFixed(1)} °C at ${co2.diag.pCO2.toFixed(4)} bar · ` +
       `star-heated ${(sun.diag.Tmean - 273.15).toFixed(1)} °C at ` +
       `${(sun.diag.pCO2 * 1e6).toFixed(2)} ppm`);
@@ -973,8 +1008,8 @@ export function run() {
       // …and every world whose interior is a real one runs it. A preset or a
       // scenario that quietly holds its interior still for a billion years is
       // the one place this model would be lying about time.
-      const REAL = ['earth', 'moon', 'preindustrial', 'venus', 'mars', 'titan', 'earlyEarth',
-                    'earlyVenus', 'earlyMars', 'futureEarth',
+      const REAL = ['earth', 'moon', 'earlyMoon', 'preindustrial', 'venus', 'mars', 'titan', 'earlyEarth',
+                    'earlyVenus', 'dryVenus', 'earlyMars', 'futureEarth',
                     'trappist1b', 'trappist1e', 'gj1132b'];
       const noDecay = REAL.filter((k) => !PRESETS[k].params.realisticGeology);
       const flatScenarios = SCENARIOS.filter((s) => !s.params.realisticGeology);
@@ -1225,8 +1260,8 @@ export function run() {
       // run starts, which never fires and gives the interface no way to say so.
       // Elapsed time has no such value. Every argument this function can be
       // given, from a world's first instant onward, is one it can still reach.
-      // Exactly one preset ships with the event armed, and it is the one the
-      // event belongs to. Modern Venus in particular must not: it starts at an
+      // Exactly the two historical Venus paths ship with the event armed.
+      // Modern Venus in particular must not: it starts at an
       // age of 4.567, which is 715 Myr *after* the repaving happened, so an
       // armed pulse there would be a second resurfacing the planet never had.
       // Its mantle carbon is already in its atmosphere -- that is what the 88
@@ -1234,12 +1269,12 @@ export function run() {
       {
         const armed = Object.entries(PRESETS).filter(([, v]) =>
           v.params.resurfacingAge > 0 && v.params.resurfacingBoost > 1);
-        check('Only Early Venus ships with a resurfacing event armed',
-          armed.length === 1 && armed[0][0] === 'earlyVenus'
+        check('Only the two Venus histories ship with a resurfacing event armed',
+          armed.length === 2 && armed.some(([k]) => k === 'earlyVenus')
+            && armed.some(([k]) => k === 'dryVenus')
             && PRESETS.venus.params.resurfacingAge === 0
             && PRESETS.venus.params.resurfacingBoost === 1,
-          armed.length === 1 ? `${armed[0][0]}, and nothing else`
-            : `armed on ${armed.map(([k]) => k).join(', ')}`);
+          `armed on ${armed.map(([k]) => k).join(', ')}`);
       }
 
       check('\u2026and it is placed ahead of the clock, never behind it',
@@ -1270,11 +1305,41 @@ export function run() {
         const left = vw.water.ocean + vw.water.seaIce + vw.water.landIce + vw.water.vapour;
         const pH2O = vw.diag.pH2O.reduce((a, b) => a + b, 0) / vw.diag.pH2O.length;
         check('Early Venus arrives at the present day as the Venus we have',
-          Math.abs(vw.diag.Tmean - 737) < 70 && Math.abs(vw.diag.pTotMean - 92) < 15
-            && pH2O < 0.5,
+          Math.abs(vw.diag.Tmean - 737) < 8 && Math.abs(vw.diag.pTotMean - 92) < 3
+            && vw.diag.pCO2 > 86 && vw.diag.pCO2 < 91
+            && vw.diag.pN2 > 3.2 && vw.diag.pN2 < 3.8
+            && vw.diag.pO2 < 0.05 && pH2O < 0.01,
           `${vw.diag.Tmean.toFixed(0)} K (737), ${vw.diag.pTotMean.toFixed(1)} bar (92), ` +
-          `${pH2O.toExponential(1)} bar of water (0.003), ${left.toExponential(2)} EO left`);
+          `${vw.diag.pCO2.toFixed(1)} bar CO₂, ${vw.diag.pN2.toFixed(2)} bar N₂, ` +
+          `${vw.diag.pO2.toExponential(1)} bar O₂, ${pH2O.toExponential(1)} bar H₂O, ` +
+          `${left.toExponential(2)} EO left`);
       }
+
+      if (PRESETS.dryVenus) {
+        const sim = new Simulation({ ...PRESETS.dryVenus.params });
+        const vw = sim.world;
+        const span = (4.567 - PRESETS.dryVenus.params.startAge) * 1e9;
+        let maxOcean = vw.water.ocean;
+        while (vw.time < span) {
+          sim.stepOnce(Math.min(maxStep(vw), 5e6, span - vw.time));
+          maxOcean = Math.max(maxOcean, vw.water.ocean);
+        }
+        const pH2O = vw.diag.pH2O.reduce((a, b) => a + b, 0) / vw.diag.pH2O.length;
+        check('Never-Wet Venus never condenses an ocean and still arrives at modern Venus',
+          maxOcean < 1e-10 && Math.abs(vw.diag.Tmean - 737) < 8
+            && Math.abs(vw.diag.pTotMean - 92) < 3
+            && vw.diag.pCO2 > 86 && vw.diag.pCO2 < 91
+            && vw.diag.pN2 > 3.2 && vw.diag.pN2 < 3.8
+            && vw.diag.pO2 < 0.05 && pH2O < 0.01,
+          `${maxOcean.toExponential(1)} EO maximum ocean · ${vw.diag.Tmean.toFixed(0)} K · `
+          + `${vw.diag.pTotMean.toFixed(1)} bar = ${vw.diag.pCO2.toFixed(1)} CO₂ + `
+          + `${vw.diag.pN2.toFixed(2)} N₂ + ${vw.diag.pO2.toExponential(1)} O₂`);
+      }
+
+      check('Resurfacing delivery is an exact cumulative ledger',
+        resurfacingProgress(PRESETS.earlyVenus.params, 0) === 0
+          && resurfacingProgress(PRESETS.earlyVenus.params, 10) === 1,
+        '0 before the pulse, 1 after it');
     }
 
     // Smoothing turns a slider into a destination. It exists because of the
@@ -3156,8 +3221,8 @@ export function run() {
         return sim.world;
       });
       const bad = [];
-      for (const id of ['earth', 'moon', 'preindustrial', 'venus', 'mars', 'earlyEarth',
-                        'earlyVenus', 'earlyMars', 'snowball', 'dune', 'eyeball',
+      for (const id of ['earth', 'moon', 'earlyMoon', 'preindustrial', 'venus', 'mars', 'earlyEarth',
+                        'earlyVenus', 'dryVenus', 'earlyMars', 'snowball', 'dune', 'eyeball',
                         'waterworld', 'titan', 'trappist1b', 'trappist1e',
                         'gj1132b', 'superEarth']) {
         const [a, b] = both(id);
@@ -3171,7 +3236,7 @@ export function run() {
       check('Fast physics lands on the same climate as exact physics',
         bad.length === 0,
         bad.length ? bad.join(', ')
-          : '17 presets, same state and within 5 K after 20 Myr');
+          : '19 presets, same state and within 5 K after 20 Myr');
     }
 
     // Every stop has to be a value its own slider can actually hold.

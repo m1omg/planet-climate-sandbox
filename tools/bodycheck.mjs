@@ -10,6 +10,7 @@
 // derive the height separately and a body map that only moved one of them would
 // slide the shoreline as you toggled.
 import { readFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -42,9 +43,47 @@ const check = (name, ok, detail = '') => {
   if (!ok) failed++;
 };
 
+// Minimal grayscale-PNG read: IHDR for the size, then inflate and un-filter.
+// The checked-in planetary DEMs are all 8-bit and use only their first channel.
+function readGrayPng(url) {
+  const png = readFileSync(url);
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+  const bitDepth = png[24], colourType = png[25];
+  const idat = [];
+  for (let o = 8; o < png.length;) {
+    const len = png.readUInt32BE(o), type = png.toString('ascii', o + 4, o + 8);
+    if (type === 'IDAT') idat.push(png.subarray(o + 8, o + 8 + len));
+    o += len + 12;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const chans = colourType === 0 ? 1 : colourType === 2 ? 3 : colourType === 4 ? 2 : 4;
+  const stride = width * chans * (bitDepth / 8);
+  const pixels = new Uint8Array(width * height);
+  const prior = new Uint8Array(stride), line = new Uint8Array(stride);
+  for (let y = 0, p = 0; y < height; y++) {
+    const ft = raw[p++];
+    for (let i = 0; i < stride; i++) {
+      const x = raw[p + i], a = i >= chans ? line[i - chans] : 0, b = prior[i];
+      const c = i >= chans ? prior[i - chans] : 0;
+      let v;
+      if (ft === 0) v = x; else if (ft === 1) v = x + a; else if (ft === 2) v = x + b;
+      else if (ft === 3) v = x + ((a + b) >> 1);
+      else { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
+             v = x + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c); }
+      line[i] = v & 255;
+    }
+    p += stride;
+    for (let x = 0; x < width; x++) pixels[y * width + x] = line[x * chans];
+    prior.set(line);
+  }
+  return { width, height, pixels };
+}
+
 const { PlanetView } = await import(pathToFileURL(join(root, 'src/render/planet.js')).href);
 const { createWorld, update } = await import(pathToFileURL(join(root, 'src/physics/climate.js')).href);
 const { EARTH } = await import(pathToFileURL(join(root, 'src/game/presets.js')).href);
+const { BODY_COAST_LOW, BODY_COAST_HIGH, seaLevelForLand } =
+  await import(pathToFileURL(join(root, 'src/render/terrain.js')).href);
 
 const view = new PlanetView(canvas, 'webgl1');
 check('the body-map path is compiled in', view.bodyCapable === true,
@@ -185,6 +224,35 @@ check('…and reaches both of them about equally',
     `${(moved * 100).toFixed(0)}% of a Venus-like planet changes when the map is switched on`);
 }
 
+// Earth's DEM is already resolved to a real shoreline. The old procedural
+// 0.036-wide blend painted low plains as water and reduced 30% mapped land to
+// about 25%. Check the actual checked-in asset, with spherical area weighting,
+// so merely changing a shader token cannot pass this regression.
+{
+  const { width, height, pixels } =
+    readGrayPng(new URL('../../assets/bodies/earth_height.png', import.meta.url));
+  const level = seaLevelForLand(0.30);
+  const ramp = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  let area = 0, narrow = 0, broad = 0;
+  for (let y = 0; y < height; y++) {
+    const weight = Math.sin((y + 0.5) / height * Math.PI);
+    for (let x = 0; x < width; x++) {
+      const h = 0.30 + 0.40 * pixels[y * width + x] / 255 - level;
+      area += weight;
+      narrow += weight * ramp(BODY_COAST_LOW, BODY_COAST_HIGH, h);
+      broad += weight * ramp(-0.010, 0.026, h);
+    }
+  }
+  narrow /= area; broad /= area;
+  check('Earth’s mapped shoreline preserves its continental area',
+    Math.abs(narrow - 0.30) < 0.01 && broad < narrow - 0.025,
+    `${(narrow * 100).toFixed(1)}% effective land with mapped ramp; `
+    + `${(broad * 100).toFixed(1)}% with the flooding-prone procedural ramp`);
+}
+
 // Mars's DEM has to be Mars, in the right place, the right way up.
 //
 // A height map that is rolled, flipped or simply someone else's planet passes
@@ -196,40 +264,8 @@ check('…and reaches both of them about equally',
 // hypothesis argues for -- and leave the southern highlands dry. That falls out
 // of the real hypsometry and out of nothing else.
 {
-  const { readFileSync } = await import('node:fs');
-  const png = readFileSync(new URL('../../assets/bodies/mars_height.png', import.meta.url));
-  // Minimal grayscale-PNG read: IHDR for the size, then inflate and un-filter.
-  const { inflateSync } = await import('node:zlib');
-  const W2 = png.readUInt32BE(16), H2 = png.readUInt32BE(20);
-  const bitDepth = png[24], colourType = png[25];
-  let idat = [];
-  for (let o = 8; o < png.length;) {
-    const len = png.readUInt32BE(o), type = png.toString('ascii', o + 4, o + 8);
-    if (type === 'IDAT') idat.push(png.subarray(o + 8, o + 8 + len));
-    o += len + 12;
-  }
-  const raw = inflateSync(Buffer.concat(idat));
-  const chans = colourType === 0 ? 1 : colourType === 2 ? 3 : colourType === 4 ? 2 : 4;
-  const stride = W2 * chans * (bitDepth / 8);
-  const img = new Uint8Array(W2 * H2);
-  const prior = new Uint8Array(stride), line = new Uint8Array(stride);
-  for (let y = 0, p2 = 0; y < H2; y++) {
-    const ft = raw[p2++];
-    for (let i = 0; i < stride; i++) {
-      const x = raw[p2 + i];
-      const a = i >= chans ? line[i - chans] : 0, b = prior[i];
-      const c = i >= chans ? prior[i - chans] : 0;
-      let v;
-      if (ft === 0) v = x; else if (ft === 1) v = x + a; else if (ft === 2) v = x + b;
-      else if (ft === 3) v = x + ((a + b) >> 1);
-      else { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
-             v = x + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c); }
-      line[i] = v & 255;
-    }
-    p2 += stride;
-    for (let x = 0; x < W2; x++) img[y * W2 + x] = line[x * chans];
-    prior.set(line);
-  }
+  const { width: W2, height: H2, pixels: img } =
+    readGrayPng(new URL('../../assets/bodies/mars_height.png', import.meta.url));
   // Flood the lowest 30% by area, which is Noachian Mars's own land fraction.
   const area = new Float64Array(H2);
   for (let y = 0; y < H2; y++) area[y] = Math.sin((y + 0.5) / H2 * Math.PI);

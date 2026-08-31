@@ -489,6 +489,12 @@ Kansas, the Amazon, mid-Pacific, Antarctica and the rest — on the right side o
 the map keeps its bathymetry (70% of the globe spread across the sub-sea levels, not clipped flat),
 **sea level really moves**: drain the oceans and the continental shelves appear.
 
+Mapped topography uses a much narrower shoreline blend than invented terrain. The procedural ramp
+made smooth fictional coasts, but on Earth's resolved DEM it blended too wide a band and reduced a
+30.0% mapped-land target to 25.2%, visually flooding low plains as soon as the clock moved. The
+measured mapped ramp preserves **29.7% effective land**, while still following the simulated sea
+level as a planet dries or floods; the broad ramp remains only on procedural worlds.
+
 The photograph's ocean is not treated as permanent blue paint. Its reference shoreline is recovered
 from the same DEM; wherever the simulated sea has retreated below it, the renderer reveals modelled
 dark seabed instead. This is why a zero-ocean Earth no longer keeps blue copies of the Indian and
@@ -529,11 +535,18 @@ seed. Almost everything on that map is older than the epoch — the crustal dich
 and the whole cratered southern highlands are Noachian-aged — so the shape is right and the rust is
 the caveat, being billions of years of oxidation this world has not had yet.
 
-**Early Venus and the Archean deliberately get no map**, for the same reason in both cases: the real
+**Both early Venuses and the Archean deliberately get no map**, for the same reason: the real
 surface is *younger than the preset*. Every feature on the Magellan map post-dates Venus's global
 resurfacing 715 Myr ago, which that world has not reached yet and may never; and the Archean had
 perhaps a tenth of today's continental area, nowhere near where the coastlines are now. A procedural
 world is honest about not knowing. Earth's map on an Archean planet would be a claim, and a false one.
+
+**Ancient Moon** does use the lunar mosaic. The broad maria were being emplaced during the preset's
+epoch, so the present map is an orientation aid rather than a claim that every lava flow already
+existed. Needham & Kring's eruption inventory supplies 0.01 bar of CO/S-dominated gas and
+1.5×10⁻⁷ Earth oceans of water. Because this model has no CO or sulfur reservoir, radiatively weak
+N₂ is labelled as an explicit proxy; its escape multiplier is fitted to the paper's roughly 70 Myr
+atmospheric lifetime, while most of the tiny water inventory survives as cold-trapped ice.
 
 #### Three that are not in this solar system
 
@@ -569,17 +582,17 @@ still have their seas:
 
 | heated by | starlight | volcanism | equilibrium CO₂ | surface |
 |---|---|---|---|---|
-| **its own air** | 1.00 S⊕ | 20× | **0.0563 bar** | 37.3 °C |
-| **its star** | 1.28 S⊕ | 1× | **2.22 ppm** | 37.4 °C |
+| **its own air** | 1.000 S⊕ | 4.5× | **0.091 bar** | 49.5 °C |
+| **its star** | 1.256 S⊕ | 0× | **~0 ppm** | 49.0 °C |
 
-A tenth of a degree apart, **twenty-five thousand times** apart in carbon dioxide — and the second
-world is running on *a hundred and twenty times less* CO₂ than pre-industrial Earth. That is the
+Half a degree apart and effectively all the carbon dioxide on the first world. Both also set basin
+geometry to zero: these presets are global oceans, not Earth-shaped continents under a misleading
+name. That is the
 carbonate–silicate thermostat seen from both sides. Heat a planet from outside and it weathers
 faster, strips its own greenhouse away, and bakes anyway; heat one from inside and the greenhouse
-has to be erupted back continuously or the planet cools. Which is also why the first one needs the
-outgassing slider at its **ceiling**: the thermostat is strong, 8× Earth's volcanism buys only 29 °C,
-and a sea at bath temperature is genuinely hard to build out of carbon. Earth is not one nudge away
-from this.
+has to be erupted back continuously or the planet cools. With no continents, seafloor weathering is
+the first world's only carbon thermostat; 4.5× volcanism holds it near 50 °C without exhausting the
+finite mantle reservoir during the checked 100 Myr run.
 
 **Over the Edge** is that second world with the star turned up until there is no equilibrium left,
 and the edge turns out to be **one part in thirteen hundred**:
@@ -630,17 +643,27 @@ two stars — or, as it turns out, for one star at two different ages. "Hold Bac
 star that brightens 26%/Gyr and used to be *given* one; it is now an F at 6500 K, 2.75 Gyr old, which
 **has** one.
 
-### Two worlds tuned by where they end, not where they start
+### Three worlds tuned by where they end, not where they start
 
-Early Venus and Noachian Mars are the two presets whose endpoints are observations, and both are now
+The two early Venus paths and Noachian Mars are presets whose endpoints are observations, and all are
 pinned by the run rather than by the setting.
 
-Venus arrives at **739 K under 93.2 bar with no water in it**, against the 737 K, 92 bar and 30 ppm
+The ocean-bearing Early Venus arrives at **738 K under 92.1 bar with no water in it**, against the 737 K, 92 bar and 30 ppm
 the planet has. Getting there took two corrections. Its insolation is 1.524 rather than Way's 1.40,
 for the same reason the Archean carries 0.77 — a world that starts at an age of 1.67 Gyr and runs to
 the present has to *arrive* at the 1.911 S⊕ Venus gets. And the cold trap had to be allowed to fail:
 see the escape bullet above. It stays habitable at 26 °C until 3.67 Gyr, boils at 3.80, and is dry by
 4.42 — which is Way's timeline, not an imposed one.
+
+**Never-Wet Venus** is the alternative hot-start history rather than a replacement for Way's.
+Turbet et al. (2021) found in a 3-D GCM that an initially steamy Venus forms nightside water clouds
+with a net warming effect, preventing ocean condensation even under the faint young Sun.
+Constantinou, Shorttle & Rimmer (2024) approach the question from modern atmospheric chemistry and
+find Venusian volcanic gas at most 6% water, consistent with a mantle desiccated during an
+approximately 100 Myr magma-ocean epoch. The preset therefore begins at 0.1 Gyr with 0.06 Earth
+oceans entirely as steam, never seeds an ocean, and follows dry secondary outgassing. At 4.567 Gyr
+it reaches **737 K and 92.0 bar: 88.5 bar CO₂, 3.51 bar N₂, no residual O₂ or ocean**. This zonal
+sandbox represents the constrained history; it does not claim to reproduce Turbet's 3-D clouds.
 
 Noachian Mars arrives at **5.8 mbar and −69 °C** against 6.0 mbar and −63 °C, with outgassing at 0.14
 of Earth's. 0.2 left it at 11 mbar, twice as thick as the planet out there.
@@ -802,10 +825,10 @@ with every other planet's.
 ### Looking at it
 
 Drag to orbit the camera — the star, the terminator and the ice caps stay where they belong and you
-simply look from somewhere else. **Scroll or pinch to zoom**, double-click to reset. Zoom moves the
+simply look from somewhere else. The **0.5× / 1× / 2×** view button cycles drag sensitivity and
+remembers it. **Scroll out to zoom out, scroll in to zoom in**, or pinch; double-click resets. Zoom moves the
 camera rather than narrowing the lens, so the planet keeps its perspective and the atmosphere's limb
-still reads correctly; drag sensitivity scales with it, so the surface moves the same distance under
-your finger however close you are.
+still reads correctly; drag sensitivity also scales with camera distance.
 
 **Axial tilt is drawn.** The spin axis leans by the obliquity and the whole planet leans with it —
 bands, ice caps and surface together — so the terminator cuts across the latitudes at an angle
@@ -940,7 +963,7 @@ test pins it.
 ### An interior is not a constant, and tidal heat is not radiogenic heat
 
 **Every real world and every scenario now runs with the interior ageing** — `realisticGeology` on by
-default, for Earth, Venus, Mars, Titan, the Archean, Early Venus, Noachian Mars, Earth +1 Gyr, all
+default, for Earth, both Moons, Venus, Mars, Titan, the Archean, both early Venuses, Noachian Mars, Earth +1 Gyr, all
 three exoplanets and all eight scenarios. Radiogenic heat falls with the potassium, thorium and
 uranium that make it — Earth's interior ran at three times today's flux when it was half a billion
 years old — and because outgassing goes as `√(F/F_earth)`, the volcanoes come down with it without
@@ -1977,7 +2000,10 @@ obliquity resists glaciation) · Turbet et al. 2018 (TRAPPIST-1 climates and vol
 et al. 2021 (TRAPPIST-1 masses, radii and insolations) · Bonfils et al. 2018 (GJ 1132 b) · Greene et
 al. 2023 (TRAPPIST-1b's 503 K dayside, and no atmosphere) · Joshi, Haberle & Reynolds 1997,
 Wordsworth 2015, Koll & Abbot 2016 (night-side cold traps and atmospheric collapse on tidally locked
-planets) · Draper 1847 (the temperature at which solids begin to glow visibly).
+planets) · Turbet et al. 2021 (nightside-cloud warming and inhibited early Venus oceans) ·
+Constantinou, Shorttle & Rimmer 2024 (dry Venusian interior from volcanic-gas chemistry) · Needham &
+Kring 2017 (transient ancient lunar atmosphere and water inventory) · Draper 1847 (the temperature
+at which solids begin to glow visibly).
 
 ## Licence
 

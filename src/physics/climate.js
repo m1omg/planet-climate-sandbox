@@ -106,7 +106,9 @@ export function resetWorld(w, params) {
   w.ch4 = params.ch4Bar * 1e5 / d.g;
   w.o2 = (params.o2Bar ?? 0) * 1e5 / d.g;
   w.co2Frozen = 0;
-  w.water = { ocean: params.water, seaIce: 0, landIce: 0, vapour: 0, lost: 0 };
+  w.water = params.startWithSteam
+    ? { ocean: 0, seaIce: 0, landIce: 0, vapour: params.water, lost: 0 }
+    : { ocean: params.water, seaIce: 0, landIce: 0, vapour: 0, lost: 0 };
   // The inventory the world started with. The `water` control tracks what is
   // left, so charts and classification need this as a fixed reference.
   w.waterInitial = params.water;

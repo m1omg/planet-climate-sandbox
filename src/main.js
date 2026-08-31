@@ -11,6 +11,7 @@ import { runawayLimit, iceFraction } from './physics/radiation.js';
 import { NBANDS, lockFactor, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
+import { PAN_SPEEDS, nextPanSpeed, wheelZoomFactor, panRadiansPerPixel } from './render/camera.js';
 import { SoftwareView } from './render/software.js';
 import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, profileBandAtX } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
@@ -61,6 +62,23 @@ const discovered = loadDiscovered();
 // hardware that still struggles, and it is remembered between visits.
 const QUALITY_KEY = `${NS}.quality.v1`;
 const ATMO_KEY = `${NS}.atmosphere.v1`;
+const PAN_KEY = `${NS}.panSpeed.v1`;
+
+function panSpeedPref() {
+  try {
+    const value = Number(localStorage.getItem(PAN_KEY));
+    return PAN_SPEEDS.includes(value) ? value : 1;
+  } catch { return 1; }
+}
+let panSpeed = panSpeedPref();
+
+function updatePanButton() {
+  const b = $('#btn-pan');
+  if (!b) return;
+  b.textContent = `${panSpeed}×`;
+  b.title = t(`Panning speed: ${panSpeed}×`);
+  b.setAttribute('aria-label', b.title);
+}
 
 // Stylised by default. A real atmosphere is a hairline -- Earth's is 0.7% of its
 // radius -- and the whole point of the app is watching one change, so the
@@ -1901,6 +1919,13 @@ function bindControls() {
     view.yaw = 0; view.pitch = 0; view.spinVel = 0; view.zoom = 1;
     if (view.software) view.skyKey = '';
   });
+  updatePanButton();
+  $('#btn-pan').addEventListener('click', () => {
+    panSpeed = nextPanSpeed(panSpeed);
+    try { localStorage.setItem(PAN_KEY, String(panSpeed)); } catch { }
+    updatePanButton();
+    toast(`Panning speed ${panSpeed}×`);
+  });
   // Cycle through every renderer, so each can be seen on any machine.
   const RENDER_ORDER = ['gl2', 'gl1', 'software'];
   const LABELS = {
@@ -2069,7 +2094,7 @@ function bindPlanetDrag() {
     moved += Math.abs(dx) + Math.abs(dy);
     // Dragging should move the planet the same distance under the finger
     // whatever the zoom, so the sensitivity scales with how close you are.
-    const k = 0.0075 * clamp(view.zoom ?? 1, MIN_ZOOM, MAX_ZOOM);
+    const k = panRadiansPerPixel(view.zoom, panSpeed, MIN_ZOOM, MAX_ZOOM);
     view.yaw += dx * k;
     view.pitch = clamp(view.pitch + dy * k, -1.45, 1.45);   // keep the poles reachable, not flippable
     const now = performance.now();
@@ -2096,9 +2121,7 @@ function bindPlanetDrag() {
   // The wheel zooms. passive:false because the page must not scroll instead.
   cv.addEventListener('wheel', (e) => {
     e.preventDefault();
-    // Normalise the three deltaMode units so a trackpad and a mouse behave.
-    const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
-    applyZoom(Math.exp(-clamp(px, -240, 240) * 0.0016), true);
+    applyZoom(wheelZoomFactor(e.deltaY, e.deltaMode), true);
   }, { passive: false });
 
   cv.addEventListener('dblclick', () => { view.zoom = 1; if (view.software) view.skyKey = ''; });
@@ -2250,6 +2273,7 @@ function relabel() {
   updateAtmoButton();
   updateQualityButton();
   updateGfxButton();
+  updatePanButton();
   buildPresets();
   buildScenarios();
   setPresetActive(activePreset);

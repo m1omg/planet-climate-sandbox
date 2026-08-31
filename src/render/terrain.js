@@ -19,6 +19,13 @@
 // rescaled all of them.
 export const TERRAIN_MEAN = 0.4972, TERRAIN_SD = 0.05313;
 
+// A mapped DEM already contains a resolved shoreline. The procedural terrain's
+// broad ramp looks pleasant on invented worlds, but on Earth's DEM it blends
+// too wide a band and paints low continental plains blue. Measured against
+// earth_height.png, it reduces a 30% mapped-land target to 25.2%; this narrow
+// ramp preserves 29.7% effective land.
+export const BODY_COAST_LOW = -0.002, BODY_COAST_HIGH = 0.003;
+
 // Inverse normal CDF (Acklam's rational approximation, ~1e-9 absolute).
 export function probit(p) {
   if (!(p > 0)) return -Infinity;

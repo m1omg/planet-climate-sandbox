@@ -3,7 +3,7 @@ import {
   OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH, M_EARTH,
 } from './constants.js';
 import { iceFraction } from './radiation.js';
-import { nonThermalEscape } from './evolution.js';
+import { nonThermalEscape, resurfacingProgress } from './evolution.js';
 import { stepLife } from './biosphere.js';
 import { outgassingScale, radiusFromMass } from './planet.js';
 import { NBANDS } from './climate.js';
@@ -514,18 +514,19 @@ export function escapeRates(w) {
   const inflate = clamp(1 + 60 * H / d.R, 1, 2.2);
   const energy = 0.15 * xuv * Math.pow(inflate, 3) / (dg.g * d.R) * YEAR;
 
-  const water = Math.min(diffusion, energy) * (dg.totalWater > 0 ? 1 : 0);
+  const escapeScale = clamp(p.escapeScale ?? 1, 0, 100);
+  const water = Math.min(diffusion, energy) * (dg.totalWater > 0 ? 1 : 0) * escapeScale;
 
   // Background gas loss. Gated on the cosmic shoreline: XUV irradiation has to
   // overcome gravitational binding (~ v_esc^4) before N2/CO2 go anywhere.
   const vescRel = d.vesc / 11186;
   const fCrit = 1.15e-3 * Math.pow(vescRel, 4) * 30;
   const gate = smoothstep(0.3, 3, xuv / Math.max(fCrit, 1e-12));
-  const background = 0.005 * xuv / (dg.g * d.R) * YEAR * gate;
+  const background = 0.005 * xuv / (dg.g * d.R) * YEAR * gate * escapeScale;
 
   // ...and the channel that has no threshold at all: the solar wind stripping
   // ions off whatever the magnetosphere does not cover. See nonThermalEscape.
-  const nonThermal = nonThermalEscape(p, d, xuv, pTot);
+  const nonThermal = nonThermalEscape(p, d, xuv, pTot) * escapeScale;
 
   return { water, background, nonThermal, fStrat, Tct, diffusion, energy, xSteam };
 }
@@ -717,6 +718,14 @@ export function stepVolatiles(w, dtYears) {
   stepLife(w, dtYears);
 
   const p = w.params, dg = w.diag, d = dg.d;
+  // Venus's resurfacing supplied the secondary N2 atmosphere as well as CO2.
+  // Integrating a cumulative progress curve makes the delivered bar exact even
+  // when maxStep changes by orders of magnitude through the event.
+  if ((p.resurfacingN2Bar ?? 0) > 0 && dtYears > 0) {
+    const a = resurfacingProgress(p, w.time / 1e9);
+    const b = resurfacingProgress(p, (w.time + dtYears) / 1e9);
+    w.n2 += Math.max(0, b - a) * p.resurfacingN2Bar * 1e5 / d.g;
+  }
   const esc = escapeRates(w);
   let escapeO2 = 0;      // kg/m^2/yr, filled in by the water block below
 
@@ -747,6 +756,15 @@ export function stepVolatiles(w, dtYears) {
       // with it. Early Venus spent its whole run doing this.
       escapeO2 = dtYears > 0 ? lostEO * d.eoColumn * (32 / 18) * 0.15 / dtYears : 0;
     }
+  }
+  // Proportional escape approaches zero asymptotically. Below a trillionth of
+  // an Earth ocean the remaining global film is micrometres deep, but leaving
+  // subnormal floating-point crumbs alive makes maxStep honour a 5% water-loss
+  // bound forever and can hold a fully desiccated Venus to one-year steps.
+  const remnant = totalWater(w);
+  if (remnant > 0 && remnant < 1e-12) {
+    w.water.lost += remnant;
+    w.water.ocean = 0; w.water.seaIce = 0; w.water.landIce = 0; w.water.vapour = 0;
   }
   partitionWater(w, dtYears);
 
@@ -912,7 +930,9 @@ export function stepVolatiles(w, dtYears) {
     // lost ocean left behind -- Venus. The floor is seafloor oxidation: gating
     // it on exposed land alone would leave a waterworld, which has none, with
     // no sink at all.
-    const weathering = (0.25 + 0.75 * landExposed) * liquid / O2_TAU_OX;
+    const hotDryRock = Math.max(p.hotRockOxidation ?? 0, 0)
+      * smoothstep(450, 650, dg.Tmean) * (1 - liquid) / 5e6;
+    const weathering = (0.25 + 0.75 * landExposed) * liquid / O2_TAU_OX + hotDryRock;
 
     // Kept for maxStep: how fast the reservoir is moving right now.
     w.o2Rate = (source - reductant) - w.o2 * weathering;

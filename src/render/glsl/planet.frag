@@ -20,6 +20,8 @@ uniform sampler2D uBodyHeight;  // its topography, matched to the terrain distri
 uniform float uBodyMix;         // 0 = procedural, 1 = the real thing
 uniform float uBodyHasHeight;   // not every body has a usable DEM
 uniform float uBodySeaLevel;    // source photograph's shoreline; < 0 = none
+const float BODY_COAST_LOW = -0.002;
+const float BODY_COAST_HIGH = 0.003;
 #endif
 uniform float uWaterCap;    // 0 = bone dry, 1 = plenty of water for snow/sea
 uniform float uGlaciated;   // share of frozen land carrying an ice sheet
@@ -136,10 +138,13 @@ float bodyBlend(float detail){
 // because the coastline must not move when you toggle between them, and
 // because a real world showing on only one of them is what happened when the
 // textured path had its own copy of this and never got the map.
+float bodyCoast(float h){
+  return smoothstep(BODY_COAST_LOW, BODY_COAST_HIGH, h);
+}
 float bodyHeight(float raw, vec2 buv, float bm, out float sourceLand){
   float mapped = 0.30 + 0.40*texture(uBodyHeight, buv).r;
   sourceLand = uBodySeaLevel < 0.0 ? 1.0
-    : smoothstep(-0.010, 0.026, mapped - uBodySeaLevel);
+    : bodyCoast(mapped - uBodySeaLevel);
   return mix(raw, mix(raw, mapped, uBodyHasHeight), bm);
 }
 vec3 bodyGround(vec3 ground, vec2 buv, float bm, float life, float sourceLand){
@@ -161,6 +166,14 @@ vec3 bodyGround(vec3 ground, vec2 buv, float bm, float life, float sourceLand){
   return mix(ground, mix(real, dead, wither), bm);
 }
 #endif
+
+// The inverse-normal sea-level lookup is deliberately finite at its endpoints,
+// but the climate can truthfully report an exact global ocean. Fade away the
+// last quantile-clamped summits as flooded area reaches 100%, so picture and
+// readout agree on both mapped and invented terrain.
+float floodLand(float land){
+  return land * (1.0 - smoothstep(0.998, 0.9999, uOceanFrac));
+}
 
 vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float height){
   vec4 terr = texture(uTerrain, sp);
@@ -186,8 +199,15 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   float h = raw - thr;
   height = h;
   float land = smoothstep(-0.010, 0.026, h);
+#ifdef BODY_MAP
+  // Keep a mapped DEM's resolved shoreline narrow, but centre it on the
+  // model's current sea level. Using sourceLand here would freeze the coast to
+  // the photograph and stop extra oceans from flooding the continents.
+  land = mix(land, bodyCoast(h), bm * uBodyHasHeight);
+#endif
   // A world with no ocean has no sea basins: low ground is just low ground.
   land = mix(1.0, land, smoothstep(0.0, 0.04, uOceanFrac));
+  land = floodLand(land);
 
   // Mountain belts sit in the continental interiors, as they do on Earth.
   float mount = det.r * smoothstep(0.0, 0.16, h);
@@ -329,7 +349,11 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
 #endif
   float h = raw - uSeaLevel;
   float land = smoothstep(-0.010, 0.026, h);
+#ifdef BODY_MAP
+  land = mix(land, bodyCoast(h), bm * uBodyHasHeight);
+#endif
   land = mix(1.0, land, smoothstep(0.0, 0.04, uOceanFrac));
+  land = floodLand(land);
   float mount = det.r * smoothstep(0.0, 0.16, h);
   float elev  = max(h, 0.0) + 0.30*mount;
 
