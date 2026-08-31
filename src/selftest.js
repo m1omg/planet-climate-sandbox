@@ -12,7 +12,8 @@ import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
-import { floodedFraction, MIN_SEA_DEPTH } from './physics/hypsometry.js';
+import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
+         MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
@@ -115,25 +116,38 @@ export function run() {
       `solar ${solarLeaf.map((v) => v.toFixed(2)).join('/')} · K4 ${orangeLeaf.map((v) => v.toFixed(2)).join('/')}`);
   }
 
-  // Water an ocean world cannot put anywhere is not an ocean.
-  //
-  // `flooded` comes from the basin geometry, and floodedFraction multiplies by
-  // (1 - landFraction): a world whose ground is all high has no sea at any
-  // inventory. Such a world used to classify as Temperate & Habitable with the
-  // globe drawing 100% land and the readout agreeing -- reported on a
-  // terraformed Venus, which is exactly the case, because that preset shipped
-  // with basin geometry at 1.
+  // Basins have finite relief. The old power law multiplied by
+  // (1 - landFraction), so its exact endpoint hid twelve Earth oceans in a
+  // zero-area, infinite-depth reservoir: water.ocean said 12 EO while the globe
+  // and readout both said 0% ocean. These are the two reported URLs, including
+  // their short elapsed times.
   {
-    const nowhere = settle({ ...EARTH, landFraction: 1, water: 1, startT: 288 }, 1e6).world;
-    const st = classify(nowhere);
-    check('A world with water and nowhere to put it is a desert, not an ocean',
-      st.id === 'dune' && nowhere.diag.flooded < 0.01,
-      `${nowhere.diag.totalWater.toFixed(2)} EO, ` +
-      `${(nowhere.diag.flooded * 100).toFixed(0)}% of the surface flooded → ${st.name}`);
+    const reportedEarth = settle({ ...EARTH, landFraction: 1, water: 12,
+      co2Bar: 0.000475454, ch4Bar: 0.00000205607, emissions: 1,
+      fossilUsed: 0.098, brightening: 1, realisticGeology: true }, 4).world;
+    const reportedBarren = settle({ ...EARTH, landFraction: 1, water: 12,
+      biosphere: 0, co2Bar: 0.0563, ch4Bar: 0.0000011447, outgassing: 20,
+      startT: 310.45, realisticGeology: true }, 56).world;
+    check('Finite relief puts both reported twelve-ocean inventories on the surface',
+      reportedEarth.diag.totalWater > 11.9 && reportedEarth.diag.flooded > 0.999
+        && reportedBarren.diag.totalWater > 11.9 && reportedBarren.diag.flooded > 0.999,
+      `${reportedEarth.diag.totalWater.toFixed(2)} EO → ${(reportedEarth.diag.flooded * 100).toFixed(0)}% ocean · ` +
+      `${reportedBarren.diag.totalWater.toFixed(2)} EO → ${(reportedBarren.diag.flooded * 100).toFixed(0)}% ocean`);
+    check('…and both labels follow the ocean the globe now shows',
+      classify(reportedEarth).id === 'waterworld' && classify(reportedBarren).id === 'waterworld',
+      `${classify(reportedEarth).name} · ${classify(reportedBarren).name}`);
+    const allOceanReference = settle({ ...EARTH, landFraction: 0, water: 12,
+      co2Bar: 0.000475454, ch4Bar: 0.00000205607, emissions: 1,
+      fossilUsed: 0.098, brightening: 1, realisticGeology: true }, 4).world;
+    const weatheringScale = Math.max(Math.abs(allOceanReference.weathering.W), 1e-30);
+    check('…and drowned high ground no longer weathers as exposed continent',
+      Math.abs(reportedEarth.weathering.W - allOceanReference.weathering.W) / weatheringScale < 1e-10,
+      `weathering differs by ${((reportedEarth.weathering.W - allOceanReference.weathering.W)
+        / weatheringScale).toExponential(1)}`);
 
     // …and Venus can now be terraformed into something that looks terraformed.
     // Its basin geometry is 0.8 because about a fifth of the planet is lowland
-    // plain, which is where an ocean would go; at 1 it could not have one.
+    // plain, which is where an ocean goes before it starts overtopping uplands.
     const cooled = settle({ ...PRESETS.venus.params, insolation: 1.0, water: 1,
       co2Bar: 3e-4, startT: 288 }, 3e6).world;
     const cs = classify(cooled);
@@ -2598,22 +2612,53 @@ export function run() {
   // ---- 7b. land and ocean coverage follow the water ------------------------
   {
     const REF = 2.744751e6;   // one Earth ocean as a column, kg/m²
+    const overflow = floodedFraction(12 * REF, 1, REF);
+    check('Twelve Earth oceans overtop even maximal basin geometry',
+      overflow > 0.999,
+      `${(overflow * 100).toFixed(2)}% of the surface flooded`);
+
     let worstCal = 0;
-    for (const L of [0, 0.1, 0.3, 0.5, 0.7, 0.95, 1]) {
+    for (const L of [0, 0.1, 0.3, 0.5, 0.7, 0.8]) {
       worstCal = Math.max(worstCal, Math.abs(floodedFraction(REF, L, REF) - (1 - L)));
     }
-    check('One Earth ocean floods exactly the basin geometry (calibration)',
+    check('One Earth ocean follows the basin calibration while its depth is physical',
       worstCal < 1e-12, `worst error ${worstCal.toExponential(1)}`);
 
-    let mono = true, bounded = true, prev = -1;
-    for (let i = 0; i <= 4000; i++) {
-      const f = floodedFraction((i / 200) * REF, 0.3, REF);
-      if (f < prev - 1e-15) mono = false;
-      if (f < 0 || f > 1) bounded = false;
-      prev = f;
+    const finiteAtOne = floodedFraction(REF, 1, REF);
+    const finiteExpected = REF / (1000 * MAX_BASIN_DEPTH);
+    check('Maximal high ground still has finite-depth basins',
+      Math.abs(finiteAtOne - finiteExpected) < 1e-12,
+      `1 EO floods ${(finiteAtOne * 100).toFixed(2)}% at the ${MAX_BASIN_DEPTH / 1000} km depth bound`);
+
+    const duneBefore = 0.02 * Math.pow(0.03, 0.25);
+    const duneAfter = floodedFraction(0.03 * REF, 0.98, REF);
+    check('The finite-depth bound leaves Dune World coverage unchanged',
+      Math.abs(duneAfter - duneBefore) < 1e-12,
+      `${(duneAfter * 100).toFixed(2)}% flooded`);
+
+    let mono = true, bounded = true;
+    for (const L of [0, 0.3, 0.8, 0.98, 1]) {
+      let prev = -1;
+      for (let i = 0; i <= 4000; i++) {
+        const f = floodedFraction((i / 200) * REF, L, REF);
+        if (f < prev - 1e-15) mono = false;
+        if (f < 0 || f > 1) bounded = false;
+        prev = f;
+      }
     }
     check('Flooded fraction rises with water and never leaves [0, 1]',
-      mono && bounded, 'swept 0–20 Earth oceans');
+      mono && bounded, 'swept 0–20 Earth oceans across five basin geometries');
+
+    let worstInverse = 0;
+    for (const L of [0, 0.3, 0.8, 0.98, 1]) {
+      for (const f of [1e-4, 0.01, 0.1, 0.5, 0.99, 1]) {
+        const water = waterForFlooded(f, L, REF);
+        worstInverse = Math.max(worstInverse,
+          Math.abs(floodedFraction(water, L, REF) - f));
+      }
+    }
+    check('Water-for-coverage remains the inverse on every depth branch',
+      worstInverse < 1e-10, `worst error ${worstInverse.toExponential(1)}`);
 
     // Boiling a world dry must uncover its seafloor.
     const boil = new Simulation({ ...EARTH, insolation: 2.6, xuvFraction: 1e-3 });

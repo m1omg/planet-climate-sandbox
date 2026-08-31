@@ -791,7 +791,11 @@ export function stepVolatiles(w, dtYears) {
     w.aerosol = relaxTo(w.aerosol ?? 0, AEROSOL_FULL * running, AEROSOL_TAU);
   }
   const liquid = clamp(1 - dg.iceMean, 0, 1) * smoothstep(0, 0.02, w.water.ocean);
-  const landExposed = clamp(p.landFraction * (1 - dg.iceMean), 0, 1);
+  // Drying can expose basaltic seafloor without turning it into continental
+  // crust, so nominal land remains the upper bound. Flooding can also drown
+  // those continents, though: count only the smaller of the reference land and
+  // the land that is actually still above water.
+  const landExposed = clamp(Math.min(p.landFraction, dg.landFrac) * (1 - dg.iceMean), 0, 1);
   const pCO2rel = Math.max(dg.pCO2 / 280e-6, 1e-6);
   // Two silicate sinks, not one.
   //
