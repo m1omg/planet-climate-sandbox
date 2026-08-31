@@ -872,7 +872,13 @@ export class PlanetView {
     gl.uniform1i(this.u.uDetailMap, 7);
     gl.uniform1i(this.u.uCloudMap, 8);
     const q = QUALITY[this.quality] ?? QUALITY.high;
-    gl.uniform1f(this.u.uRelief, q.relief);
+    // A photograph and a random height field describe two different worlds.
+    // Keep relief where the map has its own matching DEM (Earth and Mars), but
+    // fade the generated slopes away with a colour-only map such as the Moon.
+    // Otherwise invented ridges are multiplied over the real maria and craters
+    // and the source image is visible only faintly through generic rockiness.
+    const mappedRelief = 1 - this.bodyMix * (1 - this.bodyHasHeight);
+    gl.uniform1f(this.u.uRelief, q.relief * mappedRelief);
     gl.uniform1f(this.u.uCloudDetail, q.cloudDetail);
     gl.uniform1f(this.u.uUseTex, this.useTextures);
     gl.uniform1f(this.u.uZoom, clamp(this.zoom, MIN_ZOOM, MAX_ZOOM));

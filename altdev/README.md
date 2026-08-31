@@ -789,6 +789,11 @@ Only **Earth, the Moon, Mars, Venus and Titan** carry real photography, and only
 real topography. Shared sources and licences are in `../assets/bodies/CREDITS.md`; the altdev-only
 lunar source is in `assets/bodies/CREDITS.md`.
 
+Relief follows the same rule. Earth and Mars keep slope lighting from their matching DEMs; a
+colour-only map such as the Moon's does not inherit ridges from the random procedural planet beneath
+it. The generated relief fades out as that photograph fades in, leaving the real maria and craters
+legible instead of embossing them with invented terrain.
+
 Vegetation is not permanently green. The renderer interpolates representative one-atmosphere colours
 from Luke Campbell's *Colors of Alien Plants*: A-star brown, F-star blue-violet, solar G2 green,
 K-star orange, and M-star violet/blue grading to pale tan at late M. It recolours procedural biomes,
