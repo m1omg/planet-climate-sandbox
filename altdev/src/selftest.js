@@ -2,6 +2,7 @@
 // go to the console), or headlessly with `node src/selftest.js`.
 import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
+import { volcanicActivity } from './physics/planet.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
          planetaryAlbedo } from './physics/radiation.js';
@@ -1166,6 +1167,40 @@ export function run() {
           'brightening: 0 leaves insolation untouched');
       }
 
+      // Strong volcanism has to be visible from orbit, and it has to be the
+      // same number in the physics and in the picture. Melt production, not
+      // the CO2 that rides up with it: a mantle whose carbon is exhausted
+      // still erupts, it simply erupts volatile-poor lava, and a world that
+      // went quiet on the shader while its interior was still molten would be
+      // telling a lie the model does not believe.
+      check('Volcanic activity is a diagnostic, scaled by melt production',
+        Math.abs(volcanicActivity({ mass: 1, outgassing: 1, internalHeat: 0.092 }) - 1) < 1e-9
+          && volcanicActivity({ mass: 1, outgassing: 0, internalHeat: 0.092 }) === 0,
+        `Earth reads 1.00 at 1x outgassing, 0 with the volcanoes off`);
+
+      // Io is the case this exists for: the most volcanically active body
+      // known, and it is tidal heat rather than the control that does it.
+      {
+        const io = volcanicActivity({ mass: 0.015, outgassing: 1, internalHeat: 2.0 });
+        const earth = volcanicActivity({ mass: 1, outgassing: 1, internalHeat: 0.092 });
+        const cranked = volcanicActivity({ mass: 1, outgassing: 20, internalHeat: 0.092 });
+        check('…so a tidally heated moon and a cranked slider both read as violent',
+          io > earth * 4 && cranked > earth * 15 && cranked === 20 * earth,
+          `Io-like ${io.toFixed(1)}x Earth from heat alone · 20x outgassing reads ${cranked.toFixed(0)}x`);
+      }
+
+      // …and the renderer has to actually receive it. A number computed and
+      // never passed to a shader is the exact bug that shipped twice before.
+      {
+        const s = new Simulation({ ...EARTH, outgassing: 12, internalHeat: 0.5 });
+        s.runYears(1e4);
+        const dg = s.world.diag;
+        check('…and the world carries it where the renderer can read it',
+          dg.volcanism > 1 && Math.abs(dg.volcanism
+            - volcanicActivity(s.world.params)) < 1e-9,
+          `diag.volcanism ${dg.volcanism.toFixed(1)}x Earth`);
+      }
+
       // Auto-ease has to slow the clock, not chop it up. It used to do the
       // second: the per-frame allowance was overshot by a single solver step,
       // the leftover credit was thrown away to stop it banking a burst, and the
@@ -1210,6 +1245,74 @@ export function run() {
           on > off * 20 && Math.abs(on - fast) < 0.5 && on > 1 && on < 60,
           `runaway in ${off.toFixed(2)} s unheld · ${on.toFixed(2)} s eased at 10 Myr/s · `
           + `${fast.toFixed(2)} s eased at 100 Myr/s`);
+      }
+
+      // A world that is merely wobbling is not in a transition, and must not be
+      // treated as one. This is what the first version of the fix got wrong: it
+      // asked the solver for small steps on EVERY frame the governor was armed
+      // rather than only on frames that were actually moving, which held a
+      // settled Titan to a tenth of the rate it was asked for and alternated
+      // between two step sizes while the planet did nothing. Checked across the
+      // presets and rates people actually use, and against the same run with
+      // the governor off, because a stiff world is slow either way and that is
+      // the physics rather than the ease.
+      {
+        const walk = (params, rate, ease) => {
+          const s = new Simulation({ ...params });
+          s.rate = rate; s.autoEase = ease;
+          s.runYears(1e3);
+          const T0 = s.world.diag.Tmean;
+          const f = [];
+          for (let i = 0; i < 120; i++) f.push(s.advance(1 / 60) / (rate / 60));
+          // Alternation is a REVERSAL -- fast, slow, fast -- not a change. A
+          // governor letting go of a world as its transition ends accelerates
+          // over several frames, and counting that as stutter was measuring
+          // the feature. Only direction changes larger than 2x either way
+          // count, which is what "it keeps alternating" actually describes.
+          let swings = 0;
+          for (let i = 2; i < f.length; i++) {
+            const a = f[i - 2] + 1e-12, b = f[i - 1] + 1e-12, c = f[i] + 1e-12;
+            const up = b / a, down = c / b;
+            if ((up > 2 && down < 0.5) || (up < 0.5 && down > 2)) swings++;
+          }
+          return { mean: f.reduce((x, y) => x + y, 0) / f.length, swings,
+                   // how far the world actually travelled, in log temperature
+                   span: Math.abs(Math.log(s.world.diag.Tmean / T0)) };
+        };
+        const bad = [];
+        for (const id of ['earth', 'preindustrial', 'titan', 'waterworld', 'earlyEarth']) {
+          // Up to 10 Myr/s, which is the range these are actually played at.
+          // Past it a frame covers so much simulated time that an ordinary
+          // world genuinely is in visible motion, and holding it back is the
+          // feature rather than a fault.
+          for (const rate of [1e5, 1e6, 1e7]) {
+            const on = walk(PRESETS[id].params, rate, true);
+            const off = walk(PRESETS[id].params, rate, false);
+            // The governor's contract, tested as a contract rather than as a
+            // number: it may hold back a world that would otherwise cross the
+            // screen faster than the target, and it may not touch any other. So
+            // the discriminator is how far the world travels with the governor
+            // OFF -- two seconds of watching at 120 frames, against the target
+            // for that long. Under it, hands off; over it, holding back is the
+            // feature. The Archean at 10 Myr/s is over it, and is meant to be.
+            const inMotion = off.span > 0.1 * 2;
+            // A tenth is the tolerance, and the Archean is why it is not
+            // tighter: it holds a real equilibrium offset -- a cold world under
+            // a faint sun with a tenth of a bar of CO2, a long way from where
+            // it is going even while its net temperature barely moves -- and
+            // the governor reads that offset and takes about 10% off the clock
+            // for it. Steadily, with no stutter, which is the governor working.
+            // What this check is for is the other thing: a world held back for
+            // nothing, or held back unevenly.
+            if ((!inMotion && on.mean < off.mean * 0.85 - 1e-9) || on.swings > off.swings) {
+              bad.push(`${id}@${rate.toExponential(0)} ${(100 * on.mean).toFixed(0)}% vs `
+                + `${(100 * off.mean).toFixed(0)}% off, swings ${on.swings}/${off.swings}`
+                + `, span ${off.span.toFixed(3)}`);
+            }
+          }
+        }
+        check('…and does not throttle or stutter a world that is only wobbling',
+          bad.length === 0, bad.length ? bad.join(' · ') : '15 preset/rate pairs, none held back');
       }
 
       // A world that is not doing anything must not be held back at all.
@@ -2472,8 +2575,14 @@ export function run() {
     // events that differ by a factor of twenty in kelvin. That is the whole
     // argument for the unit, and it is worth a check of its own: both land
     // inside a factor of four of each other in wall-clock seconds.
+    // Four was the old bound, and it was loose because the old governor never
+    // reached its target: it bottomed out on maxStep's own limits instead, at
+    // 2.8 s and 1.3 s, which happen to be closer together than the events are.
+    // Now that the target is actually hit, the ratio of the two durations IS
+    // the ratio of the two log-temperature spans -- 0.55 against 0.13 -- so the
+    // check can say what it always meant.
     check('\u2026and one setting serves both, because the budget is in log temperature',
-      easedHot / easedCold < 4 && easedCold / easedHot < 4,
+      easedHot / easedCold < 5 && easedCold / easedHot < 5,
       `${easedHot.toFixed(1)}s against ${easedCold.toFixed(1)}s, for transitions ` +
       `of 212 K and 33 K`);
   }
