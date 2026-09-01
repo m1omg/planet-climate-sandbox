@@ -446,6 +446,23 @@ export function renderPlanet(rgba, W, H, s) {
           r += gl; g += 0.30*gl; bl += 0.08*gl;
         }
 
+        // Volcanic vents, on the unlit side. Same field, same threshold walk
+        // and the same colours as the GL path -- see planet.frag -- so a world
+        // does not look more or less volcanic depending on the machine. f[3] is
+        // the terrain's fine channel, which is what the shader reads as
+        // texture(uTerrain, sp).a.
+        if (s.volcano > 0.001 && h > -0.01) {
+          const lo = mix(0.92, 0.55, s.volcano);
+          const vent = smoothstep(lo, lo + 0.05, f[3]) * smoothstep(-0.01, 0.03, h);
+          if (vent > 0.004) {
+            const dim = 1 - vent * 0.5 * lam * s.volcano * 0.45;
+            r *= dim; g *= dim; bl *= dim;
+            const pulse = 0.75 + 0.25*Math.sin(time * 0.7 + f[3] * 40);
+            const vg = vent * pulse * (1 - lam) * s.volcano * 1.6;
+            r += vg; g += 0.42*vg; bl += 0.10*vg;
+          }
+        }
+
         // cloud deck: the baked detail field advected with time, so it churns
         // rather than sitting still
         if ((s.cloud > 0.02 || s.steam > 0.01) && s.clouds) {
@@ -476,6 +493,15 @@ export function renderPlanet(rgba, W, H, s) {
 
         // What the eye would really see through a deep atmosphere: Venus shows
         // cloud tops, Titan shows haze, and neither shows the ground.
+        // Ash and sulphate by day, the other half of the same story.
+        const ashAmt = s.ash || 0;
+        if (ashAmt > 0.001) {
+          const a = ashAmt * (0.25 + 0.55*lam), al = 0.18 + 0.82*lam;
+          r += (0.78*al*sc[0] - r) * a;
+          g += (0.74*al*sc[1] - g) * a;
+          bl += (0.62*al*sc[2] - bl) * a;
+        }
+
         const veil = s.veil || 0;
         if (veil > 0.001) {
           const vl = 0.12 + 0.88*lam;

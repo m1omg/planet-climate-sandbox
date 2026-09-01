@@ -137,6 +137,38 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
     }
   }
 
+  // Vents belong on the night side and on land. Drawn into the lit half they
+  // would be orange dots on a daylit continent, which is not what an eruption
+  // looks like from orbit; drawn under an ocean they would be a glow through
+  // three kilometres of water. Both are one factor each, and both are easy to
+  // lose in a refactor, so they are pinned here.
+  {
+    const vents = src.match(/vec3\(1\.0,\s*0\.42,\s*0\.10\)\s*\*\s*vent[^;]*;/);
+    const gated = vents && /\(1\.0\s*-\s*lam\)/.test(vents[0]);
+    const dry = /float\s+vent\s*=\s*smoothstep\([^)]*\)\s*\*\s*dry/.test(src);
+    if (!gated || !dry) {
+      failed++;
+      console.log('\x1b[31mFAIL\x1b[0m  volcanic vents are drawn '
+        + (!gated ? 'in daylight' : '') + (!dry ? ' under the ocean' : ''));
+    } else {
+      console.log('\x1b[32mPASS\x1b[0m  volcanic vents are drawn on the night side and on land only');
+    }
+  }
+
+  // The camera pair exists to buy the uniform slot volcanism needed. Splitting
+  // it back into two floats would put the fragment stage over its budget on
+  // hardware that only guarantees the minimum, and the failure mode for that is
+  // a shader that will not link on someone else's machine.
+  {
+    const packed = /uniform\s+vec2\s+uCam\s*;/.test(src) && /rotY\(uCam\.x\)\s*\*\s*rotX\(uCam\.y\)/.test(src);
+    if (!packed) {
+      failed++;
+      console.log('\x1b[31mFAIL\x1b[0m  the camera uniforms are unpacked — the fragment stage is over budget');
+    } else {
+      console.log('\x1b[32mPASS\x1b[0m  camera orbit and elevation share one uniform vector');
+    }
+  }
+
   const { BODY_COAST_LOW, BODY_COAST_HIGH, seaLevelForLand } =
     await import('../src/render/terrain.js');
   const { width, height, pixels } = readGrayPng(join(root, '../assets/bodies/earth_height.png'));

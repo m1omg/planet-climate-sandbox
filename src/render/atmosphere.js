@@ -57,6 +57,32 @@ export function cloudLook(coverMean, pH2Obar) {
   return clamp(coverMean, 0, 1) * (0.72 + 0.28 * thickness);
 }
 
+// What volcanism looks like from orbit, from the melt production the physics
+// already tracks. One place, because two renderers reading the same number and
+// mapping it differently would be a difference nobody could account for.
+//
+// Vents saturate: past a few times Earth's activity the ground is already
+// covered in them and more heat makes them brighter rather than more numerous,
+// so the curve is a log that reaches 1 around 30x -- GJ 1132 b, the most
+// volcanic body this model carries.
+//
+// Ash needs an atmosphere to hang in, and is slower to arrive. Below about
+// twice Earth's activity there is effectively none: the stratosphere clears a
+// Pinatubo in three or four years, and it takes continuous eruption to hold a
+// permanent veil up. It also cannot exist without air to hold it -- Io has no
+// ash haze because it has no atmosphere, and neither should this.
+export function volcanoLook(world) {
+  const dg = world.diag;
+  const v = Math.max(dg.volcanism ?? 0, 0);
+  const vents = clamp(Math.log10(1 + v) / Math.log10(31), 0, 1);
+  const air = clamp((dg.pTotMean - 0.01) / 0.2, 0, 1);
+  const ash = clamp((Math.log10(1 + v) - Math.log10(2)) / (Math.log10(21) - Math.log10(2)), 0, 1);
+  // Capped well below opaque. A permanently volcanic world is hazy, not
+  // buried: at half opacity the surface stopped being readable at all, which
+  // defeats the point of being able to look at it.
+  return { vents, ash: ash * air * 0.32 };
+}
+
 export function atmosphereLook(world, steam, realistic) {
   const dg = world.diag;
   const pTot = dg.pTotMean;

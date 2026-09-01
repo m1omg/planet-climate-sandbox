@@ -13,6 +13,7 @@ const screenshot = join(tmpdir(), 'altdev-browsercheck.png');
 const slovakScreenshot = join(tmpdir(), 'altdev-browsercheck-sk.png');
 const cloudyShot = join(tmpdir(), 'altdev-clouds-on.png');
 const clearShot = join(tmpdir(), 'altdev-clouds-off.png');
+const volcanoScreenshot = join(tmpdir(), 'altdev-volcanism.png');
 const drownedScreenshot = join(tmpdir(), 'altdev-browsercheck-drowned.png');
 const chrome = spawn(chromePath, [
   '--headless=new',
@@ -328,6 +329,56 @@ try {
   ok(cloudPersist === 'false' && cloudAfter === 'false', 'A cloudless view survives a reload');
   await evaluate("document.querySelector('#btn-clouds').click()");
 
+  // Strong volcanism has to reach the shader, and a quiet world must not get
+  // any. Read off the uniform the fragment stage actually received, because a
+  // number computed and never passed to a shader is a bug that has shipped
+  // here twice.
+  const volc = await evaluate(`(async () => {
+    const v = __app.view;
+    const read = async (id) => {
+      __app.loadPreset(id);
+      for (let i = 0; i < 80 && __app.view.body !== id && __app.sim.world.params.outgassing == null; i++) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await new Promise((r) => setTimeout(r, 60));
+      __app.tick(0);
+      const u = v.software ? [v.lastVolcano, v.lastAsh]
+                           : [v.gl.getUniform(v.prog, v.u.uVolcano)[0],
+                              v.gl.getUniform(v.prog, v.u.uVolcano)[1]];
+      return { vents: u[0], ash: u[1], volcanism: __app.sim.world.diag.volcanism };
+    };
+    const mars = await read('mars');
+    const earth = await read('earth');
+    const gj = await read('gj1132b');
+    // ...and the slider, not just the presets.
+    __app.loadPreset('earth');
+    await new Promise((r) => setTimeout(r, 120));
+    __app.params.outgassing = 20;
+    __app.sim.reset(__app.params);
+    __app.tick(0);
+    const cranked = v.software ? [v.lastVolcano, v.lastAsh]
+                               : [v.gl.getUniform(v.prog, v.u.uVolcano)[0],
+                                  v.gl.getUniform(v.prog, v.u.uVolcano)[1]];
+    return { mars, earth, gj, cranked: { vents: cranked[0], ash: cranked[1] } };
+  })()`);
+  ok(volc.mars.vents < volc.earth.vents && volc.earth.vents < volc.gj.vents
+    && volc.gj.vents > 0.9 && volc.mars.vents < 0.05,
+    'Volcanism reaches the shader, and a dead world gets none',
+    `Mars ${volc.mars.vents.toFixed(3)} · Earth ${volc.earth.vents.toFixed(3)} · `
+    + `GJ 1132 b ${volc.gj.vents.toFixed(3)}`);
+  ok(volc.cranked.vents > volc.earth.vents * 2 && volc.cranked.ash > 0.15,
+    'Cranking the volcanism slider is visible from orbit',
+    `20x outgassing: vents ${volc.cranked.vents.toFixed(3)}, ash ${volc.cranked.ash.toFixed(3)}`);
+  // Io-like: all the heat, no air. Ash needs an atmosphere to hang in.
+  ok(volc.gj.ash <= 0.35 && volc.mars.ash < 0.05,
+    'Ash needs an atmosphere to hang in',
+    `Mars ${volc.mars.ash.toFixed(3)} at 6 mbar · GJ 1132 b ${volc.gj.ash.toFixed(3)}`);
+  // Turned so the terminator is across the middle: the vents only read on the
+  // unlit half, so a screenshot of the day side proves nothing about them.
+  await evaluate(`(() => { __app.view.yaw = 2.2; __app.view.pitch = 0.15; __app.tick(0); })()`);
+  const volcShot = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
+  writeFileSync(volcanoScreenshot, Buffer.from(volcShot.data, 'base64'));
+
   // Two artefacts of the cloud-free view, which is the one change here that can
   // only be judged by looking: Earth with its weather on and with it taken off.
   await evaluate(`(async () => {
@@ -474,6 +525,7 @@ try {
   console.log(`Drowned screenshot: ${drownedScreenshot}`);
   console.log(`Slovak screenshot: ${slovakScreenshot}`);
   console.log(`Clouds on/off: ${cloudyShot} · ${clearShot}`);
+  console.log(`Volcanism: ${volcanoScreenshot}`);
 } finally {
   try { await call('Browser.close', {}, undefined, 2000); } catch { chrome.kill('SIGTERM'); }
   await Promise.race([new Promise((resolve) => chrome.once('exit', resolve)), delay(2000)]);

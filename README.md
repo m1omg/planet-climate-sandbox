@@ -960,6 +960,50 @@ globe showing through it. **Scroll out to zoom out, scroll in to zoom in**, or p
 camera rather than narrowing the lens, so the planet keeps its perspective and the atmosphere's limb
 still reads correctly; drag sensitivity also scales with camera distance.
 
+### Volcanism you can see
+
+Strong volcanism used to be invisible. A world at twenty times Earth's outgassing rendered
+*identically* to one at zero: `outgassing` reached the carbon cycle, the oxygen budget and the
+methane, and never reached a shader at all. Two things now carry it.
+
+**Vents, on the night side.** This is what a volcanic world actually looks like from orbit — not a
+red planet, but points of light on the dark half, which is how Io's eruptions are seen. They sit on
+the terrain's own fine channel rather than on new noise, so a vent stays in the same place and turns
+with the planet; more of them appear because the threshold through that fixed field walks down as
+activity rises, not because anything is re-rolled. Land only, since a vent under three kilometres of
+water is a black smoker, and the lit half gets dark unweathered flows around the same points instead
+of a glow.
+
+**Ash and sulphate, by day.** A heavily volcanic world is not only bright spots at night: it is hazy,
+because sulphur dioxide oxidises to an aerosol that stays up for years. Pinatubo put 20 Tg of it into
+the stratosphere and cooled the planet half a kelvin; a world erupting continuously never clears it.
+Yellow-grey and slightly brightening, which is what separates it from the organic haze — that one is
+orange and dims. It needs air to hang in, so it fades out with surface pressure: **Io has no ash haze
+because Io has no atmosphere**, and neither does this.
+
+What both read is melt production, `outgassing × √(F_int/F_⊕)` — the same `meltBoost` the carbon
+source uses, and *not* the mass factor that goes with it there. `outgassingScale` is about how much
+volatile a bigger planet delivers per square metre; it is not about how much lava is on the ground,
+and including it read Io as a quarter of Earth's volcanism, which is exactly backwards for the most
+volcanically active body known. It is melt production and not the CO₂ that rides up with it, for the
+same kind of reason: a mantle whose carbon is exhausted still erupts, it erupts volatile-poor lava,
+and a world going quiet on screen while its interior is still molten would be telling a lie the model
+does not believe.
+
+| world | vents | ash |
+|---|---|---|
+| Mars | 0.03 | 0.00 |
+| Earth | 0.20 | 0.00 |
+| Earth at 20× outgassing | 0.89 | 0.32 |
+| Io-like, 2 W/m² tidal | 0.51 | 0.00 — no air |
+| GJ 1132 b, 80 W/m² | 1.00 | 0.16 |
+
+It cost no uniform. The fragment stage is at its guaranteed budget of 32 vectors, and a slot holds
+four components whichever way you fill it — so `uYaw` and `uPitch`, two scalars burning two slots,
+became one `vec2 uCam` and paid for `vec2 uVolcano` outright. `glslcheck.mjs` fails if they are ever
+split back apart, because the failure mode is a shader that will not link on hardware that only
+guarantees the minimum: someone else's machine, never this one.
+
 **Clouds can be switched off.** Two thirds of Earth is under cloud at any moment and the deck is drawn
 faithfully, which is a problem when what you want to look at is which continents are actually flooded,
 where the ice really reaches, or what a mapped body's surface looks like without its own weather on

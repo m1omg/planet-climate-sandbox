@@ -1,7 +1,7 @@
 import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
-import { atmosphereLook, cloudLook } from './atmosphere.js';
+import { atmosphereLook, cloudLook, volcanoLook } from './atmosphere.js';
 import { seaLevelForLand, vegetationColor } from './terrain.js';
 
 // A software renderer, used when the machine cannot give us WebGL2.
@@ -129,7 +129,8 @@ export class SoftwareView {
     const steamQ = steamOpacity(pH2Oq);
     const skyKey = [cw, ch, this.yaw.toFixed(3), this.pitch.toFixed(3),
                     dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp, this.realistic ? 'r' : 's',
-                    this.showClouds === false ? 'nc' : 'c', this.zoom.toFixed(3)].join('|');
+                    this.showClouds === false ? 'nc' : 'c',
+                    volcanoLook(world).vents.toFixed(3), this.zoom.toFixed(3)].join('|');
     if (skyKey !== this.skyKey) {
       if (this.sky.width !== cw || this.sky.height !== ch) { this.sky.width = cw; this.sky.height = ch; }
       const img = this.sctx.createImageData(cw, ch);
@@ -179,6 +180,8 @@ export class SoftwareView {
     const sc = SoftwareView.starColor(p.starTemp);
 
     const atmo = atmosphereLook(world, clamp(steamOpacity(pH2O), 0, 1), this.realistic);
+    const vRaw = volcanoLook(world), notMolten = 1 - clamp((dg.Tmean - 1200) / 400, 0, 1);
+    const volc = { vents: vRaw.vents * notMolten, ash: vRaw.ash * notMolten };
     renderPlanet(this.image.data, W, H, {
       atmoThick: atmo.thickness, veil: atmo.veil, haze: atmo.haze,
       yaw: this.yaw, pitch: this.pitch, spin: this.spin, zoom: this.zoom,
@@ -192,6 +195,10 @@ export class SoftwareView {
       // Same view-only switch as the GL path: the clouds still cool the
       // planet, they are simply not drawn. Both renderers have to agree, or
       // the button would mean two different things depending on the machine.
+      // Same shared mapping and the same molten-world suppression as the GL
+      // path, so the two renderers cannot disagree about how volcanic a world
+      // looks.
+      volcano: this.lastVolcano = volc.vents, ash: this.lastAsh = volc.ash,
       locked: lam, cloud: this.lastCloud = this.showClouds === false ? 0 : cloud,
       steam: this.lastSteam = this.showClouds === false ? 0 : steamOpacity(pH2O),
       pTot: dg.pTotMean, co2: clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1),
