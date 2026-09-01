@@ -74,7 +74,7 @@ export function radiogenic(ageGyr) {
 
 const GOUGH_A = 0.4;                     // Gough's coefficient
 const SOLAR_MS_LIFE = 10.0;              // Gyr the Sun gets on the main sequence
-const SOLAR_TEMP = 5772;                 // K
+export const SOLAR_TEMP = 5772;          // K
 const SOLAR_FRAC = EARTH_AGE / SOLAR_MS_LIFE;   // how much of it is already spent
 
 // Main-sequence lifetime from effective temperature.
@@ -174,9 +174,33 @@ export function pastMainSequence(p) {
 // This matters far more than the bolometric brightening for anything to do with
 // escape: the wind and the XUV track each other, and both are what strip an
 // unprotected atmosphere. Mars lost its air while the Sun was still young.
-export function xuvAtAge(ageGyr) {
-  const t = Math.max(ageGyr, 0.05);       // floor: before this the star is still assembling
-  return Math.pow(t / EARTH_AGE, -1.23);
+// ...but not from birth. A young star rotates fast enough that its dynamo is
+// running flat out, and the XUV ratio saturates: it cannot climb any further no
+// matter how much faster the star spins (Wright et al. 2011, log Lx/Lbol ~ -3.1
+// at Rossby numbers below ~0.13). The decline only begins once the star has spun
+// down enough to leave that regime, and how long that takes is a property of the
+// star, not a constant. Fully convective late M dwarfs shed angular momentum far
+// more slowly than a G dwarf does.
+//
+// Anchored at 0.1 Gyr for the Sun and calibrated so a late M at 2566 K holds on
+// for about 1.5 Gyr, which is the range the rotation-activity data put TRAPPIST-1
+// in. That is most of why its planets are in the state they are: not a harsher
+// star than the young Sun, but one that stayed harsh an order of magnitude longer.
+const SOLAR_SATURATION = 0.1;            // Gyr the Sun spent saturated
+const SATURATION_EXP = 3.3;              // how much longer a cooler star holds it
+
+export function saturationAge(tempK) {
+  const T = Math.max(tempK || SOLAR_TEMP, 1000);
+  return SOLAR_SATURATION * Math.pow(T / SOLAR_TEMP, -SATURATION_EXP);
+}
+
+// Flat through saturation, Ribas afterwards, and continuous at the join because
+// the flat part is simply the curve evaluated at the age it stops being flat.
+// Above the saturation age this is identical to the bare power law it replaced,
+// which is why no solar preset moves: every one of them starts past it.
+export function xuvAtAge(ageGyr, tempK = SOLAR_TEMP) {
+  const t = Math.max(ageGyr, 0);
+  return Math.pow(Math.max(t, saturationAge(tempK)) / EARTH_AGE, -1.23);
 }
 
 // The state a world's controls should be in, `years` after it started.
@@ -193,14 +217,29 @@ export function evolvedParams(p, base, years) {
 
   if (p.brightening > 0 && base.insolation > 0) {
     out.insolation = base.insolation * brightnessAfter(p, gyr);
-    // The same star calming down. Decoupled from the bolometric curve because
-    // they go opposite ways: the star gets brighter and its XUV gets weaker,
-    // and it is the second that decides whether an atmosphere survives.
-    if (base.xuvFraction > 0) {
-      const start = p.startAge ?? EARTH_AGE;
-      const now = xuvAtAge(start);
-      if (now > 0) out.xuvFraction = base.xuvFraction * xuvAtAge(start + gyr) / now;
-    }
+  }
+
+  // The same star calming down -- and this is NOT a consequence of it
+  // brightening, which is where this used to live and where it was wrong.
+  //
+  // The two go opposite ways: the star gets brighter and its ultraviolet gets
+  // weaker, and it is the second that decides whether an atmosphere survives.
+  // Nesting it inside the bolometric branch meant it ran only on worlds whose
+  // luminosity was also moving -- and every M-dwarf preset here carries
+  // brightening: 0, correctly, because over any run TRAPPIST-1's luminosity
+  // really is flat. So XUV was pinned for the whole run on the four worlds
+  // where XUV is the dominant process and everything else is scenery.
+  //
+  // `brightening` still gates the luminosity, and only the luminosity. It does
+  // double duty as a speed: a 3 is a star living three times over, so the
+  // spin-down has to run at that speed too or the two halves of one star would
+  // be ageing at different rates.
+  if (base.xuvFraction > 0) {
+    const start = p.startAge ?? EARTH_AGE;
+    const speed = p.brightening > 0 ? p.brightening : 1;
+    const T = p.starTemp;
+    const now = xuvAtAge(start, T);
+    if (now > 0) out.xuvFraction = base.xuvFraction * xuvAtAge(start + speed * gyr, T) / now;
   }
 
   // Interior heat down the radiogenic curve from whatever age the world starts

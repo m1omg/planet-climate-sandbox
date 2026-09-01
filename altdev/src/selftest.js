@@ -21,7 +21,7 @@ import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B, vegetationColor,
          SOLAR_VEGETATION, stellarVegetation } from './render/terrain.js';
 import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE, dynamoLifetime,
          windExposure, nonThermalEscape, resurfacingBoost, resurfacingProgress,
-         xuvAtAge } from './physics/evolution.js';
+         xuvAtAge, saturationAge, SOLAR_TEMP } from './physics/evolution.js';
 import { bakeTerrain } from './render/cpushade.js';
 import { DEFAULT_PAN_SPEED, PAN_SPEEDS, panRadiansPerPixel, wheelZoomFactor } from './render/camera.js';
 
@@ -1125,6 +1125,103 @@ export function run() {
         xuvAtAge(EARTH_AGE) === 1 && xuvAtAge(0.5) > 10 && xuvAtAge(0.5) < 25,
         `${xuvAtAge(0.5).toFixed(0)}× at half a billion years, ${xuvAtAge(1).toFixed(1)}× at one, ` +
         `1× now (Ribas et al. 2005)`);
+
+      // A young star is not simply "the old one, scaled". It spends its first
+      // stretch magnetically saturated -- rotating fast enough that the dynamo
+      // is running flat out and the XUV ratio cannot climb any further -- and
+      // only starts to fall once it has spun down. How long that lasts is a
+      // property of the star: a G dwarf is out of it inside a hundred million
+      // years, a late M dwarf holds it for well over a billion, which is most
+      // of why the TRAPPIST-1 planets are in the state they are.
+      check('A star holds its ultraviolet flat while it is saturated, then falls',
+        Math.abs(xuvAtAge(0.02, SOLAR_TEMP) / xuvAtAge(0.09, SOLAR_TEMP) - 1) < 1e-9
+          && xuvAtAge(1, SOLAR_TEMP) < xuvAtAge(0.5, SOLAR_TEMP)
+          && Math.abs(xuvAtAge(1, SOLAR_TEMP) / Math.pow(1 / EARTH_AGE, -1.23) - 1) < 1e-9,
+        `Sun saturated to ${saturationAge(SOLAR_TEMP).toFixed(2)} Gyr, then Ribas t^-1.23`);
+
+      check('…and a late M dwarf stays saturated for an order of magnitude longer',
+        saturationAge(2566) / saturationAge(SOLAR_TEMP) > 8
+          && saturationAge(2566) < 3 && saturationAge(3270) > saturationAge(SOLAR_TEMP),
+        `TRAPPIST-1 ${saturationAge(2566).toFixed(2)} Gyr · GJ 1132 ${saturationAge(3270).toFixed(2)} · `
+        + `Sun ${saturationAge(SOLAR_TEMP).toFixed(2)}`);
+
+      // The bug this replaced: the XUV decline lived inside the brightening
+      // branch, so it only ran on worlds whose star was also getting brighter.
+      // Every M-dwarf preset carries brightening: 0 -- correctly, their
+      // luminosity really is flat -- which meant XUV was pinned for the entire
+      // run on the four worlds where XUV is the dominant process.
+      {
+        const dwarf = { ...PRESETS.trappist1e.params };
+        const base = { insolation: dwarf.insolation, xuvFraction: dwarf.xuvFraction };
+        const after = evolvedParams(dwarf, base, 1e9);
+        check('Stellar ultraviolet ages even when the star is not brightening',
+          dwarf.brightening === 0 && after.xuvFraction > 0
+            && after.xuvFraction < base.xuvFraction * 0.9,
+          `TRAPPIST-1e ${(base.xuvFraction / 3.4e-6).toFixed(0)}× solar → `
+          + `${(after.xuvFraction / 3.4e-6).toFixed(0)}× after 1 Gyr, with brightening off`);
+        // …and the bolometric track must still be the thing `brightening` gates,
+        // or turning it off would quietly start moving the star's luminosity.
+        check('…while its luminosity stays exactly where it was put',
+          after.insolation === undefined,
+          'brightening: 0 leaves insolation untouched');
+      }
+
+      // Auto-ease has to slow the clock, not chop it up. It used to do the
+      // second: the per-frame allowance was overshot by a single solver step,
+      // the leftover credit was thrown away to stop it banking a burst, and the
+      // next frame could not afford a step at all -- so it advanced nothing,
+      // so there was no movement to measure, so the governor stopped asking for
+      // fine steps and the next affordable step was bigger still. Measured at
+      // 76% of frames advancing nothing, in runs of up to nine, separated by
+      // million-year jumps. That is not an eased clock, it is a stuttering one,
+      // and no amount of watching it would show you a transition.
+      {
+        const s = new Simulation({ ...EARTH, insolation: 1.6, brightening: 0 });
+        s.rate = 1e7;
+        s.autoEase = true;
+        s.runYears(2e4);                       // get it moving
+        const frames = [];
+        for (let i = 0; i < 240; i++) frames.push(s.advance(1 / 60));
+        const dead = frames.filter((f) => f === 0).length;
+        let worstRun = 0, run = 0;
+        for (const f of frames) { run = f === 0 ? run + 1 : 0; worstRun = Math.max(worstRun, run); }
+        const live = frames.filter((f) => f > 0);
+        const spread = live.length ? Math.max(...live) / Math.min(...live) : Infinity;
+        check('Auto-ease slows the clock without ever stopping it',
+          dead === 0 && worstRun === 0 && spread < 10,
+          `${dead}/240 frames advanced nothing, longest stall ${worstRun}, `
+          + `fastest frame ${spread.toFixed(1)}× the slowest`);
+      }
+
+      // …and it still has to actually hold the transition back, at any rate the
+      // slider offers. Rate-independence is the property that makes it useful:
+      // asking for a hundred Myr a second gives the same watchable seconds as
+      // asking for one.
+      {
+        const watch = (ease, rate) => {
+          const s = new Simulation({ ...EARTH, insolation: 1.6, brightening: 0 });
+          s.rate = rate; s.autoEase = ease;
+          let n = 0;
+          while (n < 60 * 120 && s.world.diag.Tmean < 500) { s.advance(1 / 60); n++; }
+          return n / 60;
+        };
+        const off = watch(false, 1e7), on = watch(true, 1e7), fast = watch(true, 1e8);
+        check('…and holds a runaway back by the same watchable seconds at any rate',
+          on > off * 20 && Math.abs(on - fast) < 0.5 && on > 1 && on < 60,
+          `runaway in ${off.toFixed(2)} s unheld · ${on.toFixed(2)} s eased at 10 Myr/s · `
+          + `${fast.toFixed(2)} s eased at 100 Myr/s`);
+      }
+
+      // A world that is not doing anything must not be held back at all.
+      {
+        const s = new Simulation({ ...EARTH, brightening: 0 });
+        s.rate = 1e8; s.autoEase = true;
+        let dead = 0;
+        for (let i = 0; i < 600; i++) if (s.advance(1 / 60) === 0) dead++;
+        check('…and leaves a settled world alone',
+          dead === 0 && s.easeFactor > 0.9,
+          `${dead}/600 dead frames, clock running at ${(s.easeFactor * 100).toFixed(0)}% of the rate asked for`);
+      }
 
       // The whole point of the channel: it is what a planet's gravity and its
       // field together decide, and Mars loses on both counts.

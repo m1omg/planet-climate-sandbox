@@ -377,8 +377,33 @@ It acts *inside* the frame rather than turning the rate down for the next one. T
 refinement: one frame at 10 Myr/s is 160 000 years and the whole runaway is 500, so a controller
 watching the previous frame has nothing left to slow down by the time it reacts — measured at three
 frames from temperate to boiling with the feedback loop running. The budget is spent step by step and
-the frame stops when it runs out, which needs no prediction at all. A settled Earth with the governor
-armed runs its full hundred million years in ten seconds and never notices it is there.
+the frame stops when it runs out. A settled Earth with the governor armed runs its full hundred
+million years in ten seconds and never notices it is there.
+
+**For a long time it did all of that while stuttering, which made it useless.** Both halves are worth
+writing down, because neither was the physics.
+
+The budget was overshot by construction: one solver step through a transition moves further than one
+frame's allowance, so the frame always ran past it. Leftover credit was then thrown away — deliberately,
+so that banking the time the governor had just declined to spend could not hand it all back as a burst
+on the next frame. But zero was too far. The next frame could not afford a single step, so it advanced
+nothing; with no time advanced there was no temperature change to measure; with no measured change the
+governor stopped asking for finer steps, so the step it could eventually afford was *bigger*. Measured:
+**76% of frames advancing nothing, in runs of up to nine, separated by jumps of a million years.** The
+fix is to cap the leftover at one frame's worth instead of destroying it, and to size the step to the
+budget it has left *before* taking it — `maxStep` has already computed the tendency and cached it on
+the world, so what the planet is about to do per year is free to read.
+
+The second half was never the ease at all. `if (credit < dt) break` refused to move until a whole step
+was affordable, and whenever the solver would allow a step larger than one frame's credit — which is
+most of a calm world's life — the frame took no step and banked instead. The clock ran in bursts with
+dead frames between them at *every* rate, governor or no governor. A frame now spends the credit it
+actually has: a `dt` below `maxStep` is the accurate direction, and it honours the rate exactly rather
+than on average.
+
+Now **0% of frames advance nothing**, the fastest frame is 4.4× the slowest rather than 27×, the
+transition still takes the same 2.83 s at 10 and at 100 Myr/s, and a settled Earth runs at 100% of the
+rate asked for — it used to be held to 67% for no reason at all.
 
 It is a governor on measured change, not a detector for two named events, so it also catches a CO₂
 collapse, a nightside freeze-out and anything else this model can do that a list would have missed.
@@ -676,6 +701,40 @@ two stars — or, as it turns out, for one star at two different ages. "Hold Bac
 star that brightens 26%/Gyr and used to be *given* one; it is now an F at 6500 K, 2.75 Gyr old, which
 **has** one.
 
+### The other half of a star's life, which is not its luminosity
+
+A star's extreme ultraviolet does not follow its brightness — it runs the opposite way. The star gets
+brighter and its XUV gets weaker, and for anything to do with escape it is the second that decides
+whether a planet keeps its air. Ribas et al. (2005) fit solar analogues at `F_XUV ∝ t^−1.23`, which
+puts the Sun at half a billion years some fifteen times as harsh as it is now.
+
+But not from birth. A young star rotates fast enough that its dynamo is running flat out and the ratio
+**saturates** — it cannot climb further however much faster the star spins (Wright et al. 2011, below
+a Rossby number of about 0.13). The decline only starts once the star has spun down, and how long that
+takes is a property of the star rather than a constant, because a fully convective late M dwarf sheds
+angular momentum far more slowly than a G dwarf does:
+
+| star | saturated until |
+|---|---|
+| an F5 at 6500 K | 0.07 Gyr |
+| the Sun | 0.10 Gyr |
+| GJ 1132 at 3270 K | 0.65 Gyr |
+| TRAPPIST-1 at 2566 K | **1.45 Gyr** |
+
+That last row is most of why the TRAPPIST-1 planets are in the state they are. Not a harsher star than
+the young Sun — one that stayed harsh an order of magnitude longer. Above the saturation age the curve
+is identical to the bare power law it replaced, which is why no solar preset moves and none of the 23
+anchors shift: every one of them starts past it.
+
+**And it used to run only on worlds whose star was also getting brighter.** The XUV decline was nested
+inside the `brightening` branch — two lines under a comment saying it matters far more than the
+bolometric brightening for anything to do with escape. Every M-dwarf preset carries `brightening: 0`,
+correctly, because over any run TRAPPIST-1's luminosity really is flat. So XUV was pinned for the
+entire run on TRAPPIST-1b and 1e (206× solar), the Locked Eyeball (147×) and GJ 1132 b (59×) — the
+four worlds where XUV is the dominant process and everything else is scenery. It is its own term now.
+`brightening` still gates the luminosity and only the luminosity; it keeps its double duty as a speed,
+so a star living three times over spins down three times as fast too.
+
 ### Three worlds tuned by where they end, not where they start
 
 The two early Venus paths and Noachian Mars are presets whose endpoints are observations, and all are
@@ -865,6 +924,20 @@ the browser paints the open menu from that same colour — which made the list u
 globe showing through it. **Scroll out to zoom out, scroll in to zoom in**, or pinch; double-click resets. Zoom moves the
 camera rather than narrowing the lens, so the planet keeps its perspective and the atmosphere's limb
 still reads correctly; drag sensitivity also scales with camera distance.
+
+**Clouds can be switched off.** Two thirds of Earth is under cloud at any moment and the deck is drawn
+faithfully, which is a problem when what you want to look at is which continents are actually flooded,
+where the ice really reaches, or what a mapped body's surface looks like without its own weather on
+top of it. The ☁ button hides them. It is a *view*: the deck still reflects its sunlight and still
+cools the planet, the readout's cloud cover does not move, and neither does the temperature — checked
+in the browser to twelve decimal places, because a control that quietly changed the climate while
+claiming to change the picture would be worse than not having one.
+
+It needed no new uniform, which matters because the fragment stage is at its budget of 32. The shader
+already ends the cloud deck with `clamp(uCloud + uLocked*sub*0.35, 0.0, 1.0)`, so handing it a negative
+cover clamps to nothing on its own — including a tidally locked world's substellar pile-up, which is
+added inside the same clamp. `glslcheck.mjs` fails if that clamp or that 0.35 ever changes out from
+under it.
 
 The main **Pause** control freezes the globe's automatic visual rotation as well as simulated time.
 Play continues it from the same longitude, unless the separate rotation button was already paused;

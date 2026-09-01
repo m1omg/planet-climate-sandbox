@@ -11,6 +11,8 @@ const chromePath = process.env.CHROME || '/usr/bin/google-chrome';
 const profile = mkdtempSync(join(tmpdir(), 'planet-browsercheck-'));
 const screenshot = join(tmpdir(), 'altdev-browsercheck.png');
 const slovakScreenshot = join(tmpdir(), 'altdev-browsercheck-sk.png');
+const cloudyShot = join(tmpdir(), 'altdev-clouds-on.png');
+const clearShot = join(tmpdir(), 'altdev-clouds-off.png');
 const drownedScreenshot = join(tmpdir(), 'altdev-browsercheck-drowned.png');
 const chrome = spawn(chromePath, [
   '--headless=new',
@@ -272,6 +274,77 @@ try {
       longNames.over.length ? longNames.over.join(' · ') : `all ${longNames.count} fit`);
   }
 
+  // Clouds off is a view, so what has to be proved is that the renderer stopped
+  // drawing them and the model did not notice. Screenshots are no good here:
+  // the deck drifts on wall-clock time so no two frames match, and the drawing
+  // buffer is not preserved so the canvas cannot be read back. The uniforms the
+  // shader actually received can be, and they are the thing that decides.
+  const cloudTest = await evaluate(`(async () => {
+    __app.loadPreset('earth');
+    for (let i = 0; i < 80 && __app.view.body !== 'earth'; i++) {
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    const v = __app.view;
+    const read = () => {
+      __app.tick(0);
+      if (v.software) return { cloud: v.lastCloud, steam: v.lastSteam };
+      return { cloud: v.gl.getUniform(v.prog, v.u.uCloud),
+               steam: v.gl.getUniform(v.prog, v.u.uSteam) };
+    };
+    const clim = () => ({ cover: __app.sim.world.diag.cloud.reduce((a, b) => a + b, 0) / 18,
+                          T: __app.sim.world.diag.Tmean });
+    if (v.showClouds === false) document.querySelector('#btn-clouds').click();
+    const on = read(), climOn = clim();
+    document.querySelector('#btn-clouds').click();
+    const off = read(), climOff = clim();
+    const pressed = document.querySelector('#btn-clouds').getAttribute('aria-pressed');
+    document.querySelector('#btn-clouds').click();
+    const back = read();
+    return { on, off, back, pressed, climOn, climOff, software: !!v.software,
+      backPressed: document.querySelector('#btn-clouds').getAttribute('aria-pressed') };
+  })()`);
+  // The shader clamps cover from uCloud, so anything negative draws no deck at
+  // all -- including a locked world's substellar pile-up, which is added to it.
+  ok(cloudTest.on.cloud > 0 && cloudTest.off.cloud < 0 && cloudTest.off.steam === 0
+    && cloudTest.pressed === 'false',
+    'Hiding the clouds stops the renderer drawing them',
+    `cover uniform ${cloudTest.on.cloud.toFixed(2)} → ${cloudTest.off.cloud.toFixed(2)}, steam → 0`);
+  ok(Math.abs(cloudTest.climOff.cover - cloudTest.climOn.cover) < 1e-12
+    && Math.abs(cloudTest.climOff.T - cloudTest.climOn.T) < 1e-12,
+    'Hiding the clouds does not touch the climate',
+    `cover ${(cloudTest.climOff.cover * 100).toFixed(1)}% and `
+    + `${cloudTest.climOff.T.toFixed(2)} K, both unmoved`);
+  ok(cloudTest.backPressed === 'true' && cloudTest.back.cloud > 0,
+    'Turning them back on restores the deck',
+    `cover uniform back to ${cloudTest.back.cloud.toFixed(2)}`);
+  const cloudPersist = await evaluate(`(() => {
+    document.querySelector('#btn-clouds').click();
+    return document.querySelector('#btn-clouds').getAttribute('aria-pressed');
+  })()`);
+  await call('Page.reload', { ignoreCache: true }, sessionId);
+  await waitFor("document.readyState === 'complete' && !!window.__app?.view");
+  await waitFor('window.__app.view.ready || window.__app.view.software', 30_000);
+  const cloudAfter = await evaluate("document.querySelector('#btn-clouds').getAttribute('aria-pressed')");
+  ok(cloudPersist === 'false' && cloudAfter === 'false', 'A cloudless view survives a reload');
+  await evaluate("document.querySelector('#btn-clouds').click()");
+
+  // Two artefacts of the cloud-free view, which is the one change here that can
+  // only be judged by looking: Earth with its weather on and with it taken off.
+  await evaluate(`(async () => {
+    __app.loadPreset('earth');
+    for (let i = 0; i < 80 && __app.view.body !== 'earth'; i++) {
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    if (__app.view.showClouds === false) document.querySelector('#btn-clouds').click();
+    __app.tick(0);
+  })()`);
+  const withCloud = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
+  writeFileSync(cloudyShot, Buffer.from(withCloud.data, 'base64'));
+  await evaluate("document.querySelector('#btn-clouds').click(); __app.view.skyKey = ''; __app.tick(0);");
+  const noCloud = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
+  writeFileSync(clearShot, Buffer.from(noCloud.data, 'base64'));
+  await evaluate("document.querySelector('#btn-clouds').click();");
+
   // Kept as an artefact: the chart furniture is drawn to a canvas, so a picture
   // is the only way anyone can check it reads properly in the other language.
   // Venus, because it carries the longest state name in the dictionary and so
@@ -400,6 +473,7 @@ try {
   console.log(`Screenshot: ${screenshot}`);
   console.log(`Drowned screenshot: ${drownedScreenshot}`);
   console.log(`Slovak screenshot: ${slovakScreenshot}`);
+  console.log(`Clouds on/off: ${cloudyShot} · ${clearShot}`);
 } finally {
   try { await call('Browser.close', {}, undefined, 2000); } catch { chrome.kill('SIGTERM'); }
   await Promise.race([new Promise((resolve) => chrome.once('exit', resolve)), delay(2000)]);

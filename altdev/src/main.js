@@ -63,6 +63,7 @@ const discovered = loadDiscovered();
 const QUALITY_KEY = `${NS}.quality.v1`;
 const ATMO_KEY = `${NS}.atmosphere.v1`;
 const PAN_KEY = `${NS}.panSpeed.v1`;
+const CLOUD_KEY = `${NS}.showClouds.v1`;
 
 function panSpeedPref() {
   try {
@@ -134,6 +135,24 @@ function updateAtmoButton() {
   b.title = t(real
     ? 'Atmosphere: realistic — true scale height, and an opaque one hides the ground'
     : 'Atmosphere: stylised — the shell is exaggerated so you can see it change');
+}
+// Clouds off is a VIEW, not a climate. The deck still reflects its sunlight and
+// still cools the planet -- the readout's cloud cover does not move and neither
+// does the temperature. It is simply not drawn, so the surface underneath can
+// be looked at: which continents are flooded, where the ice actually reaches,
+// what a real body's map looks like without its own weather on top of it.
+function updateCloudButton() {
+  const b = $('#btn-clouds');
+  if (!b) return;
+  const on = view.showClouds !== false;
+  b.setAttribute('aria-pressed', String(on));
+  b.textContent = on ? '\u2601' : '\u26f0';
+  b.title = t(on
+    ? 'Clouds: shown — click to see the surface underneath'
+    : 'Clouds: hidden — a view only; they still cool the planet');
+}
+function cloudPref() {
+  try { return localStorage.getItem(CLOUD_KEY) !== 'off'; } catch { return true; }
 }
 function qualityFromUrl() {
   const q = (new URLSearchParams(location.search).get('quality') || '').toLowerCase();
@@ -1994,6 +2013,17 @@ function bindControls() {
       ? 'Realistic atmosphere — true scale height. Earth\u2019s air is 0.7% of its radius, and Venus shows only cloud tops.'
       : 'Stylised atmosphere — the shell is exaggerated so you can watch it change.', 6000);
   });
+  view.showClouds = cloudPref();
+  updateCloudButton();
+  $('#btn-clouds').addEventListener('click', () => {
+    view.showClouds = view.showClouds === false;
+    try { localStorage.setItem(CLOUD_KEY, view.showClouds ? 'on' : 'off'); } catch { }
+    if (view.software) view.skyKey = '';      // the CPU path caches its frame
+    updateCloudButton();
+    toast(view.showClouds
+      ? t('Clouds shown again.')
+      : t('Clouds hidden — a view only. They still reflect their sunlight and still cool the planet; the readout\u2019s cloud cover has not moved.'), 6000);
+  });
   $('#btn-gfx').addEventListener('click', () => {
     if (!view.texturesLoaded) { toast(t('Surface maps are not available in this build')); return; }
     view.wantTextures = !view.wantTextures;
@@ -2294,6 +2324,7 @@ function relabel() {
   updateAtmoButton();
   updateQualityButton();
   updateGfxButton();
+  updateCloudButton();
   updatePanSelect();
   buildPresets();
   buildScenarios();

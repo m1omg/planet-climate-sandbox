@@ -122,6 +122,21 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
     console.log('\x1b[32mPASS\x1b[0m  a 100% ocean draws no residual mapped or procedural land');
   }
 
+  // The cloud-free view has no uniform of its own -- the fragment stage is at
+  // its uniform budget -- so it works by handing the shader a negative cover
+  // and letting the existing clamp take it to nothing. That is only true while
+  // the clamp is there and while the locked-world substellar term is small
+  // enough to stay under it, so both are checked rather than assumed.
+  {
+    const m = src.match(/float\s+cover\s*=\s*clamp\(\s*uCloud\s*\+\s*uLocked\s*\*\s*sub\s*\*\s*([0-9.]+)\s*,\s*0\.0\s*,\s*1\.0\s*\)/);
+    if (!m || Number(m[1]) >= 1) {
+      failed++;
+      console.log('\x1b[31mFAIL\x1b[0m  a negative uCloud no longer clears the deck — the cloud-free view is broken');
+    } else {
+      console.log(`\x1b[32mPASS\x1b[0m  a negative uCloud clears the deck, substellar pile-up included  —  +${m[1]} < 1`);
+    }
+  }
+
   const { BODY_COAST_LOW, BODY_COAST_HIGH, seaLevelForLand } =
     await import('../src/render/terrain.js');
   const { width, height, pixels } = readGrayPng(join(root, '../assets/bodies/earth_height.png'));
