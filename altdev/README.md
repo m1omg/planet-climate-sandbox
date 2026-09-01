@@ -326,8 +326,21 @@ One check is about a word rather than a mechanism. **A runaway greenhouse is not
 `únik` is what hydrogen does, and what an atmosphere does to a solar wind — both of which this model
 tracks separately and displays a few centimetres away. Using it for the runaway as well said the
 planet was leaking when what it is doing is running away with itself, so the runaway is
-*reťazový skleníkový efekt* throughout and `smoketest.mjs` fails if `únik` ever appears in a
+*nekontrolovateľný skleníkový efekt* throughout and `smoketest.mjs` fails if `únik` ever appears in a
 translation of a string with "runaway" in it.
+
+That name is thirty-nine characters, against nineteen for "Dry Runaway Greenhouse", and it exposed a
+layout assumption that had been wrong all along: the readout tiles and the climate cards were
+`white-space: nowrap` with an ellipsis. A truncated label names nothing — `REZERVA DO NEKONTROL…` —
+and the tiles were also forcing themselves wider than the panel that holds them, which is why the
+right-hand column ran off the edge of a narrow window and why `MORSKÝ ĽAD / PEVNINSK…` was clipped in
+English too. Both now wrap instead, and `browsercheck.mjs` lays **every** climate name out in a real
+card in Chrome and fails if one overflows — measured, not assumed, because the only honest way to
+know whether a string fits is to let the browser try to fit it.
+
+The one label that still cannot fit is the readout's `Runaway margin`: the word
+*nekontrolovateľného* alone is 130px in a 136px tile, so no wrapping saves it. That tile reads
+*Rezerva do prekročenia* and carries the full sentence as a tooltip.
 
 ### Frame-rate independence
 

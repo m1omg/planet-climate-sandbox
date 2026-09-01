@@ -748,9 +748,9 @@ if (created < 20) {
       for (const f of ['name', 'blurb']) if (/únik|unik/i.test(e[f] || '')) offenders.push(`state ${id}.${f}`);
     }
   }
-  const wanted = 'reťazový skleníkový efekt';
-  const named = SK.states.dryRunaway.name.includes('reťazový skleníkový efekt')
-    && SK.states.wetRunaway.name.includes('reťazový skleníkový efekt');
+  const wanted = 'nekontrolovateľný skleníkový efekt';
+  const named = SK.states.dryRunaway.name.includes('nekontrolovateľný skleníkový efekt')
+    && SK.states.wetRunaway.name.includes('nekontrolovateľný skleníkový efekt');
   if (offenders.length || !named) {
     console.log(`\x1b[31mFAIL\x1b[0m  runaway greenhouse mistranslated as escape: `
       + (offenders.join(' · ') || `the two runaway states must be named "${wanted}"`));

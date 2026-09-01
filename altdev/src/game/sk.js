@@ -130,9 +130,9 @@ export const SK = {
     'About the model': 'O modeli',
     'A zonal energy-balance model over 18 equal-area bands. Longwave radiation uses a semi-grey two-stream fit anchored to modern Earth (240 W/m²), Venus (161 W/m²) and the':
       'Zonálny model energetickej bilancie na 18 rovnako veľkých pásoch. Dlhovlnné žiarenie počíta pološedý dvojtokový vzťah ukotvený na dnešnú Zem (240 W/m²), Venušu (161 W/m²) a na',
-    'Simpson–Nakajima runaway limit': 'Simpsonovu–Nakajimovu hranicu reťazového skleníkového efektu',
+    'Simpson–Nakajima runaway limit': 'Simpsonovu–Nakajimovu hranicu nekontrolovateľného skleníkového efektu',
     'of 283 W/m² — which the fit reproduces rather than imposes, so the runaway greenhouse emerges from the physics.':
-      's hodnotou 283 W/m² — ktorú vzťah reprodukuje, a nie predpisuje, takže reťazový skleníkový efekt vychádza z fyziky.',
+      's hodnotou 283 W/m² — ktorú vzťah reprodukuje, a nie predpisuje, takže nekontrolovateľný skleníkový efekt vychádza z fyziky.',
     'Slow processes run on the same accelerated clock: the carbonate–silicate thermostat (~1 Myr), snowball CO₂ build-up (5–50 Myr), and hydrogen escape (10⁸–10⁹ yr to lose an ocean). Physics advances on simulated time only — the trajectory is identical at any frame rate.':
       'Pomalé procesy bežia na tých istých zrýchlených hodinách: uhličitanovo-kremičitanový termostat (~1 mil. rokov), hromadenie CO₂ pod ľadom snehovej gule (5–50 mil. rokov) a únik vodíka (10⁸–10⁹ rokov na stratu oceánu). Fyzika postupuje výlučne v simulovanom čase — trajektória je pri každej snímkovej frekvencii rovnaká.',
     'Source & references': 'Zdrojový kód a literatúra',
@@ -165,7 +165,9 @@ export const SK = {
     'Absorbed': 'Pohltené',
     'Emitted': 'Vyžiarené',
     'Internal heat': 'Vnútorné teplo',
-    'Runaway margin': 'Rezerva do reťazového efektu',
+    'Runaway margin': 'Rezerva do prekročenia',
+    'How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.':
+      'O koľko beží tento svet pod Simpsonovou–Nakajimovou hranicou. Za ňou nie je rovnováha pri žiadnej teplote a začína nekontrolovateľný skleníkový efekt.',
     'Water left': 'Zostávajúca voda',
     'Water loss': 'Strata vody',
     'negligible': 'zanedbateľná',
@@ -429,9 +431,9 @@ export const SK = {
   states: {
     magma: { name: 'Magmatický oceán',
       blurb: 'Povrch je roztavená hornina. Nad približne 1400 K sa kremičitany tavia a planéta žiari v blízkej infračervenej oblasti; atmosféru, ak nejakú má, tvorí horúca zmes horninových pár a vodnej pary.' },
-    dryRunaway: { name: 'Suchý reťazový skleníkový efekt',
+    dryRunaway: { name: 'Suchý nekontrolovateľný skleníkový efekt',
       blurb: 'Venuša. Oceán je preč — vyparil sa, rozložilo ho svetlo a vodík odviala do vesmíru — a zostala hustá suchá atmosféra CO₂ nad povrchom horúcim natoľko, že slabo žiari. V ľudských časových mierkach nezvratné.' },
-    wetRunaway: { name: 'Vlhký reťazový skleníkový efekt',
+    wetRunaway: { name: 'Vlhký nekontrolovateľný skleníkový efekt',
       blurb: 'Pohltené žiarenie hviezdy spolu s vlastným teplom planéty prekročilo Simpsonovu–Nakajimovu hranicu (~282 W/m²), takže rovnováha neexistuje pri žiadnej teplote. Dokáže to aj samotné slapové teplo, na svete, ktorý by hviezda nechala obývateľný (Barnes a kol. 2013). Oceán sa vyvára do mohutnej parnej atmosféry; skupenské teplo naťahuje tento prechod na ~10⁵ rokov a samotná strata vody trvá ďalších 10⁸–10⁹.' },
     moist: { name: 'Vlhký skleníkový režim',
       blurb: 'Voda je stále kvapalná, ale chladná pasca zlyhala: podiel vody v stratosfére presiahol 10⁻³ a vodík uniká plynule. Krátkodobo obývateľný svet, ktorý však počas stoviek miliónov rokov vyschne (Kasting 1988).' },
@@ -440,7 +442,7 @@ export const SK = {
     temperate: { name: 'Mierny a obývateľný',
       blurb: 'Kvapalná voda na väčšine povrchu so stabilným polárnym ľadom. Uhličitanovo-kremičitanový termostat drží tento stav proti pomalým zmenám žiarenia hviezdy v mierke ~1 mil. rokov.' },
     dune: { name: 'Púštny svet',
-      blurb: 'Suchozemská planéta s minimom povrchovej vody. Nenasýtený vzduch dovoľuje trópom vyžarovať nad klasickú hranicu reťazového skleníkového efektu a suchá stratosféra škrtí stratu vody — púštne svety preto zostávajú obývateľné oveľa bližšie k hviezde než oceánické (Abe a kol. 2011).' },
+      blurb: 'Suchozemská planéta s minimom povrchovej vody. Nenasýtený vzduch dovoľuje trópom vyžarovať nad klasickú hranicu nekontrolovateľného skleníkového efektu a suchá stratosféra škrtí stratu vody — púštne svety preto zostávajú obývateľné oveľa bližšie k hviezde než oceánické (Abe a kol. 2011).' },
     waterworld: { name: 'Oceánický svet',
       blurb: 'Globálny oceán bez akejkoľvek súše. Kontinentálne zvetrávanie je vypnuté, ale morská voda stále prúdi cez čerstvý bazalt v oceánskych chrbtoch a ukladá tam uhlík, takže termostat prežíva — slabší, pomalší a s rovnováhou pri vyššej teplote a vyššom obsahu uhlíka, než by mal svet s kontinentmi.' },
     eyeball: { name: 'Svet-oko',
@@ -448,7 +450,7 @@ export const SK = {
     lobster: { name: 'Homárí stav',
       blurb: 'Svet-oko, ktorého otvorená voda sa prenosom tepla v oceáne roztiahla pozdĺž rovníka — teplé klepetá siahajú okolo planéty smerom k nočnej strane.' },
     twilight: { name: 'Súmračný svet',
-      blurb: 'Oko je rozpálené, nočná strana ľadová a medzi nimi vedie po terminátore mierny prstenec kvapalnej vody okolo celej planéty. Funguje to len preto, že vody je primálo na prenos tepla: vlhkejší svet by odviedol od podhviezdneho bodu dosť skupenského tepla na vyrovnanie teplôt a potom by ako celok prekročil hranicu reťazového skleníkového efektu, namiesto toho, aby po ňom zostal obývateľný pás (Lobo a kol. 2023).' },
+      blurb: 'Oko je rozpálené, nočná strana ľadová a medzi nimi vedie po terminátore mierny prstenec kvapalnej vody okolo celej planéty. Funguje to len preto, že vody je primálo na prenos tepla: vlhkejší svet by odviedol od podhviezdneho bodu dosť skupenského tepla na vyrovnanie teplôt a potom by ako celok prekročil hranicu nekontrolovateľného skleníkového efektu, namiesto toho, aby po ňom zostal obývateľný pás (Lobo a kol. 2023).' },
     trapped: { name: 'Púšť s vodou uväznenou na nočnej strane',
       blurb: 'Na svete s viazanou rotáciou je nočná strana trvalou chladnou pascou. Všetka voda sa tam presunula ako ľadovcový ľad a na osvetlenej strane zostala vyprahnutá púšť, ktorá ju už nezíska späť.' },
     waterbelt: { name: 'Vodný pás',
@@ -481,7 +483,7 @@ export const SK = {
       hint: 'Vnútri snehovej gule sú sopky jediná páka: zvetrávanie potrebuje kvapalnú vodu, takže keď ľad siaha po rovník, neexistuje odber a každý vyvrhnutý gram zostáva. Zvýšte odplyňovanie a nechajte bežať hodiny.',
     },
     hold: {
-      name: 'Zadržať reťazový efekt',
+      name: 'Zadržať nekontrolovateľný efekt',
       brief: 'Svet šesť wattov na meter štvorcový pod Simpsonovou–Nakajimovou hranicou — obývateľný, a bez akejkoľvek rezervy. Jeho hviezda je ťažšia než Slnko a spaľuje vodík trikrát rýchlejšie, takže sa táto medzera zatvára sama a neprestane. Udržte planétu obývateľnú miliardu rokov.',
       hint: 'Hviezdu stlmiť neviete a jasnieť jej nezabránite. Vziať sa dá skleníkový efekt: odstráňte CO₂ a držte ho dole, lebo 2,5-násobný vulkanizmus ho vracia späť. Ak to prestane stačiť, pamätajte, že hranica platí pre pohltené žiarenie oproti tomu, čo atmosféra dokáže vyžiariť — zosvetlite povrch, a suchšia planéta vyžaruje lepšie než vlhká.',
     },
@@ -497,7 +499,7 @@ export const SK = {
     },
     dune: {
       name: 'Postaviť púštny svet',
-      brief: 'Umiestnite obývateľnú planétu tam, kde by sa oceánický svet vyvaril. Púštne planéty prežijú oveľa bližšie k hviezde: nenasýtený vzduch vyžaruje nad klasickú hranicu reťazového skleníkového efektu a suchá stratosféra brzdí stratu vody.',
+      brief: 'Umiestnite obývateľnú planétu tam, kde by sa oceánický svet vyvaril. Púštne planéty prežijú oveľa bližšie k hviezde: nenasýtený vzduch vyžaruje nad klasickú hranicu nekontrolovateľného skleníkového efektu a suchá stratosféra brzdí stratu vody.',
       hint: 'Proti intuícii, no skutočne (Abe a kol. 2011): dajte jej *menej* vody. Samotné vysušenie však nestačí — pri hlbokých panvách zemského typu sa aj tá troška rozleje do širokých plytkých morí a vzduch zostane vlhký. Zvýšte aj geometriu panví, aby zvyšná voda nemala kam tiecť.',
     },
     oxidation: {
@@ -507,7 +509,7 @@ export const SK = {
     },
     venus: {
       name: 'Zvrátiť Venušu',
-      brief: 'Suchý reťazový skleníkový efekt: 90 barov CO₂, 460 °C a voda dávno rozložená svetlom a odviata preč. Ochlaďte planétu pod bod varu.',
+      brief: 'Suchý nekontrolovateľný skleníkový efekt: 90 barov CO₂, 460 °C a voda dávno rozložená svetlom a odviata preč. Ochlaďte planétu pod bod varu.',
       hint: 'Voda je preč a nevráti sa — posuvník zásoby je však váš. Pochovajte CO₂ a dajte zvetrávaciemu termostatu niečo, s čím môže pracovať.',
     },
     hotbranch: {

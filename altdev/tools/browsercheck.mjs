@@ -231,8 +231,58 @@ try {
     'The state banner’s subtitle is translated, not just its title', slovak.reason);
   ok(slovak.option === '0,5×' && /0,5×/.test(slovak.title || ''),
     'The pan-speed menu uses a Slovak decimal comma', `${slovak.option} · ${slovak.title}`);
+  // A label the panel cannot show is a label that names nothing. Slovak is
+  // routinely longer than the English it replaces, so measure the tiles in the
+  // language that stresses them rather than in the one they were designed for.
+  const clipped = await evaluate(`(() => {
+    const bad = [];
+    for (const k of document.querySelectorAll('#readout .stat .k')) {
+      if (k.scrollHeight > k.clientHeight + 1) bad.push(k.textContent.trim());
+    }
+    return bad;
+  })()`);
+  ok(clipped.length === 0, 'No readout label is truncated in Slovak',
+    clipped.length ? clipped.join(' · ') : 'all tiles show their full label');
+
+  // The discovered-climates list is a two-column grid, so each name gets about
+  // half the panel. Rather than measure only what this session unlocked, put
+  // every Slovak name into a real card and let the browser lay it out.
+  const longNames = await evaluate(`(async () => {
+    const { SK } = await import('./src/game/sk.js');
+    const cards = [...document.querySelectorAll('#statelog .state-card')];
+    if (!cards.length) return { skipped: true };
+    const names = Object.values(SK.states).map((e) => e.name);
+    const over = [];
+    for (const n of names) {
+      const c = cards[0], nm = c.querySelector('.nm');
+      const before = nm.textContent;
+      nm.textContent = n;
+      if (nm.scrollHeight > nm.clientHeight + 1 || nm.scrollWidth > nm.clientWidth + 1) {
+        over.push(n + ' (' + nm.scrollWidth + 'x' + nm.scrollHeight
+          + ' in ' + nm.clientWidth + 'x' + nm.clientHeight + ')');
+      }
+      nm.textContent = before;
+    }
+    return { over, count: names.length };
+  })()`);
+  if (longNames.skipped) {
+    ok(true, 'No climate card was present to measure', 'skipped');
+  } else {
+    ok(longNames.over.length === 0, 'Every Slovak climate name fits its card',
+      longNames.over.length ? longNames.over.join(' · ') : `all ${longNames.count} fit`);
+  }
+
   // Kept as an artefact: the chart furniture is drawn to a canvas, so a picture
   // is the only way anyone can check it reads properly in the other language.
+  // Venus, because it carries the longest state name in the dictionary and so
+  // stresses the banner and the climate card harder than Earth does.
+  await evaluate(`(async () => {
+    __app.loadPreset('venus');
+    for (let i = 0; i < 60 && __app.view.body !== 'venus'; i++) {
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    __app.tick(0);
+  })()`);
   const skShot = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
   writeFileSync(slovakScreenshot, Buffer.from(skShot.data, 'base64'));
 

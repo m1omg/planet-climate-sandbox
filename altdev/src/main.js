@@ -792,7 +792,12 @@ function lifeText(w) {
       t('Cells with a nucleus and mitochondria, so: aerobes. They need free oxygen — a percent or so of Earth\u2019s is enough — and they give out around 60 °C, far short of what a bacterium will take.'));
 }
 
-function stat(k, v, cls = '') { return `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
+// `tip` exists because a 136px tile cannot hold every language's name for a
+// quantity. The label is what fits; the tooltip is what it means.
+function stat(k, v, cls = '', tip = '') {
+  const title = tip ? ` title="${tip.replace(/"/g, '&quot;')}"` : '';
+  return `<div class="stat ${cls}"${title}><div class="k">${k}</div><div class="v">${v}</div></div>`;
+}
 
 function updateReadout() {
   const w = sim.world, dg = w.diag, d = dg.d;
@@ -909,7 +914,8 @@ function updateReadout() {
       return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
     stat(t('Runaway margin'), `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
-      margin < 0 ? 'bad' : margin < 15 ? 'warn' : '') +
+      margin < 0 ? 'bad' : margin < 15 ? 'warn' : '',
+      t('How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.')) +
     stat(t('Water left'), `${(dg.totalWater).toFixed(dg.totalWater < 1 ? 3 : 2)}<small> EO</small>`,
       w.water.lost > 0.02 ? 'warn' : '') +
     stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : t('negligible'),
