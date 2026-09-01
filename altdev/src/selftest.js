@@ -1147,13 +1147,53 @@ export function run() {
         `TRAPPIST-1 ${saturationAge(2566).toFixed(2)} Gyr · GJ 1132 ${saturationAge(3270).toFixed(2)} · `
         + `Sun ${saturationAge(SOLAR_TEMP).toFixed(2)}`);
 
+      // Spin-down is a switch of its own, and the red dwarfs come with it on.
+      // It has to be separable from the bolometric track because the two are
+      // separate physics that happen to belong to the same star: a world can
+      // reasonably be asked "what if this star never calmed down", and before
+      // it was a control there was no way to ask.
+      {
+        const dwarfs = ['trappist1b', 'trappist1e', 'gj1132b'];
+        const armed = dwarfs.filter((id) => PRESETS[id].params.xuvDecay === true);
+        const cool = dwarfs.every((id) => (PRESETS[id].params.starTemp ?? 5772) < 4000);
+        check('Every red dwarf preset ships with its star spinning down',
+          armed.length === dwarfs.length && cool,
+          `${armed.join(', ')} — all below 4000 K`);
+      }
+      {
+        const base = { insolation: 1, xuvFraction: 7e-4 };
+        const on = evolvedParams({ ...PRESETS.trappist1e.params, xuvDecay: true }, base, 2e9);
+        const off = evolvedParams({ ...PRESETS.trappist1e.params, xuvDecay: false }, base, 2e9);
+        check('…and turning it off holds the ultraviolet exactly where it was set',
+          on.xuvFraction < base.xuvFraction * 0.9 && off.xuvFraction === undefined,
+          `${(base.xuvFraction / 3.4e-6).toFixed(0)}× solar → `
+          + `${(on.xuvFraction / 3.4e-6).toFixed(0)}× with it on, unchanged with it off`);
+      }
+
+      // Flipping it mid-run has to re-base the curve on where the star actually
+      // is, not on where it started, or turning it on would teleport the
+      // ultraviolet to wherever the untouched curve had got to by then.
+      {
+        const s = new Simulation({ ...PRESETS.trappist1e.params, xuvDecay: false });
+        s.runYears(1e9);
+        const held = s.world.params.xuvFraction;
+        s.setParams({ xuvDecay: true });
+        const justAfter = s.world.params.xuvFraction;
+        s.runYears(1e9);
+        check('…and switching it on mid-run starts from where the star is',
+          Math.abs(justAfter - held) < held * 1e-6
+            && s.world.params.xuvFraction < held * 0.95,
+          `${(held / 3.4e-6).toFixed(0)}× solar when switched on, `
+          + `${(s.world.params.xuvFraction / 3.4e-6).toFixed(0)}× a billion years later`);
+      }
+
       // The bug this replaced: the XUV decline lived inside the brightening
       // branch, so it only ran on worlds whose star was also getting brighter.
       // Every M-dwarf preset carries brightening: 0 -- correctly, their
       // luminosity really is flat -- which meant XUV was pinned for the entire
       // run on the four worlds where XUV is the dominant process.
       {
-        const dwarf = { ...PRESETS.trappist1e.params };
+        const dwarf = { ...PRESETS.trappist1e.params };   // ships with xuvDecay on
         const base = { insolation: dwarf.insolation, xuvFraction: dwarf.xuvFraction };
         const after = evolvedParams(dwarf, base, 1e9);
         check('Stellar ultraviolet ages even when the star is not brightening',

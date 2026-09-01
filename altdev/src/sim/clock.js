@@ -102,6 +102,7 @@ export class Simulation {
       w.insolationTarget = null;
     }
     const touched = ['insolation', 'internalHeat', 'brightening', 'realisticGeology',
+                     'xuvDecay',
                      'startAge', 'xuvFraction', 'magneticField', 'outgassing',
                      'resurfacingAge', 'resurfacingBoost', 'resurfacingSpan'].some((k) => k in patch);
     if (touched) this.rebaseEvolution();

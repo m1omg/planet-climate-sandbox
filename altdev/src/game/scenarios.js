@@ -80,7 +80,7 @@ export const SCENARIOS = [
     // the number this scenario was built around, now derived from the star
     // instead of asserted over it.
     params: { ...EARTH, realisticGeology: true, insolation: 1.15, co2Bar: 1.2e-3, outgassing: 2.5,
-              starTemp: 6500, startAge: 2.75, brightening: 1, startT: 300 },
+              starTemp: 6500, startAge: 2.75, brightening: 1, xuvDecay: true, startT: 300 },
     limit: 1e9,
     check: (w) => w.time > 1e9 && classify(w).habitable,
     fail: (w) => w.diag.Tmean > 400 || w.water.lost > 0.25,
@@ -102,7 +102,7 @@ export const SCENARIOS = [
     icon: '👁️',
     brief: 'A tidally locked world facing an active M dwarf forever. One hemisphere burns, the other is a cold trap that steals water and never gives it back. Keep an open ocean under the star for a billion years.',
     hint: 'Thick air moves heat to the night side and stops the water migrating there for good. Watch the XUV — an active red dwarf strips water fast.',
-    params: { ...EARTH, realisticGeology: true, mass: 1.2, insolation: 1.05, tidallyLocked: true, rotationHours: 300, starTemp: 3200, xuvFraction: 6e-4, landFraction: 0.2, n2Bar: 1.5, startT: 265 },
+    params: { ...EARTH, realisticGeology: true, mass: 1.2, insolation: 1.05, tidallyLocked: true, rotationHours: 300, starTemp: 3200, xuvFraction: 6e-4, xuvDecay: true, landFraction: 0.2, n2Bar: 1.5, startT: 265 },
     limit: 1e9,
     check: (w) => { const c = classify(w); return w.time > 1e9 && (c.id === 'eyeball' || c.id === 'lobster' || c.habitable); },
     fail: (w) => w.water.lost > 0.6 || w.diag.iceMean > 0.985,

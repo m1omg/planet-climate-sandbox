@@ -805,10 +805,25 @@ anchors shift: every one of them starts past it.
 inside the `brightening` branch — two lines under a comment saying it matters far more than the
 bolometric brightening for anything to do with escape. Every M-dwarf preset carries `brightening: 0`,
 correctly, because over any run TRAPPIST-1's luminosity really is flat. So XUV was pinned for the
-entire run on TRAPPIST-1b and 1e (206× solar), the Locked Eyeball (147×) and GJ 1132 b (59×) — the
-four worlds where XUV is the dominant process and everything else is scenery. It is its own term now.
-`brightening` still gates the luminosity and only the luminosity; it keeps its double duty as a speed,
-so a star living three times over spins down three times as fast too.
+entire run on TRAPPIST-1b and 1e (206× solar) and GJ 1132 b (59×) — the worlds where XUV is the
+dominant process and everything else is scenery.
+
+It is **its own switch** now, `star spins down`, sitting beside the XUV slider rather than folded into
+the brightening one. They are separate physics that happen to belong to the same star: the bolometric
+track is the core filling with helium, the spin-down is the surface losing angular momentum to its own
+wind, and the two run in opposite directions. Having them share a control meant a world could not be
+asked what it would do under a star that never calmed down — which is close to what a flare star is,
+and a fair thing to want to ask.
+
+`brightening` still gates the luminosity and only the luminosity, and it keeps its double duty as a
+speed: a star living three times over spins down three times as fast too.
+
+**The three red dwarfs ship with it armed** — TRAPPIST-1b, TRAPPIST-1e and GJ 1132 b — along with the
+Eye of the Red Dwarf scenario, whose own hint already tells you to watch the XUV. So do the solar
+histories, which had it before it was separable. The invented worlds — the ocean world, the dune
+world, the snowball — start with it off, which is exactly what they did before the switch existed.
+Flipping it mid-run re-bases the curve on where the star actually is, so turning it on does not
+teleport the ultraviolet to wherever an untouched curve had reached by then.
 
 ### Three worlds tuned by where they end, not where they start
 

@@ -234,7 +234,14 @@ export function evolvedParams(p, base, years) {
   // double duty as a speed: a 3 is a star living three times over, so the
   // spin-down has to run at that speed too or the two halves of one star would
   // be ageing at different rates.
-  if (base.xuvFraction > 0) {
+  //
+  // ...and it has a switch of its own, because it is separate physics that
+  // happens to belong to the same star. The bolometric track comes from the
+  // core filling with helium; the ultraviolet comes from the surface losing
+  // angular momentum to its own wind. A world can reasonably be asked what it
+  // would do under a star that never calmed down -- which is close to what a
+  // flare star is -- and before this there was no way to ask.
+  if (p.xuvDecay && base.xuvFraction > 0) {
     const start = p.startAge ?? EARTH_AGE;
     const speed = p.brightening > 0 ? p.brightening : 1;
     const T = p.starTemp;

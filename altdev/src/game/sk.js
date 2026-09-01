@@ -274,6 +274,13 @@ export const SK = {
     "The star brightens by 10% every billion years, and the control follows it. The Sun's real track is 7.4%/Gyr averaged over its life.":
       'Hviezda sa každú miliardu rokov zjasní o 10 % a ovládací prvok sa hýbe s ňou. Skutočná dráha Slnka je v priemere 7,4 % za miliardu rokov.',
     'brightening star': 'jasnejúca hviezda',
+    'star spins down': 'hviezda spomaľuje rotáciu',
+    'A young star is magnetically saturated — its dynamo is running flat out and the ratio cannot climb further however fast it spins — and only starts to calm down once it has spun down. How long that takes belongs to the star: a tenth of a billion years for the Sun, one and a half for a late M dwarf. Off, the star never calms down, which is roughly a flare star that stayed young.':
+      'Mladá hviezda je magneticky nasýtená — jej dynamo beží naplno a pomer už nemôže stúpnuť, nech sa točí akokoľvek rýchlo — a upokojovať sa začne až po spomalení rotácie. Ako dlho to trvá, závisí od hviezdy: desatina miliardy rokov pri Slnku, jeden a pol pri neskorom červenom trpaslíkovi. Vypnuté znamená hviezdu, ktorá sa nikdy neupokojí — teda zhruba eruptívnu hviezdu, ktorá zostala mladá.',
+    'The star now calms down as it ages — saturated first, then Ribas t⁻¹·²³':
+      'Hviezda sa s vekom upokojuje — najprv nasýtená, potom Ribasov vzťah t⁻¹·²³',
+    'The star stays as active as it is now, for as long as you run it':
+      'Hviezda zostane rovnako činná, ako je teraz, po celý beh',
     'Move this control and the star walks to the new value instead of jumping to it. A jump can throw a world across a threshold that the same change made gradually would carry it along — the difference between a 63 °C ocean and a 576 °C steam greenhouse.':
       'Hviezda k novej hodnote prejde postupne, namiesto skoku. Skok dokáže svet prehodiť cez prah, ktorý by tá istá zmena spravená pozvoľna zvládla bez ujmy — rozdiel medzi oceánom pri 63 °C a parným skleníkom pri 576 °C.',
     'smooth changes': 'plynulé zmeny',
