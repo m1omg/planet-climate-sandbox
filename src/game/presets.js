@@ -133,6 +133,25 @@ export const SOLAR_HISTORY = { brightening: 1, realisticGeology: true, xuvDecay:
 // planets keep an atmosphere. It is the one process on these worlds that
 // everything else is scenery to, so it ships armed.
 export const DWARF_HISTORY = { brightening: 0, realisticGeology: true, xuvDecay: true };
+// Everything about these two worlds that its age does not change. Shared, so a
+// planet and its own younger self cannot disagree about its mass, its orbit or
+// its star -- the whole value of the pair is that the only differences between
+// them are the ones six and a half billion years put there.
+const T1B = { ...EARTH, ...DWARF_HISTORY,
+  mass: 1.374, insolation: 4.153, starTemp: 2566, tidallyLocked: true,
+  rotationHours: 36.3, obliquity: 0, landFraction: 1, o2Bar: 0, ch4Bar: 0, biosphere: 0,
+  internalHeat: 2.68, tidalHeat: 2.68, outgassing: 1.5, xuvFraction: 7e-4,
+  startAge: 7.6, landAlbedo: 0.12 };
+const T1E = { ...EARTH, ...DWARF_HISTORY,
+  mass: 0.692, insolation: 0.646, starTemp: 2566, tidallyLocked: true,
+  rotationHours: 146.4, obliquity: 0, landFraction: 0.3, o2Bar: 0, ch4Bar: 0, biosphere: 0,
+  internalHeat: 0.18, tidalHeat: 0.18, outgassing: 1.0, xuvFraction: 7e-4, startAge: 7.6 };
+
+// TRAPPIST-1 is not 4.567 Gyr old. Burgasser & Mamajek (2017) put the system at
+// 7.6 +/- 2.2 Gyr, and the default start age was simply the solar system's --
+// which for a star still observed X-ray active matters, because where it sits
+// on its own spin-down curve is the whole question. Both TRAPPIST planets are
+// 100% tidally heated, so moving their age does not touch their interiors.
 
 export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
 
@@ -355,12 +374,8 @@ export const PRESETS = {
   // brightness temperature of about 503 K, which is what a bare rock with no
   // atmosphere redistributing heat looks like: no atmosphere detected. So it
   // starts with essentially none, and the volcanism has to build one.
-  trappist1b: { name: 'TRAPPIST-1b', icon: '🔥', params: { ...EARTH, ...DWARF_HISTORY,
-    mass: 1.374, insolation: 4.153, starTemp: 2566, tidallyLocked: true,
-    rotationHours: 36.3, obliquity: 0, water: 0, landFraction: 1,
-    n2Bar: 1e-4, o2Bar: 0, co2Bar: 1e-5, ch4Bar: 0, biosphere: 0,
-    internalHeat: 2.68, tidalHeat: 2.68, outgassing: 1.5, xuvFraction: 7e-4,
-    landAlbedo: 0.12, startT: 500 } },
+  trappist1b: { name: 'TRAPPIST-1b', icon: '🔥', params: { ...T1B, water: 0,
+    n2Bar: 1e-4, co2Bar: 1e-5, startT: 500 } },
 
   // 0.646 S(+), and the one in the system that sits squarely in the habitable
   // zone. 0.18 W/m^2 of tidal heat, about twice Earth's. Barr et al. give it a
@@ -374,11 +389,8 @@ export const PRESETS = {
   // 1 bar CO2 case). Those GCMs manage it on far less CO2, because a locked
   // world grows a thick cloud deck over the substellar point that this model
   // only approximates; a bar is at the thick end of plausible, not the middle.
-  trappist1e: { name: 'TRAPPIST-1e', icon: '🌍', params: { ...EARTH, ...DWARF_HISTORY,
-    mass: 0.692, insolation: 0.646, starTemp: 2566, tidallyLocked: true,
-    rotationHours: 146.4, obliquity: 0, water: 1.0, landFraction: 0.3,
-    n2Bar: 1.0, o2Bar: 0, co2Bar: 1.0, ch4Bar: 0, biosphere: 0,
-    internalHeat: 0.18, tidalHeat: 0.18, outgassing: 1.0, xuvFraction: 7e-4, startT: 280 } },
+  trappist1e: { name: 'TRAPPIST-1e', icon: '🌍', params: { ...T1E, water: 1.0,
+    n2Bar: 1.0, co2Bar: 1.0, startT: 280 } },
 
   // 19 S(+), and the one Swain et al. 2021 model at 80 W/m^2 of tidal heat --
   // a thousand times Earth's, from an eccentricity of only 0.01 held by
@@ -392,6 +404,42 @@ export const PRESETS = {
   // times Earth's specific activity on top of it would have counted the same
   // heat twice and landed on ninety. It matches the GJ 1132 b button under the
   // internal-heat slider, which is where that arithmetic is written out.
+  // TRAPPIST-1 at 1 Gyr, which is the age its planets had just settled onto the
+  // main sequence and the age the interesting part of their story starts at.
+  //
+  // The star does not change over the run and that is the point: an M8 is
+  // saturated to about 9 Gyr, so these worlds spend their ENTIRE lives under an
+  // ultraviolet flux two hundred times the Sun's, with no let-up to wait for.
+  // That is what the presets are for -- the loss is not a phase they come out
+  // of, it is the whole biography.
+  //
+  // Run either of them forward 6.6 Gyr and it arrives at its own present-day
+  // preset. 1b arrives exactly: five Earth oceans and twenty bar of CO2 are
+  // stripped to nothing and it ends airless, which is what JWST finds and what
+  // Bolmont et al. (2017) predicted from the XUV history. Eight oceans is a
+  // different world -- it never loses the last of them and stays in a wet
+  // runaway -- so the inventory here is on the side of that fork that matches
+  // the planet we can see.
+  earlyTrappist1b: { name: 'TRAPPIST-1b · 1 Gyr', icon: '🌫️', params: { ...T1B,
+    startAge: 1.0, water: 5, n2Bar: 2, co2Bar: 20, startT: 700 } },
+
+  // 1e is the honest one, and it does NOT arrive at its present-day preset.
+  //
+  // That preset carries a bar of CO2 over a bar of N2, and says of itself that
+  // it is a plausible configuration rather than a measured one -- nothing is
+  // known about this planet's atmosphere. Run from a young start under a star
+  // that stays saturated, this model strips it: a hundred bar of nitrogen goes
+  // the same way as one, because at 0.646 S(+) and 206x solar XUV the planet
+  // sits well past the cosmic shoreline and the loss does not care how much
+  // there is to lose. What is left after 6.6 Gyr is a nightside freeze-out --
+  // an ocean cold-trapped on the hemisphere that never sees the star.
+  //
+  // Both presets are worth having, and the disagreement between them is worth
+  // seeing rather than tuning away. One is what the planet would be if it kept
+  // an atmosphere; this is what this model says happens if it started with one.
+  earlyTrappist1e: { name: 'TRAPPIST-1e · 1 Gyr', icon: '🌊', params: { ...T1E,
+    startAge: 1.0, water: 3, n2Bar: 1.0, co2Bar: 2.0, startT: 285 } },
+
   gj1132b: { name: 'GJ 1132 b', icon: '🌋', params: { ...EARTH, ...DWARF_HISTORY,
     mass: 1.66, insolation: 18.8, starTemp: 3270, tidallyLocked: true,
     rotationHours: 39.1, obliquity: 0, water: 0, landFraction: 1,

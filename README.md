@@ -789,17 +789,63 @@ a Rossby number of about 0.13). The decline only starts once the star has spun d
 takes is a property of the star rather than a constant, because a fully convective late M dwarf sheds
 angular momentum far more slowly than a G dwarf does:
 
+How long is **measured, not fitted**. It was fitted once — 0.1 Gyr for the Sun times `(T/T☉)^−3.3` —
+and the number that fell out for a late M dwarf, about 1.5 Gyr, contradicted the observation the
+presets are anchored to. The contradiction is the kind a model can carry for years without anything
+looking wrong:
+
+> TRAPPIST-1b and 1e carry a **measured** present-day XUV of 206× solar (Wheatley et al. 2017:
+> `Lx/Lbol` = 2–4×10⁻⁴, and more again in the EUV). Run that back up a `t^−1.23` curve to a saturation
+> that ended at 1.5 Gyr and it implies the star used to be **843× solar** — almost six times the
+> saturation ceiling of `log(Lx/Lbol) ≈ −3.3`, a ratio no star exceeds because it is set by the dynamo
+> running flat out. The curve was claiming a history the star could not have had. GJ 1132 b was over
+> by four times.
+
+The table is West et al. (2008) instead, who measure activity lifetimes across the M sequence from
+38 000 stars, with the solar X-ray timescale at the hot end. A power law cannot fit it — the sequence
+flattens between M5 and M6, and fits through M4 and through M7 disagree by a factor of two either
+side.
+
 | star | saturated until |
 |---|---|
-| an F5 at 6500 K | 0.07 Gyr |
 | the Sun | 0.10 Gyr |
-| GJ 1132 at 3270 K | 0.65 Gyr |
-| TRAPPIST-1 at 2566 K | **1.45 Gyr** |
+| M0, 3870 K | 0.80 Gyr |
+| GJ 1132, 3270 K | 3.75 Gyr |
+| TRAPPIST-1, 2566 K | **9.1 Gyr** |
 
-That last row is most of why the TRAPPIST-1 planets are in the state they are. Not a harsher star than
-the young Sun — one that stayed harsh an order of magnitude longer. Above the saturation age the curve
-is identical to the bare power law it replaced, which is why no solar preset moves and none of the 23
-anchors shift: every one of them starts past it.
+That last row is most of why the TRAPPIST-1 planets are in the state they are, and it is checkable:
+**TRAPPIST-1 is still X-ray active at the age it actually is.** The system is 7.6 ± 2.2 Gyr old
+(Burgasser & Mamajek 2017) — the presets used to say 4.567, which was just the solar system's number
+left in place — and at 7.6 Gyr it is still inside its saturated stretch. So the spin-down switch,
+armed, correctly does *nothing* to it. `selftest.js` now runs every dwarf preset's measured XUV back
+up the curve and fails if it implies a star brighter than stars get.
+
+Above the saturation age the curve is identical to the bare power law it replaced, which is why no
+solar preset moves and none of the 23 anchors shift: every one of them starts past it.
+
+### TRAPPIST-1 at one billion years
+
+Two presets for the age the story starts at, sharing everything with their present-day selves that
+six and a half billion years does not change — mass, orbit, star, tidal heat — and differing only in
+age, water and air. The star does not change over the run, and that is the point: an M8 saturated to
+9 Gyr means these worlds spend their **entire lives** under 200× the Sun's ultraviolet, with no let-up
+to wait for. The loss is not a phase they come out of, it is the whole biography.
+
+**TRAPPIST-1b · 1 Gyr arrives exactly.** Five Earth oceans and twenty bar of CO₂ are stripped to
+nothing over 6.6 Gyr and it ends airless — which is what JWST finds and what Bolmont et al. (2017)
+predicted from the XUV history. Eight oceans is a different planet: it never loses the last of them
+and stays in a wet runaway, so the inventory sits on the side of that fork matching the world we can
+see.
+
+**TRAPPIST-1e · 1 Gyr does not arrive, and that is worth seeing rather than tuning away.** The
+present-day 1e preset carries a bar of CO₂ over a bar of N₂ and says of itself that it is a plausible
+configuration rather than a measured one — nothing is known about this planet's atmosphere. Run from
+a young start under a star that stays saturated, this model strips it, and **a hundred bar of nitrogen
+goes the same way as one**: at 0.646 S⊕ and 206× solar XUV the planet sits well past the cosmic
+shoreline, and the loss does not care how much there is to lose. What is left after 6.6 Gyr is a
+nightside freeze-out at 0.08 bar with three oceans cold-trapped on the hemisphere that never sees the
+star. One preset is what 1e would be if it kept an atmosphere; the other is what this model says
+happens if it started with one.
 
 **And it used to run only on worlds whose star was also getting brighter.** The XUV decline was nested
 inside the `brightening` branch — two lines under a comment saying it matters far more than the

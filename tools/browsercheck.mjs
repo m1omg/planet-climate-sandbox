@@ -666,7 +666,14 @@ try {
   ok(Math.abs(presets.earlyMoon.p - 0.01) < 0.001 && presets.earlyMoon.water < 2e-7,
     'Ancient Moon loads with thin air and trace water', `${(presets.earlyMoon.p * 1000).toFixed(1)} mbar`);
   if (!renderer.software) ok(presets.earlyMoon.body === 'earlyMoon', 'Ancient Moon loads the real lunar map', presets.earlyMoon.body);
-  ok(presets.presetCount === 24, 'All presets are present in the live DOM', `${presets.presetCount}`);
+  // Counted against the module rather than against a number written here, which
+  // went stale the first time a preset was added and failed for no reason worth
+  // anyone's attention.
+  const presetTotal = await evaluate(
+    `import('./src/game/presets.js').then((m) => Object.keys(m.PRESETS).length)`);
+  ok(presets.presetCount === presetTotal,
+    'Every preset in the module has a button in the live DOM',
+    `${presets.presetCount} of ${presetTotal}`);
 
   const drownedEarth = await evaluate(`(async () => {
     __app.loadPreset('earth');

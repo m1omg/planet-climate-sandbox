@@ -182,16 +182,56 @@ export function pastMainSequence(p) {
 // star, not a constant. Fully convective late M dwarfs shed angular momentum far
 // more slowly than a G dwarf does.
 //
-// Anchored at 0.1 Gyr for the Sun and calibrated so a late M at 2566 K holds on
-// for about 1.5 Gyr, which is the range the rotation-activity data put TRAPPIST-1
-// in. That is most of why its planets are in the state they are: not a harsher
-// star than the young Sun, but one that stayed harsh an order of magnitude longer.
-const SOLAR_SATURATION = 0.1;            // Gyr the Sun spent saturated
-const SATURATION_EXP = 3.3;              // how much longer a cooler star holds it
+// How long that lasts is MEASURED, not fitted to a convenient exponent. It was
+// the exponent once -- 0.1 Gyr for the Sun times (T/T_sun)^-3.3 -- and the
+// number that fell out for a late M dwarf, about 1.5 Gyr, was wrong by enough
+// to contradict the observation the presets are anchored to.
+//
+// The contradiction is worth stating, because it is the kind a model can carry
+// for a long time without anything going visibly wrong. TRAPPIST-1b and 1e
+// carry a measured present-day XUV of 206x solar (Wheatley et al. 2017:
+// Lx/Lbol = 2-4e-4, and more again in the EUV). Run that back up a t^-1.23
+// curve to a saturation that ended at 1.5 Gyr and it implies the star used to
+// be 843x solar -- almost six times the saturation ceiling of log(Lx/Lbol)
+// ~ -3.3, which is a ratio no star exceeds because it is set by the dynamo
+// running flat out. The curve was claiming a history the star could not have
+// had. GJ 1132 b was over by four times.
+//
+// The resolution is that late M dwarfs stay saturated for far longer than that
+// exponent allowed. West et al. (2008) measure activity lifetimes across the M
+// sequence from 38 000 stars -- 0.8 Gyr at M0, 4.5 at M4, 8 at M7 -- and
+// TRAPPIST-1 itself is still X-ray active at an age of 7.6 Gyr
+// (Burgasser & Mamajek 2017 for the age). So the table is theirs, with the
+// solar X-ray saturation timescale at the hot end, interpolated in log lifetime
+// against effective temperature. A power law cannot fit it: the M sequence
+// flattens between M5 and M6 and the fit through M4 and the fit through M7
+// disagree by a factor of two either side.
+const SATURATION_TABLE = [
+  [5772, 0.10],   // the Sun: X-ray saturated only for its first ~100 Myr
+  [3870, 0.80],   // M0
+  [3700, 1.30],   // M1
+  [3550, 2.00],   // M2
+  [3410, 2.60],   // M3
+  [3200, 4.50],   // M4
+  [3030, 7.00],   // M5
+  [2850, 7.00],   // M6
+  [2650, 8.00],   // M7
+  [2500, 10.0],   // M8, past the end of West's sample: TRAPPIST-1 is M8 and is
+];                //     observed still active at 7.6 Gyr, so it is at least that
 
 export function saturationAge(tempK) {
   const T = Math.max(tempK || SOLAR_TEMP, 1000);
-  return SOLAR_SATURATION * Math.pow(T / SOLAR_TEMP, -SATURATION_EXP);
+  const tab = SATURATION_TABLE;
+  if (T >= tab[0][0]) return tab[0][1];
+  if (T <= tab[tab.length - 1][0]) return tab[tab.length - 1][1];
+  for (let i = 1; i < tab.length; i++) {
+    const [T1, a1] = tab[i - 1], [T0, a0] = tab[i];
+    if (T >= T0) {
+      const f = (T - T0) / (T1 - T0);
+      return Math.exp(Math.log(a0) + f * (Math.log(a1) - Math.log(a0)));
+    }
+  }
+  return tab[tab.length - 1][1];
 }
 
 // Flat through saturation, Ribas afterwards, and continuous at the join because
