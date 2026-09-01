@@ -389,8 +389,30 @@ export const PRESETS = {
   // 1 bar CO2 case). Those GCMs manage it on far less CO2, because a locked
   // world grows a thick cloud deck over the substellar point that this model
   // only approximates; a bar is at the thick end of plausible, not the middle.
-  trappist1e: { name: 'TRAPPIST-1e', icon: '🌍', params: { ...T1E, water: 1.0,
-    n2Bar: 1.0, co2Bar: 1.0, startT: 280 } },
+  // Three Earth oceans, and almost no air above them.
+  //
+  // This preset used to carry a bar of CO2 over a bar of N2, and said of itself
+  // that it was a plausible configuration rather than a measured one -- nothing
+  // is known about this planet's atmosphere. What it did not say is that this
+  // model does not let it keep that: press play and it collapsed to 0.08 bar
+  // inside a hundred million years, every time. A preset whose first act is to
+  // abandon its own configuration is not a snapshot of a world, it is a
+  // starting gun.
+  //
+  // So it starts where it ends up. The night side of a locked world at 0.646
+  // S(+) is a cold trap the CO2 cannot climb back out of, and the nitrogen goes
+  // to space under 206x solar XUV held for the star's whole life -- a hundred
+  // bar goes the same way as one, because the loss is a flux and does not care
+  // how much there is to lose. What is left is a Partial Nightside Freeze-Out,
+  // and that state is defined by still having a sea: 0.6 Earth oceans of liquid
+  // water under a day side at 55 C, ninety percent of the surface flooded, and
+  // four bar of dry ice lying on the hemisphere that never sees the star.
+  //
+  // Less Earth-like than the bar of CO2 it replaces, and more defensible: it is
+  // stable for a billion years rather than a hundred million, and it is where
+  // TRAPPIST-1e · 1 Gyr actually arrives.
+  trappist1e: { name: 'TRAPPIST-1e', icon: '🌍', params: { ...T1E, water: 3.0,
+    n2Bar: 0, co2Bar: 0.05, startT: 280 } },
 
   // 19 S(+), and the one Swain et al. 2021 model at 80 W/m^2 of tidal heat --
   // a thousand times Earth's, from an eccentricity of only 0.01 held by
@@ -423,20 +445,23 @@ export const PRESETS = {
   earlyTrappist1b: { name: 'TRAPPIST-1b · 1 Gyr', icon: '🌫️', params: { ...T1B,
     startAge: 1.0, water: 5, n2Bar: 2, co2Bar: 20, startT: 700 } },
 
-  // 1e is the honest one, and it does NOT arrive at its present-day preset.
+  // 1e arrives too, and what it arrives at is a planet with a sea and hardly
+  // any air above it.
   //
-  // That preset carries a bar of CO2 over a bar of N2, and says of itself that
-  // it is a plausible configuration rather than a measured one -- nothing is
-  // known about this planet's atmosphere. Run from a young start under a star
-  // that stays saturated, this model strips it: a hundred bar of nitrogen goes
-  // the same way as one, because at 0.646 S(+) and 206x solar XUV the planet
-  // sits well past the cosmic shoreline and the loss does not care how much
-  // there is to lose. What is left after 6.6 Gyr is a nightside freeze-out --
-  // an ocean cold-trapped on the hemisphere that never sees the star.
+  // Three oceans, a bar of nitrogen and two of CO2 at 1 Gyr. The nitrogen goes
+  // to space -- 206x solar XUV held for the star's whole life, and the loss is
+  // a flux, so a hundred bar would go the same way as one -- and once the air
+  // is thin enough to stop carrying heat across, the CO2 snows out onto the
+  // hemisphere that never sees the star and cannot climb back. Four bar of dry
+  // ice lies there at the end.
   //
-  // Both presets are worth having, and the disagreement between them is worth
-  // seeing rather than tuning away. One is what the planet would be if it kept
-  // an atmosphere; this is what this model says happens if it started with one.
+  // What does NOT go is the ocean. The day side sits at 55 C under 0.07 bar,
+  // ninety percent of the surface is flooded, and six tenths of an Earth ocean
+  // is liquid. That is the whole difference between a Partial Nightside
+  // Freeze-Out and a complete one, and it is why the present-day preset was
+  // rewritten to match rather than the young one tuned to reach the old one:
+  // this is a world with liquid water on it, which is the thing worth being
+  // right about.
   earlyTrappist1e: { name: 'TRAPPIST-1e · 1 Gyr', icon: '🌊', params: { ...T1E,
     startAge: 1.0, water: 3, n2Bar: 1.0, co2Bar: 2.0, startT: 285 } },
 

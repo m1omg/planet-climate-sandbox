@@ -837,15 +837,32 @@ predicted from the XUV history. Eight oceans is a different planet: it never los
 and stays in a wet runaway, so the inventory sits on the side of that fork matching the world we can
 see.
 
-**TRAPPIST-1e · 1 Gyr does not arrive, and that is worth seeing rather than tuning away.** The
-present-day 1e preset carries a bar of CO₂ over a bar of N₂ and says of itself that it is a plausible
-configuration rather than a measured one — nothing is known about this planet's atmosphere. Run from
-a young start under a star that stays saturated, this model strips it, and **a hundred bar of nitrogen
-goes the same way as one**: at 0.646 S⊕ and 206× solar XUV the planet sits well past the cosmic
-shoreline, and the loss does not care how much there is to lose. What is left after 6.6 Gyr is a
-nightside freeze-out at 0.08 bar with three oceans cold-trapped on the hemisphere that never sees the
-star. One preset is what 1e would be if it kept an atmosphere; the other is what this model says
-happens if it started with one.
+**TRAPPIST-1e · 1 Gyr arrives too**, and what it arrives at is a planet with a sea and hardly any air
+above it. Three oceans, a bar of N₂ and two of CO₂ at 1 Gyr. The nitrogen goes to space — 206× solar
+held for the star's whole life, and the loss is a *flux*, so **a hundred bar would go the same way as
+one** — and once the air is too thin to carry heat across, the CO₂ snows onto the hemisphere that
+never sees the star and cannot climb back. Four bar of dry ice lies there at the end.
+
+What does not go is the ocean. The day side sits at 55 °C under 0.07 bar, ninety percent of the
+surface is flooded, and **six tenths of an Earth ocean is liquid**.
+
+So the *present-day* preset was rewritten to match, rather than the young one tuned to reach the old
+one. The old 1e carried a bar of CO₂ over a bar of N₂ and said of itself that it was a plausible
+configuration rather than a measured one — what it did not say is that this model never let it keep
+that: press play and it collapsed to 0.08 bar inside a hundred million years, every time. **A preset
+whose first act is to abandon its own configuration is a starting gun, not a snapshot.** It starts
+where it ends up now: stable across a billion years instead of a hundred million, less Earth-like than
+the bar of CO₂ it replaces, and where its own younger self actually lands — 0.62 EO of liquid against
+0.61, 90% flooded against 90%.
+
+That rewrite exposed a disagreement inside the model. **Two states were reported uninhabitable while
+their own text called them habitable.** A Partial Nightside Freeze-Out is *defined* by still having a
+sea — the branch cannot be reached unless liquid water is present, and the instant the last of it goes
+the world becomes a complete Nightside Freeze-Out instead — and its blurb says "the day side is still
+warm, wet and habitable while it happens". A Twilight World's branch requires a liquid ring around the
+terminator and its blurb calls that ring habitable. Neither was on the habitability list. Neither is
+Earth-like, and neither needs to be: what that flag answers is whether there is liquid water somewhere
+a thing could live in, and on both of these there is, by construction.
 
 **And it used to run only on worlds whose star was also getting brighter.** The XUV decline was nested
 inside the `brightening` branch — two lines under a comment saying it matters far more than the

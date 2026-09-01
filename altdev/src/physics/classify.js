@@ -164,9 +164,26 @@ export function classify(w) {
   else id = 'temperate';
 
   const s = STATES[id];
+  // Two states were missing from this list while their own blurbs asserted the
+  // opposite, which is a disagreement inside the model rather than a matter of
+  // taste. A Partial Nightside Freeze-Out is defined by still having a sea --
+  // the branch above will not choose it unless liquidShare > 0.02 and something
+  // is flooded, and the moment the last of it goes the world becomes a
+  // Nightside Freeze-Out instead. Its text says "the day side is still warm,
+  // wet and habitable while it happens: a planet with a working ocean under its
+  // sun and its atmosphere quietly draining away behind it", and then the
+  // readout said uninhabitable. A Twilight World is the same case: its branch
+  // requires a liquid ring around the terminator and its text calls that ring
+  // habitable.
+  //
+  // Neither is Earth-like and neither needs to be. What this flag answers is
+  // whether there is liquid water somewhere a thing could live in, and on both
+  // of these there is -- by construction, or the state would not have been
+  // reached.
   const habitable = (id === 'temperate' || id === 'waterworld' || id === 'dune' ||
                      id === 'eyeball' || id === 'lobster' || id === 'hothouse' ||
-                     id === 'waterbelt') && water > 0.005;
+                     id === 'waterbelt' || id === 'nightfrost' || id === 'twilight')
+                    && water > 0.005;
 
   return { id, name: s.name, color: s.color, blurb: s.blurb, habitable, Tsub, Tanti };
 }

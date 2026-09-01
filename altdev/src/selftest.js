@@ -1227,19 +1227,67 @@ export function run() {
           + `${d.pTotMean.toExponential(1)} bar left — against today's ${classify(today.world).id}`);
       }
 
-      // 1e does not, and that disagreement is the point rather than a fault:
-      // its present-day preset says of itself that it is a plausible
-      // configuration rather than a measured one, and this model says a planet
-      // at 0.646 S(+) under 206x solar XUV for its whole life does not get to
-      // keep one. A hundred bar of nitrogen goes the same way as one.
+      // 1e arrives too, at a world with a sea and hardly any air above it. Both
+      // ends of that are checked, because the interesting claim is not that the
+      // atmosphere goes -- it is that the ocean stays. A Partial Nightside
+      // Freeze-Out is defined by still having one; the moment the last of it is
+      // gone the state becomes a complete freeze-out instead, so a run that
+      // ended there would be a different answer wearing the same name.
       {
-        const s = new Simulation({ ...PRESETS.earlyTrappist1e.params });
-        s.runYears(6.6e9, 2e6, 120000);
-        const d = s.world.diag;
-        check('…while young TRAPPIST-1e is stripped, whatever it starts with',
-          d.pTotMean < 0.2 && d.totalWater > 1,
-          `${classify(s.world).id} at ${d.pTotMean.toFixed(3)} bar, `
-          + `${d.totalWater.toFixed(1)} EO still there but cold-trapped`);
+        const young = new Simulation({ ...PRESETS.earlyTrappist1e.params });
+        young.runYears(6.6e9, 2e6, 120000);
+        const now = new Simulation({ ...PRESETS.trappist1e.params });
+        now.runYears(1e9, 2e6, 120000);
+        const a = classify(young.world), b = classify(now.world);
+        const close = (x, y, tol) => Math.abs(x - y) <= tol;
+        check('Young TRAPPIST-1e arrives at the present-day one, ocean and all',
+          a.id === b.id && a.id === 'nightfrost' && a.habitable && b.habitable
+            && close(young.world.water.ocean, now.world.water.ocean, 0.1)
+            && close(young.world.diag.flooded, now.world.diag.flooded, 0.05),
+          `${a.id}: ${young.world.water.ocean.toFixed(2)} EO liquid against `
+          + `${now.world.water.ocean.toFixed(2)}, `
+          + `${(young.world.diag.flooded * 100).toFixed(0)}% flooded against `
+          + `${(now.world.diag.flooded * 100).toFixed(0)}%`);
+      }
+
+      // ...and the present-day preset has to be somewhere a planet can sit. The
+      // one this replaced collapsed to a twelfth of its stated pressure inside a
+      // hundred million years, which made it a starting gun rather than a
+      // snapshot: whatever you were shown on load was gone before you could
+      // change anything about it.
+      {
+        const s = new Simulation({ ...PRESETS.trappist1e.params });
+        s.runYears(1e5, 2e6, 60000);
+        const early = { id: classify(s.world).id, p: s.world.diag.pTotMean,
+                        ocean: s.world.water.ocean };
+        s.runYears(1e9, 2e6, 120000);
+        const late = classify(s.world);
+        check('…and the present-day TRAPPIST-1e stays where it is put',
+          early.id === late.id && late.habitable
+            && Math.abs(s.world.diag.pTotMean - early.p) < early.p * 0.2
+            && Math.abs(s.world.water.ocean - early.ocean) < 0.1,
+          `${late.id} at ${early.p.toFixed(3)} bar and ${early.ocean.toFixed(2)} EO, `
+          + `still ${s.world.diag.pTotMean.toFixed(3)} bar and `
+          + `${s.world.water.ocean.toFixed(2)} EO a billion years later`);
+      }
+
+      // The flag and the blurb have to agree. A state whose own text calls the
+      // day side habitable, and whose branch cannot be reached without liquid
+      // water, was reported as uninhabitable for as long as it existed.
+      {
+        // With a sea: a Partial Nightside Freeze-Out, and habitable. Without
+        // one: the complete freeze-out, and not. The difference between the two
+        // states IS the water, so it is the right thing to vary.
+        const wet = new Simulation({ ...PRESETS.trappist1e.params });
+        wet.runYears(1e7, 2e6, 60000);
+        const dry = new Simulation({ ...PRESETS.trappist1e.params, water: 0 });
+        dry.runYears(1e7, 2e6, 60000);
+        const a = classify(wet.world), b = classify(dry.world);
+        check('A world with a sea reads as habitable, whatever else has gone wrong',
+          a.id === 'nightfrost' && a.habitable === true && b.habitable === false
+            && b.id !== 'nightfrost',
+          `${a.id} with ${wet.world.water.ocean.toFixed(2)} EO reads habitable; `
+          + `${b.id} with none does not`);
       }
 
       // Spin-down is a switch of its own, and the red dwarfs come with it on.
