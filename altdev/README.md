@@ -291,11 +291,24 @@ usable page rather than a blank one. Content — climate states, presets, scenar
 because a preset's name is a name rather than a label, and because two states may share an English
 word and must not be forced to share a Slovak one.
 
-**The model does not know a language exists.** Nothing under `src/physics/` is touched: `classify()`
-still returns `id: 'snowball'` with its English name beside it, and every assertion in `selftest.js`
-still reads that. Translation happens where text meets the screen. A dictionary that reached into the
-physics would make two hundred and fifty checks language-dependent, which is a poor trade for a model
-whose entire output is prose about planets.
+**The model does not know a language exists.** `classify()` still returns `id: 'snowball'` with its
+English name beside it, and every assertion in `selftest.js` still reads that. A dictionary that
+reached into the physics would make two hundred and fifty checks language-dependent, which is a poor
+trade for a model whose entire output is prose about planets.
+
+The one place text is genuinely *composed* rather than looked up is `reasonText()` — the line under
+the state name, which picks its clauses from what the planet is doing. It cannot be a dictionary
+entry, because it is six or seven of them joined by the physics. So it takes a **translator as an
+argument**: `reasonText(w, st, tp)` from the UI, and a default that formats the English exactly as
+before for every headless caller. `classify.js` imports nothing from `src/game/`, and the tests that
+call it with two arguments never notice.
+
+That line was English on a Slovak page for as long as the translation existed, and so was every label
+on the charts, because both are built after boot and neither is a DOM text node `applyStatic()` can
+walk. Coverage counted dictionary keys, which is why it reported full coverage the whole time.
+`smoketest.mjs` now walks a spread of worlds through `reasonText()` with a spy in the translator slot
+and fails on any clause the dictionary has no entry for — and rejects a bare string literal inside a
+`label(ctx, …)` call, since chart text is drawn to a canvas where nothing else can see it.
 
 The static page translates **in place**: `applyStatic()` walks the text nodes and the
 `title`/`aria-label`/`placeholder` attributes, caching the English on each one the first time it sees
@@ -308,6 +321,13 @@ climate log, every line of the readout — and that is what `relabel()` rebuilds
 scenario with no translation, or a translation for an id that no longer exists. It also checks that
 the switch is wired, and that the translator actually switches both ways and falls back to English on
 a string it does not know.
+
+One check is about a word rather than a mechanism. **A runaway greenhouse is not an escape.** Slovak
+`únik` is what hydrogen does, and what an atmosphere does to a solar wind — both of which this model
+tracks separately and displays a few centimetres away. Using it for the runaway as well said the
+planet was leaking when what it is doing is running away with itself, so the runaway is
+*reťazový skleníkový efekt* throughout and `smoketest.mjs` fails if `únik` ever appears in a
+translation of a string with "runaway" in it.
 
 ### Frame-rate independence
 
@@ -826,7 +846,10 @@ with every other planet's.
 
 Drag to orbit the camera — the star, the terminator and the ice caps stay where they belong and you
 simply look from somewhere else. The **0.5× / 1× / 2×** selector chooses drag sensitivity directly
-and remembers it; 1× is the default. **Scroll out to zoom out, scroll in to zoom in**, or pinch; double-click resets. Zoom moves the
+and remembers it; 1× is the default. Its options need an opaque background of their own: the rail's
+button colour is deliberately translucent so a control sitting over the planet does not block it, and
+the browser paints the open menu from that same colour — which made the list unreadable against the
+globe showing through it. **Scroll out to zoom out, scroll in to zoom in**, or pinch; double-click resets. Zoom moves the
 camera rather than narrowing the lens, so the planet keeps its perspective and the atmosphere's limb
 still reads correctly; drag sensitivity also scales with camera distance.
 

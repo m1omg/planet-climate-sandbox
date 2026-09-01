@@ -1,6 +1,9 @@
 import { NBANDS, X, lockFactor, insolationProfile } from '../physics/climate.js';
 import { olr, planetaryAlbedo, iceFraction } from '../physics/radiation.js';
 import { psatH2O, clamp } from '../physics/constants.js';
+// Chart furniture is prose too: axis ends, the legend and the two empty-state
+// lines were the last English left on a Slovak page.
+import { t } from '../game/i18n.js';
 
 const CSS = getComputedStyle(document.documentElement);
 const col = (n, fb) => (CSS.getPropertyValue(n) || fb).trim() || fb;
@@ -65,7 +68,7 @@ export function drawHistory(canvas, world, markT = null) {
   const pad = HISTORY_PAD;
   const H = world.history;
   axes(ctx, w, h, pad);
-  if (H.length < 2) { label(ctx, 'collecting…', w / 2, h / 2, 'center'); return; }
+  if (H.length < 2) { label(ctx, t('collecting…'), w / 2, h / 2, 'center'); return; }
 
   const tMax = Math.max(world.time, 10);
   const lx = (t) => historyX(t, tMax, w);
@@ -97,8 +100,8 @@ export function drawHistory(canvas, world, markT = null) {
 
   label(ctx, `${(thi - 273.15).toFixed(0)}°C`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, `${(tlo - 273.15).toFixed(0)}°C`, pad.l - 4, h - pad.b, 'right');
-  label(ctx, 'time →', w - pad.r, h - 5, 'right');
-  label(ctx, 'surface temperature', pad.l + 4, pad.t + 8, 'left', 'rgba(233,240,255,0.4)');
+  label(ctx, t('time →'), w - pad.r, h - 5, 'right');
+  label(ctx, t('surface temperature'), pad.l + 4, pad.t + 8, 'left', 'rgba(233,240,255,0.4)');
 
   // The scrub handle, drawn last so it sits over the trace. Everything to the
   // right of it is the future being abandoned, dimmed to say so.
@@ -174,12 +177,12 @@ export function drawProfile(canvas, world, hover = null) {
   label(ctx, `${(hi - 273.15).toFixed(0)}°C`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, `${(lo - 273.15).toFixed(0)}°C`, pad.l - 4, h - pad.b, 'right');
   if (lam > 0.5) {
-    label(ctx, 'anti-stellar', pad.l, h - 6, 'left');
-    label(ctx, 'substellar', w - pad.r, h - 6, 'right');
+    label(ctx, t('anti-stellar'), pad.l, h - 6, 'left');
+    label(ctx, t('substellar'), w - pad.r, h - 6, 'right');
   } else {
-    label(ctx, 'S pole', pad.l, h - 6, 'left');
-    label(ctx, 'equator', (pad.l + w - pad.r) / 2, h - 6, 'center');
-    label(ctx, 'N pole', w - pad.r, h - 6, 'right');
+    label(ctx, t('S pole'), pad.l, h - 6, 'left');
+    label(ctx, t('equator'), (pad.l + w - pad.r) / 2, h - 6, 'center');
+    label(ctx, t('N pole'), w - pad.r, h - 6, 'right');
   }
 }
 
@@ -198,7 +201,7 @@ export function drawWater(canvas, world) {
   const total = Math.max(world.waterInitial ?? world.params.water,
                          inv.ocean + inv.seaIce + inv.landIce + inv.vapour + inv.lost);
   if (total <= 0 || H.length < 2) {
-    label(ctx, total <= 0 ? 'no water on this world' : 'collecting…', w / 2, h / 2, 'center');
+    label(ctx, t(total <= 0 ? 'no water on this world' : 'collecting…'), w / 2, h / 2, 'center');
     return;
   }
   const tMax = Math.max(world.time, 10);
@@ -237,7 +240,7 @@ export function drawWater(canvas, world) {
   const swatch = ['#2f8fd6', '#9fd4ec', '#e6f3fb', '#e8c07a', '#c98ad0', '#ff5a3c'];
   // Drop reservoirs that are empty and staying empty, so the row does not run
   // off the end of a narrow panel with five zeroes on it.
-  const shown = layers.map((l, i) => ({ name: l[0], c: swatch[i], v: share[i] }))
+  const shown = layers.map((l, i) => ({ name: t(l[0]), c: swatch[i], v: share[i] }))
                       .filter((e) => e.v / total >= 5e-4);
   ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
   const wOf = (e) => 9 + 4 + ctx.measureText(`${e.name} ${pct(e.v / total)}`).width + 10;
@@ -332,8 +335,8 @@ export function drawPhase(canvas, world) {
   ctx.beginPath(); ctx.arc(px(clamp(dg.Tmean, T0, T1)), py(clamp(dg.emitted, 0, fmax)), 3.5, 0, 7);
   ctx.fillStyle = '#fff'; ctx.fill();
 
-  label(ctx, 'OLR', px(T1) - 4, py(pts[pts.length - 1][1]) - 6, 'right', '#ff9d5c', 10);
-  label(ctx, 'absorbed', px(T0) + 6, py(pts[0][2]) - 6, 'left', '#7fd4ff', 10);
+  label(ctx, t('OLR'), px(T1) - 4, py(pts[pts.length - 1][1]) - 6, 'right', '#ff9d5c', 10);
+  label(ctx, t('absorbed'), px(T0) + 6, py(pts[0][2]) - 6, 'left', '#7fd4ff', 10);
   label(ctx, `${fmax.toFixed(0)} W/m²`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, '-30°C', px(243), h - 6, 'center');
   label(ctx, '60°C', px(333), h - 6, 'center');
