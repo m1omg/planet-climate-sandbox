@@ -69,6 +69,13 @@ export const SK = {
       'Atmosféra: realistická — skutočná výšková škála, a nepriehľadná zakrýva povrch',
     'Atmosphere: stylised — the shell is exaggerated so you can see it change':
       'Atmosféra: štylizovaná — obal je zámerne zväčšený, aby boli zmeny viditeľné',
+    'Clouds: shown — click to see the surface underneath':
+      'Oblaky: zobrazené — kliknutím uvidíte povrch pod nimi',
+    'Clouds: hidden — a view only; they still cool the planet':
+      'Oblaky: skryté — len zobrazenie; planétu naďalej ochladzujú',
+    'Clouds shown again.': 'Oblaky sú opäť zobrazené.',
+    'Clouds hidden — a view only. They still reflect their sunlight and still cool the planet; the readout\u2019s cloud cover has not moved.':
+      'Oblaky sú skryté — ide len o zobrazenie. Naďalej odrážajú svetlo hviezdy a planétu ochladzujú; údaj o oblačnosti sa nezmenil.',
     'Renderer': 'Vykresľovanie',
     'Language': 'Jazyk',
     'Language: English': 'Jazyk: angličtina',

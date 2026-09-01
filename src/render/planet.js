@@ -191,6 +191,7 @@ export class PlanetView {
     this.ready = false;
     this.texturesLoaded = false;
     this.bakedSeed = null;
+    this.showClouds = true;
     this.prog = this.bakeProg = this.cloudProg = null;
     this.vao = null; this.bakeFb = null;
     this.textures = null;
@@ -844,8 +845,16 @@ export class PlanetView {
     }
     gl.uniform1f(this.u.uGlaciated, dg.glaciatedShare ?? 1);
     gl.uniform1f(this.u.uWaterCap, dg.waterCap);
-    gl.uniform1f(this.u.uCloud, cloudMean);
-    gl.uniform1f(this.u.uSteam, steam);
+    // A view with the weather taken off, for looking at the ground. The model
+    // is untouched: these clouds still reflect their sunlight and still cool
+    // the planet, they are simply not drawn. No new uniform for it, because
+    // the fragment stage is at its uniform budget and the shader already ends
+    // with clamp(uCloud + uLocked*sub*0.35, 0, 1) -- a negative cover clamps to
+    // nothing on its own, on a locked world's substellar pile-up as well.
+    gl.uniform1f(this.u.uCloud, this.showClouds === false ? -1 : cloudMean);
+    // Steam is drawn through the same mask and has to go with them, or a
+    // boiling world keeps its white shroud with the clouds switched off.
+    gl.uniform1f(this.u.uSteam, this.showClouds === false ? 0 : steam);
     gl.uniform1f(this.u.uAtmoThick, atmo.thickness);
     gl.uniform1f(this.u.uVeil, atmo.veil);
     gl.uniform1f(this.u.uHaze, atmo.haze);

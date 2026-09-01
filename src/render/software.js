@@ -31,6 +31,7 @@ export class SoftwareView {
     this.realistic = false;
     this.spin = 0; this.yaw = 0; this.pitch = 0; this.spinVel = 0; this.zoom = 1;
     this.spinPaused = false; this.simPaused = false;
+    this.showClouds = true;
     this.bakedSeed = null;
     this.terrain = null;
     this.accum = 0;
@@ -127,7 +128,8 @@ export class SoftwareView {
     const pH2Oq = dg.pH2O.reduce((a, b) => a + b, 0) / NBANDS;
     const steamQ = steamOpacity(pH2Oq);
     const skyKey = [cw, ch, this.yaw.toFixed(3), this.pitch.toFixed(3),
-                    dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp, this.realistic ? 'r' : 's', this.zoom.toFixed(3)].join('|');
+                    dg.pTotMean.toFixed(3), steamQ.toFixed(2), p.starTemp, this.realistic ? 'r' : 's',
+                    this.showClouds === false ? 'nc' : 'c', this.zoom.toFixed(3)].join('|');
     if (skyKey !== this.skyKey) {
       if (this.sky.width !== cw || this.sky.height !== ch) { this.sky.width = cw; this.sky.height = ch; }
       const img = this.sctx.createImageData(cw, ch);
@@ -187,8 +189,11 @@ export class SoftwareView {
       oceanFrac: dg.flooded ?? dg.oceanFrac,
       seaLevel: seaLevelForLand(1 - (dg.flooded ?? dg.oceanFrac)),
       waterCap: dg.waterCap, glaciated: dg.glaciatedShare ?? 1,
-      locked: lam, cloud,
-      steam: steamOpacity(pH2O),
+      // Same view-only switch as the GL path: the clouds still cool the
+      // planet, they are simply not drawn. Both renderers have to agree, or
+      // the button would mean two different things depending on the machine.
+      locked: lam, cloud: this.lastCloud = this.showClouds === false ? 0 : cloud,
+      steam: this.lastSteam = this.showClouds === false ? 0 : steamOpacity(pH2O),
       pTot: dg.pTotMean, co2: clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1),
       // A gate, not a magnitude -- cpushade takes the brightness from the
       // local band temperature, as the GL path does. See thermalGlow().

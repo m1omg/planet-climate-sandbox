@@ -168,21 +168,43 @@ export class Simulation {
     const T0 = w.diag.Tmean;
     // The ease budget for this frame, in |d ln T|. Infinite when the governor
     // is off, which is the only thing that has to cost nothing.
-    const budget = this.autoEase && dtReal > 0 ? EASE_TARGET * dtReal : Infinity;
-    let moved = 0, eased = false;
-    // Once the budget is binding, ask the solver for finer steps as well.
-    // Without this the ease has a granularity floor of one solver step, and one
-    // step of a runaway moves two and a half kelvin -- about seven frames'
-    // worth of budget -- so the frame overshoots every time and the transition
-    // still goes by six times too fast. Only while something is actually
-    // happening: a settled world would otherwise be forced to crawl.
-    const tighten = this.autoEase && this.climateSpeed > EASE_TARGET;
+    const tighten = this.autoEase && dtReal > 0;
+    const budget = tighten ? EASE_TARGET * dtReal : Infinity;
+    let moved = 0;
     this.throttled = false;
     while (steps < this.maxStepsPerFrame) {
       const cap = tighten
-        ? clamp(w.diag.Tmean * Math.max(budget - moved, 0), 0.05, 2.5) : 2.5;
-      const dt = Math.min(maxStep(w, cap), rate * 0.3, 5e6);
-      if (this.credit < dt) break;
+        ? clamp(w.diag.Tmean * Math.max(budget - moved, 0), 0.02, 2.5) : 2.5;
+      let room = Math.min(maxStep(w, cap), rate * 0.3, 5e6);
+      if (tighten) {
+        // Size the step to the budget it has left, instead of taking the step
+        // the solver would allow and discovering afterwards that it spent six
+        // frames' worth. maxStep has just computed the tendency and cached it
+        // on the world, so what the planet is about to do per year is already
+        // paid for: read it rather than measure it after the fact. This is the
+        // "arguing with the step-size estimator" the note above deferred, and
+        // it is what turns a 2.8 s transition into the ~25 s the target asks
+        // for.
+        const dT = w._solve && w._solve.tend && w._solve.tend.dT;
+        if (dT && w.diag.Tmean > 0) {
+          let sum = 0;
+          for (let i = 0; i < dT.length; i++) sum += dT[i];
+          const perYear = Math.abs(sum / dT.length) / w.diag.Tmean;
+          if (perYear > 0) room = Math.min(room, Math.max(budget - moved, 0) / perYear);
+        }
+      }
+      // Spend what is in hand rather than refusing to move until a whole step
+      // is affordable. This was the other half of the stutter and it was never
+      // about the ease at all: whenever the solver would allow a step larger
+      // than one frame's credit -- which is most of a calm world's life -- the
+      // frame took no step and banked instead, so the clock ran in bursts
+      // separated by dead frames. Paying for a shorter step is always safe: a
+      // dt below maxStep is the accurate direction, and it honours the rate
+      // exactly rather than on average.
+      const dt = Math.min(room, this.credit);
+      // Below a thousandth of what the solver would allow, a step is not worth
+      // its own overhead; bank it and let the next frame afford more.
+      if (!(dt > 0) || dt < room * 1e-3) break;
       // Never blow the frame budget, however stiff the planet has become. A
       // difficult transition makes the simulated clock run slow; it must never
       // make the interface stop responding.
@@ -192,16 +214,21 @@ export class Simulation {
       this.stepOnce(dt);
       advanced += dt;
       steps++;
-      if (budget < Infinity && before > 0 && w.diag.Tmean > 0) {
+      if (tighten && before > 0 && w.diag.Tmean > 0) {
         moved += Math.abs(Math.log(w.diag.Tmean / before));
-        if (moved >= budget) { eased = true; break; }
+        if (moved >= budget) break;
       }
     }
-    // Unspent credit is capped so a long stall cannot bank a huge jump -- and
-    // when the ease stopped the frame it is dropped outright, because banking
-    // the time the governor just declined to spend would hand it all back on
-    // the next frame and undo the whole thing.
-    this.credit = eased ? 0 : Math.min(this.credit, rate * 2);
+    // Unspent credit is capped so a long stall cannot bank a huge jump. While
+    // the ease is engaged it is capped at a single frame's worth -- NOT thrown
+    // away, which is what used to happen and what emptied the following frame.
+    // Zero left the next frame unable to afford even one step, so it advanced
+    // nothing, so there was no temperature change to measure, so the governor
+    // stopped asking for finer steps and the step it could eventually afford
+    // was bigger still: 76% of frames dead, in runs of up to nine, separated by
+    // million-year jumps. Keeping one frame's worth starves nothing and banks
+    // no burst.
+    this.credit = Math.min(this.credit, tighten ? rate * dtReal : rate * 2);
     // How fast the climate appeared to move, per wall-clock second, at the rate
     // this frame actually ran at. Measured across the frame rather than read off
     // the instantaneous tendency, because an implicit step absorbs most of a
