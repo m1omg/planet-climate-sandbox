@@ -13,7 +13,7 @@ import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { DEFAULT_PAN_SPEED, PAN_SPEEDS, wheelZoomFactor, panRadiansPerPixel } from './render/camera.js';
 import { SoftwareView } from './render/software.js';
-import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, profileBandAtX } from './render/charts.js';
+import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, historyWindow, profileBandAtX } from './render/charts.js';
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
 import { NS } from './game/storage.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
@@ -1099,20 +1099,27 @@ function renderMarks() {
     row.className = 'mark-row';
 
     const name = document.createElement('input');
-    name.type = 'text'; name.value = m.name; name.spellcheck = false;
-    name.setAttribute('aria-label', 'Milestone name');
+    // An auto-named mark shows the state's name in the current language; one
+    // the user has renamed shows what they typed, untouched.
+    const auto = m.id && !m.renamed ? (tx('states', m.id, 'name') || m.name) : m.name;
+    name.type = 'text'; name.value = auto; name.spellcheck = false;
+    name.setAttribute('aria-label', t('Milestone name'));
     const rename = () => {
-      m.name = name.value.trim() || 'mark';
-      name.value = m.name;
+      const typed = name.value.trim();
+      if (typed && typed !== auto) { m.name = typed; m.renamed = true; }
+      name.value = m.renamed ? m.name : auto;
       syncClocks(sim.world);
     };
     name.addEventListener('blur', rename);
     name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
 
-    const when = document.createElement('span');
+    const when = document.createElement('button');
+    when.type = 'button';
     when.className = 'mark-when';
     when.textContent = fmtTime(m.t);
-    when.title = t('Elapsed time when this was marked');
+    when.title = t('Go back to this milestone');
+    when.disabled = restorePoints.length < 2 || m.t >= sim.world.time;
+    when.addEventListener('click', () => jumpTo(m.t));
 
     const gap = document.createElement('span');
     gap.className = 'mark-gap';
@@ -1135,6 +1142,62 @@ function renderMarks() {
   });
 }
 
+// The epoch list. Reversed, newest first, because the interesting end of a run
+// is the end you are at -- and the open span is the one you want to read the
+// duration of while it is still running.
+function renderEpochs() {
+  const box = $('#epochs-list'), group = $('#epochs-group');
+  if (!box || !group) return;
+  // One epoch is not a history, it is just the state, and the banner already
+  // says that. The panel appears when the world has actually been somewhere.
+  group.hidden = epochs.length < 2;
+  if (group.hidden) { box.innerHTML = ''; return; }
+  box.innerHTML = '';
+  const now = sim.world.time;
+  for (let i = epochs.length - 1; i >= 0; i--) {
+    const e = epochs[i], end = e.to == null ? now : e.to;
+    const row = document.createElement('div');
+    row.className = 'epoch-row' + (e.to == null ? ' current' : '');
+
+    const dot = document.createElement('span');
+    dot.className = 'epoch-dot';
+    dot.style.background = e.color;
+
+    const nm = document.createElement('span');
+    nm.className = 'epoch-name';
+    nm.textContent = tx('states', e.id, 'name') || e.name;
+    nm.title = tx('states', e.id, 'blurb') || (STATES[e.id] && STATES[e.id].blurb) || '';
+
+    const span = document.createElement('span');
+    span.className = 'epoch-span';
+    span.textContent = fmtTime(Math.max(end - e.from, 0));
+    span.title = tp('{0} to {1}', fmtTime(e.from), e.to == null ? t('now') : fmtTime(e.to));
+
+    // Clicking one goes back to where it started. That is what makes this a
+    // record you can use rather than one you can only read: the whole reason to
+    // want a list of epochs is to get back to the moment before one of them.
+    const back = document.createElement('button');
+    back.type = 'button'; back.className = 'epoch-back';
+    back.textContent = '\u21b6';
+    back.title = tp('Go back to the start of “{0}”', tx('states', e.id, 'name') || e.name);
+    back.disabled = restorePoints.length < 2 || e.from >= now;
+    back.addEventListener('click', () => jumpTo(e.from));
+
+    row.append(dot, nm, span, back);
+    box.appendChild(row);
+  }
+}
+
+// Going to a moment by name rather than by aiming at a pixel. The scrubber is
+// still how you browse; this is how you land exactly.
+function jumpTo(when) {
+  if (restorePoints.length < 2) return;
+  sim.paused = true; syncPlay();
+  scrubTo(when, true);
+  updateReadout();
+  toast(tp('Back to {0} — change something, then press play', fmtTime(when)));
+}
+
 function snapshot() {
   // The world itself comes from captureWorld, so the slots, the export file and
   // the history scrubber cannot drift apart about what a world is. What is
@@ -1144,7 +1207,11 @@ function snapshot() {
     v: 1, at: Date.now(),
     name: currentName(),
     seed: renderState.seed,
-    marks: marks.map((m) => ({ t: m.t, name: m.name })),
+    marks: marks.map((m) => ({ t: m.t, name: m.name, id: m.id, renamed: !!m.renamed })),
+    // The epoch record travels with the world, for the same reason the
+    // milestones do: it is an account of what happened to THIS world, and a
+    // save that came back without it would have lost the only copy.
+    epochs: epochs.map((e) => ({ id: e.id, from: e.from, to: e.to })),
     ...captureWorld(sim.world),
   };
 }
@@ -1174,9 +1241,49 @@ function snapshot() {
 // now in the future, which is the same rule the temperature history follows.
 let marks = [];               // { t, name }, oldest first
 
+// The run's own account of itself: which climate this world was in, and from
+// when to when. Every state the model can reach already has a name and a
+// colour; what was missing was the record of WHEN, so a world that had been
+// through four climates could only tell you the one it was in now.
+//
+// Closed spans, oldest first, with the last one still open -- `to` is null
+// while the world is in it. Boundaries are the instant classify() started
+// answering differently, which is the same event the discovery log listens to,
+// so the two cannot disagree about what happened.
+let epochs = [];              // { id, name, color, from, to }
+
+function noteEpoch(w, st) {
+  const last = epochs[epochs.length - 1];
+  if (last && last.id === st.id) { last.to = null; return; }
+  if (last) last.to = w.time;
+  epochs.push({ id: st.id, name: st.name, color: st.color, from: w.time, to: null });
+  renderEpochs();
+}
+
+// A rewind un-happens epochs the same way it un-happens milestones: the span
+// the world is standing in is reopened, and everything after it is gone,
+// because on this branch it has not happened.
+function truncateEpochs(when) {
+  const kept = [];
+  for (const e of epochs) {
+    if (e.from > when + 1) continue;
+    kept.push(e.to != null && e.to > when ? { ...e, to: null } : e);
+  }
+  if (kept.length) kept[kept.length - 1].to = null;
+  const changed = kept.length !== epochs.length;
+  epochs = kept;
+  if (changed) renderEpochs();
+}
+
 let restorePoints = [];       // whole worlds, oldest first
 let suspendCapture = false;   // no snapshots of a half-written world
 let scrubMark = null;         // where the handle is while dragging, else null
+// The timeline's window. A linear axis over four and a half billion years is
+// nine million years to the pixel, which is fine for finding an era and useless
+// for finding an event, so the axis can be narrowed to a window and slid along
+// it. 1 is the whole run; pan is where the right-hand edge sits, as a fraction.
+let histZoom = 1, histPan = 1;
+const HIST_ZOOM_MAX = 4096;
 
 // The physics half: put a saved world state back into the simulation.
 //
@@ -1194,6 +1301,7 @@ function applyWorldState(s) {
   if (isFinite(when)) {
     const kept = marks.filter((m) => m.t <= when + 1);
     if (kept.length !== marks.length) { marks = kept; renderMarks(); }
+    truncateEpochs(when);
   }
   // The live params object is handed through rather than replaced: the sliders
   // read and write it, and it is what makes a change made after a rewind reach
@@ -1207,9 +1315,19 @@ function applyWorldState(s) {
 function restore(s) {
   applyWorldState(s);
   marks = Array.isArray(s.marks)
-    ? s.marks.filter((m) => m && isFinite(m.t)).map((m) => ({ t: +m.t, name: String(m.name || 'mark') }))
+    ? s.marks.filter((m) => m && isFinite(m.t)).map((m) => ({ t: +m.t,
+        name: String(m.name || 'mark'), id: m.id, renamed: !!m.renamed }))
     : [];
   renderMarks();
+  // Names and colours are looked up rather than stored, so a state renamed or
+  // recoloured since the save shows its current name and an id that no longer
+  // exists is dropped instead of drawing a blank row.
+  epochs = Array.isArray(s.epochs)
+    ? s.epochs.filter((e) => e && STATES[e.id] && isFinite(e.from))
+        .map((e) => ({ id: e.id, name: STATES[e.id].name, color: STATES[e.id].color,
+                       from: +e.from, to: e.to == null ? null : +e.to }))
+    : [];
+  renderEpochs();
   // A loaded world has no past in this session yet: the run it came from
   // happened before, and its history did not travel in the slot.
   restorePoints = [snapshot()];
@@ -1440,7 +1558,8 @@ function bindScrub() {
   let dragging = false;
   const timeAt = (e) => {
     const r = cv.getBoundingClientRect();
-    return historyTimeAtX(e.clientX - r.left, Math.max(sim.world.time, 10), r.width);
+    return historyTimeAtX(e.clientX - r.left, Math.max(sim.world.time, 10), r.width,
+      histZoom, histPan);
   };
   cv.addEventListener('pointerdown', (e) => {
     if (sim.world.history.length < 2 || restorePoints.length < 2) return;
@@ -1464,6 +1583,41 @@ function bindScrub() {
   };
   cv.addEventListener('pointerup', end);
   cv.addEventListener('pointercancel', end);
+
+  // Wheel zooms the timeline about the moment under the pointer, which is the
+  // one place worth keeping still: you are already looking at it. Shift-wheel
+  // slides the window instead, for following a span sideways once it is narrow
+  // enough that the whole run no longer fits.
+  cv.addEventListener('wheel', (e) => {
+    const w = sim.world;
+    if (w.history.length < 2) return;
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    const tMax = Math.max(w.time, 10);
+    if (e.shiftKey) {
+      const win = historyWindow(tMax, histZoom, histPan);
+      const step = (win.t1 - win.t0) * 0.15 * Math.sign(e.deltaY || e.deltaX);
+      histPan = clamp((win.t1 + step) / tMax, 1 / Math.max(histZoom, 1), 1);
+      return;
+    }
+    // Anchor on the pointer: solve for the pan that leaves the time currently
+    // under it in the same place afterwards. Zooming about the right-hand edge
+    // instead would walk whatever you were looking at off the screen, which is
+    // the thing that makes a zoom feel broken.
+    const held = historyTimeAtX(e.clientX - r.left, tMax, r.width, histZoom, histPan);
+    const f = clamp((e.clientX - r.left - 34) / Math.max(r.width - 44, 1), 0, 1);
+    const next = clamp(histZoom * (e.deltaY < 0 ? 1.35 : 1 / 1.35), 1, HIST_ZOOM_MAX);
+    const span = tMax / next;
+    histZoom = next;
+    histPan = clamp((held + (1 - f) * span) / tMax, 1 / next, 1);
+  }, { passive: false });
+
+  // Double-click puts the whole run back on screen. A zoom with no way out is
+  // a trap, and hunting for the scroll direction that undoes it is not a way.
+  cv.addEventListener('dblclick', () => {
+    histZoom = 1; histPan = 1;
+    toast(t('Timeline reset to the whole run'));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1646,6 +1800,8 @@ function bindControls() {
     renderState.seed = initialSeed;
     sim.reset(params);
     marks = []; renderMarks();
+    epochs = []; renderEpochs();
+    histZoom = 1; histPan = 1;
     syncSliders();
     scenarioResult = null; endSettle(); sim.paused = resetPaused; syncPlay();
     writeHash(); markTouched();
@@ -1887,11 +2043,27 @@ function bindControls() {
   // that is almost always what the player is marking -- "the ice started here",
   // "this is where it ran away" -- and a name that writes itself is one fewer
   // dialog between seeing something and recording it. Rename them in the list.
+  const clearMarks = $('#marks-clear');
+  if (clearMarks) {
+    clearMarks.addEventListener('click', () => {
+      if (!marks.length) return;
+      const n = marks.length;
+      marks = [];
+      renderMarks(); syncClocks(sim.world);
+      toast(tp('Cleared {0} milestones', String(n)));
+    });
+  }
+
   const markBtn = $('#btn-mark');
   markBtn.addEventListener('click', () => {
     const w = sim.world;
     const st = classify(w);
-    marks.push({ t: w.time, name: st.name });
+    // The id travels with the mark, not just the name. A mark named at the
+    // moment it was dropped is named in whatever language was on at the time,
+    // and it would still say that after the switch was flipped -- so the id is
+    // what is stored, the name is looked up, and a mark the user renames keeps
+    // the name they typed instead.
+    marks.push({ t: w.time, id: st.id, name: st.name });
     syncClocks(w); renderMarks();
     toast(tp('Marked “{0}” at {1}', tx('states', st.id, 'name') || st.name, fmtTime(w.time)));
   });
@@ -2228,6 +2400,15 @@ function tick(dtReal) {
     // guard by its exact text -- it exists because settling once ran straight
     // past a paused clock, and it caught this edit when it was folded in.
     if (!sim.paused) markDirty();
+    // The epoch record is written here, on the simulation's own loop, and NOT
+    // from the readout. The readout runs at 10 Hz, and a transition that
+    // finished between two of its ticks was simply never recorded: the world
+    // would list itself as temperate and then as a runaway with nothing in
+    // between, having in fact passed through the moist greenhouse for a fifth
+    // of a second. classify() is a chain of comparisons over numbers the
+    // diagnostics already hold, so asking it every frame costs nothing worth
+    // measuring against a step of the model.
+    noteEpoch(sim.world, classify(sim.world));
     view.render(sim.world, renderState, dtReal);
 
     // Autosave rides the chart clock rather than a timer of its own: it is
@@ -2241,7 +2422,8 @@ function tick(dtReal) {
     if (chartClock > 0.1) {
       chartClock = 0;
       updateReadout();
-      drawHistory($('#chart-history'), sim.world, scrubMark);
+      drawHistory($('#chart-history'), sim.world, scrubMark,
+        { zoom: histZoom, pan: histPan, epochs, marks });
       drawPhase($('#chart-phase'), sim.world);
       drawProfile($('#chart-profile'), sim.world, profileHover);
       drawWater($('#chart-water'), sim.world);
@@ -2339,6 +2521,8 @@ function relabel() {
       tx('scenarios', activeScenario.id, 'brief') || activeScenario.brief;
   }
   buildLogUI($('#statelog'), discovered, selectState);
+  renderMarks();
+  renderEpochs();
   syncSlots();
   syncPlay();
   updateReadout();
@@ -2398,6 +2582,10 @@ try { localStorage.removeItem(`${NS}.renderer.v1`); } catch { }
 window.__app = {
   sim, view, tick, frame, params, loadPreset, startScenario, graphicsFromUrl, useRenderer,
   rendererLog,
+  // The timeline window and the epoch record, for the browser check -- neither
+  // is reachable from a Node test, because both live in click handlers.
+  timeline: () => ({ zoom: histZoom, pan: histPan }),
+  epochs: () => epochs.map((e) => ({ ...e })),
   // Paste __app.diagnose() into the console to see what this machine offers.
   diagnose() {
     const probe = (kind) => {
