@@ -246,7 +246,13 @@ body.software-render #planet{image-rendering:auto}
 /* ---------------- stats & charts ---------------- */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
-.stat .k{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .k{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-faint);
+  /* Two lines, not one and an ellipsis. A truncated label is worse than a tall
+     tile -- "REZERVA DO NEKONTROL…" names nothing -- and translations are
+     routinely longer than the English they replace. The grid row stretches to
+     whichever tile needs the second line, which is what it is for. */
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  line-height:1.25;overflow-wrap:anywhere}
 .stat .v{font:14px/1.25 var(--mono);color:var(--fg);margin-top:2px}
 .stat .v small{font-size:10px;color:var(--fg-dim)}
 .stat.wide{grid-column:span 2}
@@ -266,7 +272,13 @@ body.software-render #planet{image-rendering:auto}
   transition:.18s;overflow:hidden;
 }
 .state-card .dot{width:7px;height:7px;border-radius:50%;flex:none;opacity:.28;transition:.25s}
-.state-card .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.state-card .nm{
+  /* Same reason as the readout tiles: a Slovak climate name is routinely twice
+     the width of the English one, and "Suchý nekontrolo…" identifies nothing.
+     Up to three lines here -- the grid row stretches, and the two columns stay
+     level with each other because flex items in a row share a height. */
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+  line-height:1.3;overflow-wrap:anywhere}
 .state-card.found{color:var(--fg)}
 .state-card.found .dot{opacity:1;box-shadow:0 0 9px currentColor}
 .state-card:hover{border-color:var(--line-2);background:rgba(255,255,255,.06)}
