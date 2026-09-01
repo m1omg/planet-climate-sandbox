@@ -55,6 +55,7 @@ export const EARTH = {
   // a hot-start inventory placed in steam rather than an ocean, a measured
   // escape-rate correction, and oxidation by a hot dry crust.
   resurfacingN2Bar: 0, startWithSteam: false, escapeScale: 1,
+  xuvDecay: false,
   hotRockOxidation: 0,
 };
 
@@ -109,7 +110,7 @@ export const EARTH = {
 // settles at 91.5 bar against the 92 the planet actually has.
 export const INDUCED_MAGNETOSPHERE = 0.02;
 
-export const SOLAR_HISTORY = { brightening: 1, realisticGeology: true };
+export const SOLAR_HISTORY = { brightening: 1, realisticGeology: true, xuvDecay: true };
 
 // The three worlds around M dwarfs get no brightening at all, and that is the
 // accurate choice rather than an omission. An M dwarf is essentially a constant
@@ -125,7 +126,13 @@ export const SOLAR_HISTORY = { brightening: 1, realisticGeology: true };
 // to the radiogenic part only and these worlds keep the flux they are measured
 // to have. Before that split the whole switch had to be off, which also cost
 // them the dynamo's decline for no reason.
-export const DWARF_HISTORY = { brightening: 0, realisticGeology: true };
+// A red dwarf's luminosity really is flat over any run this model can show --
+// TRAPPIST-1 has a 1500 Gyr main sequence -- so `brightening` stays off. Its
+// ULTRAVIOLET is the opposite: these stars sit saturated for a billion years and
+// more, and the spin-down out of that is most of what decides whether their
+// planets keep an atmosphere. It is the one process on these worlds that
+// everything else is scenery to, so it ships armed.
+export const DWARF_HISTORY = { brightening: 0, realisticGeology: true, xuvDecay: true };
 
 export const PREINDUSTRIAL = { ...EARTH, co2Bar: 280e-6, ch4Bar: 0.8e-6, startT: 286.85 };
 

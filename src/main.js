@@ -496,6 +496,7 @@ function syncSliders() {
   // preset, and on anything restored from a slot or from the world's own past.
   const br = $('#chk-brightening'); if (br) br.checked = params.brightening > 0;
   const gl = $('#chk-geology'); if (gl) gl.checked = !!params.realisticGeology;
+  const xd = $('#chk-xuv-decay'); if (xd) xd.checked = !!params.xuvDecay;
   const sm = $('#chk-smooth-sun'); if (sm) sm.checked = !!params.smoothInsolation;
   const rs = $('#chk-resurface'); if (rs) rs.checked = params.resurfacingAge > 0 && params.resurfacingBoost > 1;
   markBody();
@@ -1896,6 +1897,15 @@ function bindControls() {
     toast(e.target.checked
       ? 'Starlight changes now walk to the new value instead of jumping'
       : 'Starlight changes apply at once');
+  });
+
+  $('#chk-xuv-decay').addEventListener('change', (e) => {
+    params.xuvDecay = e.target.checked;
+    sim.setParams({ xuvDecay: params.xuvDecay });
+    writeHash(); markTouched();
+    toast(e.target.checked
+      ? t('The star now calms down as it ages — saturated first, then Ribas t⁻¹·²³')
+      : t('The star stays as active as it is now, for as long as you run it'));
   });
 
   $('#chk-geology').addEventListener('change', (e) => {

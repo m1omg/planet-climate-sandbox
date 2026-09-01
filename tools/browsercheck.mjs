@@ -330,6 +330,43 @@ try {
   ok(cloudPersist === 'false' && cloudAfter === 'false', 'A cloudless view survives a reload');
   await evaluate("document.querySelector('#btn-clouds').click()");
 
+  // The spin-down switch: present, checked on a red dwarf, off on a sandbox
+  // world, and it has to survive the address bar or a shared link would arrive
+  // at a different star from the one that was shared.
+  const xuv = await evaluate(`(async () => {
+    const load = async (id) => {
+      __app.loadPreset(id);
+      for (let i = 0; i < 80 && __app.view.body !== id; i++) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await new Promise((r) => setTimeout(r, 80));
+      __app.tick(0);
+      return { checked: document.querySelector('#chk-xuv-decay').checked,
+               param: !!__app.sim.world.params.xuvDecay };
+    };
+    const dwarf = await load('trappist1e');
+    const sandbox = await load('waterworld');
+    // Flip it on the sandbox world and read the address bar.
+    const box = document.querySelector('#chk-xuv-decay');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    __app.tick(0);
+    return { dwarf, sandbox, hash: location.hash,
+             after: !!__app.sim.world.params.xuvDecay };
+  })()`);
+  ok(xuv.dwarf.checked && xuv.dwarf.param && !xuv.sandbox.checked && !xuv.sandbox.param,
+    'The spin-down switch ships on for a red dwarf and off for a sandbox world',
+    `TRAPPIST-1e ${xuv.dwarf.checked} · ocean world ${xuv.sandbox.checked}`);
+  ok(xuv.after && /xuvDecay=true/.test(xuv.hash),
+    'Turning it on reaches the model and the address bar',
+    xuv.hash.slice(0, 60));
+  const xuvBack = await evaluate(`(async () => {
+    __app.loadPreset('waterworld');
+    await new Promise((r) => setTimeout(r, 120));
+    return !!__app.sim.world.params.xuvDecay;
+  })()`);
+  ok(xuvBack === false, 'Loading a preset puts its own answer back', `back to ${xuvBack}`);
+
   // The timeline, the milestones and the epoch record. All three live in click
   // handlers, so none of them is visible to a Node test.
   const timeline = await evaluate(`(async () => {

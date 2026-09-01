@@ -122,7 +122,19 @@ export const SLIDERS = [
     fmt: (v) => `${(v / 3.4e-6).toFixed(v / 3.4e-6 < 10 ? 1 : 0)}× Sun`,
     units: { sun: 3.4e-6, suns: 3.4e-6, x: 3.4e-6, '×': 3.4e-6 }, unitFor: () => '× Sun',
     parseScale: 3.4e-6,
-    note: 'Drives hydrogen escape. Young suns and red dwarfs are 100–1000× more active.' },
+    note: 'Drives hydrogen escape. Young suns and red dwarfs are 100–1000× more active.',
+    // Its own switch, beside the number it moves, rather than folded into the
+    // brightening one. They are separate physics on the same star: the
+    // bolometric track is the core filling with helium, the ultraviolet is the
+    // surface losing angular momentum to its own wind, and the two run in
+    // opposite directions. The red dwarfs ship with it on because it is the one
+    // process on those worlds that everything else is scenery to.
+    extra: `
+      <div class="supply">
+        <label class="supply-inf" title="A young star is magnetically saturated — its dynamo is running flat out and the ratio cannot climb further however fast it spins — and only starts to calm down once it has spun down. How long that takes belongs to the star: a tenth of a billion years for the Sun, one and a half for a late M dwarf. Off, the star never calms down, which is roughly a flare star that stayed young.">
+          <input type="checkbox" id="chk-xuv-decay"> star spins down
+        </label>
+      </div>` },
   { g: 'star', key: 'rotationHours', label: 'Rotation period', min: 2, max: 20000, log: true,
     // 47.95, not 48: at 47.98 the hours branch rounds the label to "48.0 h",
     // which the days branch would have written as "2 d".
