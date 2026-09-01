@@ -1,6 +1,6 @@
-import { createWorld, resetWorld, update, stepTemperature, maxStep } from '../physics/climate.js';
+import { createWorld, resetWorld, update, stepTemperature, maxStep, NBANDS, DX, X } from '../physics/climate.js';
 import { stepVolatiles } from '../physics/volatiles.js';
-import { clamp } from '../physics/constants.js';
+import { clamp, smoothstep, YEAR } from '../physics/constants.js';
 import { evolvedParams, brightnessAfter, radiogenic, EARTH_AGE, approach, walkRate }
   from '../physics/evolution.js';
 
@@ -25,7 +25,7 @@ import { evolvedParams, brightnessAfter, radiogenic, EARTH_AGE, approach, walkRa
 // over the second. In log temperature they are 0.14 and 1.2 -- within a factor
 // of nine of each other -- and 5%/s puts the glaciation in about three seconds
 // and the runaway in about twenty-five.
-const EASE_TARGET = 0.05;      // |d ln T| per wall-clock second
+const EASE_TARGET = 0.10;      // |d ln T| per wall-clock second
 
 // Measured, because the number above is not the whole story. At ten Myr a
 // second a runaway greenhouse goes from temperate to boiling in 0.05 s of wall
@@ -57,6 +57,11 @@ export class Simulation {
     this.autoEase = false;
     this.easeFactor = 1;      // what it is currently doing to the rate, for the UI
     this.easeRate = null;     // the rate it has settled on, null when not engaged
+    this.easing = 0;          // 0 = free, 1 = fully held back; continuous, never a switch
+    this.reach = 0;           // kelvin this climate can still move before it is at rest
+    this.tau = Infinity;      // years it takes to get most of the way there
+    this.span = 0;            // that reach as a fraction of the mean temperature, smoothed
+    this.lnPerYear = 0;       // |d ln T| per simulated year the planet actually covered
     this.climateSpeed = 0;    // |d ln T| per wall-clock second, measured
     this._acc = 0;
     this.onSample = null;
@@ -157,8 +162,125 @@ export class Simulation {
   advance(realDt) {
     if (this.paused) { this.actualRate = 0; return 0; }
     const dtReal = clamp(realDt, 0, 0.1);          // ignore huge stalls
-    this.credit = Math.min(this.credit + dtReal * this.rate, this.rate * 4);
-    return this.runCredit(this.rate, dtReal);
+    const eff = this.governedRate();
+    this.credit = Math.min(this.credit + dtReal * eff, eff * 2);
+    return this.runCredit(eff, dtReal);
+  }
+
+  // The rate the governor is willing to run at, in simulated years per wall
+  // second. Continuous in the state of the planet, so it cannot alternate.
+  //
+  // This is a rate limiter and not a per-frame allowance, which is the third
+  // and last version of this thing. An allowance cuts the frame off the moment
+  // it is spent, and a frame cut short advances a different amount from one run
+  // full -- so the clock alternated between roughly half the rate and roughly
+  // one and a half times it, on any world sitting near the target. Every
+  // patch for that (hysteresis, a smooth dial, not banking the declined time)
+  // narrowed the swing without removing its cause, because the cause is the cut
+  // itself.
+  //
+  // What forced the cut was lag: at 10 Myr/s a frame is 160 000 years and a
+  // whole runaway is 500, so a controller that waits to see how far the last
+  // frame got has nothing left to slow down. That argument does not apply to a
+  // controller that reads the planet's tendency *before* stepping it. maxStep
+  // computes that tendency anyway; here it is called once on the current state,
+  // which costs one extra evaluation per frame while the governor is on and
+  // nothing at all while it is off.
+  governedRate() {
+    const w = this.world;
+    if (!this.autoEase || !(w.diag.Tmean > 0)) {
+      this.easing = 0; this.easeRate = null; this.easeFactor = 1;
+      return this.rate;
+    }
+    maxStep(w, 2.5);                       // fills tendency and damping for free
+    const sol = w._solve;
+    const dT = sol && sol.tend && sol.tend.dT, k = sol && sol.k, C = w.diag.C;
+    if (dT && k && C) {
+      // How far this planet can actually go, and how long it takes to get
+      // there. The tendency alone is the initial slope, and using it directly
+      // held every world in the model to a few percent of its rate: a settled
+      // Earth carries a perfectly ordinary instantaneous tendency and simply
+      // does not go anywhere, because it is damped. What decides whether there
+      // is anything to watch is the equilibrium offset, dT * C / k, and the
+      // relaxation time C / k that governs how much of it is reached.
+      // Damped by the same thing maxStep's own linearisation damps by:
+      // radiation AND lateral transport. Radiation alone is not the planet's
+      // restoring force -- on a tidally locked world transport is the larger
+      // term by far, since it is what carries the day side's heat to the night
+      // side -- and leaving it out made the reach fifteen times too large and
+      // held TRAPPIST-1e to eight percent of a rate it did not need holding at.
+      const D = sol.tend.D;
+      let offset = 0, tauSum = 0, unbounded = false;
+      for (let i = 0; i < NBANDS; i++) {
+        const eL = -1 + DX * i, eR = -1 + DX * (i + 1);
+        const wL = i === 0 ? 0 : D * (1 - eL * eL) / (DX * DX);
+        const wR = i === NBANDS - 1 ? 0 : D * (1 - eR * eR) / (DX * DX);
+        const wsum = wL + wR;
+        const di = Math.max(k[i], -0.4 * wsum - 0.05) + wsum;
+        if (!(di > 1e-12)) { unbounded = true; break; }
+        offset += (C[i] * dT[i] / di) / NBANDS;    // signed: opposite bands cancel
+        tauSum += (C[i] / di) / NBANDS;
+      }
+      // A non-positive damping is a planet with no equilibrium to relax to --
+      // the runaway -- so the offset is unbounded and the whole rate is
+      // available to be spent watching it.
+      this.reach = unbounded ? Infinity : Math.abs(offset);
+      this.tau = unbounded ? Infinity : tauSum / YEAR;   // years
+    }
+    // At R years per wall second, a relaxing planet covers
+    //   reach * (1 - exp(-R / tau))
+    // kelvin in one second of watching. Solve that for the R that covers
+    // exactly the target, and take it if it is slower than what was asked for.
+    // A world whose entire reach is below the target -- which is most of them,
+    // most of the time -- has no solution and is never held back at all,
+    // however fast the clock is set. That is the property every earlier version
+    // of this got wrong in one direction or the other.
+    // Smoothed, and this is not cosmetic. On a tidally locked world the bands
+    // are not moving together: a night side still falling while a day side has
+    // settled means the NET mean tendency passes through zero, so the reach
+    // computed from it collapses to nothing and comes back a frame later. The
+    // governor let go and grabbed on 163 times in 240 frames on TRAPPIST-1e.
+    // Instant to rise and slow to fall, so a transition is still caught on the
+    // frame it starts while a zero crossing underneath it is simply ridden over.
+    const raw = w.diag.Tmean > 0 ? (this.reach ?? 0) / w.diag.Tmean : 0;
+    this.span = raw > this.span ? raw : this.span + 0.06 * (raw - this.span);
+    const span = this.span;
+    // Two ways a planet can be worth slowing down for, and they need separate
+    // answers because one of them is invisible to the other.
+    //
+    // A world relaxing toward a fixed point covers `span` and stops, so what it
+    // shows in one second of watching is span*(1 - exp(-R/tau)) and a world
+    // whose whole span is under the target is never held back however fast the
+    // clock runs. That is the glaciation, and it is most of the model.
+    //
+    // A runaway is not that. Its fixed point runs away in front of it -- water
+    // vapour moves the equilibrium as fast as the surface chases it -- so the
+    // instantaneous offset stays small while the planet travels two hundred
+    // kelvin. Reach alone says there is nothing to see and lets it past at full
+    // speed, which is exactly what it did. The driven case has to be measured
+    // instead of predicted, and measuring it is safe here in a way it was not
+    // before: this is a rate limiter now, so the frames it measures are all
+    // being run at about the same size and the reading has a fixed point rather
+    // than an oscillation.
+    let eff = this.rate;
+    if (span > EASE_TARGET && this.tau < Infinity) {
+      const r = -this.tau * Math.log(1 - EASE_TARGET / span);
+      if (r > 0 && isFinite(r)) eff = Math.min(eff, r);
+    } else if (this.tau === Infinity && span > 0) {
+      eff = Math.min(eff, EASE_TARGET / Math.max(this.lnPerYear, 1e-30));
+    }
+    if (this.lnPerYear > 0) eff = Math.min(eff, EASE_TARGET / this.lnPerYear);
+    // Slow the clock, never stop it -- but an ABSOLUTE floor, not a fraction of
+    // the rate that was asked for. A proportional one silently undid the whole
+    // governor at speed: at 10 Myr/s a floor of rate*1e-4 is a thousand years a
+    // second, and the limiter had asked for less than one. The runaway went by
+    // in a third of a second with the ease on and every dial reading as though
+    // it were engaged.
+    eff = Math.max(eff, 1e-6);
+    this.easing = this.rate > 0 ? clamp(1 - eff / this.rate, 0, 1) : 0;
+    this.easeRate = eff < this.rate ? eff : null;
+    this.easeFactor = this.rate > 0 ? Math.min(1, eff / this.rate) : 1;
+    return eff;
   }
 
   runCredit(rate = this.rate, dtReal = 0) {
@@ -166,41 +288,35 @@ export class Simulation {
     const deadline = performance.now() + this.budgetMs;
     let advanced = 0, steps = 0;
     const T0 = w.diag.Tmean;
-    // The ease budget for this frame, in |d ln T|. Infinite when the governor
-    // is off, which is the only thing that has to cost nothing.
-    const tighten = this.autoEase && dtReal > 0;
-    const budget = tighten ? EASE_TARGET * dtReal : Infinity;
-    let moved = 0;
+    // A backstop for the first frame of a transition, and only that.
+    //
+    // The rate limiter above cannot catch an onset, because it reads the frame
+    // before: at 10 Myr/s a frame is 160 000 years and a whole runaway is 500,
+    // so the first frame goes from temperate to boiling before anything has
+    // been measured. Cutting the frame off is the only thing that can stop
+    // that, and cutting frames is what made every earlier version alternate --
+    // a cut frame advances a different amount from a full one.
+    //
+    // Thirty times the budget is the reconciliation, and the margin is wide on
+    // purpose. An onset overshoots by four orders of magnitude, so a wide guard
+    // still stops it dead; ordinary drift on a world merely getting on with its
+    // life overshoots by two or three, and a tight guard chopped those frames
+    // too -- an Archean at 10 Myr/s ran at a fifth of its rate for no reason but
+    // this. What must never happen is this firing twice in a row on the same
+    // world, because that is a cut frame every frame, which is the alternation
+    // the rate limiter exists to remove.
+    const guard = this.autoEase && dtReal > 0 ? 30 * EASE_TARGET * dtReal : Infinity;
     this.throttled = false;
     while (steps < this.maxStepsPerFrame) {
-      const cap = tighten
-        ? clamp(w.diag.Tmean * Math.max(budget - moved, 0), 0.02, 2.5) : 2.5;
-      let room = Math.min(maxStep(w, cap), rate * 0.3, 5e6);
-      if (tighten) {
-        // Size the step to the budget it has left, instead of taking the step
-        // the solver would allow and discovering afterwards that it spent six
-        // frames' worth. maxStep has just computed the tendency and cached it
-        // on the world, so what the planet is about to do per year is already
-        // paid for: read it rather than measure it after the fact. This is the
-        // "arguing with the step-size estimator" the note above deferred, and
-        // it is what turns a 2.8 s transition into the ~25 s the target asks
-        // for.
-        const dT = w._solve && w._solve.tend && w._solve.tend.dT;
-        if (dT && w.diag.Tmean > 0) {
-          let sum = 0;
-          for (let i = 0; i < dT.length; i++) sum += dT[i];
-          const perYear = Math.abs(sum / dT.length) / w.diag.Tmean;
-          if (perYear > 0) room = Math.min(room, Math.max(budget - moved, 0) / perYear);
-        }
-      }
+      const room = Math.min(maxStep(w, 2.5), rate * 0.3, 5e6);
       // Spend what is in hand rather than refusing to move until a whole step
-      // is affordable. This was the other half of the stutter and it was never
-      // about the ease at all: whenever the solver would allow a step larger
-      // than one frame's credit -- which is most of a calm world's life -- the
-      // frame took no step and banked instead, so the clock ran in bursts
-      // separated by dead frames. Paying for a shorter step is always safe: a
-      // dt below maxStep is the accurate direction, and it honours the rate
-      // exactly rather than on average.
+      // is affordable. Whenever the solver would allow a step larger than one
+      // frame's credit -- most of a calm world's life -- the frame used to take
+      // no step at all and bank instead, so the clock ran in bursts with dead
+      // frames between them at every rate, governor or no governor: 76% of
+      // frames advancing nothing, in runs of up to nine. A dt below maxStep is
+      // the accurate direction, and it honours the rate exactly rather than on
+      // average.
       const dt = Math.min(room, this.credit);
       // Below a thousandth of what the solver would allow, a step is not worth
       // its own overhead; bank it and let the next frame afford more.
@@ -210,35 +326,27 @@ export class Simulation {
       // make the interface stop responding.
       if ((steps & 7) === 0 && performance.now() > deadline) { this.throttled = true; break; }
       this.credit -= dt;
-      const before = w.diag.Tmean;
       this.stepOnce(dt);
       advanced += dt;
       steps++;
-      if (tighten && before > 0 && w.diag.Tmean > 0) {
-        moved += Math.abs(Math.log(w.diag.Tmean / before));
-        if (moved >= budget) break;
-      }
+      if (guard < Infinity && T0 > 0 && w.diag.Tmean > 0
+        && Math.abs(Math.log(w.diag.Tmean / T0)) >= guard) break;
     }
-    // Unspent credit is capped so a long stall cannot bank a huge jump. While
-    // the ease is engaged it is capped at a single frame's worth -- NOT thrown
-    // away, which is what used to happen and what emptied the following frame.
-    // Zero left the next frame unable to afford even one step, so it advanced
-    // nothing, so there was no temperature change to measure, so the governor
-    // stopped asking for finer steps and the step it could eventually afford
-    // was bigger still: 76% of frames dead, in runs of up to nine, separated by
-    // million-year jumps. Keeping one frame's worth starves nothing and banks
-    // no burst.
-    this.credit = Math.min(this.credit, tighten ? rate * dtReal : rate * 2);
+    // Unspent credit is capped so a long stall cannot bank a huge jump.
+    this.credit = Math.min(this.credit, rate * 2);
     // How fast the climate appeared to move, per wall-clock second, at the rate
-    // this frame actually ran at. Measured across the frame rather than read off
-    // the instantaneous tendency, because an implicit step absorbs most of a
-    // large tendency and what the governor needs is how far the planet got.
+    // this frame actually ran at.
     if (dtReal > 0 && T0 > 0 && w.diag.Tmean > 0) {
       this.climateSpeed = Math.abs(Math.log(w.diag.Tmean / T0)) / dtReal;
-      // What the ease is doing to the clock, for the readout: how much of the
-      // rate that was asked for actually got spent.
-      const wanted = this.rate * dtReal;
-      this.easeFactor = wanted > 0 ? Math.min(1, advanced / wanted) : 1;
+    }
+    // What the planet actually covered, per simulated year. This is the driven
+    // term: it sees a runaway that the linearised reach cannot. Instant to rise
+    // so the second frame of a transition is already held back, slow to fall so
+    // coming out of one is a glide rather than a step.
+    if (this.autoEase && advanced > 0 && T0 > 0 && w.diag.Tmean > 0) {
+      const perYear = Math.abs(Math.log(w.diag.Tmean / T0)) / advanced;
+      this.lnPerYear = perYear > this.lnPerYear
+        ? perYear : this.lnPerYear + 0.05 * (perYear - this.lnPerYear);
     }
     this.actualRate = advanced;
     return advanced;

@@ -2,7 +2,7 @@ import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_
          P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O } from './constants.js';
 import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
-import { derive } from './planet.js';
+import { derive, volcanicActivity } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
 
 import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL } from './volatiles.js';
@@ -465,6 +465,9 @@ export function update(w, dt) {
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted,
     hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, totalWater, superFrac,
     hazeTau, hazeSW, ch4SW, swTrans,
+    // What the renderer draws vents and ash from. Here rather than in the
+    // render layer so both renderers read one number and the tests can pin it.
+    volcanism: volcanicActivity(p),
     Tmax: Math.max(...w.T), Tmin: Math.min(...w.T),
   };
   return w.diag;

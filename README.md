@@ -367,11 +367,11 @@ At the 10 Myr/s this is mostly played at, a runaway greenhouse takes **0.05 seco
 and a glaciation 0.02 — the planet is temperate, and then it is not, and the transition every one of
 these worlds is *about* is the one thing you never get to see.
 
-The **ease** switch beside the clock spends a fixed budget of `|d ln T|` per wall-clock second. Log
+The **ease** switch beside the clock holds the clock to a fixed `|d ln T|` per wall-clock second. Log
 temperature rather than kelvin, because the two events are not the same size: a snowball is a 33 K
 fall and a runaway a 212 K climb, so any fixed number of degrees a second either flicks past the
 first or takes two minutes over the second. In log they are 0.14 and 1.2, and one setting serves
-both — **2.8 s and 1.3 s** respectively, and the same 2.8 s if you ask for 100 Myr/s instead of 10.
+both — **5.8 s and 1.7 s** respectively, and the same 5.8 s if you ask for 100 Myr/s instead of 10.
 
 It acts *inside* the frame rather than turning the rate down for the next one. That is not a
 refinement: one frame at 10 Myr/s is 160 000 years and the whole runaway is 500, so a controller
@@ -380,30 +380,65 @@ frames from temperate to boiling with the feedback loop running. The budget is s
 the frame stops when it runs out. A settled Earth with the governor armed runs its full hundred
 million years in ten seconds and never notices it is there.
 
-**For a long time it did all of that while stuttering, which made it useless.** Both halves are worth
-writing down, because neither was the physics.
+**It took three versions to get right, and the first two are worth writing down, because neither
+failure was in the physics.**
 
-The budget was overshot by construction: one solver step through a transition moves further than one
-frame's allowance, so the frame always ran past it. Leftover credit was then thrown away — deliberately,
-so that banking the time the governor had just declined to spend could not hand it all back as a burst
-on the next frame. But zero was too far. The next frame could not afford a single step, so it advanced
-nothing; with no time advanced there was no temperature change to measure; with no measured change the
-governor stopped asking for finer steps, so the step it could eventually afford was *bigger*. Measured:
-**76% of frames advancing nothing, in runs of up to nine, separated by jumps of a million years.** The
-fix is to cap the leftover at one frame's worth instead of destroying it, and to size the step to the
-budget it has left *before* taking it — `maxStep` has already computed the tendency and cached it on
-the world, so what the planet is about to do per year is free to read.
+The original was a per-frame *allowance*: steps were spent against a budget of `|d ln T|` until it ran
+out, then the frame stopped. One solver step through a transition moves further than one frame's
+allowance, so the frame always overshot; the leftover credit was then thrown away, deliberately, so
+that banking time the governor had just declined to spend could not hand it back as a burst. Zero was
+too far. The next frame could not afford a single step, so it advanced nothing; with nothing advanced
+there was no change to measure; with no measured change the governor stopped asking for finer steps,
+so the step it could eventually afford was *bigger*. **76% of frames advancing nothing, in runs of up
+to nine, separated by jumps of a million years** — not a slowed clock but a stuttering one.
 
-The second half was never the ease at all. `if (credit < dt) break` refused to move until a whole step
-was affordable, and whenever the solver would allow a step larger than one frame's credit — which is
-most of a calm world's life — the frame took no step and banked instead. The clock ran in bursts with
-dead frames between them at *every* rate, governor or no governor. A frame now spends the credit it
+Half of that was never the ease at all. `if (credit < dt) break` refused to move until a whole step
+was affordable, and whenever the solver would allow a step larger than one frame's credit — most of a
+calm world's life — the frame took no step and banked instead. The clock ran in bursts with dead
+frames between them at *every* rate, governor or no governor. A frame now spends the credit it
 actually has: a `dt` below `maxStep` is the accurate direction, and it honours the rate exactly rather
 than on average.
 
-Now **0% of frames advance nothing**, the fastest frame is 4.4× the slowest rather than 27×, the
-transition still takes the same 2.83 s at 10 and at 100 Myr/s, and a settled Earth runs at 100% of the
-rate asked for — it used to be held to 67% for no reason at all.
+The second version fixed the dead frames and replaced the alternation with a milder one, because a
+frame cut off at its budget advances a different amount from a frame that runs full, and that
+difference *is* the alternation. Hysteresis narrowed it. A continuous dial narrowed it. Not banking
+the declined time narrowed it. None of them removed it, because the cause was the cut.
+
+**The third is a rate limiter, and it reads the planet rather than the last frame.** What forced the
+cut was lag — at 10 Myr/s a frame is 160 000 years and a whole runaway is 500 — and that argument does
+not apply to a controller that looks at the tendency *before* stepping. `maxStep` computes it anyway.
+Two quantities come out of the same linearisation the solver already builds:
+
+- **How far this climate can still go**, `ΔT·C/d`, damped by radiation *and lateral transport*. Using
+  radiation alone made the reach fifteen times too large on a tidally locked world, where transport is
+  what carries the day side's heat to the night side, and held TRAPPIST-1e to 8% of a rate it did not
+  need holding at.
+- **How long it takes to get there**, `C/d`. A world whose entire remaining reach is below the target
+  is never held back at all, however fast the clock is set — which is most worlds, most of the time,
+  and is the property every earlier version got wrong in one direction or the other.
+
+A runaway is not that, and needs its own term: its fixed point runs away in front of it, so the
+instantaneous offset stays small while the planet travels 200 K. Reach alone let it past at full
+speed. That one is measured rather than predicted, which is safe *here* in a way it was not before —
+a rate limiter runs its frames at roughly constant size, so the reading has a fixed point instead of
+an oscillation. A wide backstop inside the frame catches the very first onset, once, before the
+measurement exists; it has thirty times the budget in hand, so ordinary drift never trips it.
+
+Two smaller things, both of which silently undid the rest. The tendency is kelvin per **second** and
+the governor wants per year. And the anti-stall floor was `rate × 1e-4` — proportional, so at 10 Myr/s
+it was a thousand years a second when the limiter had asked for less than one, and the runaway went by
+in a third of a second with every dial reading as though it were engaged. It is absolute now.
+
+**Measured, across every preset at 0.1, 1 and 10 Myr/s: no frame advances nothing, no run alternates,
+and no world is held back that would not have crossed the screen faster than the target.** The
+Archean is held about 10% at 10 Myr/s and should be — it carries a real equilibrium offset, a cold
+world under a faint sun with a tenth of a bar of CO₂, a long way from where it is going.
+
+One number moved with the fix. The old governor asked for 5%/s and delivered a 2.8 s runaway where
+5%/s means eleven, because most of the limiting it thought it was doing never happened. A governor
+that hits its target is a slower governor at the same setting, so the setting moved with it: **10%/s**
+puts the glaciation at the 1.3 s it always took and the runaway at 5.8 s, both watchable and neither
+tedious, and the ratio between them is now simply the ratio of their log-temperature spans.
 
 It is a governor on measured change, not a detector for two named events, so it also catches a CO₂
 collapse, a nightside freeze-out and anything else this model can do that a list would have missed.

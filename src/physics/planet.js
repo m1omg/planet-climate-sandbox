@@ -20,6 +20,29 @@ export function outgassingScale(massEarths) {
   return clamp(Math.pow(massEarths, 0.7), 0.05, 6);
 }
 
+// How volcanically active this world is, relative to Earth at 1x.
+//
+// Melt production per unit area, NOT the CO2 that rides up with it. A mantle
+// whose carbon is exhausted still erupts; it erupts volatile-poor lava. Tying
+// the picture to the CO2 delivery would switch the volcanoes off on a world
+// whose interior is still molten, which is neither what the model believes nor
+// what Io looks like.
+//
+// And deliberately WITHOUT outgassingScale, which the carbon source does use.
+// That factor is about how much volatile a bigger planet delivers per square
+// metre; it is not about how much lava is on the ground. Including it read Io
+// as a quarter of Earth's volcanism -- m^0.7 on 0.015 masses is 0.056, enough
+// to bury a 4.7x heat flux -- which is exactly backwards for the most
+// volcanically active body known. What the eye sees is melt vigour, and that is
+// the heat coming out per unit area and the mantle's own activity, both of
+// which are already here.
+export const EARTH_INTERNAL_FLUX = 0.092;   // W/m^2
+export function volcanicActivity(p) {
+  const heat = Math.max(p.internalHeat ?? EARTH_INTERNAL_FLUX, 0);
+  const melt = clamp(Math.sqrt(heat / EARTH_INTERNAL_FLUX), 0, 100);
+  return Math.max(p.outgassing ?? 0, 0) * melt;
+}
+
 // Derived geometry / bookkeeping for a parameter set.
 export function derive(params) {
   const g = surfaceGravity(params.mass);
