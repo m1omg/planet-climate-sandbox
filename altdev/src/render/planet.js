@@ -1,7 +1,7 @@
 import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
-import { atmosphereLook, cloudLook } from './atmosphere.js';
+import { atmosphereLook, cloudLook, volcanoLook } from './atmosphere.js';
 import { seaLevelForLand, vegetationColor } from './terrain.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
@@ -300,7 +300,7 @@ export class PlanetView {
     this.u = {};
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uVegColor', 'uSeed',
       'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
-      'uNightGlow', 'uYaw', 'uPitch', 'uUseTex', 'uRelief', 'uCloudDetail',
+      'uNightGlow', 'uCam', 'uVolcano', 'uUseTex', 'uRelief', 'uCloudDetail',
       'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt', 'uSeaLevel', 'uBio',
       'uBodyMap', 'uBodyHeight', 'uBodyMix', 'uBodyHasHeight', 'uBodySeaLevel',
       'uTerrain', 'uDetailMap', 'uCloudMap', 'uBands']) {
@@ -865,6 +865,12 @@ export class PlanetView {
     // A gate, not a magnitude: the shader takes the brightness from the local
     // band temperature. See thermalGlow() in terrain.js.
     gl.uniform1f(this.u.uNightGlow, glow);
+    // Volcanism, from the melt production the physics tracks. Suppressed on a
+    // molten world: a magma ocean is already drawn as molten everywhere, and
+    // painting vents onto it would be claiming a distinction that is not there.
+    const volc = volcanoLook(world);
+    const notMolten = 1 - clamp((dg.Tmean - 1200) / 400, 0, 1);
+    gl.uniform2f(this.u.uVolcano, volc.vents * notMolten, volc.ash * notMolten);
     // Cross-fade rather than snap, so toggling the surface style is a dissolve.
     const target = (this.wantTextures && this.texturesLoaded) ? 1 : 0;
     this.useTextures += clamp(target - this.useTextures, -3 * dtReal, 3 * dtReal);
@@ -895,8 +901,7 @@ export class PlanetView {
     // A tidally locked world has no meaningful obliquity: its bands run from
     // the substellar point, not from a pole.
     gl.uniform1f(this.u.uTilt, (1 - lam) * (p.obliquity || 0) * Math.PI / 180);
-    gl.uniform1f(this.u.uYaw, this.yaw);
-    gl.uniform1f(this.u.uPitch, this.pitch);
+    gl.uniform2f(this.u.uCam, this.yaw, this.pitch);
     gl.activeTexture(gl.TEXTURE0 + 9);
     gl.bindTexture(gl.TEXTURE_2D, this.bandTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, NBANDS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.bandBytes);

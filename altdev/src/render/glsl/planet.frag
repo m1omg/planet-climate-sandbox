@@ -45,8 +45,14 @@ uniform float uMagma;       // 0..1 molten surface
 uniform float uLocked;      // 0 = free rotator, 1 = tidally locked
 uniform float uZoom;        // camera distance, 1 = default framing
 uniform float uTilt;        // obliquity, radians: the spin axis leans this far
-uniform float uYaw;         // camera orbit, radians
-uniform float uPitch;
+// Camera orbit and elevation, radians. Paired into one vec2 rather than kept as
+// two floats because a uniform vector slot holds four components either way, so
+// two scalars cost two slots and a vec2 costs one -- and the fragment stage is
+// at its guaranteed budget of 32. That freed the slot uVolcano needed.
+uniform vec2  uCam;         // x = orbit, y = elevation
+// x = melt production relative to Earth's, on a 0..1 curve; y = the ash and
+// sulphate veil that comes with it.
+uniform vec2  uVolcano;
 uniform float uNightGlow;   // thermal emission on the dark side
 // Per-band temperature and ice, as a texture rather than two uniform arrays.
 // Uniform arrays cost a vector each -- 36 of them, against a WebGL1 guaranteed
@@ -404,7 +410,7 @@ void main(){
   // Dragging orbits the camera rather than turning the planet, so the star, the
   // terminator and the ice caps all stay where they belong while you look from
   // a new angle.
-  mat3 view = rotY(uYaw) * rotX(uPitch);
+  mat3 view = rotY(uCam.x) * rotX(uCam.y);
   // Zoom by moving the camera rather than narrowing the lens, so the planet
   // keeps its perspective and the atmosphere's limb still reads correctly.
   vec3 ro = view * vec3(0.0, 0.0, 3.0 * uZoom);
@@ -507,6 +513,32 @@ void main(){
     float glow = uNightGlow * min(exp(11.68 - 17520.0/max(T, 1.0)), 1.4);
     lit += vec3(1.0,0.30,0.08) * glow * (1.0 - lam);
 
+    // ---- volcanism ----
+    //
+    // Vents, on the unlit side. This is what a volcanic world actually looks
+    // like from orbit: not a red planet, but points of light on the dark half.
+    // Io is the case -- its eruptions are visible against a night side that is
+    // otherwise nothing, and Earth's would be too if there were enough of them.
+    //
+    // Placed on the terrain's own fine channel rather than on new noise, so a
+    // vent sits in the same spot every frame and turns with the planet. The
+    // threshold walks down as activity rises, which is how more of them appear:
+    // the field is fixed and the level through it is not.
+    if (uVolcano.x > 0.001) {
+      float f = texture(uTerrain, sp).a;
+      // Land only. A vent under an ocean is a black smoker, and what reaches
+      // the surface from one is a plume, not a glow.
+      float dry = smoothstep(-0.01, 0.03, height);
+      float lo = mix(0.92, 0.55, uVolcano.x);
+      float vent = smoothstep(lo, lo + 0.05, f) * dry;
+      // Fresh flows, dark and unweathered, around the same points in daylight.
+      lit = mix(lit, lit * 0.55, vent * 0.5 * lam * uVolcano.x);
+      // ...and the incandescence, which only reads on the night side. Slow
+      // breathing so a vent field looks alive rather than printed on.
+      float pulse = 0.75 + 0.25 * sin(uTime * 0.7 + f * 40.0);
+      lit += vec3(1.0, 0.42, 0.10) * vent * pulse * (1.0 - lam) * uVolcano.x * 1.6;
+    }
+
     // ---- clouds ----
     // Two layers drifting at different speeds, warped by their own noise, so
     // the deck churns and shears the way weather does instead of sliding past
@@ -548,6 +580,17 @@ void main(){
     // ground, which is the whole point of looking at a climate model.
     vec3 veilCol = mix(airTint, vec3(0.86,0.88,0.92), 1.0 - uHaze) * uStarColor;
     lit = mix(lit, veilCol * (0.12 + 0.88*lam), uVeil);
+
+    // Ash and sulphate, the daylight half of the same story. A heavily volcanic
+    // world is not only bright spots at night: it is hazy by day, because
+    // sulphur dioxide oxidises to a sulphate aerosol that stays up for years.
+    // Pinatubo put 20 Tg of it into the stratosphere and cooled the planet half
+    // a kelvin; a world erupting continuously never clears it. Yellow-grey and
+    // slightly brightening, unlike the organic haze, which is orange and dims.
+    if (uVolcano.y > 0.001) {
+      vec3 ash = vec3(0.78, 0.74, 0.62) * uStarColor;
+      lit = mix(lit, ash * (0.18 + 0.82*lam), uVolcano.y * (0.25 + 0.55*lam));
+    }
 
     // limb darkening + atmospheric rim seen against the surface
     float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);

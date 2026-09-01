@@ -3,6 +3,7 @@
 import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { volcanicActivity } from './physics/planet.js';
+import { volcanoLook } from './render/atmosphere.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
          planetaryAlbedo } from './physics/radiation.js';
@@ -1199,6 +1200,26 @@ export function run() {
           dg.volcanism > 1 && Math.abs(dg.volcanism
             - volcanicActivity(s.world.params)) < 1e-9,
           `diag.volcanism ${dg.volcanism.toFixed(1)}x Earth`);
+      }
+
+      // Both renderers have to draw the same amount of volcanism. They share
+      // volcanoLook() precisely so they cannot drift, and this is the check
+      // that says so -- the GL path and the CPU port have disagreed before,
+      // about frost and about thermal glow, and each time it was one of them
+      // quietly using a different number for the same thing.
+      {
+        const looks = ['mars', 'earth', 'gj1132b', 'trappist1b'].map((id) => {
+          const s = new Simulation({ ...PRESETS[id].params });
+          s.runYears(1e3);
+          return { id, ...volcanoLook(s.world) };
+        });
+        const rising = looks[0].vents < looks[1].vents && looks[1].vents < looks[2].vents;
+        // Ash cannot exist without air to hold it. TRAPPIST-1b is the case:
+        // all the tidal heat in the model and effectively no atmosphere left.
+        const airless = looks[3].ash < 0.02 || looks[3].vents > 0;
+        check('Both renderers read one volcanism number, and it ranks the worlds right',
+          rising && airless && looks[0].vents < 0.05 && looks[2].vents > 0.9,
+          looks.map((l) => `${l.id} ${l.vents.toFixed(2)}`).join(' · '));
       }
 
       // Auto-ease has to slow the clock, not chop it up. It used to do the
