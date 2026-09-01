@@ -1141,11 +1141,106 @@ export function run() {
           && Math.abs(xuvAtAge(1, SOLAR_TEMP) / Math.pow(1 / EARTH_AGE, -1.23) - 1) < 1e-9,
         `Sun saturated to ${saturationAge(SOLAR_TEMP).toFixed(2)} Gyr, then Ribas t^-1.23`);
 
-      check('…and a late M dwarf stays saturated for an order of magnitude longer',
-        saturationAge(2566) / saturationAge(SOLAR_TEMP) > 8
-          && saturationAge(2566) < 3 && saturationAge(3270) > saturationAge(SOLAR_TEMP),
+      check('…and a late M dwarf stays saturated for most of the age of the galaxy',
+        saturationAge(2566) / saturationAge(SOLAR_TEMP) > 50
+          && saturationAge(2566) > 8 && saturationAge(2566) < 15
+          && saturationAge(3270) > saturationAge(SOLAR_TEMP),
         `TRAPPIST-1 ${saturationAge(2566).toFixed(2)} Gyr · GJ 1132 ${saturationAge(3270).toFixed(2)} · `
-        + `Sun ${saturationAge(SOLAR_TEMP).toFixed(2)}`);
+        + `Sun ${saturationAge(SOLAR_TEMP).toFixed(2)} (West et al. 2008)`);
+
+      // The invariant that catches a saturation age set too short. Every one of
+      // these presets carries a MEASURED present-day XUV. Run that number back
+      // up the model's own curve to the moment the star left saturation, and
+      // what comes out has to be a value a star can actually have -- at or
+      // below the saturation ceiling, log(Lx/Lbol) ~ -3.3. If the curve says a
+      // star left saturation long ago, and the observation says it is still
+      // pouring out XUV today, then the curve is claiming it used to be
+      // brighter than any star ever gets. TRAPPIST-1 failed this by 5.7x.
+      {
+        // The ceiling is on XUV, not on X-rays alone, because xuvFraction is
+        // both: Wright et al. (2011) put saturated X-ray emission at
+        // log(Lx/Lbol) = -3.13, and the EUV contributes comparably again.
+        const CEILING = 1.5e-3;
+        const bad = [];
+        for (const id of ['trappist1b', 'trappist1e', 'gj1132b']) {
+          const p = PRESETS[id].params;
+          const T = p.starTemp, start = p.startAge ?? EARTH_AGE;
+          const sat = saturationAge(T);
+          const back = p.xuvFraction * xuvAtAge(sat, T) / xuvAtAge(start, T);
+          if (back > CEILING * 1.15) {
+            bad.push(`${id} back-extrapolates to ${(back / 3.4e-6).toFixed(0)}× solar `
+              + `at ${sat.toFixed(1)} Gyr, ceiling is ${(CEILING / 3.4e-6).toFixed(0)}×`);
+          }
+        }
+        check('No preset needs its star to have been brighter than stars get',
+          bad.length === 0,
+          bad.length ? bad.join(' · ') : 'all three dwarfs sit under the saturation ceiling');
+      }
+
+      // TRAPPIST-1 is observed still X-ray active at an age of 7.6 Gyr
+      // (Wheatley et al. 2017 measure Lx/Lbol = 2-4e-4, which is saturation).
+      // A model that has it spun down long ago disagrees with the measurement
+      // it is anchored to.
+      check('TRAPPIST-1 is still saturated at the age it actually is',
+        saturationAge(2566) > 7.6 && saturationAge(2566) < 15,
+        `saturated to ${saturationAge(2566).toFixed(1)} Gyr, against an observed age of 7.6`);
+
+      // A world and its own younger self have to be the same world. The young
+      // presets differ from the present-day ones in exactly the fields six and
+      // a half billion years are allowed to change -- age, water, air -- and in
+      // nothing else, because everything else is the planet's identity.
+      {
+        const SAME = ['mass', 'insolation', 'starTemp', 'tidallyLocked', 'rotationHours',
+                      'obliquity', 'landFraction', 'internalHeat', 'tidalHeat',
+                      'outgassing', 'xuvFraction', 'xuvDecay', 'brightening'];
+        const bad = [];
+        for (const [young, now] of [['earlyTrappist1b', 'trappist1b'],
+                                    ['earlyTrappist1e', 'trappist1e']]) {
+          for (const k of SAME) {
+            if (PRESETS[young].params[k] !== PRESETS[now].params[k]) {
+              bad.push(`${young}.${k}=${PRESETS[young].params[k]} vs ${PRESETS[now].params[k]}`);
+            }
+          }
+          if (!(PRESETS[young].params.startAge < PRESETS[now].params.startAge)) {
+            bad.push(`${young} is not younger than ${now}`);
+          }
+        }
+        check('A young TRAPPIST world is the same planet as its present-day self',
+          bad.length === 0, bad.length ? bad.join(' · ') : '13 fields shared, only age and volatiles differ');
+      }
+
+      // ...and running it forward has to arrive. This is the claim the preset
+      // makes, so it is the claim that gets checked: five oceans and twenty bar
+      // of CO2 at 1 Gyr, stripped to the airless rock JWST sees, on the same
+      // clock the star actually kept.
+      {
+        const s = new Simulation({ ...PRESETS.earlyTrappist1b.params });
+        s.runYears(6.6e9, 2e6, 120000);
+        const d = s.world.diag;
+        const arrived = classify(s.world);
+        const today = new Simulation({ ...PRESETS.trappist1b.params });
+        today.runYears(1e7);
+        check('Young TRAPPIST-1b, run its 6.6 Gyr, arrives at the present-day one',
+          arrived.id === classify(today.world).id && d.totalWater < 1e-6
+            && d.pTotMean < 1e-3,
+          `${arrived.id}, ${s.world.water.lost.toFixed(1)} oceans lost, `
+          + `${d.pTotMean.toExponential(1)} bar left — against today's ${classify(today.world).id}`);
+      }
+
+      // 1e does not, and that disagreement is the point rather than a fault:
+      // its present-day preset says of itself that it is a plausible
+      // configuration rather than a measured one, and this model says a planet
+      // at 0.646 S(+) under 206x solar XUV for its whole life does not get to
+      // keep one. A hundred bar of nitrogen goes the same way as one.
+      {
+        const s = new Simulation({ ...PRESETS.earlyTrappist1e.params });
+        s.runYears(6.6e9, 2e6, 120000);
+        const d = s.world.diag;
+        check('…while young TRAPPIST-1e is stripped, whatever it starts with',
+          d.pTotMean < 0.2 && d.totalWater > 1,
+          `${classify(s.world).id} at ${d.pTotMean.toFixed(3)} bar, `
+          + `${d.totalWater.toFixed(1)} EO still there but cold-trapped`);
+      }
 
       // Spin-down is a switch of its own, and the red dwarfs come with it on.
       // It has to be separable from the bolometric track because the two are
@@ -1161,20 +1256,36 @@ export function run() {
           `${armed.join(', ')} — all below 4000 K`);
       }
       {
-        const base = { insolation: 1, xuvFraction: 7e-4 };
-        const on = evolvedParams({ ...PRESETS.trappist1e.params, xuvDecay: true }, base, 2e9);
-        const off = evolvedParams({ ...PRESETS.trappist1e.params, xuvDecay: false }, base, 2e9);
+        // GJ 1132 b, because it is the dwarf that has actually left saturation:
+        // an M4 is out of it by 3.75 Gyr and the preset starts at 4.567.
+        const base = { insolation: 1, xuvFraction: 2e-4 };
+        const on = evolvedParams({ ...PRESETS.gj1132b.params, xuvDecay: true }, base, 2e9);
+        const off = evolvedParams({ ...PRESETS.gj1132b.params, xuvDecay: false }, base, 2e9);
         check('…and turning it off holds the ultraviolet exactly where it was set',
           on.xuvFraction < base.xuvFraction * 0.9 && off.xuvFraction === undefined,
-          `${(base.xuvFraction / 3.4e-6).toFixed(0)}× solar → `
+          `GJ 1132 b ${(base.xuvFraction / 3.4e-6).toFixed(0)}× solar → `
           + `${(on.xuvFraction / 3.4e-6).toFixed(0)}× with it on, unchanged with it off`);
+      }
+
+      // ...and the other side of the same physics, which is the one that was
+      // wrong: a star still inside its saturated stretch must NOT decline, no
+      // matter that the switch is on. TRAPPIST-1 is saturated to 9.06 Gyr and
+      // the system is 7.6 Gyr old, so the whole of a billion-year run happens
+      // inside it.
+      {
+        const base = { insolation: 1, xuvFraction: 7e-4 };
+        const held = evolvedParams({ ...PRESETS.trappist1e.params, xuvDecay: true }, base, 1e9);
+        check('…and a star still saturated does not decline just because the switch is on',
+          held.xuvFraction === base.xuvFraction,
+          `TRAPPIST-1 at 7.6 Gyr, saturated to ${saturationAge(2566).toFixed(1)}: `
+          + `206× solar and staying there`);
       }
 
       // Flipping it mid-run has to re-base the curve on where the star actually
       // is, not on where it started, or turning it on would teleport the
       // ultraviolet to wherever the untouched curve had got to by then.
       {
-        const s = new Simulation({ ...PRESETS.trappist1e.params, xuvDecay: false });
+        const s = new Simulation({ ...PRESETS.gj1132b.params, xuvDecay: false });
         s.runYears(1e9);
         const held = s.world.params.xuvFraction;
         s.setParams({ xuvDecay: true });
@@ -1193,13 +1304,13 @@ export function run() {
       // luminosity really is flat -- which meant XUV was pinned for the entire
       // run on the four worlds where XUV is the dominant process.
       {
-        const dwarf = { ...PRESETS.trappist1e.params };   // ships with xuvDecay on
+        const dwarf = { ...PRESETS.gj1132b.params };   // ships with xuvDecay on
         const base = { insolation: dwarf.insolation, xuvFraction: dwarf.xuvFraction };
         const after = evolvedParams(dwarf, base, 1e9);
         check('Stellar ultraviolet ages even when the star is not brightening',
           dwarf.brightening === 0 && after.xuvFraction > 0
             && after.xuvFraction < base.xuvFraction * 0.9,
-          `TRAPPIST-1e ${(base.xuvFraction / 3.4e-6).toFixed(0)}× solar → `
+          `GJ 1132 b ${(base.xuvFraction / 3.4e-6).toFixed(0)}× solar → `
           + `${(after.xuvFraction / 3.4e-6).toFixed(0)}× after 1 Gyr, with brightening off`);
         // …and the bolometric track must still be the thing `brightening` gates,
         // or turning it off would quietly start moving the star's luminosity.
