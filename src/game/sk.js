@@ -102,7 +102,7 @@ export const SK = {
     'fast': 'rýchlo',
     'custom': 'vlastné',
     'Ease off automatically when the climate tips': 'Automaticky spomaliť, keď sa klíma preklápa',
-    'Auto-ease is holding the clock back so this tipping can be ': 'Automatické spomalenie drží hodiny, aby sa dal prevrat ',
+    'Auto-ease is holding the clock back so this tipping can be ': 'Automatické spomalenie drží hodiny, aby sa dalo preklopenie ',
     'The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.':
       'Klíma sa mení príliš rýchlo na to, aby sa dala preskočiť — simulácia beží tak rýchlo, ako to presnosť dovoľuje.',
 
@@ -130,9 +130,9 @@ export const SK = {
     'About the model': 'O modeli',
     'A zonal energy-balance model over 18 equal-area bands. Longwave radiation uses a semi-grey two-stream fit anchored to modern Earth (240 W/m²), Venus (161 W/m²) and the':
       'Zonálny model energetickej bilancie na 18 rovnako veľkých pásoch. Dlhovlnné žiarenie počíta pološedý dvojtokový vzťah ukotvený na dnešnú Zem (240 W/m²), Venušu (161 W/m²) a na',
-    'Simpson–Nakajima runaway limit': 'Simpsonovu–Nakajimovu hranicu úniku',
+    'Simpson–Nakajima runaway limit': 'Simpsonovu–Nakajimovu hranicu reťazového skleníkového efektu',
     'of 283 W/m² — which the fit reproduces rather than imposes, so the runaway greenhouse emerges from the physics.':
-      's hodnotou 283 W/m² — ktorú vzťah reprodukuje, a nie predpisuje, takže nekontrolovateľný skleníkový efekt vychádza z fyziky.',
+      's hodnotou 283 W/m² — ktorú vzťah reprodukuje, a nie predpisuje, takže reťazový skleníkový efekt vychádza z fyziky.',
     'Slow processes run on the same accelerated clock: the carbonate–silicate thermostat (~1 Myr), snowball CO₂ build-up (5–50 Myr), and hydrogen escape (10⁸–10⁹ yr to lose an ocean). Physics advances on simulated time only — the trajectory is identical at any frame rate.':
       'Pomalé procesy bežia na tých istých zrýchlených hodinách: uhličitanovo-kremičitanový termostat (~1 mil. rokov), hromadenie CO₂ pod ľadom snehovej gule (5–50 mil. rokov) a únik vodíka (10⁸–10⁹ rokov na stratu oceánu). Fyzika postupuje výlučne v simulovanom čase — trajektória je pri každej snímkovej frekvencii rovnaká.',
     'Source & references': 'Zdrojový kód a literatúra',
@@ -165,12 +165,46 @@ export const SK = {
     'Absorbed': 'Pohltené',
     'Emitted': 'Vyžiarené',
     'Internal heat': 'Vnútorné teplo',
-    'Runaway margin': 'Rezerva do úniku',
+    'Runaway margin': 'Rezerva do reťazového efektu',
     'Water left': 'Zostávajúca voda',
     'Water loss': 'Strata vody',
     'negligible': 'zanedbateľná',
     'Stratospheric H₂O': 'H₂O v stratosfére',
     'Mantle': 'Plášť',
+
+    // ---- riadok pod názvom stavu ------------------------------------------
+    // Skladá ho reasonText(); prekladač doň ide ako parameter, aby fyzikálny
+    // modul nemusel poznať jazyky.
+    'mean surface {0} °C': 'priemer na povrchu {0} °C',
+    'day {0} °C, night {1} °C': 'deň {0} °C, noc {1} °C',
+    'equator {0} °C, poles {1} °C': 'rovník {0} °C, póly {1} °C',
+    '{0}% ice': '{0} % ľadu',
+    '{0} W/m² imbalance': 'nerovnováha {0} W/m²',
+    'losing {0} oceans/Gyr': 'stráca {0} oceánu za mld. rokov',
+    '{0} bar CO₂ frozen onto the night side': '{0} baru CO₂ vymrznutého na nočnej strane',
+    '{0} bar CO₂ frozen out': '{0} baru CO₂ vymrznutého',
+
+    // ---- popisky grafov ----------------------------------------------------
+    // Pozor na svetové strany: slovenské S je sever, nie south.
+    'surface temperature': 'teplota povrchu',
+    'collecting…': 'zbierajú sa údaje…',
+    'no water on this world': 'na tomto svete nie je voda',
+    'anti-stellar': 'protihviezdny bod',
+    'substellar': 'podhviezdny bod',
+    'time →': 'čas →',
+    'equator': 'rovník',
+    'N pole': 'S pól',
+    'S pole': 'J pól',
+    'absorbed': 'pohltené',
+    'ocean': 'oceán',
+    'sea ice': 'morský ľad',
+    'land ice': 'pevninský ľad',
+    'vapour': 'para',
+    'supercritical': 'nadkritická',
+    'lost': 'stratená',
+
+    // ---- desatinná čiarka v ponuke rýchlosti otáčania ----------------------
+    '0.5×': '0,5×',
 
     // ---- hlásenia ----------------------------------------------------------
     'The GPU dropped out — drawing on the CPU instead. The simulation is unaffected.':
@@ -270,7 +304,7 @@ export const SK = {
     'resurfacing event': 'obnova povrchu',
     'Resurfacing after': 'Obnova povrchu po',
     'When the mantle turns over and everything dissolved in it comes up at once. Counted from <em>the start of the run</em>, not from the planet’s formation — so it is always ahead of you and never behind. Venus’s repaving is dated to roughly 700 Myr ago, an age of 3.85 Gyr; Early Venus starts at an age of 1.67, which is why that preset asks for 2.18 from its own start.':
-      'Keď sa plášť premieša a všetko v ňom rozpustené vyjde naraz na povrch. Počíta sa od <em>začiatku behu</em>, nie od vzniku planéty — takže je vždy pred vami, nikdy za vami. Prekrytie Venuše je datované asi 700 miliónov rokov dozadu, teda do veku 3,85 mld. rokov; Mladá Venuša začína vo veku 1,67, a preto ten svet žiada 2,18 od vlastného začiatku.',
+      'Keď sa plášť premieša a všetko v ňom rozpustené vyjde naraz na povrch. Počíta sa od <em>začiatku behu</em>, nie od vzniku planéty — takže je vždy pred vami, nikdy za vami. Prekrytie Venuše je datované asi 700 miliónov rokov dozadu, teda do veku 3,85 mld. rokov; Mladá Venuša začína vo veku 1,67, a preto tento svet žiada 2,18 od vlastného začiatku.',
     'Resurfacing size': 'Rozsah obnovy povrchu',
     'How much it multiplies volcanic outgassing by at its peak. Shaped as a smooth pulse so nothing in the solver meets a step change.':
       'Koľkonásobne vo vrchole zosilní odplyňovanie. Má tvar plynulého impulzu, aby v riešiči nikde nevznikol skokový prechod.',
@@ -323,7 +357,7 @@ export const SK = {
     'Type a rate: 500 yr, 2 Myr, 1.5 Gyr. Per second is assumed.':
       'Zadajte rýchlosť: 500 yr, 2 Myr, 1.5 Gyr. Predpokladá sa za sekundu.',
     'Auto-ease is holding the clock back so this tipping can be watched — {0} / s was asked for. Turn off "ease" to run at full speed.':
-      'Automatické spomalenie drží hodiny, aby sa dal prevrat sledovať — požadované bolo {0} / s. Plnou rýchlosťou sa pokračuje po vypnutí „spomaliť“.',
+      'Automatické spomalenie drží hodiny, aby sa dalo preklopenie sledovať — požadované bolo {0} / s. Plnou rýchlosťou sa pokračuje po vypnutí „spomaliť“.',
     'Marked at {0} elapsed': 'Označené v čase {0}',
 
     // ---- ponuka zrýchlenia času -------------------------------------------
@@ -366,7 +400,7 @@ export const SK = {
     'Enceladus': 'Enceladus',
     'Io': 'Io',
     'Carboniferous': 'Karbón',
-    '10% PAL': '10 % dnešnej Zeme',
+    '10% PAL': '10 % dnešnej úrovne',
     'locked': 'viazaná rotácia',
     'tidally locked': 'viazaná rotácia',
 
@@ -395,9 +429,9 @@ export const SK = {
   states: {
     magma: { name: 'Magmatický oceán',
       blurb: 'Povrch je roztavená hornina. Nad približne 1400 K sa kremičitany tavia a planéta žiari v blízkej infračervenej oblasti; atmosféru, ak nejakú má, tvorí horúca zmes horninových pár a vodnej pary.' },
-    dryRunaway: { name: 'Suchý skleníkový únik',
+    dryRunaway: { name: 'Suchý reťazový skleníkový efekt',
       blurb: 'Venuša. Oceán je preč — vyparil sa, rozložilo ho svetlo a vodík odviala do vesmíru — a zostala hustá suchá atmosféra CO₂ nad povrchom horúcim natoľko, že slabo žiari. V ľudských časových mierkach nezvratné.' },
-    wetRunaway: { name: 'Vlhký skleníkový únik',
+    wetRunaway: { name: 'Vlhký reťazový skleníkový efekt',
       blurb: 'Pohltené žiarenie hviezdy spolu s vlastným teplom planéty prekročilo Simpsonovu–Nakajimovu hranicu (~282 W/m²), takže rovnováha neexistuje pri žiadnej teplote. Dokáže to aj samotné slapové teplo, na svete, ktorý by hviezda nechala obývateľný (Barnes a kol. 2013). Oceán sa vyvára do mohutnej parnej atmosféry; skupenské teplo naťahuje tento prechod na ~10⁵ rokov a samotná strata vody trvá ďalších 10⁸–10⁹.' },
     moist: { name: 'Vlhký skleníkový režim',
       blurb: 'Voda je stále kvapalná, ale chladná pasca zlyhala: podiel vody v stratosfére presiahol 10⁻³ a vodík uniká plynule. Krátkodobo obývateľný svet, ktorý však počas stoviek miliónov rokov vyschne (Kasting 1988).' },
@@ -406,7 +440,7 @@ export const SK = {
     temperate: { name: 'Mierny a obývateľný',
       blurb: 'Kvapalná voda na väčšine povrchu so stabilným polárnym ľadom. Uhličitanovo-kremičitanový termostat drží tento stav proti pomalým zmenám žiarenia hviezdy v mierke ~1 mil. rokov.' },
     dune: { name: 'Púštny svet',
-      blurb: 'Suchozemská planéta s minimom povrchovej vody. Nenasýtený vzduch dovoľuje trópom vyžarovať nad klasickú hranicu úniku a suchá stratosféra škrtí stratu vody — púštne svety preto zostávajú obývateľné oveľa bližšie k hviezde než oceánické (Abe a kol. 2011).' },
+      blurb: 'Suchozemská planéta s minimom povrchovej vody. Nenasýtený vzduch dovoľuje trópom vyžarovať nad klasickú hranicu reťazového skleníkového efektu a suchá stratosféra škrtí stratu vody — púštne svety preto zostávajú obývateľné oveľa bližšie k hviezde než oceánické (Abe a kol. 2011).' },
     waterworld: { name: 'Oceánický svet',
       blurb: 'Globálny oceán bez akejkoľvek súše. Kontinentálne zvetrávanie je vypnuté, ale morská voda stále prúdi cez čerstvý bazalt v oceánskych chrbtoch a ukladá tam uhlík, takže termostat prežíva — slabší, pomalší a s rovnováhou pri vyššej teplote a vyššom obsahu uhlíka, než by mal svet s kontinentmi.' },
     eyeball: { name: 'Svet-oko',
@@ -414,8 +448,8 @@ export const SK = {
     lobster: { name: 'Homárí stav',
       blurb: 'Svet-oko, ktorého otvorená voda sa prenosom tepla v oceáne roztiahla pozdĺž rovníka — teplé klepetá siahajú okolo planéty smerom k nočnej strane.' },
     twilight: { name: 'Súmračný svet',
-      blurb: 'Oko je rozpálené, nočná strana ľadová a medzi nimi vedie po terminátore mierny prstenec kvapalnej vody okolo celej planéty. Funguje to len preto, že vody je primálo na prenos tepla: vlhkejší svet by odviedol od podhviezdneho bodu dosť skupenského tepla na vyrovnanie teplôt a potom by hranicu úniku prekročil ako celok, namiesto toho, aby po ňom zostal obývateľný pás (Lobo a kol. 2023).' },
-    trapped: { name: 'Púšť s vodou uväznenou v noci',
+      blurb: 'Oko je rozpálené, nočná strana ľadová a medzi nimi vedie po terminátore mierny prstenec kvapalnej vody okolo celej planéty. Funguje to len preto, že vody je primálo na prenos tepla: vlhkejší svet by odviedol od podhviezdneho bodu dosť skupenského tepla na vyrovnanie teplôt a potom by ako celok prekročil hranicu reťazového skleníkového efektu, namiesto toho, aby po ňom zostal obývateľný pás (Lobo a kol. 2023).' },
+    trapped: { name: 'Púšť s vodou uväznenou na nočnej strane',
       blurb: 'Na svete s viazanou rotáciou je nočná strana trvalou chladnou pascou. Všetka voda sa tam presunula ako ľadovcový ľad a na osvetlenej strane zostala vyprahnutá púšť, ktorá ju už nezíska späť.' },
     waterbelt: { name: 'Vodný pás',
       blurb: 'Ľad siaha hlboko do trópov, ale úzky pruh otvoreného rovníkového oceánu prežíva. Skutočne stabilný stav a oveľa mäkšie pristátie než úplná snehová guľa.' },
@@ -426,8 +460,8 @@ export const SK = {
     nightfrost: { name: 'Čiastočné vymrznutie na nočnú stranu',
       blurb: 'Atmosféra sneží na temnú stranu. Svet s viazanou rotáciou má pologuľu, ktorá hviezdu nikdy nevidí, a ak klesne pod bod mrazu CO₂, vzduch tam natrvalo kondenzuje — žiadne ročné obdobie ho nevráti, a práve tým sa to líši od Marsu. Tlak klesá, kým sa zvyšok nevyrovná s nánosom na nočnej strane, pričom denná strana zostáva po celý čas teplá, vlhká a obývateľná: planéta s funkčným oceánom pod svojou hviezdou, ktorej za chrbtom potichu uniká atmosféra. To more je súčasťou definície tohto stavu, nie jeho pravdepodobným sprievodným javom — keď zmizne aj posledná kvapka, vymrznutie je úplné a svet sa stáva Vymrznutou nočnou stranou. Zastaviť to dokáže prenos tepla: dosť hustý vzduch prinesie na nočnú stranu dosť tepla, aby ju udržal nad bodom mrazu, takže na mohutnej atmosfére sa proces sám obmedzuje a na tenkej je pascou (Joshi a kol. 1997; Wordsworth 2015; Turbet a kol. 2018 pre planéty TRAPPIST-1).' },
     nightfrozen: { name: 'Vymrznutá nočná strana',
-      blurb: 'Vymrznutie je dokončené. Väčšina atmosféry leží ako suchý ľad na pologuli, ktorá hviezdu nikdy nevidí, a voda, ak nejaká je, je zamrznutá vedľa nej — nikde na planéte nie je kvapalná voda a denná strana je holá púšť pod tenkým zvyškom vzduchu. Nejde o iný mechanizmus, ale o koncový stav čiastočného vymrznutia, a rozdiel medzi nimi je more: kým existuje, svet je obývateľný a len mu potichu uniká vzduch; keď zmizne, nie je už o čo prísť. Odlišné od púšte s vodou uväznenou v noci, kde je atmosféra nedotknutá a presunula sa iba voda.' },
-    titan: { name: 'Titanovský svet',
+      blurb: 'Vymrznutie je dokončené. Väčšina atmosféry leží ako suchý ľad na pologuli, ktorá hviezdu nikdy nevidí, a voda, ak nejaká je, je zamrznutá vedľa nej — nikde na planéte nie je kvapalná voda a denná strana je holá púšť pod tenkým zvyškom vzduchu. Nejde o iný mechanizmus, ale o koncový stav čiastočného vymrznutia, a rozdiel medzi nimi je more: kým existuje, svet je obývateľný a len mu potichu uniká vzduch; keď zmizne, nie je už o čo prísť. Odlišné od púšte s vodou uväznenou na nočnej strane, kde je atmosféra nedotknutá a presunula sa iba voda.' },
+    titan: { name: 'Titanský svet',
       blurb: 'Mrazivý svet pod hustým dusíkovo-metánovým oparom, na kvapalnú vodu ďaleko príliš studený, ale dosť teplý na to, aby po povrchu tiekli iné kvapaliny.' },
     frozen: { name: 'Zamrznutá púšť',
       blurb: 'Chladno, sucho a ticho. Primálo vody na skutočnú snehovú guľu a primálo skleníkového efektu na roztopenie.' },
@@ -447,7 +481,7 @@ export const SK = {
       hint: 'Vnútri snehovej gule sú sopky jediná páka: zvetrávanie potrebuje kvapalnú vodu, takže keď ľad siaha po rovník, neexistuje odber a každý vyvrhnutý gram zostáva. Zvýšte odplyňovanie a nechajte bežať hodiny.',
     },
     hold: {
-      name: 'Zadržať únik',
+      name: 'Zadržať reťazový efekt',
       brief: 'Svet šesť wattov na meter štvorcový pod Simpsonovou–Nakajimovou hranicou — obývateľný, a bez akejkoľvek rezervy. Jeho hviezda je ťažšia než Slnko a spaľuje vodík trikrát rýchlejšie, takže sa táto medzera zatvára sama a neprestane. Udržte planétu obývateľnú miliardu rokov.',
       hint: 'Hviezdu stlmiť neviete a jasnieť jej nezabránite. Vziať sa dá skleníkový efekt: odstráňte CO₂ a držte ho dole, lebo 2,5-násobný vulkanizmus ho vracia späť. Ak to prestane stačiť, pamätajte, že hranica platí pre pohltené žiarenie oproti tomu, čo atmosféra dokáže vyžiariť — zosvetlite povrch, a suchšia planéta vyžaruje lepšie než vlhká.',
     },
@@ -463,17 +497,17 @@ export const SK = {
     },
     dune: {
       name: 'Postaviť púštny svet',
-      brief: 'Umiestnite obývateľnú planétu tam, kde by sa oceánický svet vyvaril. Púštne planéty prežijú oveľa bližšie k hviezde: nenasýtený vzduch vyžaruje nad klasickú hranicu úniku a suchá stratosféra brzdí stratu vody.',
+      brief: 'Umiestnite obývateľnú planétu tam, kde by sa oceánický svet vyvaril. Púštne planéty prežijú oveľa bližšie k hviezde: nenasýtený vzduch vyžaruje nad klasickú hranicu reťazového skleníkového efektu a suchá stratosféra brzdí stratu vody.',
       hint: 'Proti intuícii, no skutočne (Abe a kol. 2011): dajte jej *menej* vody. Samotné vysušenie však nestačí — pri hlbokých panvách zemského typu sa aj tá troška rozleje do širokých plytkých morí a vzduch zostane vlhký. Zvýšte aj geometriu panví, aby zvyšná voda nemala kam tiecť.',
     },
     oxidation: {
       name: 'Veľká oxidačná udalosť',
       brief: 'Archaický svet bez kyslíka, nad bodom mrazu ho drží milibar metánu. Vaše sinice práve zvládli kyslíkovú fotosyntézu a šíria sa samy — a kyslík s metánom vedľa seba neobstoja. Nedovoľte, aby planéta zamrzla, kým sa okysličí.',
-      hint: 'Biosféru neudržíte: zdvojnásobuje sa každých pár miliónov rokov nech robíte čokoľvek a prekročí tok vulkanických redukovadiel pri asi 0,4-násobku Zeme. Odvtedy kyslík skráti život metánu z desiatich tisíc rokov na desať, pričom milibar metánu má hodnotu asi pätnástich wattov na meter štvorcový. Nahraďte tento skleníkový efekt oxidom uhličitým *pred* prekročením, inak ľadovo-albedová spätná väzba vezme celú planétu — a metán, ktorý sa potom vráti, ju už neroztopí.',
+      hint: 'Biosféru neudržíte: zdvojnásobuje sa každých pár miliónov rokov, nech robíte čokoľvek, a prekročí tok vulkanických redukovadiel pri asi 0,4-násobku Zeme. Odvtedy kyslík skráti život metánu z desiatich tisíc rokov na desať, pričom milibar metánu má hodnotu asi pätnástich wattov na meter štvorcový. Nahraďte tento skleníkový efekt oxidom uhličitým *pred* prekročením, inak ľadovo-albedová spätná väzba vezme celú planétu — a metán, ktorý sa potom vráti, ju už neroztopí.',
     },
     venus: {
       name: 'Zvrátiť Venušu',
-      brief: 'Suchý skleníkový únik: 90 barov CO₂, 460 °C a voda dávno rozložená svetlom a odviata preč. Ochlaďte planétu pod bod varu.',
+      brief: 'Suchý reťazový skleníkový efekt: 90 barov CO₂, 460 °C a voda dávno rozložená svetlom a odviata preč. Ochlaďte planétu pod bod varu.',
       hint: 'Voda je preč a nevráti sa — posuvník zásoby je však váš. Pochovajte CO₂ a dajte zvetrávaciemu termostatu niečo, s čím môže pracovať.',
     },
     hotbranch: {
@@ -488,26 +522,26 @@ export const SK = {
     earth: 'Zem',
     moon: 'Mesiac',
     earlyMoon: 'Pradávny Mesiac',
-    preindustrial: 'Predindustriálna Zem',
-    earthlike: 'Zemi podobná',
+    preindustrial: 'Predpriemyselná Zem',
+    earthlike: 'Zemi podobný svet',
     venus: 'Venuša',
     mars: 'Mars',
     earlyEarth: 'Archaikum',
     earlyVenus: 'Mladá Venuša',
-    dryVenus: 'Nikdy nezvlhnutá Venuša',
+    dryVenus: 'Vždy suchá Venuša',
     earlyMars: 'Noachický Mars',
     snowball: 'Snehová guľa',
     dune: 'Púštny svet',
-    eyeball: 'Viazané oko',
+    eyeball: 'Viazaný svet-oko',
     waterworld: 'Oceánický svet',
-    titan: 'Titanovský svet',
+    titan: 'Titanský svet',
     trappist1b: 'TRAPPIST-1b',
     trappist1e: 'TRAPPIST-1e',
     gj1132b: 'GJ 1132 b',
     superEarth: 'Superzem',
     futureEarth: 'Zem o 1 mld. rokov',
     hotCarbon: 'Horúci oceán · CO₂',
-    hotStar: 'Horúci oceán · žiarenie',
+    hotStar: 'Horúci oceán · žiarenie hviezdy',
     brink: 'Za hranou',
   },
 };

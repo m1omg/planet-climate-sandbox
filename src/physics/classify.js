@@ -172,10 +172,18 @@ export function classify(w) {
 }
 
 // One-line "why" text shown live under the state name.
-export function reasonText(w, st) {
+// The translator is injected rather than imported: this is a physics module and
+// it must keep loading with no DOM and no language machinery behind it. The
+// default formats the English exactly as it always did, so a caller that does
+// not care -- the tests, anything headless -- sees no change at all.
+function enFormat(s, ...args) {
+  return s.replace(/\{(\d+)\}/g, (m, i) => (args[i] === undefined ? m : args[i]));
+}
+
+export function reasonText(w, st, tr = enFormat) {
   const dg = w.diag, esc = w.escape ?? {};
   const bits = [];
-  bits.push(`mean surface ${(dg.Tmean - 273.15).toFixed(1)} °C`);
+  bits.push(tr('mean surface {0} °C', (dg.Tmean - 273.15).toFixed(1)));
   // On a locked world the mean is a number no part of the planet has: it sits
   // between a face that never sets and one that never sees the star. The stats
   // panel already splits them; the banner is the line people actually read, and
@@ -183,24 +191,29 @@ export function reasonText(w, st) {
   // on its own. The two sides come from classify() rather than from Tmax and
   // Tmin, so this and the state label cannot disagree about which is which.
   if (dg.lam > 0.5 && st && st.Tsub != null) {
-    bits.push(`day ${(st.Tsub - 273.15).toFixed(0)} °C, night ${(st.Tanti - 273.15).toFixed(0)} °C`);
+    bits.push(tr('day {0} °C, night {1} °C',
+      (st.Tsub - 273.15).toFixed(0), (st.Tanti - 273.15).toFixed(0)));
   } else if (dg.Tmax != null && dg.Tmin != null && dg.Tmax - dg.Tmin > 2) {
     // The same argument one step down: on a rotating world the mean is a number
     // the equator and the poles are both a long way from, and forty kelvin of
     // spread is the difference between an ice cap and no ice cap. Tmax and Tmin
     // are the equator and the poles here -- the insolation profile is monotonic
     // in latitude on anything that is not tidally locked.
-    bits.push(`equator ${(dg.Tmax - 273.15).toFixed(0)} °C, poles ${(dg.Tmin - 273.15).toFixed(0)} °C`);
+    bits.push(tr('equator {0} °C, poles {1} °C',
+      (dg.Tmax - 273.15).toFixed(0), (dg.Tmin - 273.15).toFixed(0)));
   }
   // Same distinction as the readout's "Ice cover": what is UNDER ice, not what
   // is below freezing. Modern Mars is 100% of the second and 1.9% of the first,
   // and the subtitle claiming "100% ice" for a planet whose caps are a percent
   // of its surface was the same overstatement the renderer was making.
-  if (dg.iceArea > 0.01) bits.push(`${(dg.iceArea * 100).toFixed(0)}% ice`);
-  if (Math.abs(dg.imbalance) > 0.5) bits.push(`${dg.imbalance > 0 ? '+' : ''}${dg.imbalance.toFixed(1)} W/m² imbalance`);
+  if (dg.iceArea > 0.01) bits.push(tr('{0}% ice', (dg.iceArea * 100).toFixed(0)));
+  if (Math.abs(dg.imbalance) > 0.5) {
+    bits.push(tr('{0} W/m² imbalance',
+      `${dg.imbalance > 0 ? '+' : ''}${dg.imbalance.toFixed(1)}`));
+  }
   if (esc.fStrat > 1e-4 && dg.totalWater > 0) {
     const perGyr = (w.escape.water * 1e9) / dg.d.eoColumn;
-    if (perGyr > 1e-3) bits.push(`losing ${perGyr.toFixed(2)} oceans/Gyr`);
+    if (perGyr > 1e-3) bits.push(tr('losing {0} oceans/Gyr', perGyr.toFixed(2)));
   }
   if (w.co2Frozen > 1e-3) {
     // Where it froze matters, and on a locked world the answer is not "here".
@@ -211,8 +224,8 @@ export function reasonText(w, st) {
     const bar = (w.co2Frozen * dg.g) / 1e5;
     const amount = bar >= 100 ? bar.toFixed(0) : bar >= 1 ? bar.toFixed(1) : bar.toFixed(3);
     bits.push(dg.lam > 0.5
-      ? `${amount} bar CO₂ frozen onto the night side`
-      : `${amount} bar CO₂ frozen out`);
+      ? tr('{0} bar CO₂ frozen onto the night side', amount)
+      : tr('{0} bar CO₂ frozen out', amount));
   }
   return bits.join(' · ');
 }

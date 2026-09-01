@@ -668,5 +668,115 @@ if (created < 20) {
   }
 }
 
+
+// The banner's subtitle is composed at runtime, so it slipped past the coverage
+// check above: every id had a Slovak name while the line underneath it stayed
+// in English on a Slovak page. Run reasonText with a spy for a translator and
+// insist every template it reaches for is one the dictionary actually carries.
+{
+  const { reasonText, classify } = await import('../src/physics/classify.js');
+  const { SK } = await import('../src/game/sk.js');
+  const { Simulation } = await import('../src/sim/clock.js');
+  const { PRESETS } = await import('../src/game/presets.js');
+  const seen = new Set();
+  const spy = (str, ...a) => { seen.add(str); return String(str).replace(/\{(\d+)\}/g, (m, i) => a[i]); };
+  // A spread of worlds, so the locked, icy, escaping and frozen-out branches
+  // all get walked rather than just temperate Earth's two bits.
+  for (const id of ['earth', 'mars', 'venus', 'snowball', 'trappist1b', 'titan', 'moon']) {
+    const sim = new Simulation({ ...PRESETS[id].params });
+    sim.runYears(2e5);
+    reasonText(sim.world, classify(sim.world), spy);
+  }
+  const untranslated = [...seen].filter((k) => !SK.ui[k]);
+  // A spy that is never called would leave `seen` empty and pass this check for
+  // the wrong reason -- which is exactly what the old two-argument reasonText
+  // did. So also render one for real and insist the English is gone from it.
+  const i18n = await import('../src/game/i18n.js');
+  const sim = new Simulation({ ...PRESETS.earth.params });
+  sim.runYears(2e5);
+  i18n.setLang('sk');
+  const skLine = reasonText(sim.world, classify(sim.world), i18n.tp);
+  i18n.setLang('en');
+  const enLine = reasonText(sim.world, classify(sim.world), i18n.tp);
+  const reallyTranslated = seen.size > 0 && skLine !== enLine
+    && !/mean surface|imbalance|ice$|poles/.test(skLine) && /mean surface/.test(enLine);
+  // …and the default must still produce the English, for every headless caller.
+  const plain = reasonText(new Simulation({ ...PRESETS.earth.params }).world, null);
+  const defaultOk = typeof plain === 'string' && /mean surface/.test(plain);
+  if (untranslated.length || !defaultOk || !reallyTranslated) {
+    console.log('\x1b[31mFAIL\x1b[0m  the state banner is not fully translatable: '
+      + (untranslated.length ? `no Slovak for ${untranslated.map((u) => JSON.stringify(u)).join(', ')}` : '')
+      + (defaultOk ? '' : ' · the untranslated default stopped producing English')
+      + (reallyTranslated ? '' : ` · the banner ignores the translator: "${skLine}"`));
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  every phrase the state banner can build is translated  —  ${seen.size} templates`);
+  }
+}
+
+// Chart furniture is drawn to a canvas, so no DOM walk can reach it and no
+// coverage check can see it. Catch a bare literal at the source instead.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/render/charts.js', import.meta.url), 'utf8');
+  // label(ctx, 'text' …) with a plain quoted string is the bug; t('text') is the fix.
+  // Axis ticks are numbers and units -- "0", "-30°C" -- and translating those
+  // would be the bug, not the fix. Only prose is required to go through t().
+  const bare = [...src.matchAll(/label\(\s*ctx\s*,\s*'([^']+)'/g)].map((m) => m[1])
+    .filter((s2) => !/^[-+\u2212\s0-9.,]*(°[CK])?$/.test(s2));
+  if (bare.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  chart labels bypass the translator: ${bare.join(', ')}`);
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  every chart label goes through the translator');
+  }
+}
+
+// A terminology guard. "Únik" is escape -- of hydrogen, of an atmosphere -- and
+// using it for the runaway greenhouse says the planet is leaking when what it
+// is doing is running away with itself. The two are separate things in this
+// model and the words have to stay separate too.
+{
+  const { SK } = await import('../src/game/sk.js');
+  const offenders = [];
+  const scan = (where, en, skText) => {
+    if (/runaway/i.test(en) && /únik|unik/i.test(skText)) offenders.push(`${where}: ${skText}`);
+  };
+  for (const [en, v] of Object.entries(SK.ui)) scan('ui', en, v);
+  for (const [id, e] of Object.entries(SK.states)) {
+    if (/runaway/i.test(id)) {
+      for (const f of ['name', 'blurb']) if (/únik|unik/i.test(e[f] || '')) offenders.push(`state ${id}.${f}`);
+    }
+  }
+  const wanted = 'reťazový skleníkový efekt';
+  const named = SK.states.dryRunaway.name.includes('reťazový skleníkový efekt')
+    && SK.states.wetRunaway.name.includes('reťazový skleníkový efekt');
+  if (offenders.length || !named) {
+    console.log(`\x1b[31mFAIL\x1b[0m  runaway greenhouse mistranslated as escape: `
+      + (offenders.join(' · ') || `the two runaway states must be named "${wanted}"`));
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  the runaway greenhouse is "${wanted}", never "únik"`);
+  }
+}
+
+// The rail's button colour is translucent by design. The browser paints the
+// open <select> popup from that same colour, which made the menu unreadable
+// against the planet behind it; the options need their own opaque ground.
+{
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../css/style.css', import.meta.url), 'utf8');
+  const rule = css.match(/\.pan-select option\{([^}]*)\}/);
+  const bg = rule && rule[1].match(/background:\s*([^;]+)/);
+  const opaque = bg && /^#[0-9a-f]{6}$/i.test(bg[1].trim());
+  if (!opaque) {
+    console.log('\x1b[31mFAIL\x1b[0m  the pan-speed menu has no opaque background — its options render see-through');
+    failed++;
+  } else {
+    console.log(`\x1b[32mPASS\x1b[0m  the pan-speed menu paints its own opaque background  —  ${bg[1].trim()}`);
+  }
+}
+
+
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);

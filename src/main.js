@@ -802,7 +802,7 @@ function updateReadout() {
   banner.querySelector('.swatch').style.background = st.color;
   banner.querySelector('.swatch').style.color = st.color;
   banner.querySelector('.txt').textContent = tx('states', st.id, 'name') || st.name;
-  banner.querySelector('.state-reason').textContent = reasonText(w, st);
+  banner.querySelector('.state-reason').textContent = reasonText(w, st, tp);
 
   if (!discovered.has(st.id)) {
     discovered.add(st.id); saveDiscovered(discovered);
@@ -1939,7 +1939,7 @@ function bindControls() {
     panSpeed = selected;
     try { localStorage.setItem(PAN_KEY, String(panSpeed)); } catch { }
     updatePanSelect();
-    toast(`Panning speed ${panSpeed}×`);
+    toast(t(`Panning speed: ${panSpeed}×`));
   });
   // Cycle through every renderer, so each can be seen on any machine.
   const RENDER_ORDER = ['gl2', 'gl1', 'software'];

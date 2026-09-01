@@ -150,6 +150,12 @@ body.software-render #planet{image-rendering:auto}
    because that is mostly what it is: the state matters more than the action. */
 #view-controls .renderer-btn{width:auto;padding:0 8px;font:10px/1 var(--mono);letter-spacing:.08em}
 #view-controls .pan-select{min-width:58px;padding:0 4px;color-scheme:dark;text-align:center}
+/* The rail's --panel-2 is translucent, which is right for a button sitting over
+   the planet and wrong for the popup the browser paints from it: the option
+   list came out as dark text on the dark canvas showing through. The open menu
+   needs its own opaque ground. */
+#view-controls .pan-select option{background:#131b2c;color:var(--fg)}
+#view-controls .pan-select option:checked{background:#1e2a44;color:var(--accent)}
 #view-controls .renderer-btn[data-kind=software]{color:var(--accent-2);border-color:var(--accent-2)}
 #view-controls .renderer-btn[data-kind=gpu]{color:var(--good);border-color:rgba(78,201,138,.5)}
 

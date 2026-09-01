@@ -10,6 +10,7 @@ const url = process.argv[2] || 'http://127.0.0.1:8765/altdev/';
 const chromePath = process.env.CHROME || '/usr/bin/google-chrome';
 const profile = mkdtempSync(join(tmpdir(), 'planet-browsercheck-'));
 const screenshot = join(tmpdir(), 'altdev-browsercheck.png');
+const slovakScreenshot = join(tmpdir(), 'altdev-browsercheck-sk.png');
 const drownedScreenshot = join(tmpdir(), 'altdev-browsercheck-drowned.png');
 const chrome = spawn(chromePath, [
   '--headless=new',
@@ -104,21 +105,28 @@ async function waitFor(expression, timeout = 20_000) {
   throw new Error(`browser condition timed out: ${expression}`);
 }
 
+// Driving this through CDP one round-trip at a time let animation frames run
+// between the move and the read, so the drag's own momentum coasted into the
+// number and the measured ratio wandered by a tenth or more. Dispatching the
+// whole gesture inside one synchronous evaluate is exact: JS is single-threaded,
+// so no rAF can land between the pointermove and reading the yaw it produced.
 async function drag(rect, dx) {
-  const x = rect.x + rect.width * 0.5;
-  const y = rect.y + rect.height * 0.5;
-  await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, sessionId);
-  await call('Input.dispatchMouseEvent', {
-    type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1,
-  }, sessionId);
-  await call('Input.dispatchMouseEvent', {
-    type: 'mouseMoved', x: x + dx, y, button: 'left', buttons: 1,
-  }, sessionId);
-  const yaw = await evaluate('__app.view.yaw');
-  await call('Input.dispatchMouseEvent', {
-    type: 'mouseReleased', x: x + dx, y, button: 'left', buttons: 0, clickCount: 1,
-  }, sessionId);
-  return yaw;
+  return evaluate(`(() => {
+    const cv = document.querySelector('#planet');
+    const x = ${rect.x + rect.width * 0.5}, y = ${rect.y + rect.height * 0.5};
+    const ev = (type, px, buttons) => new PointerEvent(type, {
+      clientX: px, clientY: y, buttons, button: buttons ? 0 : -1,
+      pointerId: 1, pointerType: 'mouse', isPrimary: true, bubbles: true, cancelable: true,
+    });
+    try { cv.setPointerCapture = () => {}; } catch { }
+    __app.view.yaw = 0; __app.view.spinVel = 0;
+    cv.dispatchEvent(ev('pointerdown', x, 1));
+    cv.dispatchEvent(ev('pointermove', x + ${dx}, 1));
+    const yaw = __app.view.yaw;
+    cv.dispatchEvent(ev('pointerup', x + ${dx}, 0));
+    __app.view.spinVel = 0;
+    return yaw;
+  })()`);
 }
 
 try {
@@ -188,6 +196,60 @@ try {
   const persistedPan = await evaluate("document.querySelector('#pan-speed').value");
   ok(persistedPan === '0.5', 'Panning speed survives a reload', `${persistedPan}×`);
 
+  // Chrome paints the native <select> popup itself, above the page, so no
+  // screenshot can show it. The resolved colour can be read, though, and a
+  // translucent one is exactly the bug: the options were being composited over
+  // the planet behind them.
+  const menuPaint = await evaluate(`(() => {
+    const opt = document.querySelector('#pan-speed option');
+    const cs = getComputedStyle(opt);
+    const m = cs.backgroundColor.match(/[\d.]+/g) || [];
+    return { bg: cs.backgroundColor, color: cs.color, alpha: m.length > 3 ? Number(m[3]) : 1 };
+  })()`);
+  ok(menuPaint.alpha === 1, 'The open pan-speed menu has an opaque background',
+    `${menuPaint.bg} on ${menuPaint.color}`);
+
+  // Slovak, end to end: the button, the runtime-composed banner line under the
+  // state name, the canvas-drawn chart furniture and the menu's decimal comma.
+  const slovak = await evaluate(`(async () => {
+    const btn = document.querySelector('#btn-lang');
+    for (let i = 0; i < 4 && document.documentElement.lang !== 'sk'; i++) {
+      btn.click();
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    __app.tick(0);
+    return {
+      lang: document.documentElement.lang,
+      reason: document.querySelector('.state-reason').textContent,
+      state: document.querySelector('.state-name')?.textContent || '',
+      option: document.querySelector('#pan-speed option').textContent,
+      title: document.querySelector('#pan-speed').getAttribute('aria-label'),
+    };
+  })()`);
+  ok(slovak.lang === 'sk' && !/mean surface|equator|poles|imbalance/.test(slovak.reason)
+    && /priemer na povrchu/.test(slovak.reason),
+    'The state banner’s subtitle is translated, not just its title', slovak.reason);
+  ok(slovak.option === '0,5×' && /0,5×/.test(slovak.title || ''),
+    'The pan-speed menu uses a Slovak decimal comma', `${slovak.option} · ${slovak.title}`);
+  // Kept as an artefact: the chart furniture is drawn to a canvas, so a picture
+  // is the only way anyone can check it reads properly in the other language.
+  const skShot = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
+  writeFileSync(slovakScreenshot, Buffer.from(skShot.data, 'base64'));
+
+  const backToEn = await evaluate(`(async () => {
+    const btn = document.querySelector('#btn-lang');
+    for (let i = 0; i < 4 && document.documentElement.lang !== 'en'; i++) {
+      btn.click();
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    __app.tick(0);
+    return { lang: document.documentElement.lang,
+      reason: document.querySelector('.state-reason').textContent,
+      option: document.querySelector('#pan-speed option').textContent };
+  })()`);
+  ok(backToEn.lang === 'en' && /mean surface/.test(backToEn.reason) && backToEn.option === '0.5×',
+    'Switching back restores the English banner and menu', backToEn.reason);
+
   const rect = await evaluate("(() => { const r = document.querySelector('#planet').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()");
   await evaluate('__app.view.zoom = 1');
   await call('Input.dispatchMouseEvent', {
@@ -216,9 +278,9 @@ try {
   })()`);
   const yawSlow = await drag(rect, 50);
   const panRatio = Math.abs(yawFast / yawSlow);
-  // One animation frame may coast the fast drag before CDP reads it back, so
-  // allow that few-percent scheduling jitter around the exact 4x multiplier.
-  ok(panRatio > 3.5 && panRatio < 4.5, 'The pan multiplier changes the actual drag response', `${panRatio.toFixed(2)}×`);
+  // The gesture is dispatched synchronously now, so this is the exact ratio of
+  // the two multipliers and not a measurement with slack in it.
+  ok(panRatio > 3.99 && panRatio < 4.01, 'The pan multiplier changes the actual drag response', `${panRatio.toFixed(2)}×`);
 
   const presets = await evaluate(`(async () => {
     const take = (id) => {
@@ -287,6 +349,7 @@ try {
   ok(browserErrors.length === 0, 'No browser exceptions or error-level console messages');
   console.log(`Screenshot: ${screenshot}`);
   console.log(`Drowned screenshot: ${drownedScreenshot}`);
+  console.log(`Slovak screenshot: ${slovakScreenshot}`);
 } finally {
   try { await call('Browser.close', {}, undefined, 2000); } catch { chrome.kill('SIGTERM'); }
   await Promise.race([new Promise((resolve) => chrome.once('exit', resolve)), delay(2000)]);
