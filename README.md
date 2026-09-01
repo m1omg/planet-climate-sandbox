@@ -374,6 +374,20 @@ and ↶ goes back to where any of them began. They travel in save slots, and a r
 you land in and drops the ones that have not happened on that branch — the same rule the milestones
 and the temperature history already followed.
 
+**The epoch you are living through counts up.** It is the only row on that list whose number is still
+moving, and the list is only rebuilt when the climate *changes* — so its duration was written once, at
+the instant the epoch began, when it is zero by construction, and then left there. Every finished
+epoch read correctly and the one you were actually in read `0.0 yr` for as long as it lasted. It is
+held by reference and retimed on the readout's own clock: one string per tick rather than a rebuilt
+list ten times a second.
+
+**And the list does not survive a clock that restarts.** Loading a preset resets time to zero, and
+continuing the record across that produced spans which closed before they opened — a runaway recorded
+as beginning at 190 years and ending at 0, because the open epoch was closed with the *new* world's
+clock. A clock that has gone backwards past the start of the open span is a different run, and the
+list starts again. A rewind *inside* one run is a different thing and is handled separately: that one
+reopens the span you landed in and drops what has not happened on that branch.
+
 One thing about where that record is written. The obvious place is the readout, which is where
 `classify()` is already called — and it is wrong, because the readout runs at 10 Hz and **a transition
 that finished between two of its ticks would never be recorded at all**. A world would list itself as
@@ -381,6 +395,41 @@ temperate and then as a runaway with nothing in between, having in fact spent a 
 passing through the moist greenhouse. It is written on the frame loop instead. `classify()` is a chain
 of comparisons over numbers the diagnostics already hold, so asking it sixty times a second costs
 nothing worth measuring against a step of the model.
+
+### Water past its critical point is not an ocean
+
+Above 647 K there is no liquid phase. Not a little liquid, not liquid if you press hard enough —
+none, at any pressure, by definition of the critical point. So a world past it cannot have a sea, and
+every accounting of its water has to say so: the inventory chart, the flooded fraction the renderer
+draws oceans from, and the state it is classified into.
+
+It did not. **TRAPPIST-1b at 1 Gyr sits at 700 K under 222 bar and booked four of its five oceans as
+liquid water** — blue seas and continents drawn on a supercritical planet, "ocean 82%" on the
+inventory chart, and immediately beside it a composition line correctly reading 83% H₂O·sc.
+
+`psatH2O` returns a finite pseudo-value above the critical point. That is right for the two things
+the rest of the model asks of it — its slope, and ratios of itself at nearby temperatures — and wrong
+as a *ceiling* on how much water the air can hold, which is what the vapour column used it for. At
+700 K it says 337 bar, which holds less than one of those five oceans; the other four had nowhere to
+go but the surface. The ceiling is lifted where it is applied rather than inside the function, so
+nothing else changes.
+
+It hid because it comes right again by accident further up: by 1400 K the pseudo-value is large
+enough to hold a whole inventory anyway, so every test that sampled a *developed* runaway passed.
+The check now samples one year in, just past the critical point, which is where it is wrong.
+
+Two things followed from the fix, both of which are the model being more honest rather than less:
+
+- A world with an ocean and 80 W/m² of internal heat — 870× Earth's — now ends as a **270 bar
+  supercritical envelope at 830 K** instead of a hot world with a sea. Its temperature is steady to
+  ten kelvin over half a billion years while its instantaneous energy balance wanders a few W/m²
+  either side of zero, because an envelope whose opacity moves with its own temperature is stiff.
+  Settle has a round cap, so it stops either way.
+- The wet-runaway convergence check was measuring the *spread* of the imbalance over twelve steps and
+  calling anything over 1 W/m² a flip-flop. With the envelope's thermal inertia the world is still
+  approaching equilibrium after 30 kyr — smoothly, monotonically, from −2.19 to −0.22 W/m², with the
+  flooded fraction pinned at zero throughout. A spread bound cannot tell that apart from the
+  period-two oscillation it was written to catch, so it counts reversals now.
 
 ### Frame-rate independence
 

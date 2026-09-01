@@ -291,12 +291,31 @@ export function update(w, dt) {
   if (w.iceSheet == null || !isFinite(w.iceSheet)) w.iceSheet = iceSheetTarget;
   const glaciatedShare = clamp(w.iceSheet, 0, 1);
 
-  // Demanded vapour per band, then rescaled if the planet hasn't got the water
+  // Demanded vapour per band, then rescaled if the planet hasn't got the water.
+  //
+  // Above the critical temperature there is no ceiling at all, because there is
+  // nothing for the air to be saturated WITH: no liquid phase exists at any
+  // pressure past 647 K, so every gram of the planet's water is up there and
+  // the band takes whatever there is.
+  //
+  // psatH2O returns a finite pseudo-value above the critical point, which is
+  // right for the two things the rest of the model asks it for -- its slope, and
+  // ratios of itself at nearby temperatures -- and wrong as a ceiling. Used as
+  // one it put 337 bar on a 700 K planet and left the other four of TRAPPIST-1b's
+  // five oceans booked as liquid water: blue seas and continents drawn on a
+  // supercritical world, an inventory chart reading "ocean 82%", and a
+  // composition line beside it correctly reading 83% H2O·sc. The ceiling is
+  // lifted here rather than in the function, so nothing else has to change.
+  //
+  // It hid because it comes right again by accident further up: by 1400 K the
+  // pseudo-value is large enough to hold a whole inventory anyway.
   const B = scratch(w);
   const demand = B.demand;
   let totalDemand = 0;
   for (let i = 0; i < NBANDS; i++) {
-    demand[i] = RH * psatH2O(w.T[i]) / g;   // kg/m^2
+    demand[i] = w.T[i] >= T_CRIT_H2O
+      ? Math.max(availCol, 0)
+      : RH * psatH2O(w.T[i]) / g;           // kg/m^2
     totalDemand += demand[i] / NBANDS;
   }
   const supply = clamp(availCol, 0, 1e12);

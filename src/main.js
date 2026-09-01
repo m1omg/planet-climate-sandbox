@@ -823,6 +823,15 @@ function updateReadout() {
   const w = sim.world, dg = w.diag, d = dg.d;
   const st = classify(w);
 
+  // Retime the open epoch. Text only, so it costs one string per readout tick
+  // rather than rebuilding a list of rows ten times a second.
+  if (openEpochSpan && epochs.length) {
+    const open = epochs[epochs.length - 1];
+    if (open && open.to == null) {
+      openEpochSpan.textContent = fmtTime(Math.max(w.time - open.from, 0));
+    }
+  }
+
   const banner = $('#state-banner');
   banner.querySelector('.swatch').style.background = st.color;
   banner.querySelector('.swatch').style.color = st.color;
@@ -1152,6 +1161,7 @@ function renderEpochs() {
   // One epoch is not a history, it is just the state, and the banner already
   // says that. The panel appears when the world has actually been somewhere.
   group.hidden = epochs.length < 2;
+  openEpochSpan = null;
   if (group.hidden) { box.innerHTML = ''; return; }
   box.innerHTML = '';
   const now = sim.world.time;
@@ -1172,6 +1182,13 @@ function renderEpochs() {
     const span = document.createElement('span');
     span.className = 'epoch-span';
     span.textContent = fmtTime(Math.max(end - e.from, 0));
+    // The open epoch is the only row whose number is still moving, and this
+    // list is only rebuilt when the climate CHANGES -- so its duration was
+    // written once, at the instant it began, when it is zero by construction,
+    // and then left there. Every finished epoch read correctly and the one you
+    // were actually living through read 0.0 yr for as long as it lasted. Held
+    // by reference and retimed on the readout's own clock instead.
+    if (e.to == null) openEpochSpan = span;
     span.title = tp('{0} to {1}', fmtTime(e.from), e.to == null ? t('now') : fmtTime(e.to));
 
     // Clicking one goes back to where it started. That is what makes this a
@@ -1252,9 +1269,17 @@ let marks = [];               // { t, name }, oldest first
 // answering differently, which is the same event the discovery log listens to,
 // so the two cannot disagree about what happened.
 let epochs = [];              // { id, name, color, from, to }
+let openEpochSpan = null;     // the one row whose duration is still counting
 
 function noteEpoch(w, st) {
-  const last = epochs[epochs.length - 1];
+  let last = epochs[epochs.length - 1];
+  // A clock that has gone backwards past the start of the open span is not this
+  // run any more -- a preset was loaded, or the world was reset. Continuing the
+  // list across that produced spans that closed before they opened: a runaway
+  // recorded as beginning at 190 years and ending at 0, because the epoch was
+  // closed with the new world's clock. A rewind inside one run is a different
+  // thing and is handled by truncateEpochs, which reopens the span landed in.
+  if (last && w.time + 1 < last.from) { epochs = []; last = undefined; }
   if (last && last.id === st.id) { last.to = null; return; }
   if (last) last.to = w.time;
   epochs.push({ id: st.id, name: st.name, color: st.color, from: w.time, to: null });

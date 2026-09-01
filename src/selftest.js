@@ -1290,6 +1290,49 @@ export function run() {
           + `${b.id} with none does not`);
       }
 
+      // Above the critical temperature there is no liquid phase. Not a little
+      // liquid, not liquid under enough pressure -- none, at any pressure, by
+      // definition of the critical point. So a world past it cannot have an
+      // ocean, and every accounting of its water has to say so: the inventory
+      // chart, the flooded fraction the renderer draws seas from, and the state
+      // it is classified into.
+      //
+      // It did not. TRAPPIST-1b at 1 Gyr sits at 700 K under 222 bar and
+      // reported four of its five oceans as liquid water, drew blue seas and
+      // continents on a supercritical planet, and put "ocean 82%" on the chart
+      // beside a composition line that correctly said the air was 83% H2O·sc.
+      {
+        // Sampled just past the critical point rather than far above it, which
+        // is where this hides: at 1400 K the finite pseudo-saturation is large
+        // enough to hold the whole inventory anyway and the accounting comes
+        // out right by accident. At 700 K it is 337 bar, which holds less than
+        // one ocean of the five, and the other four were called liquid.
+        const s = new Simulation({ ...PRESETS.earlyTrappist1b.params });
+        s.runYears(1);
+        const w = s.world, d = w.diag;
+        check('A world past the critical point has no ocean, because none can exist',
+          d.Tmean > T_CRIT_H2O && w.water.ocean < 1e-6 && w.water.seaIce < 1e-6
+            && w.water.landIce < 1e-6 && d.flooded < 1e-6,
+          `${d.Tmean.toFixed(0)} K at ${d.pTotMean.toFixed(0)} bar: `
+          + `${w.water.ocean.toFixed(3)} EO liquid, ${(d.flooded * 100).toFixed(1)}% flooded`);
+        check('…and all of its water is in the air, and reads as supercritical',
+          Math.abs(w.water.vapour - d.totalWater) < 1e-6 && (d.superFrac ?? 0) > 0.95,
+          `${w.water.vapour.toFixed(2)} of ${d.totalWater.toFixed(2)} EO airborne, `
+          + `${((d.superFrac ?? 0) * 100).toFixed(0)}% of it past the critical point`);
+      }
+
+      // ...and the ordinary case still works, or the fix would have been to
+      // stop the model having oceans at all.
+      {
+        const s = new Simulation({ ...EARTH });
+        s.runYears(1e4);
+        const w = s.world;
+        check('…while a temperate world keeps its ocean where it was',
+          w.water.ocean > 0.9 && w.water.vapour < 0.02
+            && s.world.diag.Tmean < T_CRIT_H2O,
+          `Earth: ${w.water.ocean.toFixed(3)} EO liquid, ${w.water.vapour.toFixed(4)} airborne`);
+      }
+
       // Spin-down is a switch of its own, and the red dwarfs come with it on.
       // It has to be separable from the bolometric track because the two are
       // separate physics that happen to belong to the same star: a world can
@@ -1933,10 +1976,34 @@ export function run() {
 
     // The imbalance is what Settle stops on. Leave the interior out of it and a
     // heated world sits at a permanent false imbalance and Settle never returns.
-    const heated = settle({ ...EARTH, internalHeat: 80, outgassing: 0 }, 5e6).world;
+    // Two of them, because 80 W/m2 stopped being a world with an ocean the day
+    // water above its critical point stopped being counted as one. That heat is
+    // 870 times Earth's; with an ocean to boil, the planet ends as a 270 bar
+    // supercritical envelope at 830 K, which is right and is a much stiffer
+    // thing to balance. Dry at 80, and wet at 40, are the cases that test what
+    // this was written to test.
+    const heatedDry = settle({ ...EARTH, internalHeat: 80, outgassing: 0, water: 0 }, 5e6).world;
+    const heatedWet = settle({ ...EARTH, internalHeat: 40, outgassing: 0 }, 5e6).world;
     check('…and a settled world with internal heat reads as settled',
-      Math.abs(heated.diag.imbalance) < 0.05,
-      `imbalance ${heated.diag.imbalance.toFixed(4)} W/m² at 80 W/m² internal`);
+      Math.abs(heatedDry.diag.imbalance) < 0.05
+        && Math.abs(heatedWet.diag.imbalance) < 0.05 && heatedWet.water.ocean > 0.5,
+      `${heatedDry.diag.imbalance.toFixed(4)} W/m² dry at 80 W/m² internal, `
+      + `${heatedWet.diag.imbalance.toFixed(4)} with an ocean at 40`);
+
+    // ...and the supercritical case is stable in the thing that matters, which
+    // is its temperature. Its instantaneous imbalance wanders a few W/m2 either
+    // side of zero -- a 270 bar envelope whose opacity moves with its own
+    // temperature is stiff -- while the surface sits still to within ten kelvin
+    // over half a billion years. Settle has a round cap, so it stops either way.
+    {
+      const a = settle({ ...EARTH, internalHeat: 80, outgassing: 0 }, 5e6).world;
+      const b = settle({ ...EARTH, internalHeat: 80, outgassing: 0 }, 5e8).world;
+      check('…and a supercritical envelope holds its temperature even when the balance is stiff',
+        a.water.ocean === 0 && Math.abs(a.diag.Tmean - b.diag.Tmean) < 15
+          && a.diag.Tmean > T_CRIT_H2O,
+        `${a.diag.Tmean.toFixed(0)} K at 5 Myr, ${b.diag.Tmean.toFixed(0)} K at 500 Myr, `
+        + `${a.diag.pTotMean.toFixed(0)} bar with no liquid water in it`);
+    }
 
     // The Tidal Venus. Insolation alone leaves this world temperate; the
     // interior alone carries it past the Simpson-Nakajima limit.
@@ -3227,11 +3294,34 @@ export function run() {
     {
       const run = settle({ ...EARTH, co2Bar: 1 }, 3e4);
       const wet = run.world;
-      const seen = [];
-      for (let i = 0; i < 12; i++) { run.stepOnce(200); seen.push(wet.diag.imbalance); }
-      const swing = Math.max(...seen) - Math.min(...seen);
+      const seen = [], wetness = [];
+      for (let i = 0; i < 12; i++) {
+        run.stepOnce(200);
+        seen.push(wet.diag.imbalance);
+        wetness.push(wet.diag.flooded);
+      }
+      // Measured as alternation rather than as spread, because those are not
+      // the same thing and only one of them is the fault. A world converging
+      // from two watts to a fifth of one has a spread of nearly two and is
+      // doing exactly what it should; the bug was a period-two flip-flop worth
+      // sixteen, with the flooded fraction swinging between 43% and nothing on
+      // alternating steps. Once water past its critical point stopped counting
+      // as an ocean this became a 271 bar envelope with the thermal inertia to
+      // match, so it is still approaching equilibrium after 30 kyr -- smoothly,
+      // in one direction, which the old spread bound could not tell apart from
+      // the oscillation it was written to catch.
+      let reversals = 0;
+      for (let i = 2; i < seen.length; i++) {
+        const d1 = seen[i - 1] - seen[i - 2], d2 = seen[i] - seen[i - 1];
+        if (d1 * d2 < 0 && Math.abs(d2) > 0.05) reversals++;
+      }
+      const wetSwing = Math.max(...wetness) - Math.min(...wetness);
       check('A wet runaway settles instead of flip-flopping between wet and dry',
-        swing < 1.0, `energy balance varies by ${swing.toFixed(2)} W/m² over twelve steps`);
+        reversals === 0 && wetSwing < 0.02
+          && Math.abs(seen[seen.length - 1]) < Math.abs(seen[0]),
+        `${reversals} reversals over twelve steps, flooded steady to `
+        + `${(wetSwing * 100).toFixed(1)}%, imbalance ${seen[0].toFixed(2)} → `
+        + `${seen[seen.length - 1].toFixed(2)} W/m²`);
 
       let least = Infinity;
       for (let i = 0; i < 40; i++) { run.stepOnce(Math.min(maxStep(wet), 5e6)); least = Math.min(least, maxStep(wet)); }
