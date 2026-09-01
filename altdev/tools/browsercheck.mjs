@@ -330,6 +330,49 @@ try {
   ok(cloudPersist === 'false' && cloudAfter === 'false', 'A cloudless view survives a reload');
   await evaluate("document.querySelector('#btn-clouds').click()");
 
+  // The open epoch's duration has to count up. It is the only row on that list
+  // whose number is still moving, and the list is only rebuilt when the climate
+  // CHANGES -- so it was written once, at the instant the epoch began, when it
+  // is zero by construction, and left there. Every finished epoch read
+  // correctly and the one you were living through read 0.0 yr for as long as it
+  // lasted.
+  const epochClock = await evaluate(`(async () => {
+    __app.loadPreset('earth');
+    for (let i = 0; i < 80 && __app.view.body !== 'earth'; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    // Drive it into a second climate so the panel is showing at all.
+    __app.params.insolation = 1.9;
+    __app.sim.reset(__app.params);
+    __app.sim.rate = 1e6;
+    __app.sim.autoEase = false;
+    if (__app.sim.paused) document.querySelector('#btn-play').click();
+    // Driven through tick() with real time on it, the way the page drives it:
+    // the readout runs on a 10 Hz clock of its own and tick(0) never turns it.
+    // Kept short -- each tick of a runaway is real physics and this call has a
+    // round trip to come back inside.
+    for (let i = 0; i < 300 && __app.epochs().length < 2; i++) __app.tick(1 / 60);
+    const row = () => document.querySelector('#epochs-list .epoch-row.current .epoch-span').textContent;
+    const first = row();
+    const t0 = __app.sim.world.time;
+    for (let i = 0; i < 60; i++) __app.tick(1 / 60);
+    const out = { first, later: row(), elapsed: __app.sim.world.time - t0,
+      open: __app.epochs()[__app.epochs().length - 1] };
+    // Put the clock down and the world back before leaving. This check drives a
+    // planet into a runaway by writing insolation straight into the shared
+    // params object, and a 270 bar supercritical envelope is expensive to step:
+    // left running, it starved whatever ran next of its own round trip.
+    if (!__app.sim.paused) document.querySelector('#btn-play').click();
+    __app.loadPreset('earth');
+    await new Promise((r) => setTimeout(r, 150));
+    return out;
+  })()`);
+  ok(epochClock.first !== epochClock.later && epochClock.elapsed > 0
+    && epochClock.open.to === null,
+    'The epoch you are living through counts up as it happens',
+    `"${epochClock.first}" → "${epochClock.later}" over `
+    + `${epochClock.elapsed.toExponential(1)} simulated years`);
+
   // The spin-down switch: present, checked on a red dwarf, off on a sandbox
   // world, and it has to survive the address bar or a shared link would arrive
   // at a different star from the one that was shared.
@@ -433,7 +476,8 @@ try {
     && timeline.epochs.every((e, i) => i === 0 || e.from >= timeline.epochs[i - 1].from)
     && timeline.epochs[timeline.epochs.length - 1].to === null,
     'The world keeps a record of every climate it has been through',
-    timeline.epochs.map((e) => e.id).join(' → '));
+    timeline.epochs.map((e) => `${e.id}@${e.from.toExponential(1)}`
+      + (e.to == null ? '(open)' : `→${e.to.toExponential(1)}`)).join(' · '));
 
   // A world that has been through more than one climate shows the list, and
   // going back to an epoch's start actually moves the clock.
