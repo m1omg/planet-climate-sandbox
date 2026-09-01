@@ -342,6 +342,46 @@ The one label that still cannot fit is the readout's `Runaway margin`: the word
 *nekontrolovateľného* alone is 130px in a 136px tile, so no wrapping saves it. That tile reads
 *Rezerva do prekročenia* and carries the full sentence as a tooltip.
 
+### A timeline, and the run's own account of itself
+
+The temperature chart is the time machine — drag along it and the world goes back to where it was.
+For a long time it was almost unusable as one, because the axis was **logarithmic**. As a picture that
+is defensible: the early part of a run is where the fast things happen. As a control it is not. On a
+4.567 Gyr world the log axis gave the first half-billion years nine tenths of the width and squeezed
+the remaining four billion into the last tenth, so **five millimetres near the right-hand end was
+about two billion years** and there was no way to aim at anything.
+
+It is linear now — a timeline, where equal distances are equal spans of history — and the resolution
+that costs at the early end is given back on demand: **scroll to zoom, shift-scroll to pan,
+double-click for the whole run**. A pixel is 9 Myr on a 4.567 Gyr world at 1×, and 140 kyr at 64×.
+The zoom anchors on the moment under the pointer rather than on the right-hand edge, because zooming
+about the edge walks whatever you were looking at off the screen, which is the thing that makes a
+zoom feel broken.
+
+Three things are drawn on that timeline. The trace itself; **milestone flags**, because a checkpoint
+you cannot see is one whose time you have to remember; and a band of **climate epochs** along the
+bottom, in each state's own colour.
+
+**Milestones** were already multiple, renameable and individually removable. What they lacked was a
+way back: the time is now a button, and pressing it puts the world where it was when you dropped the
+flag. There is a *Clear all* beside the list. A mark auto-named from the climate follows the language
+switch — it stores the state's id, not the string — while one you have renamed keeps what you typed.
+
+**Climate epochs** are new. Every state the model can reach already had a name and a colour; what was
+missing was the record of *when*, so a world that had been through four climates could only tell you
+the one it was in. The panel lists them newest-first with the span of each, the open one counting up,
+and ↶ goes back to where any of them began. They travel in save slots, and a rewind reopens the span
+you land in and drops the ones that have not happened on that branch — the same rule the milestones
+and the temperature history already followed.
+
+One thing about where that record is written. The obvious place is the readout, which is where
+`classify()` is already called — and it is wrong, because the readout runs at 10 Hz and **a transition
+that finished between two of its ticks would never be recorded at all**. A world would list itself as
+temperate and then as a runaway with nothing in between, having in fact spent a fifth of a second
+passing through the moist greenhouse. It is written on the frame loop instead. `classify()` is a chain
+of comparisons over numbers the diagnostics already hold, so asking it sixty times a second costs
+nothing worth measuring against a step of the model.
+
 ### Frame-rate independence
 
 Physics advances on simulated time only. Elapsed real time buys *credit*; steps are sized purely

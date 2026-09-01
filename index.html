@@ -188,10 +188,17 @@
       <section class="group" id="marks-group" hidden>
         <h2>Milestones <small>time between the things you marked</small></h2>
         <div id="marks-list" class="marks"></div>
+        <button id="marks-clear" class="icon-btn wide" type="button"
+                title="Remove every milestone">Clear all</button>
+      </section>
+
+      <section class="group" id="epochs-group" hidden>
+        <h2>Climate epochs <small>what this world has been, and for how long</small></h2>
+        <div id="epochs-list" class="epochs"></div>
       </section>
 
       <section class="group">
-        <h2>Temperature history <small>drag to go back</small></h2>
+        <h2>Temperature history <small>scroll to zoom · shift-scroll to pan · drag to go back</small></h2>
         <canvas class="chart scrub" id="chart-history"
           title="Drag along this chart to put the world back into its own past. Change something from there and it takes a different route — the path you left is dropped unless you saved it."></canvas>
       </section>

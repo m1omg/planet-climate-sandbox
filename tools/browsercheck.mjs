@@ -14,6 +14,7 @@ const slovakScreenshot = join(tmpdir(), 'altdev-browsercheck-sk.png');
 const cloudyShot = join(tmpdir(), 'altdev-clouds-on.png');
 const clearShot = join(tmpdir(), 'altdev-clouds-off.png');
 const volcanoScreenshot = join(tmpdir(), 'altdev-volcanism.png');
+const epochScreenshot = join(tmpdir(), 'altdev-epochs.png');
 const drownedScreenshot = join(tmpdir(), 'altdev-browsercheck-drowned.png');
 const chrome = spawn(chromePath, [
   '--headless=new',
@@ -329,6 +330,149 @@ try {
   ok(cloudPersist === 'false' && cloudAfter === 'false', 'A cloudless view survives a reload');
   await evaluate("document.querySelector('#btn-clouds').click()");
 
+  // The timeline, the milestones and the epoch record. All three live in click
+  // handlers, so none of them is visible to a Node test.
+  const timeline = await evaluate(`(async () => {
+    __app.loadPreset('earth');
+    for (let i = 0; i < 80 && __app.view.body !== 'earth'; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    if (__app.sim.paused) document.querySelector('#btn-play').click();
+    // Run a world far enough to have a history worth scrubbing.
+    __app.sim.rate = 1e7;
+    for (let i = 0; i < 400; i++) { __app.sim.advance(1 / 60); }
+    __app.tick(0);
+    const cv = document.querySelector('#chart-history');
+    const r = cv.getBoundingClientRect();
+    const mid = { clientX: r.left + r.width * 0.5, clientY: r.top + r.height * 0.5 };
+    const { historyTimeAtX } = await import('./src/render/charts.js');
+    const tMax = Math.max(__app.sim.world.time, 10);
+    // A pixel is worth this many years at full zoom...
+    const before = historyTimeAtX(r.width * 0.9 + 1, tMax, r.width)
+                 - historyTimeAtX(r.width * 0.9, tMax, r.width);
+    cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true, ...mid }));
+    cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true, ...mid }));
+    cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true, ...mid }));
+    cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true, ...mid }));
+    __app.tick(0);
+    const z = __app.timeline();
+    const after = historyTimeAtX(r.width * 0.9 + 1, tMax, r.width, z.zoom, z.pan)
+                - historyTimeAtX(r.width * 0.9, tMax, r.width, z.zoom, z.pan);
+    cv.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    __app.tick(0);
+    const reset = __app.timeline();
+
+    // Milestones: drop three, remove one, and land on another.
+    const flag = document.querySelector('#btn-mark');
+    flag.click();
+    for (let i = 0; i < 60; i++) __app.sim.advance(1 / 60);
+    flag.click();
+    for (let i = 0; i < 60; i++) __app.sim.advance(1 / 60);
+    flag.click();
+    __app.tick(0);
+    const dropped = document.querySelectorAll('#marks-list .mark-row').length;
+    document.querySelectorAll('#marks-list .mark-drop')[1].click();
+    const afterDrop = document.querySelectorAll('#marks-list .mark-row').length;
+    const groupShown = !document.querySelector('#marks-group').hidden;
+    const clearable = !!document.querySelector('#marks-clear');
+
+    return { before, after, zoom: z.zoom, reset,
+      dropped, afterDrop, groupShown, clearable,
+      epochs: __app.epochs().map((e) => ({ id: e.id, from: e.from, to: e.to })),
+      shown: document.querySelectorAll('#epochs-list .epoch-row').length,
+      epochsHidden: document.querySelector('#epochs-group').hidden };
+  })()`);
+  ok(timeline.zoom > 3 && timeline.after < timeline.before / 3
+    && timeline.reset.zoom === 1,
+    'The timeline zooms in, and a pixel is worth less time when it does',
+    `${(timeline.before / 1e6).toFixed(1)} Myr per pixel → `
+    + `${(timeline.after / 1e6).toFixed(2)} Myr at ${timeline.zoom.toFixed(1)}×, `
+    + `double-click restores the whole run`);
+  ok(timeline.dropped === 3 && timeline.afterDrop === 2
+    && timeline.groupShown && timeline.clearable,
+    'Milestones stack up, and any one of them can be removed',
+    `${timeline.dropped} dropped, ${timeline.afterDrop} after removing the middle one`);
+  ok(timeline.epochs.length >= 1
+    && timeline.epochs.every((e, i) => i === 0 || e.from >= timeline.epochs[i - 1].from)
+    && timeline.epochs[timeline.epochs.length - 1].to === null,
+    'The world keeps a record of every climate it has been through',
+    timeline.epochs.map((e) => e.id).join(' → '));
+
+  // A world that has been through more than one climate shows the list, and
+  // going back to an epoch's start actually moves the clock.
+  const epochJump = await evaluate(`(async () => {
+    __app.loadPreset('earth');
+    for (let i = 0; i < 80 && __app.view.body !== 'earth'; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    // Far enough over the limit that the world has to leave temperate. The
+    // epoch record is written by the readout, which runs on tick() rather than
+    // on advance(), so the clock has to be driven the way the page drives it.
+    __app.params.insolation = 1.9;
+    __app.sim.reset(__app.params);
+    __app.sim.rate = 1e5;
+    __app.sim.autoEase = false;
+    if (__app.sim.paused) document.querySelector('#btn-play').click();
+    for (let i = 0; i < 1200 && __app.epochs().length < 2; i++) {
+      __app.sim.advance(1 / 60);
+      __app.tick(0);
+    }
+    // ...and well past it, so going back to the epoch's start is a real move
+    // rather than a rounding error on top of the transition itself.
+    for (let i = 0; i < 300; i++) { __app.sim.advance(1 / 60); __app.tick(0); }
+    const list = __app.epochs();
+    const rows = document.querySelectorAll('#epochs-list .epoch-row').length;
+    const hidden = document.querySelector('#epochs-group').hidden;
+    const before = __app.sim.world.time;
+    const back = document.querySelectorAll('#epochs-list .epoch-back');
+    let jumped = null;
+    for (const b of back) { if (!b.disabled) { b.click(); jumped = __app.sim.world.time; break; } }
+    return { n: list.length, rows, hidden, before, jumped,
+      ids: list.map((e) => e.id),
+      S: __app.sim.world.params.insolation, T: __app.sim.world.diag.Tmean,
+      t: __app.sim.world.time, paused: __app.sim.paused };
+  })()`);
+  ok(epochJump.n >= 2 && !epochJump.hidden && epochJump.rows === epochJump.n,
+    'A world that changes climate lists every epoch it passed through',
+    `${epochJump.ids.join(' → ')} — ${epochJump.rows} rows`);
+  ok(epochJump.jumped != null && epochJump.jumped < epochJump.before * 0.9,
+    'Clicking an epoch takes the world back to where that epoch began',
+    `${epochJump.before.toExponential(2)} yr → ${epochJump.jumped.toExponential(2)} yr`);
+
+  await evaluate(`(() => {
+    // Drop three milestones so the picture shows both panels, and put them on
+    // screen -- they live below the fold in the readout column.
+    const flag = document.querySelector('#btn-mark');
+    __app.sim.rate = 1e6;
+    for (let k = 0; k < 3; k++) {
+      flag.click();
+      for (let i = 0; i < 40; i++) { __app.sim.advance(1 / 60); __app.tick(0); }
+    }
+    document.querySelector('#marks-group').scrollIntoView({ block: 'center' });
+  })()`);
+  // A milestone auto-named from the climate has to follow the language switch,
+  // because the name it was given belongs to whatever was on when it was
+  // dropped -- and the panel is the one place that name is read.
+  const markLang = await evaluate(`(() => {
+    const read = () => document.querySelector('#marks-list input').value;
+    const btn = document.querySelector('#btn-lang');
+    const a = read();
+    btn.click();
+    const b = read();
+    // ...and a name the user typed is theirs, and must survive the switch.
+    const input = document.querySelector('#marks-list input');
+    input.value = 'my own name';
+    input.dispatchEvent(new Event('blur'));
+    btn.click();
+    const kept = document.querySelector('#marks-list input').value;
+    return { a, b, kept, lang: document.documentElement.lang };
+  })()`);
+  ok(markLang.a !== markLang.b && markLang.kept === 'my own name',
+    'An auto-named milestone follows the language, a renamed one does not',
+    `"${markLang.a}" → "${markLang.b}", renamed stays "${markLang.kept}"`);
+  const epochShot = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
+  writeFileSync(epochScreenshot, Buffer.from(epochShot.data, 'base64'));
+
   // Strong volcanism has to reach the shader, and a quiet world must not get
   // any. Read off the uniform the fragment stage actually received, because a
   // number computed and never passed to a shader is a bug that has shipped
@@ -526,6 +670,7 @@ try {
   console.log(`Slovak screenshot: ${slovakScreenshot}`);
   console.log(`Clouds on/off: ${cloudyShot} · ${clearShot}`);
   console.log(`Volcanism: ${volcanoScreenshot}`);
+  console.log(`Epochs/timeline: ${epochScreenshot}`);
 } finally {
   try { await call('Browser.close', {}, undefined, 2000); } catch { chrome.kill('SIGTERM'); }
   await Promise.race([new Promise((resolve) => chrome.once('exit', resolve)), delay(2000)]);

@@ -48,22 +48,53 @@ function label(ctx, text, x, y, align = 'left', color = 'rgba(233,240,255,0.55)'
 // the whole Archean in the first pixel.
 export const HISTORY_PAD = { l: 38, r: 8, t: 10, b: 18 };
 
-export function historyX(t, tMax, w) {
-  const { l, r } = HISTORY_PAD;
-  return l + (Math.log10(Math.max(t, 1) + 1) / Math.log10(Math.max(tMax, 10) + 1)) * (w - l - r);
+// The time axis is LINEAR: a timeline, where equal distances are equal spans of
+// history and a pixel is worth the same everywhere.
+//
+// It used to be logarithmic, and as a picture that was defensible -- the early
+// part of a run is where the fast things happen. As a control it was not. On a
+// 4.567 Gyr world the log axis gave the first half-billion years nine tenths of
+// the width and squeezed the remaining four billion into the last tenth, so
+// five millimetres near the right-hand end was about two billion years and
+// there was no way to land on anything. What the scrubber is for is finding the
+// moment before a world went wrong, and it could not be aimed.
+//
+// `zoom` and `pan` narrow the axis to a window of the run, which is how the
+// resolution lost by going linear is given back where it is wanted: at full
+// zoom a pixel on a 4.567 Gyr world is 9 Myr, and at 64x it is 140 kyr.
+// Years, in as few characters as an axis end can spare.
+function fmtSpan(yr) {
+  const a = Math.abs(yr);
+  if (a >= 1e9) return `${(yr / 1e9).toFixed(2)} Gyr`;
+  if (a >= 1e6) return `${(yr / 1e6).toFixed(a >= 1e7 ? 0 : 1)} Myr`;
+  if (a >= 1e3) return `${(yr / 1e3).toFixed(0)} kyr`;
+  return `${yr.toFixed(0)} yr`;
 }
 
-export function historyTimeAtX(x, tMax, w) {
+export function historyWindow(tMax, zoom = 1, pan = 1) {
+  const span = Math.max(tMax, 10) / Math.max(zoom, 1);
+  const end = Math.max(span, Math.min(Math.max(tMax, 10), pan * Math.max(tMax, 10)));
+  return { t0: Math.max(0, end - span), t1: end };
+}
+
+export function historyX(t, tMax, w, zoom = 1, pan = 1) {
+  const { l, r } = HISTORY_PAD;
+  const { t0, t1 } = historyWindow(tMax, zoom, pan);
+  return l + ((t - t0) / Math.max(t1 - t0, 1e-9)) * (w - l - r);
+}
+
+export function historyTimeAtX(x, tMax, w, zoom = 1, pan = 1) {
   const { l, r } = HISTORY_PAD;
   const span = Math.max(w - l - r, 1);
   const f = Math.min(Math.max((x - l) / span, 0), 1);
-  return Math.pow(10, f * Math.log10(Math.max(tMax, 10) + 1)) - 1;
+  const { t0, t1 } = historyWindow(tMax, zoom, pan);
+  return t0 + f * (t1 - t0);
 }
 
 // `markT` draws the scrub handle: where in its own history the world is
 // currently standing. Absent on a world running normally, which is every world
 // until somebody goes back.
-export function drawHistory(canvas, world, markT = null) {
+export function drawHistory(canvas, world, markT = null, opts = {}) {
   const { ctx, w, h } = setup(canvas);
   const pad = HISTORY_PAD;
   const H = world.history;
@@ -71,7 +102,9 @@ export function drawHistory(canvas, world, markT = null) {
   if (H.length < 2) { label(ctx, t('collecting…'), w / 2, h / 2, 'center'); return; }
 
   const tMax = Math.max(world.time, 10);
-  const lx = (t) => historyX(t, tMax, w);
+  const zoom = Math.max(opts.zoom || 1, 1), pan = opts.pan == null ? 1 : opts.pan;
+  const win = historyWindow(tMax, zoom, pan);
+  const lx = (t) => historyX(t, tMax, w, zoom, pan);
   let tlo = 1e9, thi = -1e9;
   for (const p of H) { tlo = Math.min(tlo, p.Tmin); thi = Math.max(thi, p.Tmax); }
   tlo = Math.min(tlo, 240); thi = Math.max(thi, 320);
@@ -88,6 +121,21 @@ export function drawHistory(canvas, world, markT = null) {
     }
   }
 
+  // Climate epochs, as a band along the bottom. This is the run's own history
+  // of itself: which climate the world was in, and for how long. Drawn under
+  // the trace rather than over it, because it is context for the temperature
+  // and not a thing in front of it.
+  const epochs = opts.epochs || [];
+  const bandTop = h - pad.b + 1, bandH = 5;
+  for (const e of epochs) {
+    const a = Math.max(lx(e.from), pad.l), b = Math.min(lx(e.to ?? tMax), w - pad.r);
+    if (!(b > a)) continue;
+    ctx.fillStyle = e.color;
+    ctx.globalAlpha = 0.55;
+    ctx.fillRect(a, bandTop, Math.max(b - a, 1), bandH);
+    ctx.globalAlpha = 1;
+  }
+
   ctx.beginPath();
   for (let i = 0; i < H.length; i++) ctx[i ? 'lineTo' : 'moveTo'](lx(H[i].t), ly(H[i].Tmax));
   for (let i = H.length - 1; i >= 0; i--) ctx.lineTo(lx(H[i].t), ly(H[i].Tmin));
@@ -100,7 +148,26 @@ export function drawHistory(canvas, world, markT = null) {
 
   label(ctx, `${(thi - 273.15).toFixed(0)}°C`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, `${(tlo - 273.15).toFixed(0)}°C`, pad.l - 4, h - pad.b, 'right');
-  label(ctx, t('time →'), w - pad.r, h - 5, 'right');
+  // Milestones, as flags standing on the timeline. A checkpoint you cannot see
+  // is one you have to remember the time of, which is the opposite of the point.
+  for (const m of (opts.marks || [])) {
+    const mx = lx(m.t);
+    if (mx < pad.l - 1 || mx > w - pad.r + 1) continue;
+    ctx.strokeStyle = 'rgba(255,196,107,0.65)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(mx, pad.t); ctx.lineTo(mx, h - pad.b); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,196,107,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(mx, pad.t); ctx.lineTo(mx + 7, pad.t + 3); ctx.lineTo(mx, pad.t + 6);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // What the window is showing, when it is not showing all of it. Without this
+  // a zoomed axis is a chart with no scale, and the reading is a guess.
+  if (win.t0 > 0 || zoom > 1) {
+    label(ctx, fmtSpan(win.t0), pad.l + 2, h - 5, 'left', 'rgba(233,240,255,0.45)', 9);
+  }
+  label(ctx, zoom > 1 ? `${fmtSpan(win.t1)} →` : t('time →'), w - pad.r, h - 5, 'right');
   label(ctx, t('surface temperature'), pad.l + 4, pad.t + 8, 'left', 'rgba(233,240,255,0.4)');
 
   // The scrub handle, drawn last so it sits over the trace. Everything to the
