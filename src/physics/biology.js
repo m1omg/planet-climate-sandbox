@@ -286,7 +286,18 @@ export function stepBiology(w, dtYears, hab) {
     else if (gate > w.eukReady) w.eukReady += (gate - w.eukReady) * k;
   }
 
-  const alive = Math.max(w.bio ?? 0, 0);
+  // Nothing to divide up yet, and it matters that this returns rather than
+  // seeding a zero. w.bio is null until the first step has run, so a zero here
+  // would be a NUMBER where a null belongs: the first real step would then find
+  // w.euk already set and relax it up from nothing on the 5 kyr growth clock,
+  // and a brand-new Earth would read 28% eukaryote for its first few thousand
+  // years instead of 86. The whole and its halves are seeded together or not at
+  // all. (eukReady above is not part of that -- it is a fact about the planet's
+  // oxygen rather than a share of its biosphere, and a world that opens
+  // oxygenated should open knowing it.)
+  if (w.bio == null) return;
+
+  const alive = Math.max(w.bio, 0);
   const target = alive * eukaryoteCeiling(w, hab);
   if (w.euk == null) w.euk = target;
   else {

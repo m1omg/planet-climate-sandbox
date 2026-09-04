@@ -14,6 +14,7 @@
 // field added to the world and forgotten here would not throw; it would quietly
 // make every save and every rewind slightly wrong.
 import { update } from '../physics/climate.js';
+import { stepBiology } from '../physics/biology.js';
 
 // Everything about a world that is not derived from the rest of it.
 //
@@ -90,6 +91,12 @@ export function applyWorld(sim, s, params = s.params) {
   // was saved and reloaded. The round-trip test could not see it because its own
   // state vector did not list h2 either; it does now.
   if (s.h2 != null) w.h2 = s.h2;
+  update(w, 0);
+  // And the same seeding a fresh world gets, for a save written before the
+  // prokaryote/eukaryote split existed: it carries neither field, and without
+  // this a restored-and-paused Earth reads 0% eukaryote until you press play.
+  // Between two update()s for the reason resetWorld() gives.
+  stepBiology(w, 0);
   update(w, 0);
   // After update(), because a zero-length step rewrites both of these to zero.
   if (s.ch4Escape != null) w.ch4Escape = s.ch4Escape;

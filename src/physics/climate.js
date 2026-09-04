@@ -6,6 +6,7 @@ import { derive } from './planet.js';
 import { floodedFraction } from './hypsometry.js';
 
 import { EARTH_INTERNAL_FLUX } from './volatiles.js';
+import { stepBiology } from './biology.js';
 
 export const NBANDS = 18;
 
@@ -99,6 +100,20 @@ export function resetWorld(w, params) {
   w.bio = null;        // the living biosphere, grown from the conditions
   w.euk = null;        // how much of it has a nucleus
   w.eukReady = null;   // whether this world has evolved one at all yet
+  update(w, 0);
+  // Seed the split from the world as built rather than leaving it to the first
+  // step. Pause-on-reset is the default, so a world that waits for a step is a
+  // world that can sit there indefinitely reporting 0% eukaryote and "the oxygen
+  // is new" -- on a paused, fully oxygenated Earth. A dtYears of 0 makes this
+  // the initialisation and nothing else: every relaxation inside it multiplies
+  // by 1 - exp(0), and on a world that already has the fields it does nothing.
+  //
+  // It has to run BETWEEN two update() calls, which is the whole awkwardness
+  // here: it reads the oxygen and the temperatures out of the diag, and the diag
+  // is what publishes its answer. Seeding before the first one has nothing to
+  // read; seeding after the last one is not read. Twice at a reset costs
+  // nothing -- this is not the step loop.
+  stepBiology(w, 0);
   update(w, 0);
 }
 

@@ -1095,6 +1095,42 @@ this model's bugs were reported. The file is for the other case — a whole set 
 once, or keeping saves somewhere that is not this browser's localStorage, which
 is where saves go to die the moment a browser clears site data.
 
+#### Do saves survive a version change?
+
+**The format does, both directions.** A save written before the
+prokaryote/eukaryote split exists loads in a build that has it, restores to the
+same temperature, CO₂ and biosphere to twelve significant figures, and runs
+forward identically; a save written after it loads in a build that does not,
+which ignores the two fields it does not know. `applyWorld` reads every field
+with a fallback and `parseSaveFile` asks only that a world carry `params`, so
+new state is additive and old state is filled in.
+
+**The answer does not, necessarily, and there is nothing to warn you.** A slot
+holds raw simulation state rather than slider values — band temperatures, the ice
+sheet, the carbon below — and carries no version tag. (`v: 1` is on the export
+*file* wrapper; nothing reads it, and individual slots have nothing.) So if a
+physics constant moves between two builds, the same bytes restore without
+complaint and then simulate somewhere else. That is a silent wrong answer, which
+is the worst kind this program can give.
+
+For the split it happens not to matter — every preset is bit-identical with it in
+— but that is a property of that change and not a promise about the next one.
+
+**What always travels safely is the URL hash and the export file**, because both
+carry *parameters* rather than physics state. A world sent that way means the
+same thing in any build, which is why neither is namespaced per build and why the
+address bar is still the way to report a bug.
+
+One thing this turned up, worth writing down because it was invisible: a world
+had to take a step before it knew what kind of life it had. Pause-on-reset is the
+default, so "before it takes a step" is exactly where a reset or a load leaves
+you — and a restored, fully oxygenated Earth sat there reading **0% eukaryote,
+"the oxygen is new; a nucleus has not evolved yet"** until you pressed play.
+Seeding it at reset instead was not quite the fix either: `w.bio` is null until
+the first step, so seeding a zero put a *number* where a null belonged, and a
+fresh Earth then crept up from 28% on the 5 kyr growth clock. The whole and its
+halves are seeded together or not at all.
+
 The rules live in `src/game/saves.js`, free of the DOM and of storage for the
 same reason `controls.js` is: which slot a world lands in is a decision worth
 testing on its own, and it needs no browser to make.
