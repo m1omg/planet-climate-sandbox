@@ -2588,6 +2588,33 @@ export function run() {
         `is ${future.tot.toFixed(2)}× alive and ${(future.p * 100).toFixed(0)}% of it microbial`);
     }
 
+    // A world must know what kind of life it has BEFORE it takes a step.
+    //
+    // Pause-on-reset is the default, so "before it takes a step" is where a
+    // reset or a load actually leaves you — and this reported 0% eukaryote and
+    // "the oxygen is new; a nucleus has not evolved yet" on a paused, fully
+    // oxygenated Earth, for as long as you left it there. Every save anyone
+    // already has was written before the split existed and carries neither
+    // field, so restoring one is exactly this case.
+    {
+      const fresh = new Simulation({ ...EARTH });
+      fresh.runYears(2e3, 2e3);                    // one step, no more
+      const f = fresh.world.diag;
+
+      // And restoring a save with no euk/eukReady in it at all, which is what
+      // every existing save is.
+      const old = captureWorld(settle({ ...EARTH }, 2e5).world);
+      delete old.euk; delete old.eukReady;
+      const back = new Simulation({ ...EARTH });
+      applyWorld(back, old, { ...old.params });
+      const b = back.world.diag;
+
+      check('A world knows what kind of life it has before it takes a step',
+        near(b.euk / (b.bio || 1e-30), 0.86, 0.02) && near(f.euk / (f.bio || 1e-30), 0.86, 0.02),
+        `${(100 * b.euk / (b.bio || 1e-30)).toFixed(0)}% eukaryote on a save restored and left ` +
+        `paused, ${(100 * f.euk / (f.bio || 1e-30)).toFixed(0)}% one step into a fresh Earth`);
+    }
+
     // Neither half can go out of agreement with the whole. w.bio can fall faster
     // than the eukaryote fraction relaxes, and a negative prokaryote count is
     // not a thing that exists.
