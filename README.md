@@ -2518,6 +2518,47 @@ term already reaches full veil under a thousand bar. Measured, a temperate Hycea
 with its ocean showing through; the supercritical world draws at µ = 17.6, veil 1.0, and no
 sea at all. A uniform would have been dead code with a physics-sounding name.
 
+### Four worlds made of water, and the two real planets that are not among them
+
+The presets are pinned to **where they settle**, not to how they are configured, and settled
+means the energy budget has closed rather than that a clock ran out. That distinction cost a
+day: a world carrying thirty-four thousand oceans has the thermal inertia to look like
+anything for a million years, and a first sweep that ran on elapsed time reported a 657 K
+stable Hycean that does not exist.
+
+| preset | settles at | ocean | state |
+|---|---|---|---|
+| **Hycean World** — 10 M⊕, 500 EO, 20 bar H₂, **0.10 S⊕** | 61 °C | 262 km, on ice VII | Hycean World |
+| **Cold Hycean World** — 5 M⊕, 500 EO, 60 bar H₂, 0.0005 S⊕ | 68 °C | 376 km, on ice VII | Cold Hycean World |
+| **Super-Runaway Waterworld** — 10 M⊕, 60 EO, 20 bar H₂, 0.03 S⊕, built at 900 K | 1073 °C | none, no surface | Supercritical Envelope |
+| **Cold-Start Waterworld** — *identical*, built at 290 K | −62 °C | frozen, on ice VI | Hard Snowball |
+
+The first is the Hycean argument in one preset: at **a tenth of Earth's sunlight**, where a
+rocky planet is a snowball, this one has a warm 262 km sea. It carries five hundred oceans
+rather than sixty because sixty bottoms out on *rock* at 41 km, and an ocean standing on rock
+is a deep ocean rather than a Hycean one — the high-pressure ice floor is part of what the
+word means, and a preset whose readout contradicts its own state text is worse than no preset.
+
+The last two are the point of the hot-layer work, and a check pins that they differ in
+**exactly one parameter, `startT`**. Same mass, same water, same envelope, same star; one
+built hot and one built cold; 1135 °C between them, both settled to a hundredth of a watt.
+
+**K2-18 b and TOI-270 d are not presets, and that is the finding rather than a gap in the
+work.** Both were built at their measured parameters — K2-18 b at 8.63 M⊕ with the composition
+Phase 2 needs to reproduce its 2.61 R⊕, under a hundred bar of envelope, at its measured
+1.006 S⊕. It reads a convincing **401 K Hycean at one million years**, with **+179 W/m² of
+imbalance** underneath it, and is a **4000 K magma ocean by ten million** — where it then stays
+for the remaining four billion. That is the inner-edge gap at full size, on the object the gap
+is actually about, and no amount of preset-writing makes it go away. Shipping a gallery entry
+called "K2-18 b" that is a magma ocean would say something false about a real planet; leaving
+it out and writing this down does not. The two planets keep their place in
+`tools/calibrate.mjs`, where their **mass–radius anchors are green**.
+
+Which is the note to end on anyway. The Hycean interpretation of both worlds is **contested**:
+there are competing miscible-metal-rich-envelope and gas-dwarf readings, and recent analyses
+argue K2-18 b is unlikely to be Hycean at all. This model will let you build the world. It
+does not claim the world exists.
+
 ## Known deviations from the literature
 
 Stated plainly, because a model that hides these is less useful:

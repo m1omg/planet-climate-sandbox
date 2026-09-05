@@ -515,26 +515,36 @@ export function run() {
   {
     const hy = { ...EARTH, mass: 10, water: 60, landFraction: 0, brightening: 0,
                  co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0.01 };
-    const run = (over, yrs) => {
+    // Settled means the energy budget has closed, not that a clock ran out, and
+    // on these worlds the difference is not academic. Thirty-four thousand
+    // oceans have the thermal inertia to look like anything for a million
+    // years: K2-18 b as this model builds it reads a convincing 401 K Hycean at
+    // 1 Myr with +179 W/m² of imbalance under it, and is a 4000 K magma ocean by
+    // 10 Myr. A first version of the sweep behind these numbers ran on elapsed
+    // time and reported a 657 K stable Hycean that does not exist.
+    const run = (over, cap = 60) => {
       const s = new Simulation({ ...hy, startT: 300, ...over });
-      s.runYears(yrs);
+      for (let i = 0; i < cap && Math.abs(s.world.diag.imbalance) > 0.5; i++) s.runYears(2e6);
       return s;
     };
     // A branch nothing can reach is not a feature, it is a claim the readout
     // makes and the model cannot honour. Every state added here is reached from
     // parameters, not asserted from a hand-built diagnostic.
-    const temperate = run({ h2Bar: 20, insolation: 0.105 }, 2e6);
-    const cold = run({ h2Bar: 60, insolation: 0.001, internalHeat: 2, startT: 290 }, 1e6);
-    // 0.12 rather than 0.15: at 0.15 this lands at 1393 K, seven kelvin under
-    // the 1400 K magma branch that would catch it first, and a check sitting
-    // on a threshold measures the threshold.
-    const sup = run({ h2Bar: 20, insolation: 0.12 }, 1e6);
+    const temperate = run({ h2Bar: 20, insolation: 0.105 });
+    const cold = run({ h2Bar: 60, insolation: 0.001, internalHeat: 2, startT: 290 });
+    // Started hot, and at a twentieth of the insolation the temperate one gets.
+    // Settled, every supercritical world above about 0.05 S⊕ ends past 1400 K
+    // and `magma` catches it first -- correctly, since the silicates under that
+    // fluid really would be molten. The envelope state is the cooler end of the
+    // hot branch, and it is only reachable from a hot start: see the next check.
+    const sup = run({ h2Bar: 20, insolation: 0.03, startT: 900 });
     const got = [classify(temperate.world), classify(cold.world), classify(sup.world)];
     check('Every Hycean state this build ships can actually be reached',
       got[0].id === 'hycean' && got[1].id === 'coldHycean'
         && got[2].id === 'supercriticalEnvelope',
-      got.map((c, k) => `${['20 bar/0.105 S⊕', '60 bar/no star', '20 bar/0.12 S⊕'][k]} → ${c.id} at `
-        + `${[temperate, cold, sup][k].world.diag.Tmean.toFixed(0)} K`).join(' · '));
+      got.map((c, k) => `${['20 bar/0.105 S⊕', '60 bar/no star', '20 bar/0.03 S⊕ hot'][k]} → ${c.id} at `
+        + `${[temperate, cold, sup][k].world.diag.Tmean.toFixed(0)} K, `
+        + `${[temperate, cold, sup][k].world.diag.imbalance.toFixed(2)} W/m² out`).join(' · '));
     check('…and the two with an ocean read as habitable, while the one without does not',
       got[0].habitable && got[1].habitable && !got[2].habitable);
 
@@ -551,6 +561,22 @@ export function run() {
       + `${sup.world.diag.pTotMean.toFixed(0)} bar of air — `
       + `${(100 * (sup.world.diag.pH2 + sup.world.diag.pHe) / sup.world.diag.pTotMean).toFixed(2)}% `
       + `of the column, and still an envelope`);
+
+    // Two settled states, one star, one planet, and the only difference is where
+    // it started. This is Pierrehumbert & Furth's cold start against their hot
+    // start, arrived at as an equilibrium rather than as a transient: both sides
+    // have closed their energy budgets to a twentieth of a watt and neither is
+    // going anywhere. The hot-layer machinery is what carries the memory, and
+    // the seeding rule -- a world built at 900 K has been supercritical since
+    // before the clock started -- is what decides which basin it falls into.
+    const coldStart = run({ h2Bar: 20, insolation: 0.03, startT: 300 });
+    check('One planet, one star, two settled states, and only history between them',
+      classify(sup.world).id === 'supercriticalEnvelope' && classify(coldStart.world).id !== 'supercriticalEnvelope'
+        && sup.world.diag.Tmean > coldStart.world.diag.Tmean + 500
+        && Math.abs(sup.world.diag.imbalance) < 0.5 && Math.abs(coldStart.world.diag.imbalance) < 0.5,
+      `started at 900 K → ${classify(sup.world).id} at ${sup.world.diag.Tmean.toFixed(0)} K · `
+      + `started at 300 K → ${classify(coldStart.world).id} at `
+      + `${coldStart.world.diag.Tmean.toFixed(0)} K · both settled to under half a watt`);
 
     // The whole group is unreachable by anything that predates it, checked
     // preset by preset rather than argued. This is the promise the plan for
@@ -570,6 +596,45 @@ export function run() {
       trespass.length === 0,
       trespass.length ? trespass.join(' · ')
         : `${Object.keys(PRESETS).length} presets, four points each, none of them`);
+
+    // The four presets built on all of this, pinned to where they settle rather
+    // than to how they are configured. A preset is a claim about an outcome:
+    // ship one whose readout says something other than its name, and the name is
+    // the thing people will believe.
+    //
+    // Settled on the imbalance, and it matters here more than anywhere -- these
+    // worlds carry five hundred oceans and take tens of millions of years to
+    // mean it.
+    {
+      const want = { hycean: 'hycean', coldHycean: 'coldHycean',
+                     superRunaway: 'supercriticalEnvelope', coldStart: 'snowball' };
+      const wrong = [], seen = [];
+      for (const [id, expect] of Object.entries(want)) {
+        const sim = new Simulation({ ...PRESETS[id].params });
+        for (let i = 0; i < 90 && Math.abs(sim.world.diag.imbalance) > 0.5; i++) sim.runYears(2e6);
+        const got = classify(sim.world).id;
+        seen.push(`${id} → ${got} at ${(sim.world.diag.Tmean - 273.15).toFixed(0)} °C`);
+        if (got !== expect || Math.abs(sim.world.diag.imbalance) > 0.5) {
+          wrong.push(`${id}: wanted ${expect}, got ${got} `
+            + `(${sim.world.diag.imbalance.toFixed(2)} W/m² out)`);
+        }
+      }
+      check('The water-world presets settle into the states they are named for',
+        wrong.length === 0, wrong.length ? wrong.join(' · ') : seen.join(' · '));
+    }
+
+    // The pair, at the preset level: superRunaway and coldStart differ in
+    // exactly one parameter, and it is not one of the physical ones. If a later
+    // edit nudges an insolation or an envelope to make one of them behave, the
+    // demonstration is gone and this is what says so.
+    {
+      const a = PRESETS.superRunaway.params, b = PRESETS.coldStart.params;
+      const diff = [...new Set([...Object.keys(a), ...Object.keys(b)])]
+        .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+      check('…and the pair really is one planet twice, differing only in where it started',
+        diff.length === 1 && diff[0] === 'startT',
+        diff.length ? `they differ in: ${diff.join(', ')}` : 'identical, which is also wrong');
+    }
 
     // The biosphere ceiling and the Hycean habitability claim, checked for
     // agreement rather than either being copied into the other.

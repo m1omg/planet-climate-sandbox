@@ -161,6 +161,23 @@ const T1E = { ...EARTH, ...DWARF_HISTORY,
   rotationHours: 146.4, obliquity: 0, landFraction: 0.3, o2Bar: 0, ch4Bar: 0, biosphere: 0,
   internalHeat: 0.18, tidalHeat: 0.18, outgassing: 1.0, xuvFraction: 7e-4, startAge: 7.6 };
 
+// What is left of a planet when almost nothing about Earth applies. A
+// sub-Neptune has no continent to weather, no nitrogen, no oxygen, no biosphere
+// and no fossil carbon, and the carbonate-silicate thermostat has no exposed
+// silicate to work on -- so all of that is off rather than inherited and
+// quietly doing something. What remains is water, hydrogen, a star and gravity.
+//
+// heliumFrac is solar, 10% of the envelope by pressure. Helium is about ten
+// times weaker per collision than hydrogen, so it is a correction and not a
+// mechanism; leaving it out would make these envelopes purer than any envelope
+// that ever formed.
+//
+// brightening is off so that a world set up to show hysteresis is not also
+// being driven by its star while you watch. Turn it on deliberately.
+const HYCEAN = { ...EARTH, heliumFrac: 0.1, landFraction: 0,
+  co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0, biosphere: 0, life: false,
+  emissions: 0, fossilUsed: 0, brightening: 0, realisticGeology: false };
+
 // TRAPPIST-1 is not 4.567 Gyr old. Burgasser & Mamajek (2017) put the system at
 // 7.6 +/- 2.2 Gyr, and the default start age was simply the solar system's --
 // which for a star still observed X-ray active matters, because where it sits
@@ -574,4 +591,76 @@ export const PRESETS = {
   brink: { name: 'Over the Edge', icon: '🌡️', params: { ...EARTH, realisticGeology: true,
     insolation: 1.339, outgassing: 1, co2Bar: 1.2e-6, biosphere: 0,
     emissions: 0, fossilUsed: 0, startT: 313.5 } },
+
+  // ---- worlds made of water ------------------------------------------------
+  //
+  // Sub-Neptunes: a rock core under thousands of Earth oceans under tens of bar
+  // of hydrogen the planet kept from the disc it formed in. Nothing above this
+  // line can be one, because nothing above this line has a hydrogen envelope.
+  //
+  // A shared base rather than EARTH, because almost nothing about Earth applies.
+  // There is no continent to weather, no nitrogen, no oxygen, no biosphere and
+  // no fossil carbon; the carbonate-silicate thermostat has no silicate surface
+  // to work on. What is left is water, hydrogen, a star and gravity.
+  //
+  // heliumFrac is solar: 10% of the envelope by pressure. It is a correction and
+  // not a mechanism -- helium is about ten times weaker per collision than
+  // hydrogen -- but leaving it out would make these envelopes purer than any
+  // envelope that ever formed.
+
+  // The state the model actually holds, and the whole Hycean argument in one
+  // preset: twenty bar of hydrogen at a TENTH of Earth's sunlight settles at
+  // 61 C, with five hundred oceans of liquid water 262 km deep standing on
+  // ice VII. A rocky planet out here would be a snowball. This one is habitable
+  // and its sea is warm enough to swim in, if you could breathe hydrogen.
+  //
+  // Five hundred oceans rather than sixty because sixty bottoms out on ROCK at
+  // 41 km, and an ocean standing on rock is a deep ocean rather than a Hycean
+  // one -- the high-pressure ice floor is part of what the word means, and a
+  // preset whose readout contradicts its own state text is worse than no preset.
+  //
+  // The warm Hycean of the literature -- Madhusudhan's 350-550 K band -- is NOT
+  // reached, and the absence is honest rather than an oversight: this model runs
+  // away before it gets there. 334 K is as far as it goes. See the Hycean World
+  // state text and the GAP row in tools/calibrate.mjs.
+  hycean: { name: 'Hycean World', icon: '🌊', params: { ...HYCEAN,
+    mass: 10, water: 500, h2Bar: 20, insolation: 0.10, startT: 300 } },
+
+  // The same idea with the star removed altogether. Sixty bar of hydrogen over a
+  // warm interior holds a 68 C ocean, 376 km deep on ice VII, at five
+  // ten-thousandths of Earth's sunlight -- which is to say, in the dark. The
+  // free-floating case, and the reason the state is tested on the star being
+  // negligible rather than on the temperature: the temperature is the result,
+  // and it is the absent star that makes it worth a name. "Cold" is about the
+  // sky, not the sea.
+  coldHycean: { name: 'Cold Hycean World', icon: '🌑', params: { ...HYCEAN,
+    mass: 5, water: 500, h2Bar: 60, insolation: 0.0005, internalHeat: 2, startT: 290 } },
+
+  // ---- the same planet twice, and only history between them ----------------
+  //
+  // These two are identical in every parameter except the temperature they are
+  // built at, and they settle into different worlds and stay there. That is
+  // Pierrehumbert & Furth 2023's cold start against their hot start, and it is
+  // an equilibrium rather than a transient: both close their energy budgets to
+  // a hundredth of a watt and neither is going anywhere.
+  //
+  // What carries the memory is w.hotLayer -- how much of the water has joined
+  // the atmospheric column -- which is seeded on the first step from the world's
+  // own starting temperature. A world built at 900 K has been supercritical
+  // since before the clock started and has no cold interior to eat through. A
+  // world built at 290 K has to earn every metre of it, against a stable
+  // buoyancy gradient, and at this distance from the star it never gets the
+  // chance.
+
+  // Built hot: no surface anywhere, the atmospheric adiabat running seamlessly
+  // into the interior, 1073 C and settled.
+  superRunaway: { name: 'Super-Runaway Waterworld', icon: '🟣', params: { ...HYCEAN,
+    mass: 10, water: 60, h2Bar: 20, insolation: 0.03, startT: 900 } },
+
+  // Built cold: the same star, the same sixty oceans, the same twenty bar of
+  // hydrogen -- and a snowball at -62 C. Turn `Stellar brightening` on and it
+  // will eventually be driven across; the point of watching is how long the hot
+  // layer takes to eat down through water that is not helping it.
+  coldStart: { name: 'Cold-Start Waterworld', icon: '❄️', params: { ...HYCEAN,
+    mass: 10, water: 60, h2Bar: 20, insolation: 0.03, startT: 290 } },
 };

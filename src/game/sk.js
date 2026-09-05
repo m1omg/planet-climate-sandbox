@@ -593,5 +593,9 @@ export const SK = {
     hotCarbon: 'Horúci oceán · CO₂',
     hotStar: 'Horúci oceán · žiarenie hviezdy',
     brink: 'Za hranou',
+    hycean: 'Hyceánsky svet',
+    coldHycean: 'Studený hyceánsky svet',
+    superRunaway: 'Vodný svet za hranou nekontrolovateľnosti',
+    coldStart: 'Vodný svet so studeným štartom',
   },
 };

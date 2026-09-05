@@ -385,24 +385,44 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
 // 350 and 650 K turns out to be a way-station: 482 K at a hundred thousand
 // years, 1205 K at a million. Reported rather than tuned, because closing it by
 // hand would mean bending an opacity constant that three other anchors hold.
+//
+// Settled here means the energy budget has closed, NOT that a clock ran out,
+// and the difference is the whole measurement. A world carrying thirty-four
+// thousand oceans has the thermal inertia to look like anything for a million
+// years: K2-18 b as this model builds it reads a beautiful 401 K Hycean at
+// 1 Myr, with an imbalance of +179 W/m^2 under it, and is a 4000 K magma ocean
+// by 10 Myr. Sweeping on elapsed time found a 657 K "stable" Hycean that does
+// not exist. The criterion is the imbalance.
 {
-  const base = { ...EARTH, mass: 10, water: 60, landFraction: 0, brightening: 0,
+  const base = { ...EARTH, landFraction: 0, brightening: 0, realisticGeology: false,
+                 life: false, biosphere: 0, emissions: 0, heliumFrac: 0.1,
                  co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0.01 };
+  const settle = (s) => {
+    for (let i = 0; i < 60 && Math.abs(s.world.diag.imbalance) > 0.5; i++) s.runYears(2e7);
+    return Math.abs(s.world.diag.imbalance) <= 0.5;
+  };
   let hottest = 0;
-  for (const h2Bar of [5, 20]) {
-    for (const insolation of [0.09, 0.1, 0.105, 0.11, 0.5]) {
-      const s = new Simulation({ ...base, h2Bar, insolation, startT: 300 });
-      s.runYears(2e6);
-      if (classify(s.world).id === 'hycean') hottest = Math.max(hottest, s.world.diag.Tmean);
+  for (const mass of [5, 8.63]) {
+    for (const water of [60, 500, 14300, 34500]) {
+      for (const h2Bar of [20, 100]) {
+        for (const insolation of [0.05, 0.1, 0.2, 1]) {
+          const s = new Simulation({ ...base, mass, water, h2Bar, insolation, startT: 300 });
+          if (settle(s) && classify(s.world).id === 'hycean') {
+            hottest = Math.max(hottest, s.world.diag.Tmean);
+          }
+        }
+      }
     }
   }
-  deviation('Hottest stable Hycean surface', hottest, 350, 550, 'K',
+  deviation('Hottest settled Hycean surface', hottest, 350, 550, 'K',
     'Madhusudhan et al. 2021 put the Hycean band at 350-550 K, habitable to ' +
-    '~400 K. This model tops out well below it and the reason is the same one ' +
-    'the inner-edge rows give: inhibition is carried as extra optical depth, ' +
-    'which warms a surface but cannot hold it up. Everything between 350 and ' +
-    '650 K here is a way-station -- 482 K at 100 kyr, 1205 K at 1 Myr. The ' +
-    'temperate Hycean is real in this model; the hot one is not.');
+    '~400 K. This model tops out below it, for the same reason the inner-edge ' +
+    'rows give: inhibition is carried as extra optical depth, which warms a ' +
+    'surface but cannot hold it up, and what holds the hot branch up is a ' +
+    'stratified layer a single-tau semi-grey scheme cannot represent. ' +
+    'Everything warmer here is a way-station rather than a state -- and the ' +
+    'way-stations last longer the more water there is, which is why this row ' +
+    'settles on the energy imbalance and not on a clock.');
 }
 
 // ---- the hot layer, and the one number in it that nobody has measured -------
