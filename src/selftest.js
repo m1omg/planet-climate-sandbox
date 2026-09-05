@@ -15,6 +15,7 @@ import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
+import { oceanStructure, meltingPressure, waterDensity } from './physics/ocean.js';
 import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
@@ -3778,6 +3779,75 @@ export function run() {
     check('A deeper envelope is a bigger planet to a transit',
       thick > thin + 0.05,
       `10 bar → ${thin.toFixed(3)} R⊕, 1000 bar → ${thick.toFixed(3)} R⊕`);
+  }
+
+  // ---- 7i. how deep the water goes, and what it becomes ---------------------
+  {
+    // The melting curve is measured, so it is checked against measurements
+    // rather than against itself: ice VI appears at 0.63 GPa at the freezing
+    // point, the VI/VII triple point is at 2.216 GPa and 355 K, and ice VII
+    // still needs about 15 GPa to melt at water's critical temperature. That
+    // last one is the whole reason a deep ocean has a floor at all.
+    check('The high-pressure ice melting curve matches the measured points',
+      near(meltingPressure(273.31) / 1e9, 0.632, 0.01)
+        && near(meltingPressure(355) / 1e9, 2.216, 0.01)
+        && meltingPressure(647) / 1e9 > 12 && meltingPressure(647) / 1e9 < 20,
+      `0.63 GPa at 273 K, ${(meltingPressure(355) / 1e9).toFixed(2)} at the VI/VII point, `
+        + `${(meltingPressure(647) / 1e9).toFixed(1)} at the critical temperature`);
+
+    check('Water is compressible, and by enough to matter',
+      waterDensity(0) === 1000 && waterDensity(1e9) > 1200 && waterDensity(5e9) > 1450,
+      `1000 → ${waterDensity(1e9).toFixed(0)} kg/m³ at 1 GPa → ${waterDensity(5e9).toFixed(0)} at 5`);
+
+    // Earth's ocean is the calibration nobody has to look up: 3.7 km deep on
+    // average, on rock, under about 380 bar at the floor.
+    {
+      const w = run({}, 1e5);
+      const ob = w.diag.oceanBase;
+      check('Earth\u2019s ocean comes out the depth Earth\u2019s ocean is',
+        ob.depth > 3000 && ob.depth < 4500 && ob.basePhase === 'rock' && ob.iceDepth === 0,
+        `${(ob.depth / 1000).toFixed(2)} km on ${ob.basePhase}, ${(ob.basePressure / 1e5).toFixed(0)} bar at the floor`);
+    }
+
+    // No world that shipped before this has an ice floor: they are all films of
+    // water on rock, which is the regime the rest of the model assumes.
+    const floored = Object.entries(PRESETS).filter(([, v]) => {
+      const sim = new Simulation({ ...v.params });
+      sim.stepOnce(1);
+      return sim.world.diag.oceanBase.iceDepth > 0;
+    }).map(([k]) => k);
+    check('No shipped world stands on ice instead of rock',
+      floored.length === 0,
+      `${Object.keys(PRESETS).length} presets, ${floored.length} with a high-pressure ice floor`
+        + (floored.length ? `: ${floored.join(', ')}` : ''));
+
+    // And the behaviour that makes a Hycean ocean interesting: the melting
+    // curve rises steeply with temperature, so a HOTTER world keeps liquid
+    // water deeper rather than boiling it away. The liquid layer has to grow
+    // monotonically across the whole 350-550 K band this branch exists for.
+    {
+      const R_E = 6.371e6;
+      const col = (m, wEO) => {
+        const d = derive({ mass: m, water: wEO });
+        return wEO * d.eoColumn;
+      };
+      const liq = [300, 350, 400, 450, 500, 550].map((T) =>
+        oceanStructure(col(5, 14300), derive({ mass: 5, water: 14300 }).g, T, 1).liquidDepth / 1000);
+      const rising = liq.every((v, i) => i === 0 || v > liq[i - 1]);
+      check('A hotter ocean is a deeper ocean, not a shallower one',
+        rising && liq[liq.length - 1] > 4 * liq[0],
+        `300→550 K: ${liq.map((v) => v.toFixed(0)).join(' → ')} km of liquid`);
+
+      // Which ice it freezes into follows the temperature at the FLOOR, not at
+      // the surface, because the ocean is adiabatic and its base is warmer.
+      const cold = oceanStructure(col(5, 14300), derive({ mass: 5, water: 14300 }).g, 285, 1);
+      const warm = oceanStructure(col(5, 14300), derive({ mass: 5, water: 14300 }).g, 400, 1);
+      check('A cold ocean freezes into ice VI and a warm one into ice VII',
+        cold.basePhase === 'ice VI' && warm.basePhase === 'ice VII'
+          && cold.baseTemperature > 285 && warm.baseTemperature > 400,
+        `285 K surface → ${cold.baseTemperature.toFixed(0)} K floor, ${cold.basePhase}; `
+          + `400 K → ${warm.baseTemperature.toFixed(0)} K, ${warm.basePhase}`);
+    }
   }
 
   // ---- 8. the controls: typed values and slider round-trips ----------------

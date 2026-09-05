@@ -3,6 +3,7 @@ import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_
 import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
+import { oceanStructure } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
 
 import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL } from './volatiles.js';
@@ -432,6 +433,7 @@ export function update(w, dt) {
   //      runaway that dwarfs everything else.
   const C = B.C;
   const oceanDepth = (w.water.ocean + w.water.seaIce) * d.eoColumn / RHO_WATER;
+
   for (let i = 0; i < NBANDS; i++) {
     const deep = MIXED_LAYER + Math.max(0, oceanDepth - MIXED_LAYER) * smoothstep(315, 350, w.T[i]);
     const cOcean = deep * RHO_WATER * CP_WATER * (1 - 0.9 * (hasWater ? iceFraction(w.T[i]) : 0));
@@ -481,7 +483,21 @@ export function update(w, dt) {
   // now, and a zero here would stop the volcanoes.
   const Fint = Math.max(p.internalHeat ?? EARTH_INTERNAL_FLUX, 0);
 
+  // The water column all the way down -- how much is liquid, where it freezes,
+  // what it stands on -- attached LAZILY, and that is not a micro-optimisation.
+  // Solving it costs a bisection and two integrations, about as much as a
+  // radiative step, and nothing in the physics reads it: it is a diagnostic for
+  // the readout and the classifier, which look once a frame where update() runs
+  // hundreds of times. Computed eagerly it cost 190 us a step on Earth for a
+  // number nobody had asked for. Computed here, it costs that only when read,
+  // and once per update at most.
+  let oceanBaseCache = null;
   w.diag = {
+    get oceanBase() {
+      return oceanBaseCache ?? (oceanBaseCache = oceanStructure(
+        (w.water.ocean + w.water.seaIce) * d.eoColumn / Math.max(this.flooded, 1e-3),
+        this.g, this.Tmean, this.pTotMean));
+    },
     g, d, pN2, pCO2, pCH4, pO2, pH2, pHe, pH2O, pTot: pTotArr, pTotMean, Fint,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
     flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,

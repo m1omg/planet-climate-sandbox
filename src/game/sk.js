@@ -306,6 +306,13 @@ export const SK = {
     'Methane': 'Metán',
     'What is in the air now, not what stays. Life makes most of it and the interior a little; oxygen cuts its life from twelve thousand years to ten, so an oxygenated world holds almost none.':
       'Koľko ho je v ovzduší teraz, nie koľko vydrží. Väčšinu vyrába život, trochu vnútro planéty; kyslík skracuje jeho životnosť z dvanástich tisíc rokov na desať, takže okysličený svet ho takmer nemá.',
+    'ocean': 'oceán',
+    'then': 'potom',
+    'ice VI': 'ľad VI',
+    'ice VII': 'ľad VII',
+    'rock': 'hornina',
+    'supercritical interior': 'superkritické vnútro',
+    'deep water is supercritical': 'hlbinná voda je superkritická',
     'with envelope': 's obálkou',
     'water by mass': 'voda hmotnostne',
     'Hydrogen envelope': 'Vodíková obálka',

@@ -2127,6 +2127,65 @@ arrives; scaling the sink with the source would hold equilibrium CO₂ exactly w
 the coupling a no-op. Fresh-basalt weatherability matters at the supply-limited end, which this
 model does not enter.
 
+### How deep the water goes, and what it turns into
+
+On a rocky world this is a dull question. Earth's ocean is 3.7 km deep averaged over the globe, its
+density is 1000 kg/m³ top to bottom, and treating it as an incompressible film loses nothing. The
+readout said `water × 2750 m` and was right.
+
+On a water-rich sub-Neptune the same arithmetic returns a number that is not imprecise but
+meaningless. K2-18 b's water, spread over its surface at constant density, is **fifteen thousand
+kilometres deep** — most of the way to the planet's centre. (The old readout said 95,000 km, because
+2750 m per ocean is *Earth's* figure and a bigger world spreads the same water over more area under
+more gravity; it was out by a factor of six before the physics even got a say.)
+
+Water does not do that. Long before then the pressure passes a gigapascal and it freezes — not
+because it is cold but because it is squeezed. **Ice VI and ice VII are stable well above room
+temperature**, ice VII up to several hundred kelvin, and they are what a deep ocean actually stands
+on. So a Hycean ocean has a floor, and the floor is ice.
+
+`src/physics/ocean.js` finds it, from three measured things: water's compressibility (Tait, K₀ = 2.2
+GPa), the ice VI and ice VII melting curves anchored on the **VI/VII triple point at 2.216 GPa and
+355 K**, and the ocean's own adiabat. It is a **diagnostic** — there is no vertical ocean grid and
+nothing integrates it; the readout and the classifier read it and that is all.
+
+Three attempts at the adiabat are worth recording, because each looked reasonable:
+
+* **Marching down in pressure, stepping by a fraction of the melting pressure.** A positive feedback:
+  a hotter step raises the melting pressure, which lengthens the next step, which heats it further.
+  Ocean floors at 30,000 K.
+* **Solving the exponential form** T = T₀·exp(k·Δp), which is exact only while k is constant. It is
+  not — k = α/(ρc_p), and water's thermal expansivity collapses under compression. Across hundreds of
+  GPa this gave floors at 10⁸ K.
+* **Checking whether the adiabat is below the melting curve at the bottom of the column.** The two
+  curves generally cross **twice**: the adiabat dips below the melting curve around a couple of GPa
+  and comes back above it ten or twenty GPa further down. The ice is a *band*, with fluid on both
+  sides — which is the structure the Hycean interior literature describes. Testing only the bottom
+  found the adiabat back above and concluded nothing ever freezes.
+
+What works is letting α fall as 1/(1 + p/K₀) — the simplest form that weakens on the same pressure
+scale as the compression — which integrates to a logarithm, and then scanning for the *first*
+crossing rather than assuming there is one.
+
+The result reproduces the published phase structure. On a 5 M⊕ world:
+
+| surface T | liquid | floor | model |
+|---|---|---|---|
+| 280 K | 80 km | ice VI | 273–295 K → ice VI (Nixon & Madhusudhan) |
+| 300 K | 117 km | ice VI | boundary lands at ~310 K here, 295 K published |
+| 350 K | 214 km | ice VII | 295–413 K → ice VII |
+| 500 K | 939 km | ice VII, supercritical above it | 413–647 K → supercritical layer between |
+| 647 K | 2764 km | ice VII | at the critical point |
+
+The physics that makes that table interesting is in the second column: **a hotter ocean is a deeper
+ocean.** The ice VII melting curve rises steeply with temperature, so warming the surface does not
+boil the sea away, it pushes the ice floor down — 80 km of liquid at 280 K, 2764 km at 647 K. The
+selftest asserts that monotonicity across the whole 350–550 K band this build exists for.
+
+Solving it costs about as much as a radiative step, and nothing in the physics reads it, so it is
+attached to the diagnostics **lazily**: the readout looks once a frame where `update()` runs hundreds
+of times. Computed eagerly it cost 190 µs a step for a number nobody had asked for.
+
 ### A planet the size the planet actually is
 
 Every world this model could build had a rocky radius, `R = R⊕·M^0.27`, and for rocky worlds that is

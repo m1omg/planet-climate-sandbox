@@ -962,6 +962,16 @@ function updateReadout() {
   // envelope they are the same number and printing it twice would be noise, so
   // the second line appears only when there is something to say. Likewise the
   // water fraction: on a rocky world it is exactly zero and means nothing.
+  // The ocean, as deep as it actually is. This used to be `w.water.ocean *
+  // 2750`, which is Earth's ocean depth per Earth ocean -- fine on an
+  // Earth-sized planet and wrong by a factor of six on K2-18 b, because a
+  // bigger world spreads the same water over more area under more gravity. It
+  // also ignored that the water only covers the flooded part, and that past a
+  // gigapascal water is not liquid at all.
+  const ob = dg.oceanBase;
+  const fmtDepth = (m) => (m >= 1e6 ? `${(m / 1000).toFixed(0)} km`
+    : m >= 1e4 ? `${(m / 1000).toFixed(1)} km`
+    : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(0)} m`);
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
   const xWater = waterMassFraction(params.mass, w.water.ocean + w.water.seaIce
     + w.water.landIce + w.water.vapour);
@@ -973,7 +983,10 @@ function updateReadout() {
     (xWater > 0
       ? `<div>${t('water by mass')} <b>${(xWater * 100).toFixed(0)}%</b></div>` : '') +
     `<div>escape v <b>${(d.vesc / 1000).toFixed(1)} km/s</b></div>` +
-    `<div>ocean <b>${(w.water.ocean * 2750).toFixed(0)} m</b></div>`;
+    `<div>${t('ocean')} <b>${fmtDepth(ob.liquidDepth)}</b></div>` +
+    (ob.iceDepth > 0
+      ? `<div>${t('then')} <b>${fmtDepth(ob.iceDepth)} ${t(ob.basePhase)}</b></div>` : '') +
+    (ob.superLayer ? `<div>${t('deep water is supercritical')}</div>` : '');
 
   syncLiveControls();
   $('#simtime').textContent = fmtTime(w.time);
