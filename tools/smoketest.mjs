@@ -551,12 +551,13 @@ if (created < 20) {
 // ---------------------------------------------------------------------------
 // Nothing may write an unnamespaced localStorage key.
 //
-// localStorage is scoped to the ORIGIN and not to the path, so /, /dev/ and
-// /altdev/ share one store. main.js was namespaced when that was discovered and
-// two things were missed, because they were not in main.js: game/log.js kept its
-// own key, so the discovery log was one shared set between the stable build and
-// this one, and the dev banner's dismissal flag had no prefix at all -- it would
-// have collided with any other project on the same github.io account.
+// localStorage is scoped to the ORIGIN and not to the path, so /, /dev/,
+// /altdev/ and /altdev2/ share one store. main.js was namespaced when that was
+// discovered and two things were missed, because they were not in main.js:
+// game/log.js kept its own key, so the discovery log was one shared set between
+// the stable build and this one, and the dev banner's dismissal flag had no
+// prefix at all -- it would have collided with any other project on the same
+// github.io account.
 //
 // A source scan rather than a runtime check, because the failure is silent by
 // construction: the wrong key works perfectly, it just works on somebody else's
@@ -564,8 +565,15 @@ if (created < 20) {
 // namespace, and there is exactly one legitimate exception -- the one-time
 // adoption in storage.js, which reads the stable build's old bare key on purpose
 // so that namespacing it did not throw anyone's log away.
+//
+// The prefix is read from storage.js rather than written out here. This build
+// was forked from /altdev/ and the namespace had to be changed by hand; a check
+// that also spelled the namespace out by hand would have had to be changed by
+// the same hand, and a check that needs remembering is not protecting anything.
+// Read from the source of truth, it fails the moment the two disagree.
 {
   const { readFileSync } = await import('node:fs');
+  const { NS } = await import('../src/game/storage.js');
   const offenders = [];
   const sources = [...files.map((f) => join(root, 'src', relative(join(root, 'src'), f))),
                    join(root, 'index.html')];
@@ -575,16 +583,16 @@ if (created < 20) {
     const rel = relative(root, f);
     // Skip storage.js's deliberate bare-key adoption, which names itself.
     for (const m of src.matchAll(/localStorage\.(?:get|set|remove)Item\(\s*'([^']+)'/g)) {
-      if (m[1].startsWith('planetclimate.altdev.')) continue;
+      if (m[1].startsWith(`${NS}.`)) continue;
       if (rel.endsWith('game/storage.js')) continue;
       offenders.push(`${rel}: '${m[1]}'`);
     }
   }
   if (offenders.length) {
-    console.log(`\x1b[31mFAIL\x1b[0m  unnamespaced storage key: ${offenders.join(', ')}`);
+    console.log(`\x1b[31mFAIL\x1b[0m  storage key outside ${NS}.: ${offenders.join(', ')}`);
     failed++;
   } else {
-    console.log('\x1b[32mPASS\x1b[0m  every storage key is namespaced to this build');
+    console.log(`\x1b[32mPASS\x1b[0m  every storage key is namespaced to this build (${NS})`);
   }
 }
 

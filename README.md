@@ -22,17 +22,44 @@ node tools/bakecheck.mjs [512]  # does the baked cube map reproduce the terrain?
 node tools/bodycheck.mjs        # do the real surface maps reach both surface styles?
 node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
 node tools/resumecheck.mjs      # does the tab survive being switched away from?
+node tools/identity.mjs         # every preset's whole state, to compare against before a change
 ```
 
-Shipping is the default: commit, push, and the site is live. GitHub Pages serves
-`main:/` directly, so `git push origin main` *is* the deploy — no `gh-pages`
-branch, no build step. Verify afterwards by hash-matching a file you touched
-against `https://m1omg.github.io/planet-climate-sandbox/`, because a "built"
+Shipping is one step longer here than on the stable site, and the difference is
+worth understanding before the first push. GitHub Pages serves `main:/` directly,
+so on that branch `git push origin main` *is* the deploy. This is a separate
+branch, and its files are the site's `/altdev2/` subdirectory rather than its
+root, so a push of this branch deploys nothing at all. `node tools/deploy.mjs
+<site-root>` copies this build into a checkout of `main` and then hashes every
+tracked file outside `altdev2/` to prove it moved none of them, which is not
+ceremony: that checkout also carries the stable site, `/dev/`, and `/altdev/`,
+which is somebody else's work in progress. Commit and push happen there.
+
+That same layout is why the checks have to be run from the deployed copy rather
+than from this branch on its own. `index.html` points `window.__assetBase` at
+`../assets/`, because the 23 MB of surface maps at the root of the site are
+shared by every build instead of copied into each one — only the Moon, which
+belongs to this line of work, lives in this branch's own `assets/`. So one level
+below a site root is not where this build is *published*, it is what this build
+*is*, and `smoketest.mjs` and `glslcheck.mjs` resolve those maps exactly as the
+browser does. Run `deploy.mjs` first and run the suite in the copy.
+
+Verify after pushing by hash-matching a file you touched against
+`https://m1omg.github.io/planet-climate-sandbox/altdev2/`, because a "built"
 status is not proof the change is out there. See `CLAUDE.md`.
 
-All eleven, before pushing — `calibrate.mjs` above all, because a change that
+All twelve, before pushing — `calibrate.mjs` above all, because a change that
 fixes one anchor almost always moves three others, and the three `GAP` rows are
-known deviations that report every run rather than failing. `node --check` parses files as CommonJS and will happily
+known deviations that report every run rather than failing. `identity.mjs` is the
+newest and answers the opposite question: not whether the anchors still hold, but
+whether anything moved that had no business moving. It runs every preset ten
+million years and prints the entire state vector at a precision that reads back
+as the same double, so `diff` against a run from before the change is exact.
+Much of what this branch adds is switched off on a rocky world by being zero —
+no hydrogen, no envelope, no deep water — and adding an exact zero to a double is
+exact, so those presets should come out not merely close but unchanged. A
+fourteenth-decimal drift in one of them would pass every anchor above and mean
+the new term is reaching code it was supposed to be dormant in. `node --check` parses files as CommonJS and will happily
 miss ESM-only errors, which is exactly how a duplicate declaration once shipped a
 blank page; the smoke test loads the real module graph and fails on it. The shader
 lives in `src/render/glsl/` as real GLSL rather than a JavaScript template literal
@@ -658,7 +685,7 @@ imposes that dry-end limit; the 20 km ceiling is its wet-end counterpart.
 
 Earth, the Moon, Mars, Venus and Titan carry their **actual surface maps**, loaded when you pick that
 preset. The Moon uses NASA SVS's 2048×1024 LRO WAC natural-colour mosaic and keeps its map inside this
-altdev build.
+build rather than the shared root asset set.
 
 Geography is not a function of climate — warming Earth does not move its continents — so the map
 stays put while you drag every slider, and only changes when you load a different world. Nothing has
@@ -1100,7 +1127,7 @@ albedo maps available stays fully procedural and says so, and on a device with o
 units the albedo path is compiled out entirely.
 
 Only **Earth, the Moon, Mars, Venus and Titan** carry real photography, and only Earth and Mars carry
-real topography. Shared sources and licences are in `../assets/bodies/CREDITS.md`; the altdev-only
+real topography. Shared sources and licences are in `../assets/bodies/CREDITS.md`; this build's own
 lunar source is in `assets/bodies/CREDITS.md`.
 
 Relief follows the same rule. Earth and Mars keep slope lighting from their matching DEMs; a

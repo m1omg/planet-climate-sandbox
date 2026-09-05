@@ -6,16 +6,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
-const url = process.argv[2] || 'http://127.0.0.1:8765/altdev/';
+const url = process.argv[2] || 'http://127.0.0.1:8765/altdev2/';
 const chromePath = process.env.CHROME || '/usr/bin/google-chrome';
 const profile = mkdtempSync(join(tmpdir(), 'planet-browsercheck-'));
-const screenshot = join(tmpdir(), 'altdev-browsercheck.png');
-const slovakScreenshot = join(tmpdir(), 'altdev-browsercheck-sk.png');
-const cloudyShot = join(tmpdir(), 'altdev-clouds-on.png');
-const clearShot = join(tmpdir(), 'altdev-clouds-off.png');
-const volcanoScreenshot = join(tmpdir(), 'altdev-volcanism.png');
-const epochScreenshot = join(tmpdir(), 'altdev-epochs.png');
-const drownedScreenshot = join(tmpdir(), 'altdev-browsercheck-drowned.png');
+const screenshot = join(tmpdir(), 'altdev2-browsercheck.png');
+const slovakScreenshot = join(tmpdir(), 'altdev2-browsercheck-sk.png');
+const cloudyShot = join(tmpdir(), 'altdev2-clouds-on.png');
+const clearShot = join(tmpdir(), 'altdev2-clouds-off.png');
+const volcanoScreenshot = join(tmpdir(), 'altdev2-volcanism.png');
+const epochScreenshot = join(tmpdir(), 'altdev2-epochs.png');
+const drownedScreenshot = join(tmpdir(), 'altdev2-browsercheck-drowned.png');
 const chrome = spawn(chromePath, [
   '--headless=new',
   '--enable-unsafe-swiftshader',

@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>[altdev] Planet Climate Sandbox</title>
+<title>[altdev2] Planet Climate Sandbox</title>
 <meta name="description" content="Build a terrestrial planet and watch its climate evolve over geological time — snowball, habitable, dune world, moist greenhouse, runaway greenhouse.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <script>window.__assetBase = "../assets/";</script>
-<div id="devbar"><span class="devbar-tag">ALTDEV</span><span class="devbar-msg">An alternative line of work to /dev/. Planetary histories, magnetic fields, resurfacing, and the step-size bugs behind the flickering.</span><a class="devbar-link" href="../">stable site</a><a class="devbar-link" href="../dev/">dev</a><button type="button" class="devbar-x" aria-label="Dismiss">&#215;</button></div>
+<div id="devbar"><span class="devbar-tag">ALTDEV2</span><span class="devbar-msg">A fork of /altdev/ reaching past rocky worlds: hydrogen envelopes, oceans hundreds of kilometres deep, and climates that stay liquid well above the boiling point.</span><a class="devbar-link" href="../">stable site</a><a class="devbar-link" href="../dev/">dev</a><a class="devbar-link" href="../altdev/">altdev</a><button type="button" class="devbar-x" aria-label="Dismiss">&#215;</button></div>
 <style>
 #devbar{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;gap:.5rem;
   padding:.15rem .5rem;background:rgba(28,64,110,.94);color:#dceaff;
@@ -28,10 +28,10 @@
 <script>
 (function(){
   var bar=document.getElementById('devbar');
-  try{ if(localStorage.getItem('planetclimate.altdev.devbar.v1')==='1') bar.classList.add('gone'); }catch(e){}
+  try{ if(localStorage.getItem('planetclimate.altdev2.devbar.v1')==='1') bar.classList.add('gone'); }catch(e){}
   bar.querySelector('.devbar-x').addEventListener('click',function(){
     bar.classList.add('gone');
-    try{ localStorage.setItem('planetclimate.altdev.devbar.v1','1'); }catch(e){}
+    try{ localStorage.setItem('planetclimate.altdev2.devbar.v1','1'); }catch(e){}
   });
 })();
 </script>

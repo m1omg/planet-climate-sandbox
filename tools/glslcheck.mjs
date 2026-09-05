@@ -2,11 +2,41 @@
 // exactly as the runtime does (noise spliced in from the shared file), and
 // enforces a per-pixel noise budget so the cost that once made this unusable on
 // mobile cannot silently creep back.
-import { parse } from '/home/mroz/.nvm/versions/node/v20.20.2/lib/node_modules/@shaderfrog/glsl-parser/parser/parser.js';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// The parser is a global install rather than a dependency -- this repo has no
+// node_modules and is not about to grow one for a check that runs by hand.
+//
+// Where a global lives is a property of the machine, and this line used to name
+// one developer's nvm directory outright, so the check could not run anywhere
+// else at all: it died on an import before reaching a single shader. The fix is
+// not a longer list of machines. Node already knows where its own globals are --
+// they sit beside the interpreter, in ../lib/node_modules relative to the
+// binary -- and asking it works for a system install, an nvm one, and the
+// original developer's alike. The bare specifier is tried first so that
+// NODE_PATH or a local install still wins if either exists, and /usr/lib is
+// kept for the case where the running node is not the one the package was
+// installed under.
+const PARSER = '@shaderfrog/glsl-parser/parser/parser.js';
+const PARSER_CANDIDATES = [
+  PARSER,
+  join(dirname(dirname(process.execPath)), 'lib/node_modules', PARSER),
+  join('/usr/lib/node_modules', PARSER),
+];
+let parse;
+for (const where of PARSER_CANDIDATES) {
+  try { ({ parse } = await import(where)); break; } catch { /* try the next one */ }
+}
+if (!parse) {
+  console.error('glslcheck: cannot find @shaderfrog/glsl-parser. Install it globally\n'
+    + '  npm i -g @shaderfrog/glsl-parser\n'
+    + 'or point NODE_PATH at wherever it already is. Looked in:\n  '
+    + PARSER_CANDIDATES.join('\n  '));
+  process.exit(1);
+}
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const read = (f) => readFileSync(join(root, 'src/render/glsl', f), 'utf8');

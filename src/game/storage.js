@@ -1,11 +1,11 @@
 // Where this build's browser storage lives.
 //
 // localStorage is scoped to the ORIGIN, not to the path, so every copy of this
-// site served from m1omg.github.io -- the stable one at /, /dev/ and this one --
-// reads and writes the same keys unless they are told apart. They were not, and
-// the consequence was not academic: slot 1 is the autosave slot and it fires
-// every thirty seconds, so a minute spent in one build silently overwrote a
-// world saved from another. Worse, a slot holds full simulation state rather
+// site served from m1omg.github.io -- the stable one at /, plus /dev/, /altdev/
+// and this one -- reads and writes the same keys unless they are told apart.
+// They were not, and the consequence was not academic: slot 1 is the autosave
+// slot and it fires every thirty seconds, so a minute spent in one build
+// silently overwrote a world saved from another. Worse, a slot holds full simulation state rather
 // than slider values and there is no version tag on it, so the world loaded
 // fine in the other build and then simulated differently. Silent wrong answers.
 //
@@ -24,7 +24,12 @@
 // Worlds still travel between builds the way they should: the URL hash and the
 // export file both carry parameters rather than physics state, so they mean the
 // same thing wherever they are opened.
-export const NS = 'planetclimate.altdev';
+//
+// This build is a fork of /altdev/ and shares most of its code, which makes the
+// separate namespace easy to forget and expensive to omit: the two run different
+// physics from the same-looking sliders, so a slot written by one and simulated
+// by the other is a wrong answer that looks like a right one.
+export const NS = 'planetclimate.altdev2';
 
 export function key(name) {
   return `${NS}.${name}`;
