@@ -2171,6 +2171,17 @@ budget, not one per species**: everything leaving is lifted by the same absorbed
 envelope does not add its loss on top of the ocean's, it *takes* the budget and the ocean beneath is
 shielded. Part of why a Hycean world can stay wet where a bare rock would be stripped.
 
+That shared budget runs **both ways**, and the reverse is easy to misread. Put ten bar of hydrogen on
+a one-Earth-mass planet at 0.3 S⊕ and the low gravity makes the greenhouse enormous — τ goes as
+1/g — so the world runs away to **1400 K**. Its air is then steam: the envelope's share of the column
+falls under a percent, its loss is throttled in proportion, and the planet *keeps* its hydrogen
+because it is drowning in water. So "fraction of the envelope left after 100 Myr" reads
+**non-monotonic in mass** — 31%, 85%, 25%, 52% at 1, 3, 8 and 20 M⊕ — not because escape is wrong but
+because those four worlds are no longer in comparable climates. The escape *rate* from identical
+starting states is cleanly monotonic and spans a factor of **920** from 0.3 to 20 M⊕, and that is
+what the selftest asserts. An earlier version of that check asked only whether one retained fraction
+was smaller than another, and passed on the noise.
+
 #### What this is fitted to, and it is one number
 
 `CIA_H2` is fitted to the Pierrehumbert & Gaidos anchor and to nothing else. Every other opacity

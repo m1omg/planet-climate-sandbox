@@ -3657,16 +3657,46 @@ export function run() {
     // envelope's scale height goes as 1/mu, so hydrogen stands nine times
     // taller than steam, presents a far bigger XUV target, and is stripped as
     // the cube of that radius. A small planet cannot keep one.
-    const keep = (mass) => {
-      const w = run({ mass, insolation: 0.3, h2Bar: 10, co2Bar: 0, ch4Bar: 0,
-        o2Bar: 0, n2Bar: 0, water: 5, startT: 300, life: false,
-        xuvFraction: 3.4e-6 * 30, magneticField: 0 }, 1e8, 1e5);
-      return w.diag.pH2 / 9;   // share of the 10 bar (pure H2, so 9 of it) left
+    //
+    // Measured as the loss RATE from identical starting states, and it has to
+    // be, which is worth writing down because the obvious test is wrong. Asking
+    // instead what fraction is left after a hundred million years compares
+    // worlds that are no longer comparable: at 0.3 S(+) under ten bar of
+    // hydrogen a one-Earth-mass planet runs away to 1400 K, and once it does,
+    // its air is steam -- the envelope's share of the column falls to under a
+    // percent, the loss is throttled in proportion, and the planet KEEPS its
+    // hydrogen because it is drowning in water. Retention then reads
+    // non-monotonic in mass (31%, 85%, 25%, 52% at 1, 3, 8 and 20 M⊕) and an
+    // earlier version of this check passed on that noise by asking only whether
+    // one number was smaller than another.
+    const lossAt = (mass) => {
+      const sim = new Simulation({ ...EARTH, mass, insolation: 0.3, h2Bar: 10,
+        heliumFrac: 0.1, co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0, water: 5,
+        startT: 300, life: false, biosphere: 0, emissions: 0, brightening: 0,
+        realisticGeology: false, xuvFraction: 3.4e-6 * 30, magneticField: 0 });
+      for (let i = 0; i < 3; i++) sim.stepOnce(1);
+      return sim.world.escape.envelope;
     };
-    const small = keep(0.3), big = keep(8);
-    check('A small planet cannot hold a hydrogen envelope and a big one can',
-      small < big,
-      `0.3 M⊕ keeps ${(small * 100).toFixed(1)}%, 8 M⊕ keeps ${(big * 100).toFixed(1)}%`);
+    const masses = [0.3, 1, 3, 8, 20].map(lossAt);
+    const falling = masses.every((v, i) => i === 0 || v < masses[i - 1]);
+    check('Hydrogen escape falls steeply and monotonically with planet mass',
+      falling && masses[0] / masses[masses.length - 1] > 100,
+      `0.3→20 M⊕: ${masses.map((v) => v.toExponential(1)).join(' → ')} kg/m²/yr`
+        + `, a factor of ${(masses[0] / masses[masses.length - 1]).toExponential(1)}`);
+
+    // The other half of that story, and the reason the naive test misreads it:
+    // a runaway shields the envelope. One energy budget is shared, so an
+    // atmosphere that has become mostly steam spends it on water and the
+    // hydrogen underneath is left alone.
+    {
+      const hot = run({ mass: 1, insolation: 0.3, h2Bar: 10, co2Bar: 0, ch4Bar: 0,
+        o2Bar: 0, n2Bar: 0, water: 5, startT: 300, life: false,
+        xuvFraction: 3.4e-6 * 30, magneticField: 0 }, 2e7, 1e5);
+      check('…and a runaway shields the envelope, because the escape budget is shared',
+        hot.diag.Tmean > 1000 && hot.escape.fEnv < 0.05 && hot.escape.water > hot.escape.envelope,
+        `${hot.diag.Tmean.toFixed(0)} K, envelope is ${(hot.escape.fEnv * 100).toFixed(1)}% of the column, `
+          + `water loses ${(hot.escape.water / Math.max(hot.escape.envelope, 1e-30)).toFixed(0)}× faster`);
+    }
 
     // The envelope has to survive a save. It is a reservoir like any other and
     // a snapshot that dropped it would restore a Hycean world as a bare rock
