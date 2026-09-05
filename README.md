@@ -2240,6 +2240,70 @@ compressing the interior beneath it. None of that is modelled, so the water frac
 the structural work the envelope really does. **The radius is right for the wrong reasons**, and
 `calibrate.mjs` reports it as a `GAP` row saying so.
 
+### Convective inhibition, and where a semi-grey model runs out
+
+Lift moist air on Earth and water condenses, latent heat is released, and the parcel keeps rising —
+moist convection is self-sustaining. In a **hydrogen** background the same process works against
+itself, because water is nine times heavier than the air it condenses out of. Above a critical
+abundance the composition gradient wins: the atmosphere is stably stratified even though it is
+superadiabatic, and convection stops. The surface then sits much further below the radiating level
+than a moist adiabat allows, which is why Innes finds so low a runaway threshold.
+
+The criterion is Leconte, Selsis, Hersant & Guillot (2017), after Guillot (1995):
+
+> q_inh = R·T / ((μ_v − μ_d)·L)
+
+For water in hydrogen at 300 K that is 6.9% by mass — **0.82% by mole**. A very small number, and
+that is the point: essentially any humid hydrogen atmosphere is inhibited. It is also consistent
+with the ~1.2% quoted for Uranus and Neptune, the two places in this solar system where the same
+physics is thought to run.
+
+What this model can honestly do with it is carry the consequence — more optical depth — gated three
+ways so it cannot reach any world that predates it: there must be hydrogen, it must be the
+*background* rather than a trace, and the air must be wetter than the criterion. Every shipped world
+fails the first test, so the multiplier is exactly 1.
+
+#### Three ways of getting it wrong, each of which taught something
+
+**Measuring hydrogen's share of the total column.** Past ~380 K the water vapour over a one-bar
+envelope exceeds a bar itself, hydrogen's share falls below a half, and the gate closed — switching
+the effect off at 373 K, which is exactly where that envelope's runaway threshold sits. Condensation
+happens *aloft*, where water is a trace and hydrogen is unambiguously the background. The gate now
+measures hydrogen's share of the **dry** air.
+
+**Smoothing the threshold across a factor of two in the excess.** That made the strength depend on
+how wet the air was, and the runaway peak promptly migrated to the coldest, driest end of the scan
+where the effect was worth 8% of itself. The curve reshapes to put its peak wherever the
+parameterisation is weakest.
+
+**Narrowing it to ±20%.** That made it a *cliff*: outgoing flux fell from 204 to 56 W/m² across five
+kelvin, `runawayLimit()`'s peak-finder latched onto the last uninhibited point, and raising the
+strength stopped moving the answer at all — it only deepened the cliff. With a discontinuity in the
+curve, "the peak of the saturated OLR" stops meaning the Simpson–Nakajima limit and starts meaning
+*wherever the scan last stood before the drop*. A factor of three, spreading the transition over
+about fifteen kelvin, keeps the flux curve a curve.
+
+#### Why it stops at 40% of the gap
+
+Turning the multiplier up closes the remaining distance at about **14% per doubling** — 2.0 gives
+0.70 S⊕, 4.0 gives 0.59. Reaching Innes's 0.391 would take a multiplier near **32** on the total
+optical depth, which would make this one term larger than every other opacity in the model combined,
+on a world where the only thing constraining it is the number it was bent to reproduce.
+
+So it is not done. The strength is chosen on physical grounds — superadiabatic layers in the Uranus
+and Neptune literature enhance the surface-to-radiating-level contrast by tens of percent, not
+thirty-fold — and **the residual is the missing vertical structure, left visible as a `GAP` row.**
+That is the answer to the question this phase was really asking: a semi-grey scheme with one optical
+depth and no vertical coordinate cannot represent a superadiabatic layer, and multiplying τ is a
+shadow of one rather than a substitute for it.
+
+At **10 bar** it does not engage at all, and that is the criterion rather than a bug: q_inh is a
+*mole* fraction, so ten bar of hydrogen dilutes the same water tenfold and the threshold is never
+reached at the temperatures where that world's runaway peak sits. A knob that scaled the strength
+with envelope pressure was written, found to change nothing across values that should have moved the
+answer threefold, and **removed** — shipping a fitted parameter that provably does not affect what it
+was fitted to is worse than not having it, because it looks like the case has been accounted for.
+
 ### Hydrogen, which warms by colliding
 
 Every other greenhouse gas here works by having absorption bands, and every one of them eventually
@@ -2321,7 +2385,9 @@ Stated plainly, because a model that hides these is less useful:
   humid hydrogen atmosphere is inhibited.
 
   This model is semi-grey with a single optical depth and no vertical structure. It has nowhere to
-  put such a layer and does not pretend otherwise.
+  put such a layer, so it carries the *consequence* instead — a multiplier on τ, gated on hydrogen
+  being the background and on the air being wetter than the criterion. That closes about **40%** of
+  the 1 bar gap, 1.04 → 0.59 S⊕, and stops there on purpose. See below.
 
 * **There is no outer edge to the habitable zone.** Kasting et al. (1993) put it at 1.67 AU — 0.36
   S⊕ — and it is set by a *maximum greenhouse*: CO₂ Rayleigh-scatters about 2.5× better than air, so

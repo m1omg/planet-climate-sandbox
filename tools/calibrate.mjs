@@ -354,11 +354,17 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     return lastOK;
   };
   deviation('Hycean inner edge, 1 bar H2', edge(1), 0.35, 0.43, 'S⊕',
-    'Innes, Tsai & Pierrehumbert 2023 (ApJ 953, 168): 1.6 AU from a G star, ' +
-    '= 0.391 S⊕. Missing convective inhibition — see Phase 4.');
+    'Innes, Tsai & Pierrehumbert 2023 (ApJ 953, 168): 1.6 AU from a G star = ' +
+    '0.391 S⊕. Convective inhibition closes about 40% of this (1.04 → 0.60); ' +
+    'closing the rest would need a ×32 multiplier on the total optical depth, ' +
+    'which is a different model, not a parameterisation. The residual IS the ' +
+    'vertical structure a semi-grey single-τ scheme does not have.');
   deviation('Hycean inner edge, 10 bar H2', edge(10), 0.06, 0.075, 'S⊕',
-    'Innes et al. 2023: 3.85 AU = 0.067 S⊕. The gap grows with pressure, which ' +
-    'is what a suppressed-convection mechanism would do.');
+    'Innes et al. 2023: 3.85 AU = 0.067 S⊕. Inhibition does not engage here at ' +
+    'all, and that is the criterion rather than a bug: q_inh is a MOLE ' +
+    'fraction, so ten bar of hydrogen dilutes the same water tenfold and the ' +
+    'threshold is never reached at the temperatures where this world\'s runaway ' +
+    'peak sits.');
 }
 
 // ---- report ---------------------------------------------------------------

@@ -226,8 +226,146 @@ export function opticalDepth(pCO2, pH2O, pCH4, pTot, pH2 = 0, g = G_EARTH, pHe =
   return t;
 }
 
+// ---------------------------------------------------------------------------
+// Convective inhibition: why a hydrogen world runs away so much sooner.
+//
+// Convection needs a parcel that rises to stay buoyant. Lift moist air and it
+// cools, water condenses, latent heat is released, and on Earth that release is
+// what keeps it rising -- moist convection is self-sustaining. In a HYDROGEN
+// background the same process works against itself, because water is nine times
+// heavier than the air it is condensing out of. A parcel that has given up its
+// water is left lighter, yes, but the parcel it rose from was made heavier by
+// keeping it, and above a critical abundance the composition gradient wins:
+// the atmosphere is stably stratified even though it is superadiabatic, and
+// convection simply stops.
+//
+// The criterion is Leconte, Selsis, Hersant & Guillot 2017 (A&A 598, A98),
+// following Guillot 1995. In mass mixing ratio,
+//
+//     q_inh = R·T / ((mu_v − mu_d)·L)
+//
+// which for water in hydrogen at 300 K is 6.9% by mass -- 0.82% by MOLE. That
+// is a very small number, and it is the point: essentially any humid hydrogen
+// atmosphere is inhibited. It is also consistent with the ~1.2% quoted for
+// Uranus and Neptune, which are the two places in this solar system where the
+// same physics is thought to operate.
+const R_UNIV = 8.314;            // J/(mol K)
+const MU_H2O_KG = 0.018015, MU_H2_KG = 0.002016;   // kg/mol
+const L_VAP = 2.26e6;            // J/kg
+
+export function inhibitionMoleFraction(T) {
+  const q = R_UNIV * Math.max(T, 1) / ((MU_H2O_KG - MU_H2_KG) * L_VAP);
+  if (!(q > 0) || q >= 1) return 1;
+  return (q / 18.015) / (q / 18.015 + (1 - q) / 2.016);
+}
+
+// ...and what this model can honestly do about it.
+//
+// It cannot represent a superadiabatic layer. This is a semi-grey scheme with a
+// single optical depth and no vertical coordinate at all; there is nowhere to
+// put one, and drawing a temperature profile it does not solve would be a lie
+// told in a comment. What it can carry is the CONSEQUENCE. An inhibited layer
+// means the surface sits further below the radiating level than a moist adiabat
+// would put it, so at a given outgoing flux the surface is hotter -- which is
+// exactly what more optical depth does. So the parameterisation is a multiplier
+// on tau, and it is a parameterisation of vertical structure this model does not
+// resolve, stated as such here and in the README rather than buried.
+//
+// Gated three ways so it cannot reach any world that predates it: there must be
+// hydrogen, it must be the background rather than a trace, and the air must be
+// wetter than the criterion. Every world this model shipped with fails the
+// first test, so the multiplier is exactly 1 and tau is untouched.
+// One number, and it is NOT fitted to the inner edge, because the inner edge
+// cannot be reached from here and finding that out is the most useful thing
+// this phase produced.
+//
+// Innes, Tsai & Pierrehumbert 2023 put the 1 bar Hycean inner edge at 1.6 AU
+// from a G star -- 0.391 S(+) -- where this model, with hydrogen but without
+// inhibition, said 1.04. Turning the multiplier up closes that gap at a rate of
+// about fourteen percent per doubling: 2.0 gives 0.70, 4.0 gives 0.60. Reaching
+// 0.391 would take a multiplier near THIRTY-TWO on the total optical depth.
+//
+// That is not a parameterisation any more, it is a different model. A factor of
+// thirty-two would make this term larger than every other opacity in the file
+// put together, on a world where the only thing constraining it is the number
+// it was bent to reproduce. So it is not done. The strength below is chosen on
+// physical grounds -- superadiabatic layers in the Uranus and Neptune
+// literature enhance the surface-to-radiating-level contrast by tens of
+// percent, not by thirty-fold -- and the residual is reported as a GAP.
+//
+// The honest reading is the one the phase was designed to test: a semi-grey
+// scheme with a single optical depth and no vertical coordinate cannot
+// represent a superadiabatic layer, and multiplying tau is a shadow of one, not
+// a substitute. It closes about forty percent of the gap. The rest of the gap
+// is the missing vertical structure, and it stays visible.
+//
+// It was briefly two numbers. A second constant scaled the strength with
+// envelope pressure, to reach for their 10 bar edge at 3.85 AU as well -- and
+// it did nothing whatever, across a range of values that should have changed
+// the answer threefold. The reason is in the criterion rather than in the code:
+// q_inh is a MOLE FRACTION, so ten bar of hydrogen dilutes the same water ten
+// times over and the threshold is simply not reached at the temperatures where
+// that world's runaway peak sits. The criterion says a thick dry envelope is
+// not inhibited, and it means it.
+//
+// So the knob came out. Shipping a fitted parameter that provably does not
+// affect the thing it was fitted to is worse than not having it: it looks like
+// the 10 bar case has been accounted for. It has not, and there is a GAP row
+// saying so.
+const INH_STRENGTH = 4.0;
+const INH_DOMINANCE = 0.5;       // below this H2 share it is not the background
+
+export function inhibitionFactor(pH2O, pH2, pTot, T) {
+  if (!(pH2 > 0) || !(pTot > 0)) return 1;
+  // Hydrogen's share of the DRY air, not of everything. Measured against the
+  // total it looked right and was not: past about 380 K the water vapour over a
+  // one-bar envelope exceeds a bar itself, hydrogen's share of the column falls
+  // under a half, and the gate closed -- switching the effect off at 373 K,
+  // which is precisely where the runaway threshold for that envelope sits. The
+  // criterion is about a heavy condensable in a light background, and the
+  // condensation happens aloft where the water is a trace and the hydrogen is
+  // unambiguously the background. What the gate is for is telling a hydrogen
+  // world from a nitrogen one; water's own abundance is the OTHER test, below.
+  const dry = Math.max(pTot - pH2O, 1e-12);
+  const fH2 = Math.min(pH2 / dry, 1);
+  if (fH2 < INH_DOMINANCE) return 1;
+  const x = pH2O / pTot;
+  const xInh = inhibitionMoleFraction(T);
+  if (!(x > xInh)) return 1;
+  // Smoothed, but only just, and the width matters more than it looks. A
+  // discontinuity in optical depth at the moment a planet is deciding whether
+  // to run away is a step-size trap and this model has been bitten by that
+  // before -- so it is smoothed. But the criterion is a THRESHOLD, not a
+  // gradient: past q_inh convection stops, and how far past makes no
+  // difference to whether it has stopped.
+  //
+  // Getting the width wrong is instructive in both directions. Smoothed across
+  // a factor of two in the excess, the strength depended on how wet the air
+  // was, and the runaway peak migrated to the coldest, driest end of the scan
+  // where the effect was worth 8% of itself. Narrowed to twenty percent either
+  // side of the threshold, it became a CLIFF: outgoing flux fell from 204 to 56
+  // W/m2 across five kelvin, runawayLimit()'s peak-finder latched onto the last
+  // uninhibited point, and raising the strength stopped moving the answer at
+  // all -- it only deepened the cliff. That is the non-monotonicity that showed
+  // up while fitting, and it is worth naming: with a discontinuity in the
+  // curve, "the peak of the saturated OLR" stops meaning the Simpson-Nakajima
+  // limit and starts meaning "wherever the scan last stood before the drop".
+  //
+  // A factor of three, which spreads the transition over roughly fifteen
+  // kelvin. That is not derived from anything -- the criterion is a threshold
+  // and the real transition happens over an inhibited layer growing downward
+  // from the condensation level, which this model has no coordinate for. It is
+  // chosen to be wide enough that the flux curve stays a curve.
+  const engaged = smoothstep(xInh, 3 * xInh, x);
+  return 1 + INH_STRENGTH * fH2 * engaged;
+}
+
 export function olr(T, pCO2, pH2O, pCH4, pTot, pH2 = 0, g = G_EARTH, pHe = 0) {
-  const tau = opticalDepth(pCO2, pH2O, pCH4, pTot, pH2, g, pHe);
+  let tau = opticalDepth(pCO2, pH2O, pCH4, pTot, pH2, g, pHe);
+  // Applied here rather than inside opticalDepth() because the criterion needs
+  // a temperature and that function does not have one -- and giving it one
+  // would change a signature four other things depend on for no gain.
+  if (pH2 > 0) tau *= inhibitionFactor(pH2O, pH2, pTot, T);
   return SIGMA * T * T * T * T / (1 + 0.75 * tau);
 }
 

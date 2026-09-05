@@ -7,7 +7,7 @@ import { volcanicActivity, derive, transitRadius, condensedRadius, radiusFromMas
 import { volcanoLook } from './render/atmosphere.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
-         planetaryAlbedo } from './physics/radiation.js';
+         planetaryAlbedo, inhibitionMoleFraction, inhibitionFactor } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
@@ -3848,6 +3848,44 @@ export function run() {
         `285 K surface → ${cold.baseTemperature.toFixed(0)} K floor, ${cold.basePhase}; `
           + `400 K → ${warm.baseTemperature.toFixed(0)} K, ${warm.basePhase}`);
     }
+  }
+
+  // ---- 7j. convective inhibition -------------------------------------------
+  {
+    // The criterion reproduces the number the literature quotes for it: water
+    // in hydrogen at 300 K is inhibited above a 0.8% MOLE fraction, which is
+    // also consistent with the ~1.2% quoted for Uranus and Neptune. That is a
+    // very small number, and it is the point -- essentially any humid hydrogen
+    // atmosphere is inhibited.
+    check('The inhibition threshold is the fraction the literature quotes',
+      near(inhibitionMoleFraction(300), 0.0082, 0.0008)
+        && inhibitionMoleFraction(500) > inhibitionMoleFraction(300),
+      `${(inhibitionMoleFraction(300) * 100).toFixed(2)}% at 300 K against ~0.8%, `
+        + `${(inhibitionMoleFraction(500) * 100).toFixed(2)}% at 500 K`);
+
+    // It cannot reach a world without hydrogen. Not "does not in practice" --
+    // cannot: the multiplier is exactly 1 with no H2 whatever the air is doing.
+    check('Inhibition cannot touch a world with no hydrogen',
+      inhibitionFactor(0.3, 0, 1, 300) === 1 && inhibitionFactor(0.02, 0, 1.02, 288) === 1
+        && olr(288, 280e-6, 0.011, 1.8e-6, 1.011) === olr(288, 280e-6, 0.011, 1.8e-6, 1.011, 0),
+      'the multiplier is exactly 1, and Earth\u2019s OLR is the same number either way');
+
+    // Nor a nitrogen world that happens to have a little hydrogen in it: the
+    // criterion is about hydrogen being the BACKGROUND, and the gate measures
+    // its share of the dry air rather than of everything, because water vapour
+    // can outweigh a thin envelope without ceasing to condense into one.
+    check('\u2026nor one where hydrogen is present but not the background',
+      inhibitionFactor(0.3, 0.05, 1.35, 300) === 1
+        && inhibitionFactor(0.3, 1.0, 2.3, 300) > 1,
+      '0.05 bar of H₂ under 1 bar of air: off. 1 bar of H₂ under 0.3 bar of steam: on');
+
+    // And it makes the world it is meant to make: at a fixed absorbed flux, an
+    // inhibited atmosphere holds a hotter surface than the same atmosphere
+    // without it, which is the whole consequence being carried.
+    check('An inhibited atmosphere radiates less at the same temperature',
+      olr(320, 0, 0.105, 0, 1.105, 1, 16.28) < 0.6 * olr(320, 0, 0.105, 0, 1.105, 0, 16.28),
+      `${olr(320, 0, 0.105, 0, 1.105, 1, 16.28).toFixed(0)} W/m² against `
+        + `${olr(320, 0, 0.105, 0, 1.105, 0, 16.28).toFixed(0)} without hydrogen`);
   }
 
   // ---- 8. the controls: typed values and slider round-trips ----------------
