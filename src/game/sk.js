@@ -306,6 +306,8 @@ export const SK = {
     'Methane': 'Metán',
     'What is in the air now, not what stays. Life makes most of it and the interior a little; oxygen cuts its life from twelve thousand years to ten, so an oxygenated world holds almost none.':
       'Koľko ho je v ovzduší teraz, nie koľko vydrží. Väčšinu vyrába život, trochu vnútro planéty; kyslík skracuje jeho životnosť z dvanástich tisíc rokov na desať, takže okysličený svet ho takmer nemá.',
+    'with envelope': 's obálkou',
+    'water by mass': 'voda hmotnostne',
     'Hydrogen envelope': 'Vodíková obálka',
     'Hydrogen and helium kept from the disc the planet formed in, not outgassed from its rock. It has no absorption bands — it warms by colliding, which never saturates, so it keeps getting stronger as you add it. Forty bar of it holds an ocean liquid ten times further from the star than Earth is.':
       'Vodík a hélium zachytené z disku, v ktorom planéta vznikla, nie odplynené z jej horniny. Nemá absorpčné pásy — hreje zrážkami, ktoré sa nikdy nenasýtia, takže s pribúdajúcim množstvom je stále silnejší. Štyridsať barov udrží oceán tekutý desaťkrát ďalej od hviezdy, než je Zem.',

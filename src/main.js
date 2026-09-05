@@ -8,6 +8,7 @@ import { captureWorld, applyWorld } from './game/snapshot.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive } from './physics/planet.js';
 import { runawayLimit, iceFraction } from './physics/radiation.js';
+import { transitRadius, waterMassFraction } from './physics/planet.js';
 import { NBANDS, lockFactor, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
@@ -955,9 +956,22 @@ function updateReadout() {
     stat(t('Stratospheric H₂O'), `${(w.escape?.fStrat ?? 0).toExponential(1)}`,
       (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '');
 
+  // Two radii, and only when they differ. The structural one is what gravity is
+  // computed at; the transit one adds the envelope, which is what a telescope
+  // measures and what every published sub-Neptune radius is. On a world with no
+  // envelope they are the same number and printing it twice would be noise, so
+  // the second line appears only when there is something to say. Likewise the
+  // water fraction: on a rocky world it is exactly zero and means nothing.
+  const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
+  const xWater = waterMassFraction(params.mass, w.water.ocean + w.water.seaIce
+    + w.water.landIce + w.water.vapour);
   $('#derived').innerHTML =
     `<div>gravity <b>${d.g.toFixed(2)} m/s²</b></div>` +
     `<div>radius <b>${(d.R / 6.371e6).toFixed(2)} R⊕</b></div>` +
+    (rTr > d.R * 1.005
+      ? `<div>${t('with envelope')} <b>${(rTr / 6.371e6).toFixed(2)} R⊕</b></div>` : '') +
+    (xWater > 0
+      ? `<div>${t('water by mass')} <b>${(xWater * 100).toFixed(0)}%</b></div>` : '') +
     `<div>escape v <b>${(d.vesc / 1000).toFixed(1)} km/s</b></div>` +
     `<div>ocean <b>${(w.water.ocean * 2750).toFixed(0)} m</b></div>`;
 

@@ -2127,6 +2127,60 @@ arrives; scaling the sink with the source would hold equilibrium CO₂ exactly w
 the coupling a no-op. Fresh-basalt weatherability matters at the supply-limited end, which this
 model does not enter.
 
+### A planet the size the planet actually is
+
+Every world this model could build had a rocky radius, `R = R⊕·M^0.27`, and for rocky worlds that is
+fine — Earth 1.000, Venus 0.946, Mars 0.547 against measured 1.000, 0.950 and 0.532. For a
+sub-Neptune it is not a small error. K2-18 b is 8.63 M⊕ and **2.61 R⊕ measured**; that relation says
+**1.79**. All four reference sub-Neptunes came out about 40% too small, and by a strikingly *uniform*
+amount across 4.78–10 M⊕ — which says the missing physics is bulk composition, not a wrong exponent.
+
+Zeng et al. (2019) give it as **R = f(x)·M^(1/3.7)** with **f = 1 + 0.55x − 0.14x²**, x the water mass
+fraction. Two things about that are lucky and one is not.
+
+The lucky ones: **1/3.7 = 0.2703**, so this model's rocky exponent already *is* Zeng's dry branch and
+water enters as a clean multiplier rather than a replacement. And **f(0) = 1 exactly** — the constant
+term is one, so a dry world is multiplied by 1.0 and comes out bit-for-bit unchanged. That is what
+let a mass–radius relation be swapped into a model of twenty-six terrestrial worlds without moving
+any of them. (f(0.5) = 1.240 also reproduces the 1.24 the paper quotes for a 1:1 silicate-to-ice
+planet — the cheapest available check that it was transcribed right.)
+
+#### Where "ocean" stops and "part of the planet" starts
+
+Not a matter of taste. `hypsometry.js` already says how much water a solid surface can hold before
+there is no basin left to hold it — `MAX_BASIN_DEPTH`, a deliberately generous peak-to-trough relief.
+Water past that has nowhere on the surface to be, so it is interior water. On Earth that threshold is
+**7.3 oceans**, and every world this model ships with carries at most six. The interior water term is
+therefore exactly zero on all of them, by construction rather than by tolerance.
+
+#### Two radii, because they are two different things
+
+`derive().R` is the **condensed** radius — rock plus structural water. It is what gravity is computed
+at and what a column of gas is spread over. The envelope is deliberately *not* in it: tens of bar of
+hydrogen over a super-Earth is a rounding error on the planet's mass, so folding it in would weaken a
+gravity the gas does not weaken — and would do it to every world with an atmosphere, Earth included.
+
+`transitRadius()` is what a telescope measures, and it is the one the published radii are compared
+against. It sits **ln(p_surf/p_ref)** scale heights above the surface, taking p_ref near ten
+millibars: ten bar of envelope puts it seven scale heights up, a thousand bar eleven and a half. A
+fixed count of scale heights — which is what the renderer uses to decide where to stop drawing —
+would make those two envelopes the same size, which is the opposite of what distinguishes these
+planets. The readout shows the second radius only when it differs from the first.
+
+With both terms the four anchors land on their measurements: K2-18 b **2.611** against 2.61 ± 0.09,
+TOI-270 d **2.134** against 2.133 ± 0.058, and the Madhusudhan reference planets at 2.151 and 2.600
+against 2.15 and 2.60.
+
+#### What that costs, stated as a gap
+
+The compositions it needs are **wetter than the literature builds them** — K2-18 b at a 0.94 water
+mass fraction where Madhusudhan's own Hycean models put it nearer 0.1–0.5. The reason is structural:
+here the envelope has extent and *no mass at all*. A real sub-Neptune gets a large part of its radius
+from an envelope that is several percent of the planet, standing on its own self-gravity and
+compressing the interior beneath it. None of that is modelled, so the water fraction has to absorb
+the structural work the envelope really does. **The radius is right for the wrong reasons**, and
+`calibrate.mjs` reports it as a `GAP` row saying so.
+
 ### Hydrogen, which warms by colliding
 
 Every other greenhouse gas here works by having absorption bands, and every one of them eventually

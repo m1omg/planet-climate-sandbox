@@ -2,7 +2,8 @@
 // go to the console), or headlessly with `node src/selftest.js`.
 import { Simulation } from './sim/clock.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
-import { volcanicActivity } from './physics/planet.js';
+import { volcanicActivity, derive, transitRadius, condensedRadius, radiusFromMass,
+         waterRadiusFactor, waterMassFraction } from './physics/planet.js';
 import { volcanoLook } from './render/atmosphere.js';
 import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
@@ -3710,6 +3711,73 @@ export function run() {
         back.h2 === w.h2 && back.he === w.he && back.he > 0,
         `${(back.diag.pH2).toFixed(2)} bar H₂ + ${(back.diag.pHe).toFixed(2)} bar He restored`);
     }
+  }
+
+  // ---- 7h. mass, radius, and interior water --------------------------------
+  {
+    const R_E = 6.371e6;
+    const rad = (params, T = 300) => {
+      const d = derive(params);
+      return transitRadius(params, d.R, d.g, T) / R_E;
+    };
+
+    // The identity that makes the whole term safe, asserted at the bit level
+    // rather than to a tolerance. Zeng's polynomial has a constant term of
+    // exactly one, so a dry planet is multiplied by 1.0 and comes out unchanged
+    // -- not close, unchanged. Everything else in this section rests on it.
+    check('A dry world\u2019s radius is multiplied by exactly one',
+      waterRadiusFactor(0) === 1 && condensedRadius({ mass: 3, water: 0 }) === radiusFromMass(3),
+      `f(0) = ${waterRadiusFactor(0)}, and 3 M⊕ dry is ${condensedRadius({ mass: 3, water: 0 })} m either way`);
+
+    // f(0.5) = 1.24 is the value Zeng et al. publish for a 1:1 silicate-to-ice
+    // planet. The formula reproducing its own special case is the cheapest
+    // available check that it was transcribed correctly.
+    check('\u2026and Zeng\u2019s factor reproduces its own published case',
+      near(waterRadiusFactor(0.5), 1.24, 0.001),
+      `f(0.5) = ${waterRadiusFactor(0.5).toFixed(4)} against the paper's 1.24`);
+
+    // No shipped world may acquire interior water. The threshold is what the
+    // basins can hold, and every preset is below it -- which is why the radius
+    // relation could be replaced without moving any of them.
+    const wet = Object.entries(PRESETS)
+      .filter(([, v]) => waterMassFraction(v.params.mass, v.params.water) > 0).map(([k]) => k);
+    check('No shipped world has water in its interior',
+      wet.length === 0,
+      `${Object.keys(PRESETS).length} presets, ${wet.length} above the ${
+        (waterMassFraction(1, 7.4) > 0 ? '7.3' : '?')} EO the basins hold`
+        + (wet.length ? `: ${wet.join(', ')}` : ''));
+
+    check('Earth, Venus and Mars keep the radii they had',
+      near(rad({ mass: 1, water: 1 }), 1.0, 0.01) && near(rad({ mass: 0.815, water: 0 }), 0.95, 0.02)
+        && near(rad({ mass: 0.107, water: 0.02 }), 0.532, 0.02),
+      `${rad({ mass: 1, water: 1 }).toFixed(3)}, ${rad({ mass: 0.815, water: 0 }).toFixed(3)}, `
+        + `${rad({ mass: 0.107, water: 0.02 }).toFixed(3)} R⊕ against 1.000, 0.950, 0.532`);
+
+    // The measurement the old relation could not come near.
+    check('A sub-Neptune can be built at the size one actually is',
+      near(rad({ mass: 8.63, water: 34500, h2Bar: 100, heliumFrac: 0.1 }), 2.61, 0.09),
+      `K2-18 b: ${rad({ mass: 8.63, water: 34500, h2Bar: 100, heliumFrac: 0.1 }).toFixed(3)} R⊕ `
+        + `against 2.61 ± 0.09, where the rocky relation alone gives ${(radiusFromMass(8.63) / R_E).toFixed(2)}`);
+
+    // The envelope is extent, not mass. Folding it into the structural radius
+    // would weaken a gravity the gas does not weaken -- and would do it to
+    // every world with an atmosphere, Earth included.
+    {
+      const bare = { mass: 5, water: 14300 };
+      const clad = { ...bare, h2Bar: 100, heliumFrac: 0.1 };
+      check('An envelope changes the transit radius and not the gravity',
+        derive(bare).g === derive(clad).g && rad(clad) > rad(bare),
+        `g is ${derive(clad).g.toFixed(3)} either way; transit radius ${rad(bare).toFixed(3)} → ${rad(clad).toFixed(3)} R⊕`);
+    }
+
+    // Ten bar and a thousand bar must not look the same size. The transit
+    // radius sits ln(p_surf/p_ref) scale heights up, so it grows with the
+    // envelope; a fixed count of scale heights would flatten that away.
+    const thin = rad({ mass: 5, water: 14300, h2Bar: 10, heliumFrac: 0.1 });
+    const thick = rad({ mass: 5, water: 14300, h2Bar: 1000, heliumFrac: 0.1 });
+    check('A deeper envelope is a bigger planet to a transit',
+      thick > thin + 0.05,
+      `10 bar → ${thin.toFixed(3)} R⊕, 1000 bar → ${thick.toFixed(3)} R⊕`);
   }
 
   // ---- 8. the controls: typed values and slider round-trips ----------------

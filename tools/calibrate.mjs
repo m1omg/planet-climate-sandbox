@@ -5,6 +5,7 @@
 // Sources for the targets are listed against each line. Where the literature
 // gives a range, the range is the target and the check is a range check.
 import { Simulation } from '../src/sim/clock.js';
+import { derive, transitRadius } from '../src/physics/planet.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from '../src/game/presets.js';
 import { maxStep } from '../src/physics/climate.js';
 import { olr, runawayLimit, planetaryAlbedo, cloudCover } from '../src/physics/radiation.js';
@@ -253,6 +254,53 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   anchor('Mars surface temperature today', w.diag.Tmean - 273.15, -75, -50, '°C',
     'Mars averages -63 C. This is the same run as the row above, so it is a check ' +
     'on the whole history and not on a state that was set by hand.');
+}
+
+// ---- mass, radius, and what a sub-Neptune is made of ----------------------
+//
+// The rocky relation R = M^0.27 is Zeng et al. 2019's dry branch (1/3.7 =
+// 0.2703), so water enters as a clean multiplicative factor f = 1 + 0.55x −
+// 0.14x² on top of it, and f(0) = 1 exactly. The first three rows are the
+// invariant: these are the worlds the relation already got right and no amount
+// of sub-Neptune fitting may move them.
+{
+  const R_E = 6.371e6;
+  const rad = (params, T = 300) => {
+    const d = derive(params);
+    return transitRadius(params, d.R, d.g, T) / R_E;
+  };
+  anchor('Earth radius', rad({ mass: 1, water: 1 }), 0.99, 1.01, 'R⊕',
+    'Unmoved by the water term: one ocean is far below what the basins hold, so ' +
+    'the interior water fraction is exactly zero and f(0) = 1.');
+  anchor('Venus radius', rad({ mass: 0.815, water: 0 }), 0.93, 0.97, 'R⊕', 'measured 0.950');
+  anchor('Mars radius', rad({ mass: 0.107, water: 0.02 }), 0.51, 0.57, 'R⊕', 'measured 0.532');
+
+  // And the four the relation could not reach at all. Before this, every one of
+  // them came out about 40% too small -- K2-18 b at 1.79 R⊕ against a measured
+  // 2.61, which is not an error bar, it is a different object. The compositions
+  // below are bisected to reproduce the measured radius, so what these rows
+  // report is what the model says such a planet is MADE of.
+  anchor('K2-18 b radius', rad({ mass: 8.63, water: 34500, h2Bar: 100, heliumFrac: 0.1 }),
+    2.52, 2.70, 'R⊕', 'measured 2.61 ± 0.09 (Benneke et al. 2019). Needs a water mass ' +
+    'fraction of 0.94 here, which is more water than the literature favours — see below.');
+  anchor('TOI-270 d radius', rad({ mass: 4.78, water: 13100, h2Bar: 100, heliumFrac: 0.1 }, 350),
+    2.075, 2.191, 'R⊕', 'measured 2.133 ± 0.058. Water mass fraction 0.64.');
+  anchor('Madhusudhan 5 M⊕ reference', rad({ mass: 5, water: 14300, h2Bar: 100, heliumFrac: 0.1 }),
+    2.05, 2.25, 'R⊕', 'Hycean reference planet, 2.15 R⊕. Water mass fraction 0.67.');
+  anchor('Madhusudhan 10 M⊕ reference', rad({ mass: 10, water: 32900, h2Bar: 100, heliumFrac: 0.1 }),
+    2.50, 2.70, 'R⊕', 'Hycean reference planet, 2.60 R⊕. Water mass fraction 0.77.');
+
+  // The honest cost of the decomposition above. A real sub-Neptune gets a large
+  // part of its radius from the MASS of its envelope -- several percent of the
+  // planet, compressing the interior and standing on its own self-gravity.
+  // Here the envelope has extent and no mass at all: it is a scale-height term
+  // added on top of a condensed planet, and the structural work it does in
+  // reality has to be absorbed by the water fraction instead. So these worlds
+  // come out wetter than the literature builds them, and K2-18 b at 0.94 is the
+  // clearest case -- Madhusudhan's own Hycean models put it nearer 0.1-0.5.
+  deviation('K2-18 b water fraction', 0.937, 0.10, 0.50, 'by mass',
+    'The envelope is massless here, so water absorbs the structural role a real ' +
+    'H2/He envelope plays. The radius is right for the wrong reasons.');
 }
 
 // ---- the hydrogen envelope ------------------------------------------------

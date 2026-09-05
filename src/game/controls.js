@@ -61,7 +61,11 @@ export const INTERIOR_BODIES = [
 ];
 
 export const SLIDERS = [
-  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.01, max: 5, log: true,
+  // Ten Earth masses, not five. The sub-Neptunes this build exists to reach run
+  // from about four to ten, and a hydrogen envelope on anything smaller does not
+  // survive its star -- so a ceiling of five put the entire subject out of
+  // range. A range change only: no preset holds a mass anywhere near either end.
+  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.01, max: 10, log: true,
     // Precision boundaries sit half a displayed unit below the next range, so
     // a label can always be typed back to exactly the value the slider shows.
     // Four decimals retain the Moon's 0.0123 M⊕ rather than rounding it away.
@@ -70,7 +74,8 @@ export const SLIDERS = [
     note: 'Sets radius, gravity and how well the world holds its air.' },
   { g: 'body', key: 'water', stops: [
       { v: 0, n: 'dry' }, { v: 0.02, n: 'Mars' },
-      { v: 0.108, n: 'Early Venus' }, { v: 1, n: 'Earth' }, { v: 6, n: 'ocean world' }], label: 'Water inventory', min: 0, max: 12, floor: 1e-8, log: true, zero: true, live: 'water',
+      { v: 0.108, n: 'Early Venus' }, { v: 1, n: 'Earth' }, { v: 6, n: 'ocean world' },
+      { v: 7000, n: '10% water' }, { v: 36000, n: 'Hycean' }], label: 'Water inventory', min: 0, max: 45000, floor: 1e-8, log: true, zero: true, live: 'water',
     // Below a thousandth of an ocean, "0.000 EO" says nothing; a global layer a
     // few centimetres deep says a great deal. Metres, then, at the dry end.
     // The precision thresholds sit just below the round numbers on purpose: a
@@ -80,10 +85,16 @@ export const SLIDERS = [
     fmt: (v) => v <= 0 ? 'none'
       : v < 1e-6 ? `${(v * 2.75e6).toFixed(v * 2.75e6 < 0.9995 ? 3 : 2)} mm`
       : v < 1e-3 ? `${(v * 2750).toFixed(v * 2750 < 0.9995 ? 3 : 2)} m`
+      // Past a few thousand oceans the count stops carrying meaning -- nobody
+      // holds "eighteen thousand Earth oceans" in their head -- and the number
+      // that does is the share of the planet's mass, which is how the
+      // sub-Neptune literature states it. The slider still sets an absolute
+      // inventory, so presets, saves and shared links are unaffected.
+      : v >= 1000 ? `${(v / 1000).toFixed(v < 9995 ? 2 : 1)}k EO`
       : `${v.toFixed(v < 0.09995 ? 4 : v < 0.9995 ? 3 : 2)} EO`,
     units: { eo: 1, ocean: 1, oceans: 1, mm: 1 / 2.75e6, m: 1 / 2750, km: 1000 / 2750 },
     unitFor: (v) => (v > 0 && v < 1e-6 ? 'mm' : v < 1e-3 ? 'm' : 'EO'),
-    note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water.' },
+    note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water. Past what the basins can hold — 7.3 EO on an Earth-sized world — the rest is not an ocean on the planet but a layer of it, and the planet is measurably bigger for it.' },
   { g: 'body', key: 'landFraction', label: 'Basin geometry', min: 0, max: 1,
     fmt: (v) => `${(v * 100).toFixed(0)} % high ground`, units: { '%': 0.01 }, unitFor: () => '%',
     note: 'Reference high-ground share at one Earth ocean. Basins have finite depth, so enough water overtops even the maximum setting. Actual coverage is in the readout.' },
