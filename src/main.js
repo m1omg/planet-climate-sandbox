@@ -508,6 +508,9 @@ const LIVE_READERS = {
   n2: (w) => w.n2 * w.diag.g / 1e5,
   o2: (w) => w.o2 * w.diag.g / 1e5,
   ch4: (w) => w.ch4 * w.diag.g / 1e5,
+  // The whole envelope, H2 and He together, because that is what the control
+  // sets: the helium fraction splits it and is not a slider.
+  h2: (w) => (w.h2 + w.he) * w.diag.g / 1e5,
   water: (w) => w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour,
   // Not reservoirs, but evolved by the clock all the same when their modes are
   // on. With the modes off these return the value the control already holds and
@@ -847,7 +850,7 @@ function updateReadout() {
   }
 
   const lossGyr = (w.escape?.water ?? 0) * 1e9 / d.eoColumn;
-  const rl = runawayLimit(dg.pCO2, dg.pN2 + dg.pCH4);
+  const rl = runawayLimit(dg.pCO2, dg.pN2 + dg.pCH4, dg.pH2 ?? 0, dg.g, dg.pHe ?? 0);
   // Sunlight *and* the planet's own heat. A tidally heated world can be past the
   // Simpson-Nakajima limit on its interior alone, and a margin computed from
   // insolation would read comfortable while the ocean boiled.

@@ -168,6 +168,12 @@ export const SLIDERS = [
       { v: 1e-3, n: 'Archean' }, { v: 0.05, n: 'Titan' }], label: 'Methane', min: 0, max: 1, floor: 1e-9, log: true, zero: true, live: 'ch4',
     fmt: (v) => v >= 0.01 ? fmtBar(v) : ppm(v), units: PRESSURE_UNITS, unitFor: pressureUnitFor,
     note: 'What is in the air now, not what stays. Life makes most of it and the interior a little; oxygen cuts its life from twelve thousand years to ten, so an oxygenated world holds almost none.' },
+  { g: 'atmo', key: 'h2Bar', stops: [
+      { v: 0, n: 'none' }, { v: 1, n: '1 bar' },
+      { v: 10, n: '10 bar' }, { v: 40, n: 'P&G' },
+      { v: 100, n: '100 bar' }], label: 'Hydrogen envelope', min: 0, max: 300, floor: 1e-3, log: true, zero: true, live: 'h2',
+    fmt: fmtBar, units: PRESSURE_UNITS, unitFor: (v) => (v >= 1e-3 ? 'bar' : 'µbar'),
+    note: 'Hydrogen and helium kept from the disc the planet formed in, not outgassed from its rock. It has no absorption bands — it warms by colliding, which never saturates, so it keeps getting stronger as you add it. Forty bar of it holds an ocean liquid ten times further from the star than Earth is.' },
 
   { g: 'surface', key: 'landAlbedo', label: 'Ground brightness', min: 0.05, max: 0.6,
     fmt: (v) => v.toFixed(2), note: 'Dark basalt 0.10 · rock 0.25 · bright sand 0.40' },

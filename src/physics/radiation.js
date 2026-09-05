@@ -1,4 +1,4 @@
-import { SIGMA, psatH2O, clamp, smoothstep } from './constants.js';
+import { SIGMA, G_EARTH, psatH2O, clamp, smoothstep } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // Semi-grey two-stream longwave:   OLR = sigma T^4 / (1 + 0.75 tau)
@@ -125,6 +125,66 @@ export function ch4Shortwave(pCH4) {
   if (!(pCH4 > 0)) return 0;
   return SW_CH4_MAX * (1 - Math.exp(-pCH4 / P_SW_CH4));
 }
+// ---------------------------------------------------------------------------
+// Hydrogen, which absorbs by colliding rather than by having a band.
+//
+// H2 is symmetric and has no permanent dipole, so on its own it has no
+// rotational-vibrational spectrum to speak of and ought to be transparent. It
+// is not, because during a collision the pair briefly does have a dipole, and
+// the resulting continuum has no line structure and therefore nothing to
+// saturate. That is what makes it a greenhouse gas that keeps getting stronger
+// the more of it there is, long after CO2 has gone logarithmic -- and it is why
+// forty bar of it can hold a surface at 280 K ten astronomical units from a
+// Sun-like star, where the sunlight is a hundredth of Earth's.
+//
+// Being a two-body process the absorption goes as the product of the two
+// densities, and integrating that down a hydrostatic column gives
+//
+//     tau  ~  x_H2 * P_surf^2 / g        i.e.   p_H2 * p_tot / g
+//
+// which is the form used here. The 1/g is not decoration: these are worlds of
+// three to ten Earth masses, and at twice Earth's gravity the same surface
+// pressure stands over half the molecules. Every other opacity term in this
+// file is written in pressures alone with g folded into a constant fitted at
+// Earth's gravity, which is fine for a term anchored on Earth and wrong by a
+// factor of two for one anchored on a super-Earth.
+//
+// Added AFTER the pressure-broadening factor rather than inside it, unlike the
+// methane continuum above. That term is inside because it was fitted there, to
+// Titan, and moving it would move Titan. This one is quadratic in pressure
+// because the physics says quadratic; multiplying it by p^0.3 as well would
+// make it p^2.3 for no reason anyone could defend.
+//
+// CIA_H2 is fitted to Pierrehumbert & Gaidos 2011 (ApJ 734, L13): 40 bar of
+// pure H2 on a three Earth-mass planet holds 280 K at 10 AU from a G star.
+// That is the ONLY anchor behind it, and it deserves saying plainly -- every
+// other opacity constant in this file was fitted against two or three
+// independent observations, and several of them against a measured planet.
+// This one is fitted against one number from one 1-D model of a planet nobody
+// has ever seen. It is the least constrained number in the model.
+//
+// The fit is a bisection on that single anchor, run on a LIFELESS world because
+// that is the world they modelled -- an Earth biosphere on it darkens the
+// ground enough to be worth six kelvin, which is more than the anchor's whole
+// tolerance. It lands on 280.007 K. `tools/calibrate.mjs` re-runs the same
+// world under the same conditions every time it is called, so the two cannot
+// drift apart quietly.
+const CIA_H2 = 0.3826;
+// Helium collides too, and about ten times less effectively per collision than
+// hydrogen does: it is lighter, smaller, and its interaction with H2 induces a
+// weaker dipole than an H2-H2 encounter. So it is a correction to the
+// collision partner, not a second mechanism -- a hydrogen envelope diluted
+// with helium is slightly less opaque than the same pressure of pure H2.
+const CIA_HE_REL = 0.1;
+
+// Optical depth of a hydrogen envelope. `pHe` is subtracted out of the
+// collision partner and added back at its own reduced weight.
+export function tauH2(pH2, pTot, g = G_EARTH, pHe = 0) {
+  if (!(pH2 > 0)) return 0;
+  const partner = Math.max(pTot - pHe * (1 - CIA_HE_REL), 0);
+  return CIA_H2 * pH2 * partner * (G_EARTH / Math.max(g, 0.01));
+}
+
 const N_BROADEN = 0.30;
 
 // Optical depth of CO2 alone, before pressure broadening.
@@ -152,26 +212,38 @@ function broadening(pTot) {
   return (brV = Math.pow(clamp(pTot, 1e-6, 400), N_BROADEN));
 }
 
-export function opticalDepth(pCO2, pH2O, pCH4, pTot) {
+// The hydrogen arguments are optional and default to nothing, which is what
+// makes this safe to add to a model that has had four gases in it for its whole
+// life: a world with no envelope takes the `pH2 > 0` branch never, so not one
+// floating-point operation in its optical depth changes.
+export function opticalDepth(pCO2, pH2O, pCH4, pTot, pH2 = 0, g = G_EARTH, pHe = 0) {
   const br = broadening(pTot);
   let t = tauCO2(pCO2);
   if (pH2O > 0) t += K_H2O * Math.pow(pH2O, M_H2O);
   if (pCH4 > 0) t += tauCH4(pCH4, pTot, pH2O);
-  return t * br;
+  t *= br;
+  if (pH2 > 0) t += tauH2(pH2, pTot, g, pHe);
+  return t;
 }
 
-export function olr(T, pCO2, pH2O, pCH4, pTot) {
-  const tau = opticalDepth(pCO2, pH2O, pCH4, pTot);
+export function olr(T, pCO2, pH2O, pCH4, pTot, pH2 = 0, g = G_EARTH, pHe = 0) {
+  const tau = opticalDepth(pCO2, pH2O, pCH4, pTot, pH2, g, pHe);
   return SIGMA * T * T * T * T / (1 + 0.75 * tau);
 }
 
 // The peak of the saturated OLR curve: the runaway threshold for this planet.
 // Reported in the UI so the player can see how close they are sailing.
-export function runawayLimit(pCO2, pN2) {
+// The scan used to stop at 520 K, which was comfortably past the peak for any
+// world this model could build: a saturated Earth peaks at 351 K and the curve
+// only falls after it. A hydrogen envelope moves the peak, and the states this
+// branch exists to reach are stable at 350-550 K, so a ceiling inside that band
+// would report the edge of the scan as if it were the physics. 700 K is past
+// the critical point, where there is no saturated branch left to walk.
+export function runawayLimit(pCO2, pN2, pH2 = 0, g = G_EARTH, pHe = 0) {
   let best = 0, bestT = 0;
-  for (let T = 275; T < 520; T += 1) {
+  for (let T = 275; T < 700; T += 1) {
     const p = psatH2O(T) / 1e5;
-    const F = olr(T, pCO2, p, 0, pN2 + pCO2 + p);
+    const F = olr(T, pCO2, p, 0, pN2 + pCO2 + p + pH2 + pHe, pH2, g, pHe);
     if (F > best) { best = F; bestT = T; }
   }
   return { flux: best, T: bestT };

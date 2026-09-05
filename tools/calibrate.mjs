@@ -255,6 +255,64 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     'on the whole history and not on a state that was set by hand.');
 }
 
+// ---- the hydrogen envelope ------------------------------------------------
+//
+// One anchor and two stated gaps, and the difference between them matters.
+{
+  const base = { ...PRESETS.earth.params, mass: 3, co2Bar: 0, ch4Bar: 0, o2Bar: 0,
+    n2Bar: 0, emissions: 0, brightening: 0, realisticGeology: false, life: false,
+    biosphere: 0 };
+  const settle = (params, years) => {
+    const sim = new Simulation(params);
+    const w = sim.world;
+    for (let i = 0; i < 400000 && w.time < years; i++) sim.stepOnce(Math.min(maxStep(w), 1e4));
+    return w;
+  };
+
+  // The anchor CIA_H2 is fitted to, so it checks the fit rather than testing it.
+  // It is here because a constant fitted in a scratch script and never looked at
+  // again is a constant that silently stops meaning what its comment says the
+  // next time anything upstream of it moves -- the albedo, the water partition,
+  // the step controller. This row notices that.
+  const pg = settle({ ...base, insolation: 0.01, h2Bar: 40, heliumFrac: 0,
+    water: 1, startT: 285 }, 2e7);
+  anchor('H2 greenhouse: 40 bar, 3 M⊕, 0.01 S⊕', pg.diag.Tmean, 275, 285, 'K',
+    'Pierrehumbert & Gaidos 2011 (ApJ 734 L13): 40 bar of pure H2 on a three ' +
+    'Earth-mass planet holds 280 K at 10 AU from a G star. CIA_H2 is fitted to ' +
+    'this and to nothing else.');
+
+  // And the two that are honestly wrong. Innes, Tsai & Pierrehumbert 2023 put
+  // the inner edge of the Hycean habitable zone at 1.6 AU for a 1 bar envelope
+  // and 3.85 AU for 10 bar around a G star. This model puts both far closer in,
+  // and the gap WIDENS with pressure -- 2.7x at 1 bar, 4.0x at 10 -- which is
+  // the fingerprint of a mechanism that strengthens with the hydrogen column.
+  //
+  // That mechanism is convective inhibition, and Innes says so outright: in an
+  // H2 background, condensing something as heavy as water suppresses convection
+  // and leaves a superadiabatic layer, so the surface runs far hotter than a
+  // moist adiabat allows and the runaway threshold drops. This model has no
+  // vertical structure to put such a layer in. Until it carries the consequence
+  // of one, these rows report the size of what is missing rather than pretending
+  // a single fitted opacity covers it.
+  const edge = (h2Bar) => {
+    let lastOK = 0;
+    for (let S = 0.01; S < 3; S *= 1.03) {
+      const w = settle({ ...base, h2Bar, water: 10, startT: 300, insolation: S }, 3e6);
+      const dg = w.diag;
+      const rl = runawayLimit(dg.pCO2, dg.pN2 + dg.pCH4, dg.pH2, dg.g, dg.pHe);
+      if (dg.absorbed + dg.Fint > rl.flux) return lastOK;
+      lastOK = S;
+    }
+    return lastOK;
+  };
+  deviation('Hycean inner edge, 1 bar H2', edge(1), 0.35, 0.43, 'S⊕',
+    'Innes, Tsai & Pierrehumbert 2023 (ApJ 953, 168): 1.6 AU from a G star, ' +
+    '= 0.391 S⊕. Missing convective inhibition — see Phase 4.');
+  deviation('Hycean inner edge, 10 bar H2', edge(10), 0.06, 0.075, 'S⊕',
+    'Innes et al. 2023: 3.85 AU = 0.067 S⊕. The gap grows with pressure, which ' +
+    'is what a suppressed-convection mechanism would do.');
+}
+
 // ---- report ---------------------------------------------------------------
 let bad = 0;
 console.log('');

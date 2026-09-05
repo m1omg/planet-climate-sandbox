@@ -14,10 +14,11 @@ export const SK = {
     // ---- hlavička a panely -------------------------------------------------
     'Planet Climate': 'Klíma planéty',
     'Sandbox': 'Pieskovisko',
-    'An alternative line of work to /dev/. Planetary histories, magnetic fields, resurfacing, and the step-size bugs behind the flickering.':
-      'Druhá vetva vývoja popri /dev/. Vývoj planét v čase, magnetické polia, obnova povrchu a chyby v dĺžke kroku, ktoré spôsobovali blikanie.',
+    'A fork of /altdev/ reaching past rocky worlds: hydrogen envelopes, oceans hundreds of kilometres deep, and climates that stay liquid well above the boiling point.':
+      'Odnož /altdev/, ktorá siaha za kamenné svety: vodíkové obálky, oceány hlboké stovky kilometrov a klímy, ktoré zostávajú tekuté hlboko nad bodom varu.',
     'stable site': 'stabilná verzia',
     'dev': 'dev',
+    'altdev': 'altdev',
     'Dismiss': 'Zavrieť',
     'Worlds': 'Svety',
     'Saves': 'Uložené svety',
@@ -305,6 +306,9 @@ export const SK = {
     'Methane': 'Metán',
     'What is in the air now, not what stays. Life makes most of it and the interior a little; oxygen cuts its life from twelve thousand years to ten, so an oxygenated world holds almost none.':
       'Koľko ho je v ovzduší teraz, nie koľko vydrží. Väčšinu vyrába život, trochu vnútro planéty; kyslík skracuje jeho životnosť z dvanástich tisíc rokov na desať, takže okysličený svet ho takmer nemá.',
+    'Hydrogen envelope': 'Vodíková obálka',
+    'Hydrogen and helium kept from the disc the planet formed in, not outgassed from its rock. It has no absorption bands — it warms by colliding, which never saturates, so it keeps getting stronger as you add it. Forty bar of it holds an ocean liquid ten times further from the star than Earth is.':
+      'Vodík a hélium zachytené z disku, v ktorom planéta vznikla, nie odplynené z jej horniny. Nemá absorpčné pásy — hreje zrážkami, ktoré sa nikdy nenasýtia, takže s pribúdajúcim množstvom je stále silnejší. Štyridsať barov udrží oceán tekutý desaťkrát ďalej od hviezdy, než je Zem.',
     'Ground brightness': 'Jas povrchu',
     'Dark basalt 0.10 · rock 0.25 · bright sand 0.40': 'Tmavý bazalt 0,10 · hornina 0,25 · svetlý piesok 0,40',
     'Photosynthetic biosphere': 'Fotosyntetická biosféra',

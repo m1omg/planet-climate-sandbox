@@ -3604,6 +3604,84 @@ export function run() {
       'a world has one history, not a tree of them — save a slot to keep the other');
   }
 
+  // ---- 7g. the hydrogen envelope -------------------------------------------
+  {
+    const run = (over, years = 2e7, cap = 1e4) => {
+      const sim = new Simulation({ ...EARTH, emissions: 0, brightening: 0,
+        realisticGeology: false, biosphere: 0, ...over });
+      const w = sim.world;
+      for (let i = 0; i < 400000 && w.time < years; i++) sim.stepOnce(Math.min(maxStep(w), cap));
+      return w;
+    };
+
+    // The invariant the whole phase rests on. Every world that existed before
+    // hydrogen did carries none of it, so the envelope terms are multiplied by
+    // zero everywhere and cannot reach a single existing preset. Asserted over
+    // all of them rather than spot-checked, because "I added it switched off"
+    // is exactly the claim that is easy to believe and cheap to break.
+    const carriers = Object.entries(PRESETS)
+      .filter(([, v]) => (v.params.h2Bar ?? 0) > 0).map(([k]) => k);
+    check('No world that predates hydrogen has any',
+      carriers.length === 0,
+      `${Object.keys(PRESETS).length} presets, ${carriers.length} with an envelope`
+        + (carriers.length ? `: ${carriers.join(', ')}` : ''));
+
+    // Pierrehumbert & Gaidos 2011: 40 bar of pure H2 on a three Earth-mass
+    // planet holds 280 K at 10 AU from a G star, where the sunlight is a
+    // hundredth of Earth's. Without the envelope the same world is a snowball,
+    // and the gap between those two numbers is the entire point of the phase.
+    const cold = { mass: 3, insolation: 0.01, co2Bar: 0, ch4Bar: 0, o2Bar: 0,
+                   n2Bar: 0, water: 1, startT: 285, life: false };
+    const withH2 = run({ ...cold, h2Bar: 40, heliumFrac: 0 });
+    const bare = run({ ...cold, h2Bar: 0 });
+    check('40 bar of hydrogen holds an ocean ten AU from a G star',
+      near(withH2.diag.Tmean, 280, 5),
+      `${withH2.diag.Tmean.toFixed(1)} K against Pierrehumbert & Gaidos's 280`);
+    check('…and the same world without it is frozen solid',
+      bare.diag.Tmean < 200 && withH2.diag.Tmean - bare.diag.Tmean > 100,
+      `${bare.diag.Tmean.toFixed(1)} K bare, ${(withH2.diag.Tmean - bare.diag.Tmean).toFixed(0)} K of hydrogen greenhouse`);
+
+    // Collision-induced absorption has no bands and so nothing to saturate,
+    // which is the property that distinguishes it from every other greenhouse
+    // gas in this model. CO2 goes logarithmic and stops paying; hydrogen keeps
+    // paying. Ten times the envelope has to be worth much more than one more
+    // doubling would be.
+    const t1 = run({ ...cold, h2Bar: 4 }).diag.Tmean;
+    const t2 = run({ ...cold, h2Bar: 40 }).diag.Tmean;
+    const t3 = run({ ...cold, h2Bar: 400 }).diag.Tmean;
+    check('Hydrogen never saturates: each ten-fold is worth more than the last',
+      t3 - t2 > t2 - t1 && t2 > t1,
+      `4→40 bar: +${(t2 - t1).toFixed(0)} K, 40→400 bar: +${(t3 - t2).toFixed(0)} K`);
+
+    // And the constraint that makes Hycean worlds a question about mass. The
+    // envelope's scale height goes as 1/mu, so hydrogen stands nine times
+    // taller than steam, presents a far bigger XUV target, and is stripped as
+    // the cube of that radius. A small planet cannot keep one.
+    const keep = (mass) => {
+      const w = run({ mass, insolation: 0.3, h2Bar: 10, co2Bar: 0, ch4Bar: 0,
+        o2Bar: 0, n2Bar: 0, water: 5, startT: 300, life: false,
+        xuvFraction: 3.4e-6 * 30, magneticField: 0 }, 1e8, 1e5);
+      return w.diag.pH2 / 9;   // share of the 10 bar (pure H2, so 9 of it) left
+    };
+    const small = keep(0.3), big = keep(8);
+    check('A small planet cannot hold a hydrogen envelope and a big one can',
+      small < big,
+      `0.3 M⊕ keeps ${(small * 100).toFixed(1)}%, 8 M⊕ keeps ${(big * 100).toFixed(1)}%`);
+
+    // The envelope has to survive a save. It is a reservoir like any other and
+    // a snapshot that dropped it would restore a Hycean world as a bare rock
+    // at the same temperature, which would then freeze while you watched.
+    {
+      const w = run({ ...cold, h2Bar: 40, heliumFrac: 0.1 }, 1e6);
+      const shot = captureWorld(w);
+      const sim2 = new Simulation({ ...EARTH });
+      const back = applyWorld(sim2, shot);
+      check('A saved world keeps its envelope',
+        back.h2 === w.h2 && back.he === w.he && back.he > 0,
+        `${(back.diag.pH2).toFixed(2)} bar H₂ + ${(back.diag.pHe).toFixed(2)} bar He restored`);
+    }
+  }
+
   // ---- 8. the controls: typed values and slider round-trips ----------------
   {
     const by = (k) => SLIDERS.find((d) => d.key === k);

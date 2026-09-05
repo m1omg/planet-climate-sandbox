@@ -16,9 +16,14 @@ const R_EARTH = 6.371e6;       // m
 
 // Mean molar mass of the air, from what is actually in it.
 export function molarMass(dg) {
-  const m = { n2: 28.0, co2: 44.0, ch4: 16.0, o2: 32.0, h2o: 18.0 };
+  const m = { n2: 28.0, co2: 44.0, ch4: 16.0, o2: 32.0, h2o: 18.0, h2: 2.016, he: 4.003 };
   const pH2O = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length;
-  const parts = [[dg.pN2, m.n2], [dg.pCO2, m.co2], [dg.pCH4, m.ch4], [dg.pO2, m.o2], [pH2O, m.h2o]];
+  // Hydrogen is the entry that changes the picture rather than nudging it. At
+  // 2 kg/kmol against nitrogen's 28 the scale height is fourteen times Earth's
+  // at the same temperature and gravity, which is why a hydrogen envelope is a
+  // visibly puffy planet and not a thin blue line.
+  const parts = [[dg.pN2, m.n2], [dg.pCO2, m.co2], [dg.pCH4, m.ch4], [dg.pO2, m.o2],
+                 [dg.pH2 ?? 0, m.h2], [dg.pHe ?? 0, m.he], [pH2O, m.h2o]];
   let p = 0, sum = 0;
   for (const [pp, mm] of parts) { if (pp > 0) { p += pp; sum += pp * mm; } }
   return p > 0 ? sum / p : 28.0;

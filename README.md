@@ -2127,9 +2127,77 @@ arrives; scaling the sink with the source would hold equilibrium CO₂ exactly w
 the coupling a no-op. Fresh-basalt weatherability matters at the supply-limited end, which this
 model does not enter.
 
+### Hydrogen, which warms by colliding
+
+Every other greenhouse gas here works by having absorption bands, and every one of them eventually
+runs out of road: CO₂'s 15 µm core saturates and its forcing goes logarithmic, methane's narrow
+bands saturate earlier still and then its own shortwave absorption puts a ceiling on it. **Hydrogen
+has no bands at all.** H₂ is symmetric, has no permanent dipole, and on its own ought to be
+transparent — except that during a collision the pair briefly *does* have one, and the resulting
+continuum has no line structure and so nothing to saturate.
+
+That single fact is why this branch exists. Being a two-body process the absorption goes as the
+product of two densities, and integrating that down a hydrostatic column gives
+
+> τ ∝ p<sub>H₂</sub> · p<sub>tot</sub> / g
+
+— **quadratic in surface pressure**, and still climbing where CO₂ stopped paying. Forty bar of it
+holds a surface at 280 K **ten astronomical units** from a Sun-like star, where the sunlight is a
+hundredth of Earth's (Pierrehumbert & Gaidos 2011). The same world without it freezes solid.
+
+The `1/g` is not decoration. Every other opacity term in `radiation.js` is written in pressures
+alone, with gravity folded into a constant that was fitted at Earth's — fine for a term anchored on
+Earth, and wrong by a factor of two for one anchored on a super-Earth of three to ten Earth masses.
+So this term carries gravity explicitly. It is also added *after* the pressure-broadening factor
+rather than inside it, unlike the methane continuum: that one is inside because it was fitted there,
+to Titan, and moving it would move Titan; this one is quadratic because the physics says quadratic,
+and multiplying it by p^0.3 as well would make it p^2.3 for no reason anyone could defend.
+
+**Helium** rides along as a correction, not a mechanism. It collides about ten times less
+effectively than hydrogen does, so a solar-composition envelope is slightly less opaque than the
+same pressure of pure H₂. One control sets the envelope; `heliumFrac` splits it, solar by default.
+
+#### Why a hydrogen world has to be a big one
+
+Scale height goes as 1/µ, so hydrogen's is **nine times steam's** and fourteen times air's at the
+same temperature and gravity. The envelope stands far taller, presents a much larger cross-section
+to the star's XUV, and hydrodynamic loss goes as the *cube* of that radius. A small planet simply
+cannot keep one, which is why every world in the Hycean argument is several Earth masses.
+
+Two consequences follow, and the second is the interesting one. Bulk H₂ is not subject to the
+diffusion limit that governs the trace hydrogen made by photolysing water — there is no heavier
+background to diffuse through, because it *is* the background. And the energy-limited flux is **one
+budget, not one per species**: everything leaving is lifted by the same absorbed XUV, so a thick
+envelope does not add its loss on top of the ocean's, it *takes* the budget and the ocean beneath is
+shielded. Part of why a Hycean world can stay wet where a bare rock would be stripped.
+
+#### What this is fitted to, and it is one number
+
+`CIA_H2` is fitted to the Pierrehumbert & Gaidos anchor and to nothing else. Every other opacity
+constant in this model was fitted against two or three independent observations, several of them
+against a planet somebody has measured; this one is fitted against **one number from one 1-D model
+of a planet nobody has ever seen.** It is the least constrained number in the model and it should
+say so. `tools/calibrate.mjs` carries the anchor so that a change upstream of it — the albedo, the
+water partition, the step controller — cannot quietly stop it meaning what this section says.
+
 ## Known deviations from the literature
 
 Stated plainly, because a model that hides these is less useful:
+
+* **The Hycean habitable zone's inner edge is far too close to the star.** Innes, Tsai &
+  Pierrehumbert (2023) put it at 1.6 AU for a 1 bar H₂/He envelope around a G star and 3.85 AU for
+  10 bar — 0.391 and 0.067 S⊕. This model puts them at **1.04 and 0.229 S⊕**: 2.7× and 3.4× too
+  close in. Both report as `GAP` rows every run.
+
+  The gap **widens with pressure**, which is the fingerprint of a mechanism that strengthens with the
+  hydrogen column, and Innes names it: in an H₂ background, condensing something as heavy as water
+  suppresses convection above a critical abundance and leaves a stably-stratified superadiabatic
+  layer, so the surface runs far hotter than a moist adiabat allows and the runaway threshold drops.
+  At 300 K in H₂ the criterion bites at about a **0.8% water mole fraction**, so essentially any
+  humid hydrogen atmosphere is inhibited.
+
+  This model is semi-grey with a single optical depth and no vertical structure. It has nowhere to
+  put such a layer and does not pretend otherwise.
 
 * **There is no outer edge to the habitable zone.** Kasting et al. (1993) put it at 1.67 AU — 0.36
   S⊕ — and it is set by a *maximum greenhouse*: CO₂ Rayleigh-scatters about 2.5× better than air, so

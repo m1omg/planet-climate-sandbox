@@ -515,7 +515,43 @@ export function escapeRates(w) {
   const energy = 0.15 * xuv * Math.pow(inflate, 3) / (dg.g * d.R) * YEAR;
 
   const escapeScale = clamp(p.escapeScale ?? 1, 0, 100);
-  const water = Math.min(diffusion, energy) * (dg.totalWater > 0 ? 1 : 0) * escapeScale;
+
+  // --- the primordial envelope, and who gets the escape budget -------------
+  //
+  // Hydrogen as a BULK gas is a different problem from the hydrogen this
+  // function was written for. That hydrogen is a trace, made by photolysing
+  // water, and it has to diffuse up through a heavier background to leave --
+  // which is the ceiling `diffusion` above imposes. An H2 envelope has no
+  // heavier background to diffuse through, because it IS the background. The
+  // diffusion limit does not apply to it at all, and what is left is the
+  // energy-limited flux: whatever the star's XUV can lift.
+  //
+  // Which is brutal, and the reason is the scale height. It goes as 1/mu, so
+  // hydrogen's is nine times steam's and fourteen times air's at the same
+  // temperature and gravity -- the envelope stands far taller, presents a much
+  // bigger XUV cross-section, and the loss goes as the cube of that radius. A
+  // small planet cannot hold one. This is what makes Hycean worlds a question
+  // about mass rather than about distance, and why the ones being argued over
+  // are all several Earth masses.
+  const HH2 = 1.381e-23 * dg.Tmean / (2.016 * 1.661e-27 * dg.g);
+  // A wider clamp than steam's 2.2, because this is the term where inflation is
+  // the whole story rather than a correction to it.
+  const inflateH2 = clamp(1 + 60 * HH2 / d.R, 1, 6);
+
+  // The energy-limited flux is ONE budget, not one per species. Everything
+  // leaving is lifted by the same absorbed XUV, so a thick envelope does not
+  // add its loss on top of the water's -- it takes the budget, and the ocean
+  // underneath is shielded. That shielding is not a technicality: it is part of
+  // why a Hycean world can stay wet somewhere a bare rock would be stripped.
+  //
+  // Split by the envelope's share of the column. At zero envelope the share is
+  // zero, `water` is exactly what it was, and `envelope` never runs -- so no
+  // world that existed before this paragraph moves by a bit.
+  const fEnv = clamp((dg.pH2 + dg.pHe) / pTot, 0, 1);
+  const envelope = fEnv > 0
+    ? 0.15 * xuv * inflateH2 * inflateH2 * inflateH2 / (dg.g * d.R) * YEAR * fEnv * escapeScale
+    : 0;
+  const water = Math.min(diffusion, energy * (1 - fEnv)) * (dg.totalWater > 0 ? 1 : 0) * escapeScale;
 
   // Background gas loss. Gated on the cosmic shoreline: XUV irradiation has to
   // overcome gravitational binding (~ v_esc^4) before N2/CO2 go anywhere.
@@ -528,7 +564,7 @@ export function escapeRates(w) {
   // ions off whatever the magnetosphere does not cover. See nonThermalEscape.
   const nonThermal = nonThermalEscape(p, d, xuv, pTot) * escapeScale;
 
-  return { water, background, nonThermal, fStrat, Tct, diffusion, energy, xSteam };
+  return { water, background, nonThermal, envelope, fEnv, fStrat, Tct, diffusion, energy, xSteam };
 }
 
 // ---------------------------------------------------------------------------
@@ -1135,6 +1171,16 @@ export function stepVolatiles(w, dtYears) {
     const target = Math.min(w.co2Frozen, (pEq / dg.g - w.co2));
     const move = Math.max(0, target) * relax;
     w.co2 += move; w.co2Frozen -= move;
+  }
+
+  // --- the envelope goes first ---------------------------------------------
+  // Hydrogen and helium in proportion: they are one well-mixed reservoir and
+  // the flux is hydrodynamic, which drags rather than sorts. Applied before the
+  // background loss below so that a planet losing its envelope is not also
+  // being charged the heavy-gas escape it is shielding.
+  if (esc.envelope > 0 && w.h2 + w.he > 0) {
+    const f = Math.max(0, 1 - esc.envelope * dtYears / Math.max(w.h2 + w.he, 1e-9));
+    w.h2 *= f; w.he *= f;
   }
 
   // --- atmospheric escape of the background gas ---------------------------

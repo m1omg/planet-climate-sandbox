@@ -39,6 +39,9 @@ export function captureWorld(w) {
     carbonDeep: w.carbonDeep,
     bio: w.bio,
     co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
+    // The envelope. A save that dropped it would restore a Hycean world as a
+    // bare rock at the same temperature and then watch it freeze.
+    h2: w.h2, he: w.he,
     // Where the evolving controls started. Without this a saved world resumes
     // with its star re-based to whatever brightness it had reached, and the
     // history scrubber would brighten it a second time on the way back.
@@ -74,6 +77,8 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.n2 != null) w.n2 = s.n2;
   if (s.o2 != null) w.o2 = s.o2;
   if (s.ch4 != null) w.ch4 = s.ch4;
+  if (s.h2 != null) w.h2 = s.h2;
+  if (s.he != null) w.he = s.he;
   update(w, 0);
   return w;
 }

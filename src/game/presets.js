@@ -25,6 +25,20 @@ export const EARTH = {
   biosphere: 1.0,   // oxygenic photosynthesis, relative to Earth's
   co2Bar: 427e-6,
   ch4Bar: 1.9e-6,
+  // The primordial envelope: hydrogen and helium caught from the disc while the
+  // star was still forming, rather than outgassed from the rock afterwards.
+  // Earth has none -- whatever it captured was lost long ago, and that is true
+  // of every terrestrial world here, so this is zero in all of them and the
+  // radiative term it feeds is switched off by being multiplied by nothing.
+  //
+  // It is in this list rather than only in the Hycean presets because this list
+  // is also the allowlist for the URL hash: a parameter missing from it is
+  // silently dropped from a shared link, so a Hycean world sent to someone else
+  // would arrive as a bare rock. (`tidalHeat` is missing from it and is dropped
+  // exactly that way -- a real bug, older than this branch, left alone here
+  // because fixing it is not this change.)
+  h2Bar: 0,
+  heliumFrac: 0.1,   // solar, by number -- the split only matters once h2Bar does
   emissions: 0,     // see the `earth` preset; only that world has us on it
   fossilUsed: 0,    // share of the fossil reserve already burnt
   fossilInfinite: false,  // ignore the reserve and burn for ever

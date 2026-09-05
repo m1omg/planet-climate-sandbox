@@ -88,6 +88,9 @@ export function createWorld(params) {
     T: new Float64Array(NBANDS),
     time: 0,                    // years
     co2: 0, n2: 0, ch4: 0, o2: 0,   // column masses, kg/m^2
+    // The primordial envelope, captured from the disc rather than outgassed,
+    // and zero on every world this model could build before now.
+    h2: 0, he: 0,
     co2Frozen: 0,
     water: { ocean: 0, ice: 0, vapour: 0, lost: 0 },  // Earth oceans
     diag: null,
@@ -105,6 +108,15 @@ export function resetWorld(w, params) {
   w.co2 = params.co2Bar * 1e5 / d.g;
   w.ch4 = params.ch4Bar * 1e5 / d.g;
   w.o2 = (params.o2Bar ?? 0) * 1e5 / d.g;
+  // `h2Bar` is the whole envelope, H2 and He together, because that is what an
+  // observation of one constrains and what a planet's formation delivers -- a
+  // nebular composition, not two independent inventories. `heliumFrac` then
+  // splits it by partial pressure, which for ideal gases is the mole fraction,
+  // so the solar 0.1 by number is 0.1 here.
+  const pEnv = Math.max(params.h2Bar ?? 0, 0);
+  const fHe = clamp(params.heliumFrac ?? 0, 0, 1);
+  w.h2 = pEnv * (1 - fHe) * 1e5 / d.g;
+  w.he = pEnv * fHe * 1e5 / d.g;
   w.co2Frozen = 0;
   w.water = params.startWithSteam
     ? { ocean: 0, seaIce: 0, landIce: 0, vapour: params.water, lost: 0 }
@@ -218,6 +230,8 @@ export function update(w, dt) {
   const pCO2 = w.co2 * g / 1e5;
   const pCH4 = w.ch4 * g / 1e5;
   const pO2 = w.o2 * g / 1e5;
+  const pH2 = w.h2 * g / 1e5;
+  const pHe = w.he * g / 1e5;
 
   // Water available to evaporate, as a column and then as pressure
   const totalWater = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
@@ -381,7 +395,7 @@ export function update(w, dt) {
   let Tmean = 0, iceMean = 0, iceArea = 0, absorbed = 0, emitted = 0, pTotMean = 0;
 
   for (let i = 0; i < NBANDS; i++) {
-    const pTot = pN2 + pCO2 + pCH4 + pO2 + pH2O[i];
+    const pTot = pN2 + pCO2 + pCH4 + pO2 + pH2 + pHe + pH2O[i];
     pTotArr[i] = pTot;
     const subStellar = lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;
     const ao = B.aOpt;
@@ -391,8 +405,8 @@ export function update(w, dt) {
     ao.subStellar = subStellar; ao.cloudWhite = cloudWhite;
     const a = planetaryAlbedoInto(w.T[i], ao, B.aOut);
     alb[i] = clamp(a.albedo + aerAlb, 0, 0.95); cloud[i] = a.cloud;
-    const moistOLR = olr(w.T[i], pCO2, pH2O[i], pCH4, pTot);
-    const dryOLR = olr(w.T[i], pCO2, pH2Odry[i], pCH4, pTot);
+    const moistOLR = olr(w.T[i], pCO2, pH2O[i], pCH4, pTot, pH2, g, pHe);
+    const dryOLR = olr(w.T[i], pCO2, pH2Odry[i], pCH4, pTot, pH2, g, pHe);
     // Floored rather than merely subtracted: a lumped forcing that could drive
     // the outgoing flux to nothing would be a runaway with no physics behind it.
     out[i] = Math.max((1 - FIN_FRACTION) * moistOLR + FIN_FRACTION * dryOLR - ghgForce,
@@ -468,7 +482,7 @@ export function update(w, dt) {
   const Fint = Math.max(p.internalHeat ?? EARTH_INTERNAL_FLUX, 0);
 
   w.diag = {
-    g, d, pN2, pCO2, pCH4, pO2, pH2O, pTot: pTotArr, pTotMean, Fint,
+    g, d, pN2, pCO2, pCH4, pO2, pH2, pHe, pH2O, pTot: pTotArr, pTotMean, Fint,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
     flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
     exposedBasin, effLandAlbedo, liquidAllowed, pSurfPa,
@@ -812,8 +826,8 @@ export function radiativeDamping(w) {
       : (t) => dg.pH2O[i] * (psatH2O(t) / Math.max(psatH2O(T), 1e-12));
     const pwHi = pw(T + h), pwLo = pw(T - h);
     const ptHi = dg.pTot[i] - dg.pH2O[i] + pwHi, ptLo = dg.pTot[i] - dg.pH2O[i] + pwLo;
-    const dOLR = (olr(T + h, dg.pCO2, pwHi, dg.pCH4, ptHi)
-                - olr(T - h, dg.pCO2, pwLo, dg.pCH4, ptLo)) / (2 * h);
+    const dOLR = (olr(T + h, dg.pCO2, pwHi, dg.pCH4, ptHi, dg.pH2, dg.g, dg.pHe)
+                - olr(T - h, dg.pCO2, pwLo, dg.pCH4, ptLo, dg.pH2, dg.g, dg.pHe)) / (2 * h);
     const albAt = (t, pwx, ptx) => {
       const ao = B.aOpt;
       ao.oceanFrac = dg.flooded; ao.landAlbedo = dg.effLandAlbedo;
