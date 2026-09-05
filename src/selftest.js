@@ -582,9 +582,14 @@ export function run() {
     // preset by preset rather than argued. This is the promise the plan for
     // this work made, and it is the one a future edit is most likely to break
     // by loosening a gate.
+    // "Predates the envelope" is tested as a property and not as a list of
+    // names, because a list is a second thing to remember: add a Hycean preset,
+    // forget to exclude it, and the check fails on its own success. A world with
+    // no h2Bar is a world from before this work, whenever it was written.
     const HYCEAN = ['hycean', 'coldHycean', 'supercriticalEnvelope'];
     const trespass = [];
     for (const id of Object.keys(PRESETS)) {
+      if ((PRESETS[id].params.h2Bar ?? 0) > 0) continue;
       const s = new Simulation({ ...PRESETS[id].params });
       for (const yrs of [0, 1e4, 1e6 - 1e4, 9e6]) {
         if (yrs) s.runYears(yrs);
@@ -595,7 +600,8 @@ export function run() {
     check('No world that predates the hydrogen envelope can reach a Hycean state',
       trespass.length === 0,
       trespass.length ? trespass.join(' · ')
-        : `${Object.keys(PRESETS).length} presets, four points each, none of them`);
+        : `${Object.keys(PRESETS).filter((k) => !(PRESETS[k].params.h2Bar > 0)).length} `
+          + `envelope-free presets, four points each, none of them`);
 
     // The four presets built on all of this, pinned to where they settle rather
     // than to how they are configured. A preset is a claim about an outcome:
@@ -648,7 +654,7 @@ export function run() {
     // then split itself: liveable below ~395 K, sterile and still liquid above.
     //
     // It is worth knowing that this model cannot currently take a Hycean world
-    // to either side of that line -- it tops out at 299 K, reported as a GAP by
+    // to either side of that line -- it tops out at 335 K, reported as a GAP by
     // calibrate.mjs. The agreement is still worth pinning, because the day the
     // vertical structure arrives is the day it starts to matter.
     {
@@ -3922,15 +3928,26 @@ export function run() {
 
     // The invariant the whole phase rests on. Every world that existed before
     // hydrogen did carries none of it, so the envelope terms are multiplied by
-    // zero everywhere and cannot reach a single existing preset. Asserted over
-    // all of them rather than spot-checked, because "I added it switched off"
-    // is exactly the claim that is easy to believe and cheap to break.
+    // zero everywhere and cannot reach it. Asserted over all of them rather than
+    // spot-checked, because "I added it switched off" is exactly the claim that
+    // is easy to believe and cheap to break.
+    //
+    // There are four worlds WITH an envelope now, and they are named here rather
+    // than filtered out by a property. Every other check in this file that had
+    // to learn about them uses a property, and this one is the exception on
+    // purpose: it is the promise that the inherited set was not touched, so it
+    // has to notice a twenty-seventh name appearing in it. If a future preset
+    // belongs on this list, adding it here is the deliberate act.
+    const ENVELOPED = ['hycean', 'coldHycean', 'superRunaway', 'coldStart'];
     const carriers = Object.entries(PRESETS)
-      .filter(([, v]) => (v.params.h2Bar ?? 0) > 0).map(([k]) => k);
+      .filter(([k, v]) => (v.params.h2Bar ?? 0) > 0 && !ENVELOPED.includes(k)).map(([k]) => k);
+    const missing = ENVELOPED.filter((k) => !(PRESETS[k]?.params.h2Bar > 0));
     check('No world that predates hydrogen has any',
-      carriers.length === 0,
-      `${Object.keys(PRESETS).length} presets, ${carriers.length} with an envelope`
-        + (carriers.length ? `: ${carriers.join(', ')}` : ''));
+      carriers.length === 0 && missing.length === 0,
+      carriers.length ? `unexpected envelope on: ${carriers.join(', ')}`
+        : missing.length ? `expected an envelope and found none on: ${missing.join(', ')}`
+        : `${Object.keys(PRESETS).length} presets, and the only ${ENVELOPED.length} with an `
+          + `envelope are the ones built to have one`);
 
     // Pierrehumbert & Gaidos 2011: 40 bar of pure H2 on a three Earth-mass
     // planet holds 280 K at 10 AU from a G star, where the sunlight is a
@@ -4041,15 +4058,23 @@ export function run() {
       near(waterRadiusFactor(0.5), 1.24, 0.001),
       `f(0.5) = ${waterRadiusFactor(0.5).toFixed(4)} against the paper's 1.24`);
 
-    // No shipped world may acquire interior water. The threshold is what the
-    // basins can hold, and every preset is below it -- which is why the radius
-    // relation could be replaced without moving any of them.
+    // No world from before this work may acquire interior water. The threshold is
+    // what the basins can hold, every inherited preset is below it, and that is
+    // why the radius relation could be replaced without moving any of them.
+    //
+    // The sub-Neptunes are above it, which is the point of them -- five hundred
+    // oceans is a planet made of water, not a planet with water on it -- so they
+    // are excluded by carrying an envelope rather than by name. A rocky preset
+    // cannot get past this by accident: it would have to grow a hydrogen
+    // atmosphere first, and the check above says which four are allowed to have
+    // one.
     const wet = Object.entries(PRESETS)
-      .filter(([, v]) => waterMassFraction(v.params.mass, v.params.water) > 0).map(([k]) => k);
-    check('No shipped world has water in its interior',
+      .filter(([, v]) => !(v.params.h2Bar > 0)
+        && waterMassFraction(v.params.mass, v.params.water) > 0).map(([k]) => k);
+    check('No rocky world has water in its interior',
       wet.length === 0,
-      `${Object.keys(PRESETS).length} presets, ${wet.length} above the ${
-        (waterMassFraction(1, 7.4) > 0 ? '7.3' : '?')} EO the basins hold`
+      `${Object.keys(PRESETS).filter((k) => !(PRESETS[k].params.h2Bar > 0)).length} `
+        + `envelope-free presets, ${wet.length} above the 7.3 EO the basins hold`
         + (wet.length ? `: ${wet.join(', ')}` : ''));
 
     check('Earth, Venus and Mars keep the radii they had',

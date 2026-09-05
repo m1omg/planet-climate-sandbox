@@ -621,7 +621,7 @@ export const PRESETS = {
   //
   // The warm Hycean of the literature -- Madhusudhan's 350-550 K band -- is NOT
   // reached, and the absence is honest rather than an oversight: this model runs
-  // away before it gets there. 334 K is as far as it goes. See the Hycean World
+  // away before it gets there. 335 K is as far as it goes. See the Hycean World
   // state text and the GAP row in tools/calibrate.mjs.
   hycean: { name: 'Hycean World', icon: '🌊', params: { ...HYCEAN,
     mass: 10, water: 500, h2Bar: 20, insolation: 0.10, startT: 300 } },

@@ -16,7 +16,26 @@ const clearShot = join(tmpdir(), 'altdev2-clouds-off.png');
 const volcanoScreenshot = join(tmpdir(), 'altdev2-volcanism.png');
 const epochScreenshot = join(tmpdir(), 'altdev2-epochs.png');
 const drownedScreenshot = join(tmpdir(), 'altdev2-browsercheck-drowned.png');
+// Chrome refuses to start its sandbox as root, which is every container this
+// is likely to run in -- CI, and the remote sandboxes this project is developed
+// in. Passing --no-sandbox unconditionally would weaken it for a developer
+// running the check on their own machine, so it is passed only when there is no
+// sandbox to be had anyway. Nothing changes for a normal user.
+//
+// One thing to know before diagnosing a hang here. On a machine with no GPU,
+// Chrome falls back to SwiftShader and every frame is rendered on the CPU. The
+// epoch-clock check below drives 360 frames inside a single Runtime.evaluate,
+// and the CDP call has a 20 s timeout: on software rendering that is not enough
+// and the check dies with `CDP timeout: Runtime.evaluate` after sixteen passes.
+// It is the renderer, not the model -- the same 360 ticks take 0.16 s in node
+// with no canvas, and a build predating the work being tested times out in
+// exactly the same place. Raising the timeout for everyone to accommodate a
+// GPU-less container would blunt a real deadlock detector, so this is written
+// down rather than fixed.
+const rootless = typeof process.getuid === 'function' && process.getuid() === 0
+  ? ['--no-sandbox'] : [];
 const chrome = spawn(chromePath, [
+  ...rootless,
   '--headless=new',
   '--enable-unsafe-swiftshader',
   '--no-first-run',

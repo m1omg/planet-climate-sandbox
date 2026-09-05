@@ -2471,11 +2471,12 @@ the result, because in both cases the model was built and then declined to produ
 
 **Hycean World, Cold Hycean World and Supercritical Envelope** all reach from parameters
 rather than from a hand-built diagnostic, and a self-test says so: 20 bar of hydrogen at
-0.105 S⊕ settles at 299 K with a sixty-ocean sea on ice VI; 60 bar with the star switched
-off entirely holds 324 K on internal heat; 20 bar at 0.12 S⊕ ends at 1261 K with no surface
-anywhere. They go in **after** `dryRunaway` and **before** `wetRunaway`, because `T > 420 K`
-is unconditional and would otherwise swallow the lot — a 400 K ocean under thirty bar of
-hydrogen is the whole point of the state, and the chain was calling it a boiling Earth.
+0.10 S⊕ settles at 335 K with a five-hundred-ocean sea 262 km deep on ice VII; 60 bar with
+the star switched off entirely holds 341 K on internal heat; 20 bar at 0.03 S⊕, built hot,
+ends at 1346 K with no surface anywhere. They go in **after** `dryRunaway` and **before**
+`wetRunaway`, because `T > 420 K` is unconditional and would otherwise swallow the lot — a
+400 K ocean under thirty bar of hydrogen is the whole point of the state, and the chain was
+calling it a boiling Earth.
 
 The gate is the envelope's share of the **dry** air, and the first version was wrong in a way
 worth recording. Measured against the total column, a supercritical waterworld carries tens
@@ -2497,10 +2498,19 @@ dark: a state that cannot fire still reads to a player as a state the model supp
 
 **And the Hycean World the model reaches is the temperate one only** — which is the sharper
 finding, because the hot Hycean is what this whole branch was for. The literature's band is
-350–550 K, habitable to about 400 K. Swept over envelopes from 2 to 50 bar and insolations
-from 0.05 to 2 S⊕, the hottest one here that is still a Hycean after **two million years is
-299 K**. Everything warmer is a way-station: the same world reads 482 K at a hundred thousand
-years and 1205 K at a million.
+350–550 K, habitable to about 400 K. Swept over masses 5 to 10 M⊕, envelopes 2 to 100 bar,
+insolations 0.05 to 2 S⊕ and water inventories from 60 to 34,500 oceans, the hottest world
+that is **still a Hycean once its energy budget has closed is 335 K**. Everything warmer is a
+way-station.
+
+The words "once its energy budget has closed" are the expensive part of that sentence, and
+they were learned the hard way. A first sweep ran on **elapsed time** — is it still a Hycean
+after two million years? — and reported a stable 657 K Hycean that does not exist. A world
+carrying thirty-four thousand oceans has the thermal inertia to look like anything for a
+million years: K2-18 b as this model builds it reads a convincing **401 K Hycean at 1 Myr,
+with +179 W/m² of imbalance underneath it**, and is a **4000 K magma ocean by 10 Myr**. The
+more water there is, the longer the way-station lasts and the more convincing it looks. Both
+`calibrate.mjs` and the self-tests settle on the imbalance now, not on a clock.
 
 This is not a second fault, it is the inner-edge gap wearing different clothes. Convective
 inhibition entered this model as a multiplier on τ, which makes a surface *warmer*; what

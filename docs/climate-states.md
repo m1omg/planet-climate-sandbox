@@ -126,9 +126,12 @@ thin air, and thin air is not a Hycean. Shipping a branch that cannot fire would
 worse than not having one — it would read as a state the model supports.
 
 **And the Hycean World the model reaches is the temperate one only.** The literature's band
-is 350–550 K; the hottest one here that survives two million years is 299 K, and everything
-warmer is a way-station on the road to a runaway (482 K at 100 kyr, 1205 K at 1 Myr).
-`tools/calibrate.mjs` reports it as a `GAP`. The cause is the same as the inner-edge gap:
+is 350–550 K; the hottest one here whose energy budget actually closes is 335 K, and
+everything warmer is a way-station on the road to a runaway. Measured on elapsed time instead
+the way-stations look like states — K2-18 b as this model builds it reads a convincing 401 K
+Hycean at one million years with +179 W/m² of imbalance under it, and is a 4000 K magma ocean
+by ten million. `tools/calibrate.mjs` reports the ceiling as a `GAP`, settled on the
+imbalance. The cause is the same as the inner-edge gap:
 convective inhibition enters as extra optical depth, which warms a surface but cannot hold
 it up, and what holds the hot branch up is vertical structure a single-τ semi-grey scheme
 has nowhere to put.
@@ -312,7 +315,7 @@ there; the 350–550 K band then splits itself, liveable below ~395 K and a ster
 ocean above. A self-test pins that the two modules still agree, because the moment either
 number moves is the moment a duplicated ceiling would start lying. It is worth knowing that
 this model cannot presently take a Hycean world to either side of that line — it tops out
-at 299 K — so the agreement matters for the day the vertical structure arrives, not today.
+at 335 K — so the agreement matters for the day the vertical structure arrives, not today.
 
 ## Things worth knowing about the edges
 

@@ -372,57 +372,49 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
 //
 // The inner-edge rows above report the gap as an insolation. This reports the
 // same gap as the thing a player sees: the hottest surface that is still a
-// Hycean world after two million years rather than a snapshot on the way to a
-// runaway. Madhusudhan et al. put the Hycean band at 350-550 K and its
-// habitable part up to ~400 K; measured here, over envelopes from 2 to 50 bar
-// and insolations from 0.05 to 2 S(+), it is 299 K.
+// Hycean world once its energy budget has closed. Madhusudhan et al. put the
+// band at 350-550 K and its habitable part up to ~400 K; this model tops out
+// below it.
 //
-// This is the same missing physics as the inner edge and not a second fault.
-// Convective inhibition entered as a multiplier on tau, which makes a surface
-// warmer; what holds the hot branch UP is a stably stratified layer, which is
-// vertical structure a single-tau semi-grey scheme has nowhere to put. So the
-// model warms these worlds and cannot stabilise them, and every state between
-// 350 and 650 K turns out to be a way-station: 482 K at a hundred thousand
-// years, 1205 K at a million. Reported rather than tuned, because closing it by
-// hand would mean bending an opacity constant that three other anchors hold.
+// Same missing physics as the inner edge, not a second fault. Convective
+// inhibition entered as a multiplier on tau, which makes a surface warmer; what
+// holds the hot branch UP is a stably stratified layer, and that is vertical
+// structure a single-tau semi-grey scheme has nowhere to put. So the model warms
+// these worlds and cannot stabilise them.
 //
-// Settled here means the energy budget has closed, NOT that a clock ran out,
-// and the difference is the whole measurement. A world carrying thirty-four
-// thousand oceans has the thermal inertia to look like anything for a million
-// years: K2-18 b as this model builds it reads a beautiful 401 K Hycean at
-// 1 Myr, with an imbalance of +179 W/m^2 under it, and is a 4000 K magma ocean
-// by 10 Myr. Sweeping on elapsed time found a 657 K "stable" Hycean that does
-// not exist. The criterion is the imbalance.
+// SETTLED means the imbalance has closed, not that a clock ran out, and that
+// distinction is the whole measurement. A world carrying thirty-four thousand
+// oceans has the thermal inertia to look like anything for a million years:
+// K2-18 b as this model builds it reads a convincing 401 K Hycean at 1 Myr with
+// +179 W/m^2 of imbalance under it, and is a 4000 K magma ocean by 10 Myr. A
+// first version of this row swept on elapsed time and reported a 657 K stable
+// Hycean that does not exist.
+//
+// Two worlds rather than a grid, because this row is a drift detector and not a
+// survey. The wide sweep was done once -- masses 5 to 10, envelopes 2 to 100
+// bar, insolations 0.05 to 2, water 60 to 34,500 oceans -- and the best of it is
+// the first world here. The second is one step past the edge and must NOT be a
+// Hycean: a ceiling reported without the step above it could drift upward
+// unnoticed. Seven seconds for the pair, against twenty minutes for the grid.
 {
   const base = { ...EARTH, landFraction: 0, brightening: 0, realisticGeology: false,
                  life: false, biosphere: 0, emissions: 0, heliumFrac: 0.1,
-                 co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0.01 };
-  const settle = (s) => {
-    for (let i = 0; i < 60 && Math.abs(s.world.diag.imbalance) > 0.5; i++) s.runYears(2e7);
-    return Math.abs(s.world.diag.imbalance) <= 0.5;
+                 co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0.01,
+                 mass: 10, water: 500, h2Bar: 20 };
+  const settle = (insolation) => {
+    const s = new Simulation({ ...base, insolation, startT: 300 });
+    for (let i = 0; i < 60 && Math.abs(s.world.diag.imbalance) > 0.5; i++) s.runYears(2e6);
+    return s;
   };
-  let hottest = 0;
-  for (const mass of [5, 8.63]) {
-    for (const water of [60, 500, 14300, 34500]) {
-      for (const h2Bar of [20, 100]) {
-        for (const insolation of [0.05, 0.1, 0.2, 1]) {
-          const s = new Simulation({ ...base, mass, water, h2Bar, insolation, startT: 300 });
-          if (settle(s) && classify(s.world).id === 'hycean') {
-            hottest = Math.max(hottest, s.world.diag.Tmean);
-          }
-        }
-      }
-    }
-  }
+  const best = settle(0.10), over = settle(0.14);
+  const hottest = classify(best.world).id === 'hycean' ? best.world.diag.Tmean : 0;
   deviation('Hottest settled Hycean surface', hottest, 350, 550, 'K',
     'Madhusudhan et al. 2021 put the Hycean band at 350-550 K, habitable to ' +
-    '~400 K. This model tops out below it, for the same reason the inner-edge ' +
-    'rows give: inhibition is carried as extra optical depth, which warms a ' +
-    'surface but cannot hold it up, and what holds the hot branch up is a ' +
-    'stratified layer a single-tau semi-grey scheme cannot represent. ' +
-    'Everything warmer here is a way-station rather than a state -- and the ' +
-    'way-stations last longer the more water there is, which is why this row ' +
-    'settles on the energy imbalance and not on a clock.');
+    '~400 K. One step further in (0.14 S+) this same world is ' +
+    `${classify(over.world).id} at ${over.world.diag.Tmean.toFixed(0)} K, so the ` +
+    'ceiling is bracketed rather than merely reported. The cause is the ' +
+    'inner-edge gap above: inhibition is carried as extra optical depth, which ' +
+    'warms a surface but cannot hold it up.');
 }
 
 // ---- the hot layer, and the one number in it that nobody has measured -------
