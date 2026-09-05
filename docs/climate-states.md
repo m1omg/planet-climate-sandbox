@@ -42,6 +42,8 @@ itself remains a pure function of what it is handed; the memory lives upstream o
 | `lam` = `lockFactor(p)` | 1 if tidally locked, 0 otherwise. Every `lam > 0.5` test below reads simply "is this world locked" | 0 or 1 |
 | `collapsed` | `co2Frozen > 0.25 × (co2 + co2Frozen)` **and** `co2Frozen > 1e-3`: a quarter of the CO₂ inventory is lying on the ground as dry ice, and there is a meaningful amount of it | boolean |
 | `p.landFraction` | The land fraction as configured | 0–1 |
+| `envShare` | `(pH2 + pHe) / (pTot − pH2O)` — the envelope's share of the **dry** air. Against the total column instead, a supercritical waterworld's twenty bar of hydrogen is 0.07% of tens of thousands of bar of steam and the envelope reads as absent on exactly the world whose envelope is the point | 0–1 |
+| `superShare` = `dg.hotTarget` | Area-mean of `supercriticalShare(T)`, the same 647–697 K blend the vapour ceiling is built from. One definition, not two | 0–1 |
 
 Note the difference between `ice` and `water`: **`ice` is a temperature statement, `water`
 is an inventory statement.** Modern Mars is `ice = 1.0` and `iceArea = 0.019`. That gap is
@@ -93,12 +95,51 @@ T > 470 K  AND  water < 0.06 × max(initialWater, 0.05)
 Venus. The water test is **relative to what the planet started with**, floored at 0.05 EO
 so a world that began nearly dry cannot qualify on a technicality.
 
+### 4b. The Hycean group
+```
+envShare > 0.5  AND  water > 0.005 EO, then in order:
+    superShare > 0.5                          -> Supercritical Envelope
+    liquidShare <= 0.1                        -> fall through
+    p.insolation < 0.01                       -> Cold Hycean World
+    T > 273.16 K                              -> Hycean World
+```
+It sits here, after the dry runaway and before the wet one, because `T > 420 K` below is
+unconditional and would swallow every one of them: a 400 K ocean under thirty bar of
+hydrogen is the whole point of the state, and the chain called it a boiling Earth.
+
+`envShare > 0.5` is what makes the group unreachable by anything that predates it. No world
+in this model had a hydrogen reservoir at all until recently, so it is exactly zero on all
+of them and the group is skipped by construction rather than by a threshold that happens to
+miss. A self-test pins that, preset by preset, at four points in each world's history.
+
+Note that the group can **fall through**: a hydrogen world with no liquid water is not a
+Hycean anything, and the chain carries on to the ordinary states below.
+
+**There is no Dark Hycean, and that is a result rather than an omission.** Madhusudhan et
+al. (2021) name one — a locked world whose mean is too hot to live in and whose night side
+is not. It was built and then it could not be reached. A Hycean has a thick atmosphere by
+definition, `diffusionCoefficient` scales transport with `pTot^0.9`, and a planet under
+tens of bar is very nearly isothermal: measured at 1318 K under the star against 1270 K
+behind it, on a world locked as hard as this model allows. A split that puts one face past
+habitability and the other in liquid water needs hundreds of kelvin of contrast, that needs
+thin air, and thin air is not a Hycean. Shipping a branch that cannot fire would have been
+worse than not having one — it would read as a state the model supports.
+
+**And the Hycean World the model reaches is the temperate one only.** The literature's band
+is 350–550 K; the hottest one here that survives two million years is 299 K, and everything
+warmer is a way-station on the road to a runaway (482 K at 100 kyr, 1205 K at 1 Myr).
+`tools/calibrate.mjs` reports it as a `GAP`. The cause is the same as the inner-edge gap:
+convective inhibition enters as extra optical depth, which warms a surface but cannot hold
+it up, and what holds the hot branch up is vertical structure a single-τ semi-grey scheme
+has nowhere to put.
+
 ### 5. Wet Runaway Greenhouse
 ```
 T > 420 K
 ```
-Reached only if the dry test above failed, i.e. the water is still here. Between 420 and
-470 K the world is wet-runaway regardless of inventory.
+Reached only if the dry test and the Hycean group above both failed, i.e. the water is
+still here and there is no hydrogen envelope over it. Between 420 and 470 K the world is
+wet-runaway regardless of inventory.
 
 ### 6. Moist Greenhouse
 ```
@@ -247,14 +288,31 @@ waterworld.
 Separate from the state name, and stricter than "temperate":
 
 ```
-habitable = (temperate | waterworld | dune | eyeball | lobster | hothouse | waterbelt)
+habitable = (temperate | waterworld | dune | eyeball | lobster | hothouse | waterbelt
+             | nightfrost | twilight | hycean | coldHycean)
             AND water > 0.005 EO
 ```
 
 Every runaway, every collapse, every frozen or trapped or baked state is excluded by name.
-Note that `hothouse` counts as habitable and `twilight` does not, despite the twilight
-world having a temperate ring by construction — it is a deliberate conservatism about a
-band the 1-D model cannot fully resolve.
+`nightfrost` and `twilight` are on the list because both branches *require* liquid water to
+be reached at all and both blurbs call it habitable — a world whose own description says it
+has a working ocean should not be told by the readout beside it that it has nowhere to
+live. (This paragraph used to say `twilight` was excluded as a deliberate conservatism.
+That was true once and had stopped being true; it is corrected here rather than quietly.)
+
+The two Hycean states with an ocean are on it and `supercriticalEnvelope` is not, which is
+the one state in that group with no liquid water anywhere.
+
+**The Hycean ceiling is deliberately not repeated here.** `biosphere.js` caps prokaryotes
+over 390–400 K, which is the measured record — *Methanopyrus kandleri* strain 116 at 122 °C
+(Takai et al. 2008) — and Madhusudhan's Hycean habitability runs to about 400 K. Two
+numbers from completely independent directions, five kelvin apart, neither fitted to the
+other. So the classifier flags the state and lets `biosphere.js` decide what actually lives
+there; the 350–550 K band then splits itself, liveable below ~395 K and a sterile liquid
+ocean above. A self-test pins that the two modules still agree, because the moment either
+number moves is the moment a duplicated ceiling would start lying. It is worth knowing that
+this model cannot presently take a Hycean world to either side of that line — it tops out
+at 299 K — so the agreement matters for the day the vertical structure arrives, not today.
 
 ## Things worth knowing about the edges
 
@@ -273,5 +331,5 @@ band the 1-D model cannot fully resolve.
   `trapped`, `nightfrost` and `nightfrozen` — and `lockFactor` is a hard 0-or-1 on `p.tidallyLocked` —
   a slowly rotating world is never partially locked as far as the classifier is concerned.
 - **The README's list at "Climate states it recognises" used to be incomplete** — it omitted
-  `twilight`, `nightfrost`, `thincold`, `baked` and `frozen`. It now carries all twenty-two names
+  `twilight`, `nightfrost`, `thincold`, `baked` and `frozen`. It now carries all twenty-five names
   and points here for the conditions.

@@ -511,6 +511,95 @@ export function run() {
         + `${(t / 1e3).toFixed(0)} kyr`);
     }
   }
+  // The Hycean group, and the promise that it cannot reach backwards.
+  {
+    const hy = { ...EARTH, mass: 10, water: 60, landFraction: 0, brightening: 0,
+                 co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0.01 };
+    const run = (over, yrs) => {
+      const s = new Simulation({ ...hy, startT: 300, ...over });
+      s.runYears(yrs);
+      return s;
+    };
+    // A branch nothing can reach is not a feature, it is a claim the readout
+    // makes and the model cannot honour. Every state added here is reached from
+    // parameters, not asserted from a hand-built diagnostic.
+    const temperate = run({ h2Bar: 20, insolation: 0.105 }, 2e6);
+    const cold = run({ h2Bar: 60, insolation: 0.001, internalHeat: 2, startT: 290 }, 1e6);
+    // 0.12 rather than 0.15: at 0.15 this lands at 1393 K, seven kelvin under
+    // the 1400 K magma branch that would catch it first, and a check sitting
+    // on a threshold measures the threshold.
+    const sup = run({ h2Bar: 20, insolation: 0.12 }, 1e6);
+    const got = [classify(temperate.world), classify(cold.world), classify(sup.world)];
+    check('Every Hycean state this build ships can actually be reached',
+      got[0].id === 'hycean' && got[1].id === 'coldHycean'
+        && got[2].id === 'supercriticalEnvelope',
+      got.map((c, k) => `${['20 bar/0.105 S⊕', '60 bar/no star', '20 bar/0.12 S⊕'][k]} → ${c.id} at `
+        + `${[temperate, cold, sup][k].world.diag.Tmean.toFixed(0)} K`).join(' · '));
+    check('…and the two with an ocean read as habitable, while the one without does not',
+      got[0].habitable && got[1].habitable && !got[2].habitable);
+
+    // The envelope share is measured against the DRY air, and this is the check
+    // that would have caught the version that was not. Against the total column
+    // a supercritical waterworld's twenty bar of hydrogen is 0.07% of tens of
+    // thousands of bar of steam, so the gate reads "no envelope" on precisely
+    // the world whose envelope is the point, and the state falls through to
+    // wetRunaway.
+    check('…and a supercritical world is not mistaken for one with no envelope',
+      (sup.world.diag.pH2 + sup.world.diag.pHe) > 15
+        && (sup.world.diag.pH2 + sup.world.diag.pHe) / sup.world.diag.pTotMean < 0.05,
+      `${(sup.world.diag.pH2 + sup.world.diag.pHe).toFixed(0)} bar of envelope under `
+      + `${sup.world.diag.pTotMean.toFixed(0)} bar of air — `
+      + `${(100 * (sup.world.diag.pH2 + sup.world.diag.pHe) / sup.world.diag.pTotMean).toFixed(2)}% `
+      + `of the column, and still an envelope`);
+
+    // The whole group is unreachable by anything that predates it, checked
+    // preset by preset rather than argued. This is the promise the plan for
+    // this work made, and it is the one a future edit is most likely to break
+    // by loosening a gate.
+    const HYCEAN = ['hycean', 'coldHycean', 'supercriticalEnvelope'];
+    const trespass = [];
+    for (const id of Object.keys(PRESETS)) {
+      const s = new Simulation({ ...PRESETS[id].params });
+      for (const yrs of [0, 1e4, 1e6 - 1e4, 9e6]) {
+        if (yrs) s.runYears(yrs);
+        const c = classify(s.world);
+        if (HYCEAN.includes(c.id)) trespass.push(`${id} → ${c.id}`);
+      }
+    }
+    check('No world that predates the hydrogen envelope can reach a Hycean state',
+      trespass.length === 0,
+      trespass.length ? trespass.join(' · ')
+        : `${Object.keys(PRESETS).length} presets, four points each, none of them`);
+
+    // The biosphere ceiling and the Hycean habitability claim, checked for
+    // agreement rather than either being copied into the other.
+    //
+    // biosphere.js caps prokaryotes over 390-400 K, which is the measured
+    // record: Methanopyrus kandleri strain 116 at 122 C (Takai et al. 2008).
+    // Madhusudhan's Hycean habitability runs to about 400 K. Two numbers from
+    // completely independent directions, five kelvin apart, and neither was
+    // fitted to the other -- so the classifier does not repeat the ceiling and
+    // this is what notices if either module moves. The 350-550 K band would
+    // then split itself: liveable below ~395 K, sterile and still liquid above.
+    //
+    // It is worth knowing that this model cannot currently take a Hycean world
+    // to either side of that line -- it tops out at 299 K, reported as a GAP by
+    // calibrate.mjs. The agreement is still worth pinning, because the day the
+    // vertical structure arrives is the day it starts to matter.
+    {
+      const cap = [];
+      for (let T = 380; T <= 410; T += 1) {
+        const f = smoothstep(248, 258, T) * (1 - smoothstep(390, 400, T));
+        if (f > 0.5) cap.push(T);
+      }
+      const half = Math.max(...cap);
+      check('The prokaryote ceiling and the Hycean habitability claim still agree',
+        Math.abs(half - 395) <= 1 && Math.abs(half - 400) <= 10,
+        `life half-gone at ${half} K (122 °C = ${(395).toFixed(0)} K measured), `
+        + `Madhusudhan's Hycean habitability to ~400 K — ${Math.abs(400 - half)} K apart`);
+    }
+  }
+
 
   // ---- 3d. the night-side cold trap ----------------------------------------
   // On a synchronously rotating world the far side never sees the star, so it
@@ -1659,6 +1748,22 @@ export function run() {
         const walk = (params, rate, ease) => {
           const s = new Simulation({ ...params });
           s.rate = rate; s.autoEase = ease;
+          // The frame budget is off for the measurement, and that is the
+          // difference between a check and a coin toss.
+          //
+          // runCredit cuts a frame short when performance.now() passes a 12 ms
+          // deadline, and a cut frame advances less than a full one while the
+          // next advances more -- which is a >2x reversal, which is exactly what
+          // `swings` counts. The eased path does strictly more work per frame
+          // than the un-eased one, so under any load it blows the budget first
+          // and `on.swings > off.swings` trips on how busy the machine is rather
+          // than on anything the governor did. It was reproduced deliberately:
+          // this check passes in isolation and fails at the end of a long
+          // self-test run, and injecting a 20 ms stall every seventh frame
+          // reproduces `swings 1/0` on a build that predates the change being
+          // tested. The budget has its own check below; measuring the governor
+          // through it was measuring two mechanisms and blaming one.
+          s.budgetMs = Infinity;
           s.runYears(1e3);
           const T0 = s.world.diag.Tmean;
           const f = [];

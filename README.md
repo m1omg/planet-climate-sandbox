@@ -283,9 +283,10 @@ touching them. Click any value to type it exactly, with units — `420ppm`, `0.5
 Magma ocean · dry runaway (Venus-like) · wet runaway · moist greenhouse · ice-free hothouse ·
 temperate · waterbelt/slushball · hard snowball · eyeball · lobster · twilight world ·
 nightside-trapped desert · dune/desert world · waterworld · Mars-like collapse · partial nightside freeze-out ·
-nightside freeze-out · Titan-like · thin cold desert · baked desert · frozen desert · airless rock.
+nightside freeze-out · Titan-like · thin cold desert · baked desert · frozen desert · airless rock ·
+Hycean world · cold Hycean world · supercritical envelope.
 
-Twenty-two names down a nineteen-branch chain — `frozen` is reachable three ways — and **the exact
+Twenty-five names down a twenty-branch chain — `frozen` is reachable three ways — and **the exact
 condition for every one is written down** in
 [`docs/climate-states.md`](docs/climate-states.md) — with `docs/climate-states.ods` as the same
 table in a spreadsheet. Three things about `classify()` are worth knowing before reading any single
@@ -2462,6 +2463,60 @@ the last bit** and two moved — `brink` by −0.040 K and `dryVenus` by −0.05
 years. The three others that cross 647 K within that span do not move at all, for reasons worth
 naming: `venus` and `gj1132b` carry no water, so there is no boundary; `earlyTrappist1b` is built at
 700 K, above the blend window entirely.
+
+### Three Hycean states, and two the model refused to give
+
+Four were planned. Three shipped, and the two that did not are the more interesting half of
+the result, because in both cases the model was built and then declined to produce the world.
+
+**Hycean World, Cold Hycean World and Supercritical Envelope** all reach from parameters
+rather than from a hand-built diagnostic, and a self-test says so: 20 bar of hydrogen at
+0.105 S⊕ settles at 299 K with a sixty-ocean sea on ice VI; 60 bar with the star switched
+off entirely holds 324 K on internal heat; 20 bar at 0.12 S⊕ ends at 1261 K with no surface
+anywhere. They go in **after** `dryRunaway` and **before** `wetRunaway`, because `T > 420 K`
+is unconditional and would otherwise swallow the lot — a 400 K ocean under thirty bar of
+hydrogen is the whole point of the state, and the chain was calling it a boiling Earth.
+
+The gate is the envelope's share of the **dry** air, and the first version was wrong in a way
+worth recording. Measured against the total column, a supercritical waterworld carries tens
+of thousands of bar of steam, so its twenty bar of hydrogen is 0.07% of the air and the
+envelope reads as absent — on precisely the world whose envelope is the point. Every
+supercritical test fell through to `wetRunaway` and the state looked unreachable. Whether a
+planet has a hydrogen envelope is not a question about how much water happens to be airborne
+today. Phase 4's inhibition gate needed the same correction for the same reason.
+
+**There is no Dark Hycean.** Madhusudhan et al. (2021) name one: a locked world whose mean
+is too hot to live in and whose night side is not. It was built, and then it could not be
+reached. A Hycean has a thick atmosphere by definition, `diffusionCoefficient` scales
+transport with `pTot^0.9`, and a planet under tens of bar is very nearly isothermal —
+measured at **1318 K under the star against 1270 K behind it**, on a world locked as hard as
+this model allows, and 1404 against 1388 with a thinner envelope. A split that puts one face
+past habitability and the other in liquid water needs hundreds of kelvin of contrast, that
+needs thin air, and thin air is not a Hycean. The branch was deleted rather than shipped
+dark: a state that cannot fire still reads to a player as a state the model supports.
+
+**And the Hycean World the model reaches is the temperate one only** — which is the sharper
+finding, because the hot Hycean is what this whole branch was for. The literature's band is
+350–550 K, habitable to about 400 K. Swept over envelopes from 2 to 50 bar and insolations
+from 0.05 to 2 S⊕, the hottest one here that is still a Hycean after **two million years is
+299 K**. Everything warmer is a way-station: the same world reads 482 K at a hundred thousand
+years and 1205 K at a million.
+
+This is not a second fault, it is the inner-edge gap wearing different clothes. Convective
+inhibition entered this model as a multiplier on τ, which makes a surface *warmer*; what
+holds the hot branch *up* is a stably stratified layer, and that is vertical structure a
+single-τ semi-grey scheme has nowhere to put. So the model warms these worlds and cannot
+stabilise them. `tools/calibrate.mjs` reports the ceiling as a `GAP` every run. Closing it by
+hand would mean bending an opacity constant that three other anchors hold, which is the
+trade this project does not make.
+
+**What did not need building.** The plan called for a `superFrac` uniform driving an
+ocean-to-envelope dissolve in the renderer. It turned out to be unnecessary: gating `flooded`
+by the supercritical share already stops the sea being drawn, and `atmosphereLook`'s Rayleigh
+term already reaches full veil under a thousand bar. Measured, a temperate Hycean draws at
+µ = 2.3 with a 39 km scale height — four times Earth's, visibly puffy — behind a 0.89 veil
+with its ocean showing through; the supercritical world draws at µ = 17.6, veil 1.0, and no
+sea at all. A uniform would have been dead code with a physics-sounding name.
 
 ## Known deviations from the literature
 

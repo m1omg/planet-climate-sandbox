@@ -8,6 +8,7 @@ import { Simulation } from '../src/sim/clock.js';
 import { derive, transitRadius } from '../src/physics/planet.js';
 import { EARTH, PREINDUSTRIAL, PRESETS } from '../src/game/presets.js';
 import { maxStep } from '../src/physics/climate.js';
+import { classify } from '../src/physics/classify.js';
 import { olr, runawayLimit, planetaryAlbedo, cloudCover } from '../src/physics/radiation.js';
 
 const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -365,6 +366,43 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     'fraction, so ten bar of hydrogen dilutes the same water tenfold and the ' +
     'threshold is never reached at the temperatures where this world\'s runaway ' +
     'peak sits.');
+}
+
+// ---- how hot a Hycean this model can actually hold ------------------------
+//
+// The inner-edge rows above report the gap as an insolation. This reports the
+// same gap as the thing a player sees: the hottest surface that is still a
+// Hycean world after two million years rather than a snapshot on the way to a
+// runaway. Madhusudhan et al. put the Hycean band at 350-550 K and its
+// habitable part up to ~400 K; measured here, over envelopes from 2 to 50 bar
+// and insolations from 0.05 to 2 S(+), it is 299 K.
+//
+// This is the same missing physics as the inner edge and not a second fault.
+// Convective inhibition entered as a multiplier on tau, which makes a surface
+// warmer; what holds the hot branch UP is a stably stratified layer, which is
+// vertical structure a single-tau semi-grey scheme has nowhere to put. So the
+// model warms these worlds and cannot stabilise them, and every state between
+// 350 and 650 K turns out to be a way-station: 482 K at a hundred thousand
+// years, 1205 K at a million. Reported rather than tuned, because closing it by
+// hand would mean bending an opacity constant that three other anchors hold.
+{
+  const base = { ...EARTH, mass: 10, water: 60, landFraction: 0, brightening: 0,
+                 co2Bar: 0, ch4Bar: 0, o2Bar: 0, n2Bar: 0.01 };
+  let hottest = 0;
+  for (const h2Bar of [5, 20]) {
+    for (const insolation of [0.09, 0.1, 0.105, 0.11, 0.5]) {
+      const s = new Simulation({ ...base, h2Bar, insolation, startT: 300 });
+      s.runYears(2e6);
+      if (classify(s.world).id === 'hycean') hottest = Math.max(hottest, s.world.diag.Tmean);
+    }
+  }
+  deviation('Hottest stable Hycean surface', hottest, 350, 550, 'K',
+    'Madhusudhan et al. 2021 put the Hycean band at 350-550 K, habitable to ' +
+    '~400 K. This model tops out well below it and the reason is the same one ' +
+    'the inner-edge rows give: inhibition is carried as extra optical depth, ' +
+    'which warms a surface but cannot hold it up. Everything between 350 and ' +
+    '650 K here is a way-station -- 482 K at 100 kyr, 1205 K at 1 Myr. The ' +
+    'temperate Hycean is real in this model; the hot one is not.');
 }
 
 // ---- the hot layer, and the one number in it that nobody has measured -------

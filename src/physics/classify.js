@@ -1,6 +1,6 @@
 import { NBANDS, X, lockFactor } from './climate.js';
 import { iceFraction } from './radiation.js';
-import { clamp } from './constants.js';
+import { clamp, T_CRIT_H2O as T_CRIT } from './constants.js';
 
 // Every state the game can recognise, with the real science behind it.
 export const STATES = {
@@ -25,6 +25,9 @@ export const STATES = {
   frozen:     { name: 'Frozen Desert',        color: '#a8b8c8', blurb: 'Cold, dry and still. Not enough water for a true snowball and not enough greenhouse to thaw.' },
   thincold:   { name: 'Thin Cold Desert',     color: '#b08a6e', blurb: 'A thin, frigid, desiccated atmosphere over bare ground — Mars today. The air has not collapsed: it is simply all there is. Turn up the volcanoes and it will thicken, warm, and eventually hold liquid water again.' },
   baked:      { name: 'Baked Desert',         color: '#e08a3a', blurb: 'A hot, waterless world of bare rock. Whatever water it had is long gone, so nothing moderates the surface and the day side simply bakes.' },
+  hycean:     { name: 'Hycean World',          color: '#3fbfa8', blurb: 'A water-rich sub-Neptune under a hydrogen envelope, with a liquid ocean at the bottom of it \u2014 tens of kilometres deep, standing on high-pressure ice rather than rock. The envelope keeps the surface warm far outside a rocky planet\u2019s habitable zone: the worlds here sit at about a tenth of Earth\u2019s sunlight and are still temperate (Madhusudhan et al. 2021). What the literature also claims, and this model does not produce, is the hot end of the band \u2014 a stable ocean at 400 to 550 K. Here the hottest Hycean that survives two million years is 299 K and anything warmer runs away instead, because the stabiliser that holds the hot branch up is vertical structure a semi-grey scheme has nowhere to put. So this is the temperate Hycean, said plainly \u2014 and the reading of any real planet as Hycean at all is contested.' },
+  coldHycean: { name: 'Cold Hycean World',     color: '#4a7fb5', blurb: 'A Hycean world with effectively no starlight, holding a liquid ocean on its own internal heat under a deep hydrogen envelope. It needs the envelope to be thick: at these temperatures the greenhouse is doing all the work, and the ocean is liquid because of the pressure over it rather than because of anything the star does. The free-floating and far-orbit version of the state.' },
+  supercriticalEnvelope: { name: 'Supercritical Envelope', color: '#a05fc0', blurb: 'Past the critical point there is no surface. The liquid and the vapour are one fluid, the atmospheric adiabat runs seamlessly into the supercritical water adiabat and down into the interior, and there is no boundary anywhere to call an ocean (Pierrehumbert & Furth 2023). Which planet you get depends on the path: a world that was always hot equilibrates like this, while one that cooled first and was heated later spends a long time as a hot layer sitting on cold water before it becomes this.' },
   airless:    { name: 'Airless Rock',         color: '#8a8a8a', blurb: 'Beyond the cosmic shoreline: stellar XUV has stripped the atmosphere faster than the planet’s gravity could hold it. No climate to speak of.' },
 };
 
@@ -56,6 +59,63 @@ export function classify(w) {
   // extremes on both sides of it is a ring following the terminator.
   let temperateBands = 0;
   for (let i = 0; i < NBANDS; i++) if (w.T[i] > 275 && w.T[i] < 320) temperateBands++;
+
+  // The envelope's share of the air. Every Hycean state is gated on this, which
+  // is what makes the whole group unreachable by anything that predates it: no
+  // world in this model had a hydrogen reservoir at all until recently, so this
+  // is exactly zero on all of them and every branch below is skipped by
+  // construction rather than by a threshold that happens to miss. A check pins
+  // that preset by preset, so a future envelope on an old world cannot silently
+  // reclassify it.
+  // Measured against the DRY air, which is the same correction Phase 4's
+  // inhibition gate needed and for the same reason. Against the total column it
+  // was a gate that could never open on the states it was written for: a
+  // supercritical waterworld carries tens of thousands of bar of steam, so
+  // twenty bar of hydrogen under it is 0.07% of the air and the envelope reads
+  // as absent on exactly the world whose envelope is the point. Whether this
+  // planet has a hydrogen envelope is not a question about how much water
+  // happens to be airborne today.
+  const pH2Omean = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length;
+  const dryAir = Math.max(pTot - pH2Omean, 1e-12);
+  const envShare = ((dg.pH2 ?? 0) + (dg.pHe ?? 0)) / dryAir;
+  // How much of the surface is past the critical point, from the same function
+  // the vapour ceiling is built on rather than a second threshold of its own.
+  const superShare = dg.hotTarget ?? 0;
+
+  // Which Hycean state, or none. Returns null when the world has an envelope
+  // but nothing under it worth naming, and the chain then carries on to the
+  // ordinary states -- a dry hydrogen world is still a dry hydrogen world.
+  const hyceanState = () => {
+    if (envShare <= 0.5 || water <= 0.005) return null;
+    // No surface at all comes first, because every state under it is a claim
+    // about where an ocean is, and there isn't one.
+    if (superShare > 0.5) return 'supercriticalEnvelope';
+    if (liquidShare <= 0.1) return null;
+    // Then the two about WHERE the ocean is rather than whether it exists. A
+    // locked world whose day side has no surface and whose night side holds
+    // liquid is not a world with an ocean everywhere, and it is not a nightside
+    // freeze-out either: nothing is frozen and no air is collapsing. What holds
+    // it up is the envelope carrying heat round to the dark side.
+    // There is no dark Hycean here, and that is a result rather than an
+    // omission. Madhusudhan et al. (2021) name one: a locked world whose mean
+    // is too hot to live in and whose night side is not. It was built, and then
+    // it could not be reached. A Hycean has a thick atmosphere by definition,
+    // diffusionCoefficient scales transport with pTot^0.9, and a planet under
+    // tens of bar is very nearly isothermal -- measured at 1318 K under the
+    // star against 1270 K behind it, on a world locked as hard as this model
+    // allows, and 1404 against 1388 with a thinner envelope. A day-night split
+    // that puts one face past habitability and the other in liquid water needs
+    // a contrast of hundreds of kelvin, that needs thin air, and thin air is
+    // not a Hycean. Shipping a branch that cannot fire would have been worse
+    // than not having one: it would read as a state the model supports.
+    // A world running on its own interior. Tested on the star being negligible
+    // rather than on temperature, because the temperature is the *result*: an
+    // envelope this thick over any internal heat at all lands somewhere warm,
+    // and it is the absent star that makes the state worth a name.
+    if ((p.insolation ?? 0) < 0.01) return 'coldHycean';
+    return T > 273.16 ? 'hycean' : null;
+  };
+  const hyceanId = hyceanState();
 
   let id;
   // A real collapse means a good part of the air is lying on the ground as
@@ -94,6 +154,16 @@ export function classify(w) {
       : 'marslike';
   }
   else if (T > 470 && water < 0.06 * Math.max(initialWater, 0.05)) id = 'dryRunaway';
+  // The Hycean group. It goes here, after dryRunaway and before wetRunaway,
+  // because `T > 420` would otherwise swallow every one of them: a 400 K ocean
+  // under thirty bar of hydrogen is the state this whole branch exists to
+  // represent, and the classifier called it a boiling Earth.
+  //
+  // Decided above rather than inline so this stays one flat chain of else-ifs.
+  // A nested block here would read as though the group could fall through to
+  // the states below it, and it cannot -- hyceanState returns null and the
+  // chain carries on, or it returns a name and the chain stops.
+  else if (hyceanId) id = hyceanId;
   else if (T > 420) id = 'wetRunaway';
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
@@ -180,9 +250,24 @@ export function classify(w) {
   // whether there is liquid water somewhere a thing could live in, and on both
   // of these there is -- by construction, or the state would not have been
   // reached.
+  //
+  // The three Hycean states with an ocean join them, and the ceiling is
+  // deliberately NOT repeated here. Madhusudhan's Hycean habitability runs to
+  // about 400 K; biosphere.js caps prokaryotes at 122 C, which is 395 K and the
+  // real measured record (Methanopyrus kandleri strain 116, Takai et al. 2008).
+  // Those two numbers were arrived at from completely independent directions
+  // and land within five kelvin of each other, so the 350-550 K band splits
+  // itself without anyone having to draw the line twice: the cool half is an
+  // ocean a prokaryote could live in and the hot half is a sterile one that
+  // happens to be liquid. Duplicating the ceiling here would create a second
+  // copy to drift, and a check pins that the two modules still agree.
+  //
+  // supercriticalEnvelope is not on the list, and that is not an oversight: it
+  // is the one state in the group with no liquid water anywhere.
   const habitable = (id === 'temperate' || id === 'waterworld' || id === 'dune' ||
                      id === 'eyeball' || id === 'lobster' || id === 'hothouse' ||
-                     id === 'waterbelt' || id === 'nightfrost' || id === 'twilight')
+                     id === 'waterbelt' || id === 'nightfrost' || id === 'twilight' ||
+                     id === 'hycean' || id === 'coldHycean')
                     && water > 0.005;
 
   return { id, name: s.name, color: s.color, blurb: s.blurb, habitable, Tsub, Tanti };

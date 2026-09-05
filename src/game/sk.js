@@ -513,6 +513,12 @@ export const SK = {
       blurb: 'Horúci bezvodý svet z holej horniny. Voda, ak nejakú mal, je dávno preč, takže povrch nemá čo zmierňovať a denná strana sa jednoducho pečie.' },
     airless: { name: 'Holá skala',
       blurb: 'Za hranicou, kde planéty ešte držia atmosféru: hviezdne XUV strhlo vzduch rýchlejšie, než ho gravitácia dokázala udržať. O klíme sa nedá hovoriť.' },
+    hycean: { name: 'Hyceánsky svet',
+      blurb: 'Sub-Neptún bohatý na vodu pod vodíkovou obálkou a s kvapalným oceánom na jej dne — hlbokým desiatky kilometrov, stojacim na vysokotlakovom ľade, nie na hornine. Obálka udrží povrch teplý ďaleko za obývateľnou zónou kamennej planéty: svety v tomto stave dostávajú asi desatinu slnečného svitu Zeme a sú stále mierne teplé (Madhusudhan a kol. 2021). Literatúra však tvrdí aj to, čo tento model nedokáže vyrobiť — stabilný oceán pri 400 až 550 K. Tu najhorúcejší hyceánsky svet, ktorý prežije dva milióny rokov, má 299 K a čokoľvek teplejšie sa rozbehne do nekontrolovateľného skleníka, lebo stabilizátor, ktorý drží horúcu vetvu, je vo vertikálnej štruktúre a polosivá schéma ju nemá kam uložiť. Toto je teda mierne teplý hyceánsky svet, povedané priamo — a výklad ktorejkoľvek skutočnej planéty ako hyceánskej je aj tak sporný.' },
+    coldHycean: { name: 'Studený hyceánsky svet',
+      blurb: 'Hyceánsky svet prakticky bez hviezdneho svetla, ktorý drží kvapalný oceán z vlastného vnútorného tepla pod hlbokou vodíkovou obálkou. Obálka musí byť hrubá: pri týchto teplotách robí všetku prácu skleníkový efekt a voda je kvapalná vďaka tlaku nad ňou, nie vďaka niečomu, čo robí hviezda. Verzia stavu pre voľne letiace planéty a veľmi vzdialené obežné dráhy.' },
+    supercriticalEnvelope: { name: 'Nadkritická obálka',
+      blurb: 'Za kritickým bodom niet povrchu. Kvapalina a para sú jedna tekutina, atmosférická adiabata plynulo prechádza do nadkritickej vodnej adiabaty a pokračuje do vnútra planéty — nikde nie je rozhranie, ktoré by sa dalo nazvať oceánom (Pierrehumbert a Furth 2023). Ktorú planétu dostanete, závisí od cesty: svet, ktorý bol vždy horúci, sa ustáli takto, kým ten, ktorý najprv vychladol a zohrial sa až potom, strávi dlhý čas ako horúca vrstva ležiaca na studenej vode, než sa ním stane.' },
   },
 
   // ---- scenáre -------------------------------------------------------------

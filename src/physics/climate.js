@@ -281,7 +281,28 @@ export function update(w, dt) {
   // anything, so boiling an ocean uncovers its floor; sea ice floats and still
   // fills its basin, so freezing one does not.
   const basinW = w.water.ocean + w.water.seaIce;
-  const flooded = floodedFraction(basinW * d.eoColumn, p.landFraction, d.eoColumn);
+  const basinFlooded = floodedFraction(basinW * d.eoColumn, p.landFraction, d.eoColumn);
+  // ...and where the surface is past the critical point, none of it is a sea
+  // SURFACE, whatever the reservoir is still called.
+  //
+  // This arrived with the hot layer and is not hypothetical. A cold-started
+  // sixty-ocean world sits at 1243 K with fifty-four oceans still booked as
+  // liquid -- correctly, because they are cold water under a hot layer, at ten
+  // thousand bar and a long way down. But `flooded` is what the renderer draws
+  // and what the classifier reads, and it was reporting 100%: a blue sea with
+  // continents on it, on a planet at nine hundred and seventy degrees. That is
+  // the same defect the TRAPPIST-1b check was written to catch, arriving by a
+  // new route, and it is fixed where the surface is decided rather than in the
+  // reservoir -- there really is liquid water down there, and pretending
+  // otherwise would be the opposite error.
+  //
+  // exposedBasin below keeps reading the ungated value on purpose. Seabed under
+  // a supercritical layer is covered, not dry, and giving it the albedo of bare
+  // basalt would be a second wrong answer laid over the first.
+  let hotCover = 0;
+  for (let i = 0; i < NBANDS; i++) hotCover += supercriticalShare(w.T[i]) / NBANDS;
+  hotCover = clamp(hotCover, 0, 1);
+  const flooded = basinFlooded * (1 - hotCover);
 
   // Frozen share of the flooded area, and what is left open to the sky.
   let frozenShare = 0;
@@ -317,7 +338,7 @@ export function update(w, dt) {
   // floor -- dark basalt, not weathered continental rock -- so a drying world
   // darkens rather than brightens as its basins empty.
   const basinShare = clamp(1 - p.landFraction, 0, 1);
-  const exposedBasin = clamp(basinShare - flooded, 0, 1);
+  const exposedBasin = clamp(basinShare - basinFlooded, 0, 1);
   const landTotal = clamp(1 - flooded, 1e-6, 1);
   const effLandAlbedo = (p.landAlbedo * clamp(landTotal - exposedBasin, 0, 1)
                        + ALB_SEABED * exposedBasin) / landTotal;
@@ -354,16 +375,17 @@ export function update(w, dt) {
   // 700 K has been supercritical since before the clock started and has no cold
   // interior to eat through, so it seeds at 1 and behaves exactly as this model
   // always did. A world built at 288 K seeds at 0 and has to earn its way up.
-  let hotTarget = 0, hotTbar = 0;
-  for (let i = 0; i < NBANDS; i++) {
-    hotTarget += supercriticalShare(w.T[i]) / NBANDS;
-    hotTbar += w.T[i] / NBANDS;
-  }
-  // Eighteen bands each contributing a rounded eighteenth summed to
-  // 1.0000000000000002, which is harmless where it is read through a clamp and
-  // not harmless at all in a save file that says a planet is 100.0000000000002%
-  // supercritical. Clamped where it is made, once.
-  hotTarget = clamp(hotTarget, 0, 1);
+  // The same area-mean supercritical share that decides whether there is a sea
+  // surface decides where the layer is heading. One definition, computed once:
+  // two of them would eventually disagree about what "past the critical point"
+  // means, and the disagreement would show up as a planet with both a sea and
+  // no sea. (It is clamped at source -- eighteen bands each contributing a
+  // rounded eighteenth summed to 1.0000000000000002, harmless behind a clamp
+  // and not harmless in a save file claiming a world is 100.0000000000002%
+  // supercritical.)
+  const hotTarget = hotCover;
+  let hotTbar = 0;
+  for (let i = 0; i < NBANDS; i++) hotTbar += w.T[i] / NBANDS;
   if (w.hotLayer == null || !isFinite(w.hotLayer)) w.hotLayer = hotTarget;
   const hotShare = clamp(w.hotLayer, 0, 1);
   // What it costs to move the boundary: sensible heat to lift a kilogram of
