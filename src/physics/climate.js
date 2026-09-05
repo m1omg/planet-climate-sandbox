@@ -6,7 +6,7 @@ import { derive, volcanicActivity } from './planet.js';
 import { oceanStructure } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
 
-import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL } from './volatiles.js';
+import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN } from './volatiles.js';
 
 export const NBANDS = 18;
 
@@ -34,6 +34,42 @@ const C_LAND = 6.0e6;          // J/m^2/K, a few metres of rock
 const L_VAP = 2.4e6;           // J/kg
 const L_FUS = 3.34e5;          // J/kg, latent heat of fusion
 const MIXED_LAYER = 60;        // m
+
+// The width of the critical region, in kelvin above 647 K.
+//
+// Below the critical temperature a liquid exists and the air over it is capped
+// by saturation. Above it no liquid exists at any pressure, so the cap is gone
+// and the ceiling is whatever water the planet has. That much is not a
+// modelling choice, it is the phase diagram -- but the *switch* was, and it was
+// a step: measured here, a hundred-ocean world's airborne column went from 172
+// bar to 25,700 bar across a fifth of a kelvin, a factor of 150 in one crossing.
+// On Earth's single ocean the same step is a factor of 1.9, which is why it
+// went unnoticed: the defect scales with how much water there is, and until
+// this branch there was no world with enough of it to show.
+//
+// What the step is missing is that the two phases do not become identical at
+// the critical point, they become identical *near* it. Approaching 647 K the
+// liquid and vapour densities converge, the latent heat collapses toward zero,
+// and the surface stops being a surface -- Pierrehumbert & Furth 2023 put it as
+// the atmospheric adiabat connecting "seamlessly to the supercritical water
+// adiabat that extends into the deep interior of the planet." A seam that is
+// described as seamless should not be a step in the code.
+//
+// So the ceiling is blended over the fifty kelvin above the critical point, the
+// same width the superFrac diagnostic already uses either side of it, and
+// entirely above 647 K rather than straddling it: below the critical
+// temperature there really is a liquid, and softening into that direction would
+// boil pressurised oceans that the phase diagram says are liquid. That
+// one-sidedness is also why every world in this model that stays under 647 K is
+// bit-identical across this change -- the blend weight is exactly zero there.
+const SUPER_WIDTH = 50;        // K
+
+// How far past the critical point a parcel of surface is: 0 below 647 K, 1 by
+// 697 K. Exported because the classifier needs the same number the ceiling is
+// built from, and two definitions of "supercritical" would eventually disagree.
+export function supercriticalShare(T) {
+  return smoothstep(T_CRIT_H2O, T_CRIT_H2O + SUPER_WIDTH, T);
+}
 
 // Fraction of the surface under dry descending air, and how humid that air is.
 export const FIN_FRACTION = 0.18, RH_DRY = 0.20;
@@ -130,6 +166,7 @@ export function resetWorld(w, params) {
   w.history = [];
   w.dtPrev = 0;
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
+  w.hotLayer = null;   // and so is the depth of the hot layer, from how hot this world starts
   w.landIceMass = null;  // and so is the mass the cold trap has moved
   w.life = null;       // seeded on the first step, from whether this world has a biosphere
   // A world that starts with industry running has been running it for a while:
@@ -306,12 +343,41 @@ export function update(w, dt) {
   if (w.iceSheet == null || !isFinite(w.iceSheet)) w.iceSheet = iceSheetTarget;
   const glaciatedShare = clamp(w.iceSheet, 0, 1);
 
+  // The hot layer: how much of the planet's water is up in the atmospheric
+  // column rather than sitting cold underneath it. A real state variable with
+  // memory, advanced once per step in advanceHotLayer, because the whole reason
+  // it exists is that the same star over the same planet gives two different
+  // worlds depending on which way it got there.
+  //
+  // Seeded, like iceSheet, from the target on the first step it is looked at.
+  // That single line is what makes a hot start a hot start: a world built at
+  // 700 K has been supercritical since before the clock started and has no cold
+  // interior to eat through, so it seeds at 1 and behaves exactly as this model
+  // always did. A world built at 288 K seeds at 0 and has to earn its way up.
+  let hotTarget = 0, hotTbar = 0;
+  for (let i = 0; i < NBANDS; i++) {
+    hotTarget += supercriticalShare(w.T[i]) / NBANDS;
+    hotTbar += w.T[i] / NBANDS;
+  }
+  // Eighteen bands each contributing a rounded eighteenth summed to
+  // 1.0000000000000002, which is harmless where it is read through a clamp and
+  // not harmless at all in a save file that says a planet is 100.0000000000002%
+  // supercritical. Clamped where it is made, once.
+  hotTarget = clamp(hotTarget, 0, 1);
+  if (w.hotLayer == null || !isFinite(w.hotLayer)) w.hotLayer = hotTarget;
+  const hotShare = clamp(w.hotLayer, 0, 1);
+  // What it costs to move the boundary: sensible heat to lift a kilogram of
+  // cold water to the surface temperature, plus the latent heat to stop it
+  // being a liquid. Roughly 2 MJ/kg either way, so the two terms are the same
+  // size and neither can be dropped. Per square metre of the whole inventory,
+  // which is what advanceHotLayer divides the available flux by.
+  const hotCapacity = availCol * (CP_WATER * Math.max(hotTbar - 273.15, 0) + L_VAP);
+
   // Demanded vapour per band, then rescaled if the planet hasn't got the water.
   //
-  // Above the critical temperature there is no ceiling at all, because there is
-  // nothing for the air to be saturated WITH: no liquid phase exists at any
-  // pressure past 647 K, so every gram of the planet's water is up there and
-  // the band takes whatever there is.
+  // Above the critical temperature saturation stops being a ceiling, because
+  // there is nothing for the air to be saturated WITH: no liquid phase exists
+  // at any pressure past 647 K. What replaces it is below.
   //
   // psatH2O returns a finite pseudo-value above the critical point, which is
   // right for the two things the rest of the model asks it for -- its slope, and
@@ -324,13 +390,48 @@ export function update(w, dt) {
   //
   // It hid because it comes right again by accident further up: by 1400 K the
   // pseudo-value is large enough to hold a whole inventory anyway.
+  //
+  // The ceiling is blended over SUPER_WIDTH rather than switched -- see there
+  // for the measurement that made a step untenable.
+  //
+  // And what it blends *toward* is not the whole inventory but the hot layer:
+  // how much of the planet's water has actually joined the atmospheric column.
+  // On a world that was always hot, that is all of it, and this reduces to what
+  // the code did before. On a world that cooled first and was heated later it
+  // is not, and that difference is the point -- see advanceHotLayer.
+  //
+  // Two bounds keep the blend honest. The layer is never shallower than the
+  // steam already standing on it, because that steam *is* its top: without this
+  // a cold-start world crossing 647 K with a thin layer would have seen its
+  // ceiling fall from the saturation column to nearly nothing and rained a
+  // 200 bar steam atmosphere out at 690 K, a discontinuity worse than the one
+  // being removed. And it is never deeper than the water the planet has.
   const B = scratch(w);
   const demand = B.demand;
   let totalDemand = 0;
+  const avail = Math.max(availCol, 0);
+  const hotCol = avail * hotShare;
+  //
+  // `hotBinds` records whether the layer is the thing setting the ceiling
+  // anywhere, which is a narrower question than whether it is moving. On a world
+  // whose whole inventory is less than a saturated column -- an Earth in a wet
+  // runaway, where the pseudo-saturation at 1000 K is four times the ocean --
+  // the floor already holds the ceiling up and where the boundary sits changes
+  // nothing. maxStep uses this: bounding the step for a layer whose position
+  // cannot be read in the climate cut a wet runaway from 20 kyr steps to 2.7,
+  // which is the crawl this branch was warned to watch for.
+  let hotBinds = false;
   for (let i = 0; i < NBANDS; i++) {
-    demand[i] = w.T[i] >= T_CRIT_H2O
-      ? Math.max(availCol, 0)
-      : RH * psatH2O(w.T[i]) / g;           // kg/m^2
+    const sc = supercriticalShare(w.T[i]);
+    const psatCol = RH * psatH2O(w.T[i]) / g;    // kg/m^2
+    if (sc <= 0) {
+      demand[i] = psatCol;
+    } else {
+      const floor = Math.min(psatCol, avail);
+      if (hotCol > floor) hotBinds = true;
+      const ceil = Math.max(hotCol, floor);
+      demand[i] = sc >= 1 ? ceil : psatCol + sc * (ceil - psatCol);
+    }
     totalDemand += demand[i] / NBANDS;
   }
   const supply = clamp(availCol, 0, 1e12);
@@ -507,6 +608,7 @@ export function update(w, dt) {
     landIceFrac: clamp((1 - flooded) * glaciatedShare, 0, 1),
     iceSheetTarget,
     glaciatedShare,
+    hotTarget, hotCapacity, hotLayer: hotShare, hotBinds,
     // `absorbed` stays absorbed *sunlight*; the interior is reported separately.
     // The imbalance, though, is the whole energy budget -- Settle stops when it
     // reaches zero, so leaving the interior out of it would park a tidally
@@ -776,6 +878,14 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // sequence happened to steer it to.
   if (w.iceSheet != null && dg.iceSheetTarget != null) {
     if (Math.abs(dg.iceSheetTarget - w.iceSheet) > 0.02) dt = Math.min(dt, 3500);
+  }
+  // Same argument for the hot layer, on its own timescale. A step that moves the
+  // boundary a long way in one go jumps over the vapour ceiling it sets, and
+  // the ceiling is what the greenhouse is built on.
+  if (w.hotLayer != null && dg.hotBinds && dg.hotCapacity > 0
+      && Math.abs(dg.hotTarget - w.hotLayer) > 0.02) {
+    const flux = MIX_EFF_DOWN * Math.max(dg.absorbed + dg.Fint, 0);
+    if (flux > 0) dt = Math.min(dt, Math.max(0.05 * dg.hotCapacity / (flux * YEAR), 1.0));
   }
 
   // Smooth the step size. Near a tipping point -- the ice edge, above all --

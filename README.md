@@ -614,7 +614,10 @@ logarithmically to the ~270 bar an evaporated Earth ocean really weighs.
 At the other end there is the **critical point**: 647 K and 220.6 bar. Above it the liquid and the
 vapour stop being distinguishable — one supercritical fluid, no surface, no boiling, and no ocean at
 all. A planet in a full wet runaway is past it, so it shows 100% land under a steam envelope rather
-than a hot sea.
+than a hot sea. Approaching it the ceiling on airborne water is blended rather than switched, and on
+a world with a deep enough ocean the conversion takes real time rather than happening at the
+crossing — both below, under *The critical point was a cliff* and *The same star over the same
+planet*.
 
 Between the two, an ocean at low pressure does not sit there placidly. Near the triple point water
 boils and freezes at once: evaporation is violent, and the latent heat it carries away cools what is
@@ -2368,6 +2371,98 @@ of a planet nobody has ever seen.** It is the least constrained number in the mo
 say so. `tools/calibrate.mjs` carries the anchor so that a change upstream of it — the albedo, the
 water partition, the step controller — cannot quietly stop it meaning what this section says.
 
+### The critical point was a cliff, and how deep the ocean is decided whether you could see it
+
+Below 647 K a liquid exists and the air over it is capped by saturation. Above 647 K no liquid
+exists at any pressure, so the cap is gone and the ceiling is whatever water the planet has. That
+much is the phase diagram, not a modelling choice. The **switch** between them was a modelling
+choice, and it was a step.
+
+Measured, by holding a world at fixed temperatures a twentieth of a kelvin apart:
+
+| water | airborne at 646.9 K | at 647.1 K | step |
+|---|---|---|---|
+| 1 EO | 143 bar | 270 bar | ×1.9 |
+| 10 EO | 172 bar | 2,692 bar | ×15.7 |
+| 100 EO | 172 bar | 25,710 bar | **×150** |
+
+The defect scales with how much water there is, which is exactly why it survived: on Earth's single
+ocean it is a factor of 1.9 and looks like weather. Until this branch there was no world in the
+model with enough water to make it visible.
+
+What the step was missing is that the two phases do not become identical *at* the critical point,
+they become identical *near* it — approaching 647 K the liquid and vapour densities converge and the
+latent heat collapses toward zero. Pierrehumbert & Furth (2023) put it as the atmospheric adiabat
+connecting **"seamlessly to the supercritical water adiabat that extends into the deep interior of
+the planet."** A seam described as seamless should not be a step in the code.
+
+So the ceiling is blended over the **fifty kelvin above** the critical point — the same width the
+`superFrac` diagnostic already used either side of it, and placed entirely above 647 K rather than
+straddling it. That one-sidedness is not tidiness. Softening downward would have lifted water off
+oceans the phase diagram says are liquid: at 630 K and 500 bar water is compressed liquid, well
+above the vapour dome, and blending 40% of a hundred-ocean inventory into the air there would have
+been a fabrication. It is also why **every world in this model that stays under 647 K is
+bit-identical across the change** — the blend weight there is exactly zero.
+
+The bound the result is held to is Clausius–Clapeyron itself. Saturation below the critical point
+climbs at about 0.030 per kelvin in log column and this model has always run on that curve, so a
+transition steeper than the steepest thing already in the model is the definition of a new cliff.
+Worst single jump across 636–700 K at a twentieth of a kelvin: **×1.0015, ×1.0053 and ×1.0115** for
+1, 10 and 100 oceans. Deep water is still steep — the ceiling genuinely has 150× to travel in fifty
+kelvin — but it is a curve.
+
+### The same star over the same planet, and two different worlds
+
+`docs/climate-states.md` says of the classifier that it has "no hysteresis and no memory". This is
+the first place the model has both, and it is not decoration: Pierrehumbert & Furth's point is that
+a waterworld's state depends on the path it took.
+
+> "A sub-Neptune waterworld could undergo a cold-start runaway if it cooled off sufficiently, early
+> in its life, to form a condensed interior, but then the host star luminosity increased
+> sufficiently to cross the runaway threshold… For the cold start, there would be little heat flux
+> escaping the interior and hence nothing to drive convection… a hot (and possibly supercritical)
+> isothermal upper layer in contact with a cold liquid or ice boundary. As the isothermal layer
+> radiated into the ocean or ice, it would progressively advance toward the centre."
+
+So `w.hotLayer` is a real state variable — the share of the planet's water that has joined the
+atmospheric column — advanced once per step, seeded on the first step from the world's own starting
+temperature. That one seeding line is the whole hot-start/cold-start distinction: a world built at
+700 K has been supercritical since before the clock started and has no cold interior to eat through,
+so it seeds at 1 and behaves exactly as this model always did. A world built at 288 K seeds at 0 and
+has to earn its way up.
+
+Measured, sixty oceans under 3 S⊕ with the star held fixed, run for the same 200 kyr:
+
+| | surface | layer converted | liquid left |
+|---|---|---|---|
+| started at 700 K | 1507 K | 100% | 0 EO |
+| started at 288 K | 1243 K | **11%** | **54 EO** |
+| started at 288 K, 20 Myr | 1518 K | 100% | 0 EO |
+
+The cold start gets there — it is a delay and not a wall — but 200 kyr in it is a different planet.
+
+**The asymmetry is one number, not two invented timescales.** Going down, heat has to be mixed
+against a stable buoyancy gradient, which Pierrehumbert & Furth name as the difficulty; coming back
+up there is no such gradient, because a cooling supercritical layer gets denser and sinks on its
+own. The two directions also draw on different fluxes, which is physics rather than an asymmetry
+bolted on: going down the energy arrives from the star and the interior and only the mixed fraction
+of it reaches the boundary, while coming up the enthalpy has to leave the planet entirely, so what
+rations the retreat is how fast the planet radiates. The hysteresis falls out of that rather than
+being asserted. At equal flux one Earth ocean converts in ~45 kyr and gives itself back in ~0.9 —
+fifty to one. Measured on the sixty-ocean world above with its star cut from 3 S⊕ to 0.15, the
+retreat runs **19× faster than the advance did** and finishes in 97 kyr; the ratio is smaller than
+fifty precisely because the flux carrying the heat out is now a twentieth of the one that brought
+it in.
+
+**And the mechanism is self-scaling, which is why it could be added to a finished model at all.**
+What the layer costs to move is the water it has to move, so a world with little water has almost no
+boundary and the layer keeps up with its target exactly. Every preset this branch inherited is in
+that category. The bit-identity probe agrees: of twenty-six presets, **twenty-four are unchanged to
+the last bit** and two moved — `brink` by −0.040 K and `dryVenus` by −0.056 K over ten million
+years. The three others that cross 647 K within that span do not move at all, for reasons worth
+naming: `venus` and `gj1132b` carry no water, so there is no boundary; `earlyTrappist1b` is built at
+700 K, above the blend window entirely.
+
 ## Known deviations from the literature
 
 Stated plainly, because a model that hides these is less useful:
@@ -2388,6 +2483,20 @@ Stated plainly, because a model that hides these is less useful:
   put such a layer, so it carries the *consequence* instead — a multiplier on τ, gated on hydrogen
   being the background and on the air being wetter than the criterion. That closes about **40%** of
   the 1 bar gap, 1.04 → 0.59 S⊕, and stops there on purpose. See below.
+
+* **The cold-start conversion rate rests on one unmeasured number.** How fast a hot layer eats
+  downward into a cold ocean is set by the efficiency with which heat mixes across a stably
+  stratified interface, and there is no measurement of it: the ocean in question has never been
+  observed, and Pierrehumbert & Furth (2023) give the mechanism without a rate. What exists is a
+  bound borrowed from terrestrial oceanography — Osborn (1980) tops the stratified mixing efficiency
+  out near 0.2, and a strongly stratified interface runs an order of magnitude under that — so the
+  0.02 used here is the low end of a bound, not a fitted value. `tools/calibrate.mjs` reports it as
+  a `GAP` in the form a reader can judge, the conversion time for one Earth ocean, and the range it
+  is checked against is what the bound allows rather than what anyone has measured. Being inside it
+  means the timescale is not absurd; it does not mean it is right.
+
+  The hysteresis itself is on firmer ground than the rate. That a cold-started waterworld lags a
+  hot-started one at the same instellation is the paper's own claim; only *by how long* is invented.
 
 * **There is no outer edge to the habitable zone.** Kasting et al. (1993) put it at 1.67 AU — 0.36
   S⊕ — and it is set by a *maximum greenhouse*: CO₂ Rayleigh-scatters about 2.5× better than air, so

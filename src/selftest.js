@@ -9,7 +9,8 @@ import { classify, reasonText } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
          planetaryAlbedo, inhibitionMoleFraction, inhibitionFactor } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
-import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile } from './physics/climate.js';
+import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile,
+         createWorld, update, supercriticalShare } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
@@ -376,6 +377,139 @@ export function run() {
       `${(d.Tmean - 273.15).toFixed(0)} °C under ${d.pTotMean.toFixed(0)} bar ` +
       `(critical point ${(T_CRIT_H2O - 273.15).toFixed(0)} °C / ${(P_CRIT_H2O / 1e5).toFixed(0)} bar): ` +
       `ocean ${(d.flooded * 100).toFixed(1)} %`);
+  }
+
+  // Crossing the critical point, and the fact that until this branch it was a
+  // cliff nobody could see.
+  //
+  // The vapour ceiling used to switch: below 647 K saturation, above it the
+  // whole inventory. On Earth's one ocean that step is a factor of 1.9, small
+  // enough to look like weather. On a hundred-ocean waterworld -- which is what
+  // this branch exists to build -- it was measured at a factor of 150 across a
+  // fifth of a kelvin: 172 bar of steam at 646.9 K, 25,700 bar at 647.1 K.
+  //
+  // The bound is Clausius-Clapeyron itself. Saturation below the critical point
+  // climbs at about 0.030 per kelvin in log column, this model has always run
+  // on that curve, and a transition steeper than the steepest thing already in
+  // the model is the definition of a new cliff. Deep water is still allowed to
+  // be steep -- the ceiling genuinely has 150x to travel in fifty kelvin, and
+  // an average of ln(150)/50 is 0.10/K before any shape is chosen -- so the
+  // test is on the *jump*, sampled finely enough that a step could not hide
+  // between two samples.
+  {
+    const column = (water, T) => {
+      const w = createWorld({ ...EARTH, water, startT: T, insolation: 3 });
+      for (let i = 0; i < w.T.length; i++) w.T[i] = T;
+      update(w, 0);
+      return w.diag.pH2O.reduce((a, b) => a + b, 0) / w.diag.pH2O.length;
+    };
+    const worst = [];
+    for (const water of [1, 10, 100]) {
+      let jump = 1, at = 0, prev = column(water, 636);
+      for (let T = 636.05; T < 700; T += 0.05) {
+        const now = column(water, T);
+        if (now / prev > jump) { jump = now / prev; at = T; }
+        prev = now;
+      }
+      worst.push([water, jump, at]);
+    }
+    // A twentieth of a kelvin of Clausius-Clapeyron is 0.15%. Ten times that is
+    // still a smooth curve at this sampling and nothing like a step.
+    check('Crossing the critical point is a curve, not a cliff, however deep the ocean',
+      worst.every(([, j]) => j < 1.015),
+      worst.map(([wt, j, T]) => `${wt} EO ×${j.toFixed(3)} at ${T.toFixed(1)} K`).join(' · '));
+    check('…and the share past the critical point is 0 below it and 1 by 697 K',
+      supercriticalShare(647.09) === 0 && supercriticalShare(647.096) === 0
+        && supercriticalShare(697.096) === 1 && supercriticalShare(700) === 1
+        && supercriticalShare(672) > 0.49 && supercriticalShare(672) < 0.51,
+      `647 K → ${supercriticalShare(647.096)}, 672 K → ${supercriticalShare(672).toFixed(3)}, `
+      + `697 K → ${supercriticalShare(697.096)}`);
+  }
+
+  // Cold start against hot start: the same planet, the same star, two answers.
+  //
+  // Pierrehumbert & Furth 2023's point is that a sub-Neptune waterworld that
+  // cooled early and was heated later cannot simply become the world it would
+  // have been had it never cooled, because the heat has to be mixed downward
+  // against a stable buoyancy gradient and that is slow. The classifier's own
+  // documentation says this model has "no hysteresis and no memory"; this is
+  // the first place it has both.
+  //
+  // Built as a pair rather than as an absolute number, because what is being
+  // tested is the path dependence and not the timescale: identical worlds,
+  // identical instellation, one started above the critical point and one below
+  // it, run the same length of time.
+  {
+    const deep = { ...EARTH, water: 60, insolation: 3.0, brightening: 0, landFraction: 0 };
+    const run = (startT, yrs, water) => {
+      const s = new Simulation({ ...deep, startT, ...(water == null ? {} : { water }) });
+      s.runYears(yrs);
+      return s.world;
+    };
+    //
+    // Measured as the LAG -- how far the layer is behind where the surface
+    // temperature says it should be -- and not as how much has converted. Those
+    // are different questions and confusing them makes the test meaningless: a
+    // surface at 666 K is only part-way past the critical point, so a layer
+    // that has converted a third of the inventory there is not behind at all,
+    // it has arrived.
+    const lag = (w) => w.diag.hotTarget - w.diag.hotLayer;
+    const hot = run(700, 2e5), cold = run(288, 2e5);
+    check('A cold-started waterworld is not the same planet as a hot-started one',
+      lag(hot) < 0.01 && lag(cold) > 0.5 && cold.water.ocean > 1 && hot.water.ocean < 1e-6,
+      `after 200 kyr at 3 S⊕: hot start ${(hot.diag.hotLayer * 100).toFixed(0)}% of the way `
+      + `to ${(hot.diag.hotTarget * 100).toFixed(0)}%, ${hot.water.ocean.toFixed(1)} EO liquid · `
+      + `cold start ${(cold.diag.hotLayer * 100).toFixed(0)}% of `
+      + `${(cold.diag.hotTarget * 100).toFixed(0)}%, ${cold.water.ocean.toFixed(1)} EO liquid`);
+    // ...and it does get there, or the mechanism would be a wall rather than a
+    // delay. Same world, longer clock.
+    const late = run(288, 2e7);
+    check('…but it gets there in the end, which is what makes it a delay',
+      lag(late) < 0.01 && late.diag.hotLayer > cold.diag.hotLayer + 0.3,
+      `${(cold.diag.hotLayer * 100).toFixed(0)}% at 200 kyr → `
+      + `${(late.diag.hotLayer * 100).toFixed(0)}% at 20 Myr`);
+    // The self-scaling claim, which is the reason this mechanism could be added
+    // to a finished model at all: what the layer costs to move is the water it
+    // has to move, so a world with little of it keeps up and feels nothing.
+    // Every preset this branch inherited is in that category, and the
+    // bit-identity probe agrees -- twenty-four of twenty-six are unchanged to
+    // the last bit, and the two that moved did so by under 0.06 K.
+    const shallow = run(288, 2e5, 0.05);
+    check('…while a shallow ocean has no boundary to move and feels none of it',
+      lag(shallow) < 0.01,
+      `0.05 EO: ${(shallow.diag.hotLayer * 100).toFixed(0)}% of `
+      + `${(shallow.diag.hotTarget * 100).toFixed(0)}% at ${shallow.diag.Tmean.toFixed(0)} K, `
+      + `lag ${lag(shallow).toExponential(1)} · 60 EO at the same star: lag `
+      + `${lag(cold).toFixed(2)}`);
+
+    // And the way back, which is the half of a hysteresis loop that a test
+    // measuring only the way in would never reach. Same world, star taken away.
+    //
+    // The ratio here is not the efficiency ratio and should not be read as one:
+    // at equal flux the layer retreats 1/0.02 = 50x faster than it advances, but
+    // this world is being cooled by a star cut from 3 S⊕ to 0.15, so the flux
+    // carrying the enthalpy out is a small fraction of the one that brought it
+    // in. What the check pins is the sign and the order: the way back is faster
+    // than the way in even when the star has been all but switched off, which is
+    // the asymmetry, and it completes rather than stalling half-converted.
+    {
+      const s = new Simulation({ ...deep, startT: 288 });
+      s.runYears(2e5);
+      const advance = s.world.diag.hotLayer / 2e5;
+      s.world.params.insolation = 0.15;
+      let t = 0, prev = s.world.diag.hotLayer, fastest = 0;
+      while (t < 1.5e5 && s.world.diag.hotLayer > 0) {
+        s.runYears(250); t += 250;
+        const now = s.world.diag.hotLayer;
+        fastest = Math.max(fastest, (prev - now) / 250);
+        prev = now;
+      }
+      check('…and the layer gives itself back faster than it took, once the star goes out',
+        fastest > advance * 5 && s.world.diag.hotLayer < 1e-9 && t < 1.5e5,
+        `advance ${advance.toExponential(1)}/yr · retreat ${fastest.toExponential(1)}/yr `
+        + `(${(fastest / advance).toFixed(0)}× at a twentieth the flux) · fully gone after `
+        + `${(t / 1e3).toFixed(0)} kyr`);
+    }
   }
 
   // ---- 3d. the night-side cold trap ----------------------------------------

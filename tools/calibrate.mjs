@@ -367,6 +367,38 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     'peak sits.');
 }
 
+// ---- the hot layer, and the one number in it that nobody has measured -------
+//
+// The cold-start mechanism turns on a single constant: the efficiency with
+// which heat is mixed downward across a stably stratified interface, which sets
+// how long a waterworld that cooled early takes to convert its ocean once the
+// star brightens past the runaway threshold. Reported here rather than buried
+// in volatiles.js because it is the least constrained thing in this branch and
+// a reader deserves to see it beside the anchors that are constrained.
+//
+// There is no measurement to check it against -- the ocean it applies to has
+// never been observed, and Pierrehumbert & Furth 2023 describe the mechanism
+// without quantifying the rate. What exists is a bound from terrestrial
+// oceanography: Osborn 1980's mixing efficiency for stratified turbulence tops
+// out near 0.2, and a strongly stratified interface runs an order of magnitude
+// under that. So the range below is that bound, not a measurement of this
+// process, and a value inside it means "not obviously wrong" rather than
+// "right". It is reported as the conversion time for one Earth ocean under
+// Earth's sunlight, which is the quantity a reader can actually judge.
+{
+  const S = 1361 / 4, absorbed = S * 0.7;      // W/m^2, one Earth ocean's star
+  const EO_COL = 1.4e21 / 5.1e14;              // kg/m^2
+  const hConv = 4200 * (288 - 273.15) + 2.4e6; // J/kg, sensible + latent
+  const kyr = EO_COL * hConv / (0.02 * absorbed) / 3.155815e7 / 1e3;
+  deviation('Hot-layer conversion, 1 EO', kyr, 20, 200, 'kyr',
+    'No measurement exists. Osborn 1980 bounds the stratified mixing efficiency ' +
+    'at ~0.2 and a strong interface runs ten times under it, so 0.02 is the low ' +
+    'end of a bound rather than a fitted value. The range here is what that ' +
+    'bound allows (0.2 to 0.002 efficiency), and being inside it means the ' +
+    'timescale is not absurd -- not that it is correct. Pierrehumbert & Furth ' +
+    '2023 give the mechanism and no rate.');
+}
+
 // ---- report ---------------------------------------------------------------
 let bad = 0;
 console.log('');

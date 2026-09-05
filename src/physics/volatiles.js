@@ -583,6 +583,61 @@ function advanceIceSheet(w, dtYears) {
   w.iceSheet += (target - w.iceSheet) * (1 - Math.exp(-Math.max(dtYears, 0) / tau));
 }
 
+// How fast the boundary between the hot upper layer and the cold water beneath
+// it moves, and why it moves at two different speeds.
+//
+// Pierrehumbert & Furth 2023 describe a planet that cooled early and was heated
+// later as carrying "a hot (and possibly supercritical) isothermal upper layer
+// in contact with a cold liquid or ice boundary", which "as the isothermal layer
+// radiated into the ocean or ice, would progressively advance toward the
+// centre" -- and they say plainly why that is slow: it is "the difficulty of
+// mixing heat downward against a stable buoyancy gradient." Hot fluid sits on
+// cold fluid and stays there. Nothing carries the heat down but the small
+// fraction of the energy that stratified turbulence manages to move.
+//
+// Coming back up there is no such difficulty. A cooling supercritical layer
+// gets denser as it cools, so it sinks and condenses on its own, and the only
+// thing rationing the retreat is how fast the planet can radiate the enthalpy
+// away. So the mixing efficiency is the whole asymmetry: MIX_EFF_DOWN going in,
+// 1 coming out, one number rather than two invented timescales, and the
+// hysteresis falls out of it instead of being asserted.
+//
+// The number itself is the least defensible thing in this file and should be
+// read that way. Osborn 1980's mixing efficiency for stratified turbulence is
+// an upper bound of about 0.2, and strongly stratified interfaces run an order
+// of magnitude under it; 0.02 is that low end. It is a plausible value, not a
+// measured one, and the ocean it applies to has never been observed.
+//
+// The scale it produces: one Earth ocean under Earth's sunlight takes ~70 kyr
+// to convert and ~1.4 kyr to give back; a hundred-ocean Hycean takes millions
+// of years. Long enough to watch, short enough to finish -- and, usefully, the
+// mechanism is self-scaling. A world with little water has almost no capacity
+// to fill, so the layer snaps to its target and nothing about that world
+// changes. Every preset this branch inherited is in that category.
+export const MIX_EFF_DOWN = 0.02;
+
+function advanceHotLayer(w, dtYears) {
+  const dg = w.diag;
+  const target = dg.hotTarget ?? 0;
+  if (w.hotLayer == null) { w.hotLayer = target; return; }
+  const cap = dg.hotCapacity ?? 0;
+  // No water, or no imbalance to spend: there is no boundary to move.
+  if (!(cap > 0)) { w.hotLayer = target; return; }
+  // The two directions look at different fluxes, and that is the physics rather
+  // than an asymmetry bolted on: going down, the energy that converts cold water
+  // arrives from the star and the interior, and only the mixed fraction of it
+  // reaches the boundary. Coming up, the enthalpy has to leave the planet
+  // entirely, so what rations the retreat is how fast the planet radiates.
+  const down = target > w.hotLayer;
+  const flux = down
+    ? MIX_EFF_DOWN * Math.max(dg.absorbed + dg.Fint, 0)
+    : Math.max(dg.emitted, 0);
+  const step = flux * YEAR * Math.max(dtYears, 0) / cap;
+  w.hotLayer = down
+    ? Math.min(target, w.hotLayer + step)
+    : Math.max(target, w.hotLayer - step);
+}
+
 // How long a methane molecule lasts, in years.
 //
 // Methane is not stable, and what destroys it depends entirely on the redox
@@ -749,6 +804,7 @@ const BIO_GROW = 5000;    // yr
 
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
+  advanceHotLayer(w, dtYears);
   // Who is living here. Reads the climate, changes nothing about it -- see
   // biosphere.js for why that separation is deliberate.
   stepLife(w, dtYears);

@@ -16,6 +16,12 @@ there is no hysteresis, no "was a snowball last frame", no minimum dwell time. A
 sitting exactly on a threshold will flicker between two names, and that is a property of
 the classifier, not a bug in the physics.
 
+That is still true of the classifier and is no longer true of everything it reads. Since
+the hot-layer work, `w.hotLayer` — how much of a planet's water has joined the atmospheric
+column — is a state variable with its own history, so two worlds under identical stars can
+present different diagnostics to this chain depending on which way they arrived. The chain
+itself remains a pure function of what it is handed; the memory lives upstream of it.
+
 ## The quantities it tests
 
 | Symbol in the code | Meaning | Units |
@@ -258,8 +264,11 @@ band the 1-D model cannot fully resolve.
 - **`ice` is gated on `hasWater`** (`totalWater > 1e-5`). A bone-dry world scores `ice = 0`
   no matter how cold, which is why states 13, 14 and 18 cannot fire on one and why the dry
   branch at step 8 has to come first.
-- **No hysteresis anywhere.** Thresholds are hard except where `smoothstep` softens the
-  underlying quantity (`iceFraction`, `warmSub`). Flicker at a boundary is expected.
+- **No hysteresis in the chain.** Thresholds are hard except where `smoothstep` softens the
+  underlying quantity (`iceFraction`, `warmSub`, and now `supercriticalShare`). Flicker at a
+  boundary is expected. The hysteresis that exists is in the physics, not here: `hotLayer`
+  advances at one rate and retreats at fifty times that, so the *inputs* to this chain can
+  differ between a world that heated up and one that cooled down to the same place.
 - **Six states are unreachable on a rotating world** — `twilight`, `eyeball`, `lobster`,
   `trapped`, `nightfrost` and `nightfrozen` — and `lockFactor` is a hard 0-or-1 on `p.tidallyLocked` —
   a slowly rotating world is never partially locked as far as the classifier is concerned.
