@@ -599,3 +599,16 @@ body.software-render #planet{image-rendering:auto}
 .mark-drop{background:none;border:0;color:var(--fg-faint);cursor:pointer;font-size:13px;
   line-height:1;padding:0 2px}
 .mark-drop:hover{color:var(--bad)}
+
+/* The layer cross-section in the readout. A stack of proportional bands, each
+   carrying its own thickness, because the compression that keeps eight
+   kilometres of air and two hundred of ice in the same picture is not something
+   the eye can read a number off. */
+.structure { display: flex; flex-direction: column; gap: 2px; border-radius: 6px;
+  overflow: hidden; font-size: 11px; line-height: 1.1; }
+.structure .layer { display: flex; align-items: center; justify-content: space-between;
+  gap: .5em; padding: 0 .55em; color: #0d1520; min-height: 14px;
+  text-shadow: 0 1px 0 rgba(255,255,255,.35); }
+.structure .layer-name { font-weight: 600; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.structure .layer-size { opacity: .8; white-space: nowrap; font-variant-numeric: tabular-nums; }

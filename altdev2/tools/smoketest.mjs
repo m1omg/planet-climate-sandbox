@@ -593,6 +593,34 @@ if (created < 20) {
     failed++;
   } else {
     console.log(`\x1b[32mPASS\x1b[0m  every storage key is namespaced to this build (${NS})`);
+
+    // Every gas control must refill the reservoir it names, and this is read
+    // out of main.js's own source rather than restated here, because a list
+    // that has to be remembered alongside the thing it checks protects nothing.
+    //
+    // It is here because of a shipped bug worth not repeating. `h2Bar` was
+    // added to the physics, to the presets and to the panel, and left out of
+    // RESERVOIR_KEYS. So dragging the hydrogen slider set the parameter and
+    // never refilled w.h2 -- the envelope did not change -- and then
+    // syncLiveControls, which reads the envelope back out of the reservoir
+    // every frame, saw zero and put the handle back at zero. The control
+    // appeared to fight the user, and no physics test could see it, because
+    // nothing was wrong with the physics.
+    {
+      const { readFileSync } = await import('node:fs');
+      const { SLIDERS } = await import('../src/game/controls.js');
+      const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+      const set = src.match(/const RESERVOIR_KEYS = new Set\(\[([^\]]*)\]/);
+      const listed = set ? [...set[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
+      const gasKeys = SLIDERS.filter((d) => /Bar$/.test(d.key)).map((d) => d.key);
+      const missing = gasKeys.filter((k) => !listed.includes(k));
+      if (missing.length) {
+        console.log(`\x1b[31mFAIL\x1b[0m  a gas control does not refill its reservoir: ${missing.join(', ')}`);
+        failed++;
+      } else {
+        console.log(`\x1b[32mPASS\x1b[0m  every gas control refills the reservoir it names  —  ${gasKeys.join(', ')}`);
+      }
+    }
   }
 }
 

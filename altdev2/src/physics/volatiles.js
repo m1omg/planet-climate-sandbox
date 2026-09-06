@@ -219,6 +219,51 @@ const CO2_PER_C = 44 / 12;
 // ---------------------------------------------------------------------------
 // How much a planet's own heat drives its volcanism.
 //
+// How much of what the mantle erupts actually reaches the air.
+//
+// NOT whether the mantle erupts. A sub-Neptune's rocky core is hotter than
+// Earth's and there is no reason to think it quiet. What a floor of
+// high-pressure ice changes is the delivery path to the atmosphere.
+//
+// The older picture -- ice VI/VII as a sealed lid, rock and ocean out of
+// contact -- is the one the literature has spent the last decade dismantling,
+// and a hard zero here would be an overclaim in that direction:
+//
+//   Kalousova & Sotin 2018 (GRL 45, 8096): ice melts at the silicate interface
+//   when convection is weak, and the melt rises to the ocean efficiently. It is
+//   vigorous convection that cools the interface below melting and shuts the
+//   path down, and the path narrows as the shell thickens with age.
+//
+//   Hernandez et al. 2022 (Nat Commun 13, 3303): up to 2.5 wt% NaCl dissolves
+//   in dense ice at mini-Neptune interior conditions, and thermo-compositional
+//   convection carries it across -- plumes of salty ice melting at the ocean
+//   boundary, crystallisation at the bottom returning salt downward. Their
+//   conclusion is that the mantle is permeable, not that it is a barrier.
+//
+// So this is a throttle whose one honest justification is thickness: efficient
+// through a thin shell, progressively slower through a thick one, never zero.
+//
+// It is also lumping in two things the model cannot represent separately, and
+// both push the same way for ATMOSPHERIC carbon specifically, which is a
+// narrower question than the nutrient transport those papers are about. A
+// Hycean ocean is hundreds of kilometres deep and is an enormous dissolved-
+// carbon buffer that this model has no reservoir for; and Nakayama et al. 2019
+// (arXiv:1907.00827) find seafloor weathering on ocean planets *enhanced* by
+// high-pressure ice melting, a sink rather than a source. Carbon reaching the
+// ocean floor is a long way from carbon reaching the sky.
+//
+// HP_ICE_LEAK and HP_ICE_SCALE are therefore the least constrained numbers in
+// this file -- there is no measured atmospheric delivery efficiency for such a
+// world -- and calibrate.mjs reports them as a gap rather than an anchor.
+const HP_ICE_LEAK = 0.05;     // floor: convective permeability, never sealed
+const HP_ICE_SCALE = 5e4;     // metres of ice that halve the delivery
+
+function sealFactor(w) {
+  const ice = w.diag?.oceanBase?.iceDepth ?? 0;
+  if (!(ice > 0)) return 1;
+  return HP_ICE_LEAK + (1 - HP_ICE_LEAK) / (1 + ice / HP_ICE_SCALE);
+}
+
 // Volcanic outgassing is melt production times the CO2 dissolved in the melt --
 // ocean-island primary melts average about 4 wt% CO2 -- and melt production is
 // driven by the heat coming out of the interior. So a world with a hot inside
@@ -861,13 +906,28 @@ export function stepVolatiles(w, dtYears) {
   partitionWater(w, dtYears);
 
   // --- carbonate-silicate cycle -------------------------------------------
+  // Nor can most of it reach the air through a floor of ice. The volcanoes are
+  // still there -- see sealFactor() -- but on a water world deep enough to
+  // freeze at its base the rock sits under a shell of high-pressure ice, and
+  // what the mantle erupts mostly stays under it. This is the reason a
+  // sub-Neptune is not simply a wet Earth, and leaving it out was doing real
+  // damage: the low-sunlight Hycean preset ran a full volcanic carbon cycle
+  // through a seafloor of ice VII 246 km thick and heated itself from 63 to
+  // 265 C over a billion years on carbon that could never have got there.
+  //
+  // The gate is the ice floor, not the depth: an ocean on rock outgasses
+  // normally however deep it is. `oceanBase.iceDepth` is zero on every world
+  // this build inherited, so the factor is exactly 1.0 for all of them and the
+  // carbon cycle they had is the carbon cycle they keep.
+  const sealed = sealFactor(w);
   // Volcanoes cannot outgas carbon the planet does not have. `outgassing` used
   // to be an infinite tap, and left running it produced 24 000 bar of CO2 --
   // thirty to a hundred times the entire carbon inventory of an Earth-mass
   // world. See carbonBudget().
   // Melt production scales with the heat coming out of the interior, so a
   // tidally heated world genuinely erupts more -- see meltBoost().
-  const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0) * meltBoost(p);
+  const want = OUTGAS_EARTH * outgassingScale(p.mass) * Math.max(p.outgassing, 0)
+    * meltBoost(p) * sealed;
   const V = (dtYears > 0 && w.carbonDeep != null && !p.mantleInfinite)
     ? Math.min(want, Math.max(w.carbonDeep, 0) / dtYears) : want;
 
@@ -1014,7 +1074,7 @@ export function stepVolatiles(w, dtYears) {
     // stayed anoxic for a billion years with photosynthesis already running
     // (Catling & Zahnle 2020). The Great Oxidation is that threshold being
     // crossed, and here it falls out of the arithmetic rather than being staged.
-    const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing * meltBoost(p);
+    const reductant = O2_REDUCTANT * outgassingScale(p.mass) * p.outgassing * meltBoost(p) * sealFactor(w);
 
     // Oxidative weathering of the crust: first order in how much oxygen there
     // is, which is what makes the level settle instead of climbing for ever.
@@ -1124,7 +1184,8 @@ export function stepVolatiles(w, dtYears) {
         + CH4_ANTHRO * (w.industrial ?? 0)) * wet * lit;
 
       // And the interior makes the rest: serpentinisation and the seeps.
-      const geo = CH4_GEO * outgassingScale(p.mass) * Math.max(p.outgassing ?? 0, 0) * meltBoost(p);
+      const geo = CH4_GEO * outgassingScale(p.mass) * Math.max(p.outgassing ?? 0, 0)
+        * meltBoost(p) * sealFactor(w);
 
       // Nothing on a four-hundred-kelvin surface is making methane, biologically
       // or geologically. Without this a world could boil its ocean away and keep

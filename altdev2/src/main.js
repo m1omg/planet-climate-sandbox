@@ -6,7 +6,8 @@ import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
-import { derive } from './physics/planet.js';
+import { derive, maxWaterEO } from './physics/planet.js';
+import { scaleHeight } from './render/atmosphere.js';
 import { runawayLimit, iceFraction } from './physics/radiation.js';
 import { transitRadius, waterMassFraction } from './physics/planet.js';
 import { NBANDS, lockFactor, X as BAND_X } from './physics/climate.js';
@@ -355,13 +356,13 @@ function buildSliders() {
         c.type = 'button'; c.className = 'stop';
         c.textContent = st.n;
         c.dataset.v = String(st.v);
-        c.title = `${t(d.label)}: ${d.fmt(st.v)}`;
+        c.title = `${t(d.label)}: ${d.fmt(st.v, params)}`;
         c.addEventListener('click', () => {
           params[d.key] = st.v;
           syncSliders();
           applyParams(d.key);
           markTouched();
-          toast(`${t(d.label)} — ${t(st.n)}, ${d.fmt(st.v)}`);
+          toast(`${t(d.label)} — ${t(st.n)}, ${d.fmt(st.v, params)}`);
         });
         row.appendChild(c);
       }
@@ -400,9 +401,9 @@ function buildSliders() {
     }
 
     input.addEventListener('input', () => {
-      const v = snapToDisplay(d, fromSlider(d, +input.value));
+      const v = Math.min(snapToDisplay(d, fromSlider(d, +input.value)), physicalMax(d));
       params[d.key] = v;
-      if (!els[d.key].editing) out.value = d.fmt(v);
+      if (!els[d.key].editing) out.value = d.fmt(v, params);
       input.style.setProperty('--fill', `${input.value / 10}%`);
       applyParams(d.key);
     });
@@ -414,7 +415,7 @@ function buildSliders() {
     out.addEventListener('blur', () => { els[d.key].editing = false; commitTyped(d); });
     out.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); out.blur(); }
-      if (e.key === 'Escape') { els[d.key].editing = false; out.value = d.fmt(params[d.key]); out.blur(); }
+      if (e.key === 'Escape') { els[d.key].editing = false; out.value = d.fmt(params[d.key], params); out.blur(); }
     });
   }
 
@@ -437,17 +438,17 @@ function buildSliders() {
 function commitTyped(d) {
   const e = els[d.key];
   const v = parseValue(d, e.out.value, params[d.key]);
-  if (v === null || !isFinite(v)) { e.out.value = d.fmt(params[d.key]); e.out.classList.remove('bad'); return; }
-  const clamped = clamp(v, d.zero ? 0 : d.min, d.max);
+  if (v === null || !isFinite(v)) { e.out.value = d.fmt(params[d.key], params); e.out.classList.remove('bad'); return; }
+  const clamped = clamp(v, d.zero ? 0 : d.min, physicalMax(d));
   params[d.key] = clamped;
   const sPos = clamp(toSlider(d, clamped), 0, 1000);
   e.input.value = String(sPos);
   e.input.style.setProperty('--fill', `${sPos / 10}%`);
-  e.out.value = d.fmt(clamped);
+  e.out.value = d.fmt(clamped, params);
   if (Math.abs(clamped - v) > Math.abs(v) * 1e-6) {
     e.out.classList.add('bad');
     setTimeout(() => e.out.classList.remove('bad'), 900);
-    toast(tp('{0} limited to {1}', t(d.label), d.fmt(clamped)));
+    toast(tp('{0} limited to {1}', t(d.label), d.fmt(clamped, params)));
   }
   applyParams(d.key);
 }
@@ -488,7 +489,7 @@ function syncSliders() {
     const s = clamp(toSlider(d, params[d.key]), 0, 1000);
     e.input.value = String(s);
     e.input.style.setProperty('--fill', `${s / 10}%`);
-    e.out.value = d.fmt(params[d.key]);
+    e.out.value = d.fmt(params[d.key], params);
     markStops(d);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
@@ -541,14 +542,34 @@ function syncLiveControls() {
     const pos = clamp(toSlider(d, v), 0, 1000);
     e.input.value = String(pos);
     e.input.style.setProperty('--fill', `${pos / 10}%`);
-    e.out.value = d.fmt(v);
+    e.out.value = d.fmt(v, params);
     markStops(d);
   }
 }
 
 // Changing a *composition* slider rewrites the reservoir; changing an external
 // forcing just changes the forcing and lets the planet respond.
-const RESERVOIR_KEYS = new Set(['n2Bar', 'o2Bar', 'co2Bar', 'ch4Bar', 'water', 'mass']);
+// A control's own max is a fixed number; some ceilings are not. Forty-five
+// thousand oceans is a reasonable slider limit for a ten-Earth-mass world and
+// an ocean eleven times heavier than the planet for a one-Earth-mass one, and
+// the control had no way to know the difference. This is the second ceiling:
+// what the planet currently set can actually hold.
+function physicalMax(d) {
+  if (d.key === 'water') return Math.min(d.max, maxWaterEO(params.mass));
+  return d.max;
+}
+
+const RESERVOIR_KEYS = new Set(['n2Bar', 'o2Bar', 'co2Bar', 'ch4Bar', 'h2Bar', 'water', 'mass']);
+
+// The envelope is one control over two reservoirs, split by helium fraction
+// exactly as createWorld() splits it. Both are written together or the split
+// drifts from what the control says.
+function seedEnvelope(w, g) {
+  const pEnv = Math.max(params.h2Bar ?? 0, 0);
+  const fHe = clamp(params.heliumFrac ?? 0, 0, 1);
+  w.h2 = pEnv * (1 - fHe) * 1e5 / g;
+  w.he = pEnv * fHe * 1e5 / g;
+}
 function applyParams(key) {
   const w = sim.world;
   sim.setParams({ [key]: params[key] });
@@ -558,10 +579,32 @@ function applyParams(key) {
     if (key === 'o2Bar') w.o2 = params.o2Bar * 1e5 / d.g;
     if (key === 'co2Bar') { w.co2 = params.co2Bar * 1e5 / d.g; w.co2Frozen = 0; }
     if (key === 'ch4Bar') w.ch4 = params.ch4Bar * 1e5 / d.g;
+    // Without this the hydrogen control did nothing at all, and then undid
+    // itself: applyParams set the parameter, the reservoir was never refilled,
+    // and syncLiveControls -- which reads the envelope back out of w.h2 + w.he
+    // every frame -- saw zero and put the handle back at zero. Dragging it
+    // looked like the slider was fighting you, because it was.
+    if (key === 'h2Bar') seedEnvelope(w, d.g);
     if (key === 'mass') {
       w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g;
       w.o2 = params.o2Bar * 1e5 / d.g;
       w.ch4 = params.ch4Bar * 1e5 / d.g;
+      seedEnvelope(w, d.g);
+      // Shrinking the planet under an ocean it can no longer hold: the water
+      // ceiling moves with the mass, so the inventory has to come with it
+      // rather than quietly becoming heavier than the world beneath it.
+      const wd = SLIDERS.find((x) => x.key === 'water');
+      const cap = physicalMax(wd);
+      if (params.water > cap) {
+        params.water = cap;
+        const cur = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
+        if (cur > 1e-9) {
+          const f = cap / cur;
+          w.water.ocean *= f; w.water.seaIce *= f; w.water.landIce *= f; w.water.vapour *= f;
+        }
+        syncSliders();
+        toast(tp('{0} limited to {1}', t(wd.label), wd.fmt(cap, params)));
+      }
     }
     if (key === 'water') {
       // The control shows the water still present, so set that directly and
@@ -823,6 +866,102 @@ function stat(k, v, cls = '', tip = '') {
   return `<div class="stat ${cls}"${title}><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 
+// A cross-section of the world, top to bottom, drawn from the same numbers the
+// text readout prints. It exists because this build added structure that a
+// single "ocean 262 km" line cannot show: an envelope with real extent, a
+// supercritical layer that is neither air nor sea, an ocean standing on ice
+// rather than rock, and -- on a cold-started world -- a hot lid that has only
+// converted part of the column and still has liquid water beneath it. Those are
+// stacked things, and a stack is the honest way to draw them.
+//
+// Thicknesses are real but the scale is compressed by a cube root, because the
+// span from Earth's 8 km of air to a Hycean's 250 km of ice is three orders of
+// magnitude and a linear column would render most layers as nothing. Every
+// visible band therefore carries its own depth as text: the picture gives the
+// order and the proportion, the label gives the number.
+const LAYER_STYLE = {
+  envelope:      ['#6f8fc7', 'hydrogen envelope'],
+  air:           ['#8fb8e0', 'atmosphere'],
+  supercritical: ['#a05fc0', 'supercritical'],
+  steam:         ['#c79ad8', 'steam'],
+  ocean:         ['#2f7fbf', 'liquid ocean'],
+  seaice:        ['#cfe6f5', 'sea ice'],
+  iceVI:         ['#9fc6d8', 'ice VI'],
+  iceVII:        ['#7fa8bd', 'ice VII'],
+  rock:          ['#6b5a4a', 'rock'],
+};
+
+function drawStructure(w, d, dg) {
+  const host = $('#structure');
+  if (!host) return;
+  const ob = dg.oceanBase || {};
+  const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
+  const layers = [];
+  const add = (kind, metres, note) => {
+    if (metres > 0) layers.push({ kind, metres, note });
+  };
+
+  // Air first. The transit extent is the right number when there is an envelope
+  // -- it is what the readout prints as "with envelope" -- but it collapses to
+  // nothing on a rocky world, and drawing Earth with no atmosphere at all would
+  // be a worse lie than drawing it thin. So the band is whichever is larger:
+  // what a transit would see, or the five scale heights the renderer already
+  // treats as the visible depth of the sky.
+  const airThick = Math.max(rTr - d.R, 5 * scaleHeight(dg));
+  const envShare = (dg.pH2 ?? 0) + (dg.pHe ?? 0);
+  // pTot is per-band and a typed array, so Array.isArray does not see it.
+  const pRaw = dg.pTot;
+  const pTot = (pRaw != null && typeof pRaw.length === 'number') ? (pRaw[0] ?? 0) : (pRaw ?? 0);
+  add(envShare > 0.5 * pTot ? 'envelope' : 'air', airThick || 1,
+    `${pTot >= 1 ? pTot.toFixed(0) : pTot.toFixed(3)} bar`);
+
+  // Then the water column, in whatever phases it is actually in.
+  if (ob.basePhase === 'supercritical') {
+    add('supercritical', Math.max(ob.depth, 1e5), 'no surface');
+  } else {
+    // A cold-started world converts from the top down, and `hotLayer` is how
+    // much of the column has actually gone over rather than how much wants to.
+    // That fraction, drawn, is the whole point of the Buried Ocean state.
+    const hot = clamp(dg.hotLayer ?? 0, 0, 1);
+    const liquid = ob.liquidDepth ?? 0;
+    if (hot > 0.005 && liquid > 0) {
+      add('supercritical', liquid * hot, `${(hot * 100).toFixed(0)}% converted`);
+      add('ocean', liquid * (1 - hot), 'still liquid');
+    } else {
+      const ice = (w.water.seaIce ?? 0) + (w.water.landIce ?? 0);
+      const tot = ice + (w.water.ocean ?? 0);
+      if (tot > 0 && ice / tot > 0.5) add('seaice', liquid || 1000, 'frozen over');
+      else add('ocean', liquid, null);
+    }
+    if (ob.iceDepth > 0) {
+      add(ob.basePhase === 'ice VII' ? 'iceVII' : 'iceVI', ob.iceDepth,
+        `${(ob.basePressure / 1e9).toFixed(1)} GPa at the floor`);
+    }
+  }
+  add('rock', Math.max(d.R * 0.35, 1), 'silicate interior');
+
+  // Cube-root compression, then a floor so a thin layer is still a band.
+  const H = 210, PAD = 2;
+  const raw = layers.map((l) => Math.cbrt(l.metres));
+  const sum = raw.reduce((a, b) => a + b, 0) || 1;
+  let px = raw.map((r) => Math.max((r / sum) * (H - PAD * layers.length), 14));
+  const over = px.reduce((a, b) => a + b, 0) / H;
+  if (over > 1) px = px.map((v) => v / over);
+
+  const fmt = (m) => (m >= 1e6 ? `${(m / 1000).toFixed(0)} km`
+    : m >= 1e4 ? `${(m / 1000).toFixed(1)} km`
+    : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(0)} m`);
+
+  host.innerHTML = layers.map((l, i) => {
+    const [colour, label] = LAYER_STYLE[l.kind];
+    const h = px[i];
+    return `<div class="layer" style="height:${h.toFixed(1)}px;background:${colour}">`
+      + `<span class="layer-name">${t(label)}</span>`
+      + `<span class="layer-size">${l.kind === 'rock' ? '' : fmt(l.metres)}`
+      + `${l.note ? ` · ${t(l.note)}` : ''}</span></div>`;
+  }).join('');
+}
+
 function updateReadout() {
   const w = sim.world, dg = w.diag, d = dg.d;
   const st = classify(w);
@@ -975,6 +1114,7 @@ function updateReadout() {
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
   const xWater = waterMassFraction(params.mass, w.water.ocean + w.water.seaIce
     + w.water.landIce + w.water.vapour);
+  drawStructure(w, d, dg);
   $('#derived').innerHTML =
     `<div>gravity <b>${d.g.toFixed(2)} m/s²</b></div>` +
     `<div>radius <b>${(d.R / 6.371e6).toFixed(2)} R⊕</b></div>` +
@@ -1051,7 +1191,7 @@ function updateReadout() {
           const pos = clamp(toSlider(e.def, v), 0, 1000);
           e.input.value = String(pos);
           e.input.style.setProperty('--fill', `${pos / 10}%`);
-          e.out.value = e.def.fmt(v);
+          e.out.value = e.def.fmt(v, params);
         }
       }
     }
@@ -2564,7 +2704,7 @@ function relabel() {
         const st = d.stops[i];
         if (!st) return;
         c.textContent = t(st.n);
-        c.title = `${t(d.label)}: ${d.fmt(st.v)}`;
+        c.title = `${t(d.label)}: ${d.fmt(st.v, params)}`;
       });
     }
   }

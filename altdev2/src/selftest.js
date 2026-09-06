@@ -580,7 +580,7 @@ function runChecks() {
     const sup = toSettlement({ h2Bar: 20, insolation: 0.03, startT: 900 });
     const got = [classify(temperate.world), classify(cold.world), classify(sup.world)];
     check('Every Hycean state this build ships can actually be reached',
-      got[0].id === 'hycean' && got[1].id === 'coldHycean'
+      got[0].id === 'hycean' && got[1].id === 'lowSunHycean'
         && got[2].id === 'supercriticalEnvelope',
       got.map((c, k) => `${['20 bar/0.105 S⊕', '60 bar/no star', '20 bar/0.03 S⊕ hot'][k]} → ${c.id} at `
         + `${[temperate, cold, sup][k].world.diag.Tmean.toFixed(0)} K, `
@@ -626,7 +626,7 @@ function runChecks() {
     // names, because a list is a second thing to remember: add a Hycean preset,
     // forget to exclude it, and the check fails on its own success. A world with
     // no h2Bar is a world from before this work, whenever it was written.
-    const HYCEAN = ['hycean', 'coldHycean', 'supercriticalEnvelope'];
+    const HYCEAN = ['hycean', 'lowSunHycean', 'supercriticalEnvelope'];
     const trespass = [];
     for (const id of Object.keys(PRESETS)) {
       if ((PRESETS[id].params.h2Bar ?? 0) > 0) continue;
@@ -652,7 +652,7 @@ function runChecks() {
     // worlds carry five hundred oceans and take tens of millions of years to
     // mean it.
     {
-      const want = { hycean: 'hycean', coldHycean: 'coldHycean',
+      const want = { hycean: 'hycean', lowSunHycean: 'lowSunHycean',
                      superRunaway: 'supercriticalEnvelope', coldStart: 'snowball' };
       const wrong = [], seen = [];
       for (const [id, expect] of Object.entries(want)) {
@@ -669,17 +669,82 @@ function runChecks() {
         wrong.length === 0, wrong.length ? wrong.join(' · ') : seen.join(' · '));
     }
 
-    // The pair, at the preset level: superRunaway and coldStart differ in
-    // exactly one parameter, and it is not one of the physical ones. If a later
-    // edit nudges an insolation or an envelope to make one of them behave, the
-    // demonstration is gone and this is what says so.
+    // A state nothing can reach is a claim the readout makes and the model
+    // cannot honour -- this build already wrote a darkHycean and deleted it for
+    // exactly that. Buried Ocean is the configuration the cold-start machinery
+    // exists to produce: hot lid, cold liquid water still under it, the two
+    // separated by a buoyancy gradient heat has to fight across. It is a
+    // transient by nature, so it is looked for along a path rather than at a
+    // settling point.
     {
-      const a = PRESETS.superRunaway.params, b = PRESETS.coldStart.params;
-      const diff = [...new Set([...Object.keys(a), ...Object.keys(b)])]
-        .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+      const hits = [];
+      for (const water of [60, 500]) {
+        for (const ins of [0.3, 1, 3]) {
+          const sim = new Simulation({ ...PRESETS.hycean.params, water,
+            insolation: ins, startT: 290 });
+          for (const yrs of [1e4, 1e5, 1e6, 1e7]) {
+            sim.runYears(yrs - sim.world.time);
+            if (classify(sim.world).id === 'buriedOcean') {
+              hits.push(`${water} EO at ${ins} S⊕`); break;
+            }
+          }
+        }
+      }
+      check('A cold-started world really does spend time as a Buried Ocean',
+        hits.length >= 4, hits.length ? `${hits.length} of 6 paths pass through it`
+          : 'no path reaches it — the state cannot fire');
+    }
+
+    // ...and it gives way once the conversion finishes, or it would be a trap
+    // rather than a stage. hotLayer catching hotTarget is what ends it.
+    {
+      const sim = new Simulation({ ...PRESETS.hycean.params, water: 60,
+        insolation: 3, startT: 290 });
+      sim.runYears(1e8);
+      const dgz = sim.world.diag;
+      check('…and stops being one when the hot layer reaches the bottom',
+        (dgz.hotLayer ?? 0) > 0.95 && classify(sim.world).id !== 'buriedOcean',
+        `layer ${(100 * (dgz.hotLayer ?? 0)).toFixed(0)}% converted → ${classify(sim.world).id}`);
+    }
+
+    // An ice floor throttles what volcanism delivers to the air; it does not
+    // seal it, and it must not touch a world whose ocean stands on rock. The
+    // first half is a stated parameterisation, the second is arithmetic: every
+    // inherited world multiplies by exactly one.
+    {
+      const rocky = new Simulation({ ...PRESETS.earth.params });
+      rocky.runYears(1e5);
+      const iced = new Simulation({ ...PRESETS.lowSunHycean.params });
+      iced.runYears(1e5);
+      check('An ocean on rock outgasses normally and one on ice does not',
+        (rocky.world.diag.oceanBase?.iceDepth ?? 0) === 0
+          && (iced.world.diag.oceanBase?.iceDepth ?? 0) > 1e5,
+        `Earth: ${(rocky.world.diag.oceanBase?.iceDepth ?? 0).toFixed(0)} m of ice under the sea · `
+          + `low-sunlight Hycean: ${((iced.world.diag.oceanBase?.iceDepth ?? 0) / 1000).toFixed(0)} km`);
+    }
+
+    // The pair is built here rather than read off two presets, and that is a
+    // correction. It used to compare superRunaway against coldStart and demand
+    // they differ in startT alone, which held only while the two presets
+    // happened to be the same world. They are not: coldStart earns its keep by
+    // being a world you can watch thaw, so it carries a brightening star and an
+    // instellation chosen for that. Pinning the demonstration to two presets
+    // that exist for different reasons made the presets unable to move without
+    // breaking a claim about physics. So the physics is tested on its own
+    // world, and the presets are free to be good presets.
+    {
+      const base = { ...PRESETS.superRunaway.params, brightening: 0 };
+      const settle = (startT) => {
+        const sim = new Simulation({ ...base, startT });
+        for (let i = 0; i < 90 && Math.abs(sim.world.diag.imbalance) > 0.5; i++) sim.runYears(2e6);
+        return sim.world;
+      };
+      const hot = settle(900), cold = settle(300);
       check('…and the pair really is one planet twice, differing only in where it started',
-        diff.length === 1 && diff[0] === 'startT',
-        diff.length ? `they differ in: ${diff.join(', ')}` : 'identical, which is also wrong');
+        classify(hot).id !== classify(cold).id
+          && Math.abs(hot.diag.imbalance) <= 0.5 && Math.abs(cold.diag.imbalance) <= 0.5,
+        `one planet, one star: from 900 K → ${classify(hot).id} at ${hot.diag.Tmean.toFixed(0)} K · `
+          + `from 300 K → ${classify(cold).id} at ${cold.diag.Tmean.toFixed(0)} K`);
     }
 
     // The biosphere ceiling and the Hycean habitability claim, checked for
@@ -3970,7 +4035,7 @@ function runChecks() {
     // purpose: it is the promise that the inherited set was not touched, so it
     // has to notice a twenty-seventh name appearing in it. If a future preset
     // belongs on this list, adding it here is the deliberate act.
-    const ENVELOPED = ['hycean', 'coldHycean', 'superRunaway', 'coldStart'];
+    const ENVELOPED = ['hycean', 'lowSunHycean', 'superRunaway', 'coldStart'];
     const carriers = Object.entries(PRESETS)
       .filter(([k, v]) => (v.params.h2Bar ?? 0) > 0 && !ENVELOPED.includes(k)).map(([k]) => k);
     const missing = ENVELOPED.filter((k) => !(PRESETS[k]?.params.h2Bar > 0));
@@ -4172,14 +4237,21 @@ function runChecks() {
 
     // No world that shipped before this has an ice floor: they are all films of
     // water on rock, which is the regime the rest of the model assumes.
+    // The sub-Neptunes are excluded, and by the property that makes them
+    // sub-Neptunes rather than by name. An ice floor is the whole point of a
+    // water world deep enough to have one -- coldStart grew one the moment it
+    // was given enough water to be interesting -- while a rocky world that
+    // acquired one would mean the depth model had come loose.
     const floored = Object.entries(PRESETS).filter(([, v]) => {
+      if (v.params.h2Bar > 0) return false;
       const sim = new Simulation({ ...v.params });
       sim.stepOnce(1);
       return sim.world.diag.oceanBase.iceDepth > 0;
     }).map(([k]) => k);
-    check('No shipped world stands on ice instead of rock',
+    check('No rocky world stands on ice instead of rock',
       floored.length === 0,
-      `${Object.keys(PRESETS).length} presets, ${floored.length} with a high-pressure ice floor`
+      `${Object.keys(PRESETS).filter((k) => !(PRESETS[k].params.h2Bar > 0)).length} `
+        + `envelope-free presets, ${floored.length} with a high-pressure ice floor`
         + (floored.length ? `: ${floored.join(', ')}` : ''));
 
     // And the behaviour that makes a Hycean ocean interesting: the melting

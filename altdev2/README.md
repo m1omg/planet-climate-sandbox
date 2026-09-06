@@ -2469,9 +2469,9 @@ naming: `venus` and `gj1132b` carry no water, so there is no boundary; `earlyTra
 Four were planned. Three shipped, and the two that did not are the more interesting half of
 the result, because in both cases the model was built and then declined to produce the world.
 
-**Hycean World, Cold Hycean World and Supercritical Envelope** all reach from parameters
+**Hycean World, Low Sunlight Hycean and Supercritical Envelope** all reach from parameters
 rather than from a hand-built diagnostic, and a self-test says so: 20 bar of hydrogen at
-0.10 S⊕ settles at 335 K with a five-hundred-ocean sea 262 km deep on ice VII; 60 bar with
+0.08 S⊕ settles at 310 K with a five-hundred-ocean sea on ice VII; 60 bar with
 the star switched off entirely holds 341 K on internal heat; 20 bar at 0.03 S⊕, built hot,
 ends at 1346 K with no surface anywhere. They go in **after** `dryRunaway` and **before**
 `wetRunaway`, because `T > 420 K` is unconditional and would otherwise swallow the lot — a
@@ -2500,7 +2500,7 @@ dark: a state that cannot fire still reads to a player as a state the model supp
 finding, because the hot Hycean is what this whole branch was for. The literature's band is
 350–550 K, habitable to about 400 K. Swept over masses 5 to 10 M⊕, envelopes 2 to 100 bar,
 insolations 0.05 to 2 S⊕ and water inventories from 60 to 34,500 oceans, the hottest world
-that is **still a Hycean once its energy budget has closed is 335 K**. Everything warmer is a
+that is **still a Hycean once its energy budget has closed is 317 K**. Everything warmer is a
 way-station.
 
 The words "once its energy budget has closed" are the expensive part of that sentence, and
@@ -2539,7 +2539,7 @@ stable Hycean that does not exist.
 | preset | settles at | ocean | state |
 |---|---|---|---|
 | **Hycean World** — 10 M⊕, 500 EO, 20 bar H₂, **0.10 S⊕** | 61 °C | 262 km, on ice VII | Hycean World |
-| **Cold Hycean World** — 5 M⊕, 500 EO, 60 bar H₂, 0.0005 S⊕ | 68 °C | 376 km, on ice VII | Cold Hycean World |
+| **Low Sunlight Hycean** — 5 M⊕, 500 EO, 60 bar H₂, 0.0005 S⊕ | 84 °C | 376 km, on ice VII | Low Sunlight Hycean |
 | **Super-Runaway Waterworld** — 10 M⊕, 60 EO, 20 bar H₂, 0.03 S⊕, built at 900 K | 1073 °C | none, no surface | Supercritical Envelope |
 | **Cold-Start Waterworld** — *identical*, built at 290 K | −62 °C | frozen, on ice VI | Hard Snowball |
 
@@ -2595,7 +2595,7 @@ any run, ever**. Both were in work this same branch had added and called verifie
   written set 1.02 oceans instead of 1020 — three orders of magnitude, from dragging versus
   typing the same control. `snapToDisplay` then correctly declined to snap at all, which is
   why the number on screen was never round.
-- The **Cold Hycean preset sat below its own slider's floor.** It runs at 0.0005 S⊕ — the
+- The **Low Sunlight Hycean preset sat below its own slider's floor.** It runs at 0.0005 S⊕ — the
   point of the state is a world liquid on internal heat with the star effectively off — and
   the starlight control stopped at 0.005. A preset a slider cannot represent shows the wrong
   value the moment it loads and snaps the world elsewhere the first time anyone touches it.
@@ -2617,6 +2617,88 @@ nothing and throws at once instead of quietly working.
 
 The self-test now finishes in **nine and a half minutes**, which it turns out it always
 could have.
+
+### Four bug reports, and the one that was load-bearing
+
+All four came from someone playing with the build rather than from a test, which is
+worth saying plainly: the self-test was green through every one of them.
+
+**The hydrogen slider did nothing, then snapped back to zero.** `h2Bar` was added to the
+physics, the presets and the panel, and left out of `RESERVOIR_KEYS` in `main.js`. So
+dragging it set the parameter and never refilled `w.h2`; then `syncLiveControls`, which
+reads the envelope back out of the reservoir every frame, saw zero and put the handle
+there. The control appeared to fight you, and no physics test could see it, because
+nothing was wrong with the physics. `smoketest.mjs` now reads `RESERVOIR_KEYS` out of
+main.js's own source and checks it against every `*Bar` control.
+
+**An ocean could be ten times heavier than its planet.** The water control was absolute
+and unbounded: 45 000 EO on a one-Earth-mass world is 1055% of the planet's mass. It now
+prints the share alongside the inventory — `500 EO · 1.2% by mass` — and refuses anything
+past 70% water by mass for the mass currently set, the ceiling the sub-Neptune literature
+works in. Shrink the planet under a big ocean and the water comes with it.
+
+**The cold-start world was an iceball forever and its star never brightened.** The preset
+carried `brightening: 0`, so the one thing it existed to demonstrate could not happen. It
+now starts frozen at −53 °C and thaws to +21 °C within fifty million years, which is a
+thing you can watch rather than a thing you can read about.
+
+**And the one that mattered: the "Cold" Hycean heated itself to 265 °C.** Not a display
+bug. Every Hycean preset inherited `outgassing: 1` from Earth, so volcanoes were pumping
+carbon into the atmosphere of a world whose seafloor is 246 km of ice VII. Sealing that
+path dropped it to 80 °C.
+
+The interesting part is what the fix exposed. The **Hycean World preset was stable only
+because of the same impossible volcanism** — take it away and the flagship world of this
+whole branch runs away to 2709 °C. It had been sitting on a knife edge at 0.10 S⊕, where
+0.08 settles at 37 °C and 0.10 is past the cliff, and the trace CO₂ from volcanism through
+a quarter of a million metres of ice was what held it on the cool branch. The preset now
+sits at 0.08, stable across the full 4.5 Gyr with its ocean intact, and the reported
+ceiling moved from 335 K to **317 K** because the old figure was measured with the same
+spurious carbon under it.
+
+**What an ice floor actually does, since a hard seal was also wrong.** The first fix cut
+delivery to zero, and that is the old sealed-lid picture the literature has spent a decade
+dismantling: Kalousová & Sotin (2018) have melt at the silicate interface rising
+efficiently to the ocean when convection is weak, and Hernandez et al. (2022) dissolve
+2.5 wt% NaCl into dense ice and find thermo-compositional convection carries it across,
+concluding the mantle is *permeable*. So it is a throttle, not a lid — full delivery
+through a thin shell, a few per cent through a thick one, never zero. It is also lumping
+in two things this model cannot represent separately and which both push the same way for
+*atmospheric* carbon specifically: a Hycean ocean is an enormous dissolved-carbon buffer
+there is no reservoir for, and Nakayama et al. (2019) find seafloor weathering *enhanced*
+by high-pressure ice melting. `calibrate.mjs` carries it as a `GAP` with a plausibility
+range rather than an anchor, because nobody has measured it.
+
+### Buried Ocean, the state the machinery already had and never named
+
+Asked for by the same player, and the right question: what do you call a world that is
+running away but still has real liquid water under the hot layer?
+
+It is the cold-start configuration Pierrehumbert & Furth describe — *"a hot (and possibly
+supercritical) isothermal upper layer in contact with a cold liquid or ice boundary"* — and
+the model had been **tracking it since Phase 5 without ever naming it**. `hotLayer` is how
+much of the column has actually converted as against how much the surface says should
+have; the whole hysteresis mechanism exists to advance it slowly against a stable buoyancy
+gradient. A world mid-conversion simply reported as `wetRunaway`, or as `magma`.
+
+`magma` is the reason it needed care. Every other member of the Hycean group is cooler than
+1400 K by construction, but this one is a hot surface *by definition*, so the magma branch
+caught it first and reported bare rock on a planet with an ocean two hundred kilometres
+down — the same mistake `wetRunaway` was making one branch lower. It goes above magma, and
+it gives way to it once `hotLayer` reaches the bottom. Reachable on six of six paths
+tested, and it ends: those are both self-tests, because this build has already written one
+Hycean state that could not fire and deleted it.
+
+### A cross-section, because a stack is the honest way to draw a stack
+
+The readout now carries the column top to bottom: envelope, then whatever the water is —
+supercritical lid, liquid ocean, sea ice, ice VI or VII — then rock, each band labelled
+with its real thickness. It exists because a single "ocean 262 km" line cannot show an
+ocean standing on ice rather than rock, or a hot lid with liquid water still beneath it.
+The scale is compressed by a cube root, since Earth's 8 km of air and a Hycean's 250 km of
+ice are three orders of magnitude apart and a linear column renders most layers as nothing;
+every band therefore carries its own number. The picture gives the order, the label gives
+the depth.
 
 ## Known deviations from the literature
 

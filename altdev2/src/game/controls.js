@@ -1,6 +1,7 @@
 // Definitions of every control in the left-hand panel: range, units, how a value
 // is displayed, and how a typed value is read back. Kept free of the DOM so the
 // parsing rules can be tested on their own.
+import { waterShareOfMass } from '../physics/planet.js';
 const fmtBar = (v) => v >= 1 ? `${v.toFixed(v < 10 ? 2 : 0)} bar`
   : v >= 1e-3 ? `${(v * 1e3).toFixed(v * 1e3 < 10 ? 2 : 0)} mbar`
   : `${(v * 1e6).toFixed(0)} µbar`;
@@ -60,6 +61,32 @@ export const INTERIOR_BODIES = [
     note: 'A thousand times Earth’s, from an eccentricity of 0.01. Magma ocean tens of metres down.' },
 ];
 
+// Past a few thousand oceans the count stops carrying meaning -- nobody holds
+// "eighteen thousand Earth oceans" in their head. Below a thousandth of one,
+// "0.000 EO" says nothing while a global layer a few centimetres deep says a
+// great deal. The precision thresholds sit just below the round numbers on
+// purpose: a boundary at exactly 1 would round 0.9999 up to "1.00" while still
+// choosing the three-decimal branch, and the label would disagree with itself.
+function waterLabel(v) {
+  return v <= 0 ? 'none'
+    : v < 1e-6 ? `${(v * 2.75e6).toFixed(v * 2.75e6 < 0.9995 ? 3 : 2)} mm`
+    : v < 1e-3 ? `${(v * 2750).toFixed(v * 2750 < 0.9995 ? 3 : 2)} m`
+    : v >= 1000 ? `${(v / 1000).toFixed(v < 9995 ? 2 : 1)}k EO`
+    : `${v.toFixed(v < 0.09995 ? 4 : v < 0.9995 ? 3 : 2)} EO`;
+}
+
+// A share of a planet's mass spans six orders of magnitude across the worlds
+// this model builds -- Earth's ocean is 0.023%, a Hycean's is tens of per cent
+// -- so a fixed number of decimals is either noise at one end or nothing at the
+// other.
+function sharePct(f) {
+  const pct = f * 100;
+  return pct >= 10 ? `${pct.toFixed(0)}%`
+    : pct >= 1 ? `${pct.toFixed(1)}%`
+    : pct >= 0.01 ? `${pct.toFixed(2)}%`
+    : `${pct.toExponential(1)}%`;
+}
+
 export const SLIDERS = [
   // Ten Earth masses, not five. The sub-Neptunes this build exists to reach run
   // from about four to ten, and a hydrogen envelope on anything smaller does not
@@ -82,16 +109,16 @@ export const SLIDERS = [
     // boundary at exactly 1 would round 0.9999 up to "1.00" while still
     // choosing the three-decimal branch, and the label would then disagree with
     // itself.
-    fmt: (v) => v <= 0 ? 'none'
-      : v < 1e-6 ? `${(v * 2.75e6).toFixed(v * 2.75e6 < 0.9995 ? 3 : 2)} mm`
-      : v < 1e-3 ? `${(v * 2750).toFixed(v * 2750 < 0.9995 ? 3 : 2)} m`
-      // Past a few thousand oceans the count stops carrying meaning -- nobody
-      // holds "eighteen thousand Earth oceans" in their head -- and the number
-      // that does is the share of the planet's mass, which is how the
-      // sub-Neptune literature states it. The slider still sets an absolute
-      // inventory, so presets, saves and shared links are unaffected.
-      : v >= 1000 ? `${(v / 1000).toFixed(v < 9995 ? 2 : 1)}k EO`
-      : `${v.toFixed(v < 0.09995 ? 4 : v < 0.9995 ? 3 : 2)} EO`,
+    // An inventory means nothing without the planet it is on: five hundred
+    // oceans is a fifth of a per cent of a ten-Earth-mass world and eleven times
+    // the mass of a one-Earth-mass one. The control is absolute because presets,
+    // saves and links are, but it says the share out loud, and applyParams
+    // refuses anything past MAX_WATER_FRACTION for the mass currently set.
+    // Second argument is the params being described, absent in contexts that
+    // have no planet in hand -- then it reads as it always did.
+    fmt: (v, p) => waterLabel(v) + (p && p.mass > 0 && v > 0
+      ? ` · ${sharePct(waterShareOfMass(p.mass, v))} by mass` : ''),
+    fmtBare: (v) => waterLabel(v),
     // "keo" is here because the formatter above prints one. A label the panel
     // cannot read back is not a display choice, it is a broken control: typing
     // the "1.02k EO" it had just written set 1.02 oceans, and snapToDisplay
@@ -112,7 +139,7 @@ export const SLIDERS = [
     live: 'insolation',
     fmt: (v) => `${v.toFixed(3)} S⊕`,
     units: { s: 1, 'se': 1, 's⊕': 1, 'w/m2': 1 / 1361, 'w/m²': 1 / 1361, w: 1 / 1361 },
-    note: 'Relative to Earth. 1 S⊕ = 1361 W/m². Six decades wide because real bodies are: Titan gets 0.011, GJ 1132 b takes 18.8, and the Cold Hycean world is held liquid by its own internal heat under starlight of 0.0005 — a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it, and one that stopped at 0.005 could not represent that one.',
+    note: 'Relative to Earth. 1 S⊕ = 1361 W/m². Six decades wide because real bodies are: Titan gets 0.011, GJ 1132 b takes 18.8, and the Low Sunlight Hycean is held liquid by its own internal heat under starlight of 0.0005 — a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it, and one that stopped at 0.005 could not represent that one.',
     // Main-sequence stars brighten as they burn: helium ash makes the core
     // denser, it contracts, and it fuses faster. The Sun has gained about 40%
     // since it formed (Gough 1981), which is 7.4% per billion years compounded

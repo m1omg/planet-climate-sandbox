@@ -31,6 +31,30 @@ export function radiusFromMass(massEarths) {
 const EO_MASS = EO_COLUMN * 4 * Math.PI * R_EARTH * R_EARTH;
 
 // The fraction of the planet's mass that is water in its interior.
+// The whole water inventory as a share of the planet's mass -- basins included,
+// unlike waterMassFraction() below, which asks the narrower question of how much
+// is left over once the basins are full and so is about radius rather than about
+// whether the number makes sense at all.
+//
+// This one exists because the water control was absolute and unbounded, so a
+// one-Earth-mass planet would happily accept forty-five thousand oceans: an
+// ocean ten times heavier than the world it was sitting on.
+export function waterShareOfMass(massEarths, waterEO) {
+  if (!(waterEO > 0) || !(massEarths > 0)) return 0;
+  return waterEO * EO_MASS / (massEarths * M_EARTH);
+}
+
+// The ceiling the sub-Neptune literature actually works in: past about seventy
+// per cent water by mass there is not enough rock left to call it a planet with
+// an ocean. Madhusudhan's Hycean compositions sit well under it, and every world
+// this build ships is under a few per cent.
+export const MAX_WATER_FRACTION = 0.7;
+
+export function maxWaterEO(massEarths) {
+  if (!(massEarths > 0)) return 0;
+  return MAX_WATER_FRACTION * massEarths * M_EARTH / EO_MASS;
+}
+
 export function waterMassFraction(massEarths, waterEO) {
   if (!(waterEO > 0) || !(massEarths > 0)) return 0;
   const Rr = radiusFromMass(massEarths);
