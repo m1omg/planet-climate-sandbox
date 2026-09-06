@@ -2541,7 +2541,7 @@ stable Hycean that does not exist.
 | **Hycean World** — 10 M⊕, 500 EO, 20 bar H₂, **0.10 S⊕** | 61 °C | 262 km, on ice VII | Hycean World |
 | **Low Sunlight Hycean** — 5 M⊕, 500 EO, 60 bar H₂, 0.0005 S⊕ | 84 °C | 376 km, on ice VII | Low Sunlight Hycean |
 | **Super-Runaway Waterworld** — 10 M⊕, 60 EO, 20 bar H₂, 0.03 S⊕, built at 900 K | 1073 °C | none, no surface | Supercritical Envelope |
-| **Cold-Start Waterworld** — *identical*, built at 290 K | −62 °C | frozen, on ice VI | Hard Snowball |
+| **Cold-Start Waterworld** — 10 M⊕, 500 EO, 20 bar H₂, 0.094 S⊕, brightening | temperate → runaway | ocean buried under a hot lid | Hycean → **Buried Ocean** → magma |
 
 The first is the Hycean argument in one preset: at **a tenth of Earth's sunlight**, where a
 rocky planet is a snowball, this one has a warm 262 km sea. It carries five hundred oceans
@@ -2638,9 +2638,12 @@ past 70% water by mass for the mass currently set, the ceiling the sub-Neptune l
 works in. Shrink the planet under a big ocean and the water comes with it.
 
 **The cold-start world was an iceball forever and its star never brightened.** The preset
-carried `brightening: 0`, so the one thing it existed to demonstrate could not happen. It
-now starts frozen at −53 °C and thaws to +21 °C within fifty million years, which is a
-thing you can watch rather than a thing you can read about.
+carried `brightening: 0`, so the one thing it existed to demonstrate could not happen. The
+first fix made it thaw, which was still the wrong story — the point of a cold start is not
+that it is cold, it is that a *condensed interior* gets driven across the runaway and then
+has to be eaten from the top down. It now runs the whole arc: **temperate ocean for 1.86
+billion years, then a crossing, then 240 million years with its ocean buried under a hot
+lid**, before the lid finally reaches the bottom.
 
 **And the one that mattered: the "Cold" Hycean heated itself to 265 °C.** Not a display
 bug. Every Hycean preset inherited `outgassing: 1` from Earth, so volcanoes were pumping

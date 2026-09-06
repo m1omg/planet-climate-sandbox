@@ -662,5 +662,5 @@ export const PRESETS = {
   // will eventually be driven across; the point of watching is how long the hot
   // layer takes to eat down through water that is not helping it.
   coldStart: { name: 'Cold-Start Waterworld', icon: '❄️', params: { ...HYCEAN,
-    mass: 10, water: 60, h2Bar: 20, insolation: 0.033, startT: 220, brightening: 1 } },
+    mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
 };

@@ -653,7 +653,7 @@ function runChecks() {
     // mean it.
     {
       const want = { hycean: 'hycean', lowSunHycean: 'lowSunHycean',
-                     superRunaway: 'supercriticalEnvelope', coldStart: 'snowball' };
+                     superRunaway: 'supercriticalEnvelope', coldStart: 'hycean' };
       const wrong = [], seen = [];
       for (const [id, expect] of Object.entries(want)) {
         const sim = new Simulation({ ...PRESETS[id].params });
@@ -667,6 +667,28 @@ function runChecks() {
       }
       check('The water-world presets settle into the states they are named for',
         wrong.length === 0, wrong.length ? wrong.join(' · ') : seen.join(' · '));
+    }
+
+    // The Cold-Start Waterworld earns its name by the path it takes, not by
+    // where it starts or stops, so that is what is pinned: temperate ocean, a
+    // brightening star, a crossing into runaway, and a long spell with the
+    // ocean buried under a hot lid before the lid reaches the bottom. An
+    // earlier version of this preset was an iceball for its whole life under a
+    // star that never brightened, which is to say it demonstrated nothing.
+    {
+      const sim = new Simulation({ ...PRESETS.coldStart.params });
+      const first = {}, last = {};
+      for (let yr = 0; yr <= 3e9; yr += 2e7) {
+        sim.runYears(yr - sim.world.time);
+        const cid = classify(sim.world).id;
+        first[cid] ??= yr; last[cid] = yr;
+      }
+      const temperate = (last.hycean ?? -1) - (first.hycean ?? 0);
+      const buried = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
+      check('The cold-start world goes temperate → runaway → buried ocean',
+        first.hycean === 0 && buried > 5e7 && (first.buriedOcean ?? 0) > (first.hycean ?? 0),
+        `temperate for ${(temperate / 1e6).toFixed(0)} Myr, then its ocean is buried for `
+          + `${(buried / 1e6).toFixed(0)} Myr from ${((first.buriedOcean ?? 0) / 1e9).toFixed(2)} Gyr`);
     }
 
     // A state nothing can reach is a claim the readout makes and the model
