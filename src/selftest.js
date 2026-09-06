@@ -13,6 +13,7 @@ import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile,
          createWorld, update, supercriticalShare } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
+import { SK } from './game/sk.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
@@ -47,6 +48,20 @@ function settle(params, years) {
   return s;
 }
 
+// settle()'s cousin, for the worlds that need the adaptive step held down: a
+// bare planet with the histories switched off, stepped to `years` with no step
+// longer than `cap`. It lives out here rather than inside run() because two
+// different sections want it, and the first attempt at sharing it -- a local
+// const in one block, called from another -- is what taught this file the value
+// of not naming a helper after the function that contains it. See run().
+function settledWorld(over, years = 2e7, cap = 1e4) {
+  const sim = new Simulation({ ...EARTH, emissions: 0, brightening: 0,
+    realisticGeology: false, biosphere: 0, ...over });
+  const w = sim.world;
+  for (let i = 0; i < 400000 && w.time < years; i++) sim.stepOnce(Math.min(maxStep(w), cap));
+  return w;
+}
+
 // The inner edge of the habitable zone, by bisection: the lowest flux at which
 // this world ends up with no liquid sea left. Deliberately a local copy rather
 // than an import from tools/ -- this file also runs in the browser under
@@ -63,7 +78,32 @@ function threshold(params, lo = 0.8, hi = 3.0, tol = 0.03) {
   return (lo + hi) / 2;
 }
 
+// This file is one long function, so a helper declared in one block and called
+// from another resolves -- silently, and without a syntax error -- to whatever
+// else is in scope by that name. For four hours in one case that was run()
+// itself: `run({}, 1e5)` re-entered the self-test, which re-entered it again,
+// and the battery repeated on an exact 325-line period until the heap gave out.
+// Nothing failed; it simply never finished, and the sixteen checks after the
+// call had never once executed. The guard costs a boolean and turns that into
+// an immediate, named error, which is the difference between a bug you read in
+// the first line of output and one you find by measuring a file's growth rate.
+let running = false;
+
 export function run() {
+  if (running) {
+    throw new Error('selftest: run() re-entered. Something inside it is calling '
+      + 'run() -- almost certainly a block-local helper that was meant to shadow '
+      + 'this function and does not. Name helpers for what they settle, not run.');
+  }
+  running = true;
+  try {
+    return runChecks();
+  } finally {
+    running = false;
+  }
+}
+
+function runChecks() {
   pass = 0; fail = 0; log.length = 0;
   console.log('%c— Planet Climate Sandbox: self-test —', 'font-weight:bold');
 
@@ -441,7 +481,7 @@ export function run() {
   // it, run the same length of time.
   {
     const deep = { ...EARTH, water: 60, insolation: 3.0, brightening: 0, landFraction: 0 };
-    const run = (startT, yrs, water) => {
+    const fromStart = (startT, yrs, water) => {
       const s = new Simulation({ ...deep, startT, ...(water == null ? {} : { water }) });
       s.runYears(yrs);
       return s.world;
@@ -454,7 +494,7 @@ export function run() {
     // that has converted a third of the inventory there is not behind at all,
     // it has arrived.
     const lag = (w) => w.diag.hotTarget - w.diag.hotLayer;
-    const hot = run(700, 2e5), cold = run(288, 2e5);
+    const hot = fromStart(700, 2e5), cold = fromStart(288, 2e5);
     check('A cold-started waterworld is not the same planet as a hot-started one',
       lag(hot) < 0.01 && lag(cold) > 0.5 && cold.water.ocean > 1 && hot.water.ocean < 1e-6,
       `after 200 kyr at 3 S⊕: hot start ${(hot.diag.hotLayer * 100).toFixed(0)}% of the way `
@@ -463,7 +503,7 @@ export function run() {
       + `${(cold.diag.hotTarget * 100).toFixed(0)}%, ${cold.water.ocean.toFixed(1)} EO liquid`);
     // ...and it does get there, or the mechanism would be a wall rather than a
     // delay. Same world, longer clock.
-    const late = run(288, 2e7);
+    const late = fromStart(288, 2e7);
     check('…but it gets there in the end, which is what makes it a delay',
       lag(late) < 0.01 && late.diag.hotLayer > cold.diag.hotLayer + 0.3,
       `${(cold.diag.hotLayer * 100).toFixed(0)}% at 200 kyr → `
@@ -474,7 +514,7 @@ export function run() {
     // Every preset this branch inherited is in that category, and the
     // bit-identity probe agrees -- twenty-four of twenty-six are unchanged to
     // the last bit, and the two that moved did so by under 0.06 K.
-    const shallow = run(288, 2e5, 0.05);
+    const shallow = fromStart(288, 2e5, 0.05);
     check('…while a shallow ocean has no boundary to move and feels none of it',
       lag(shallow) < 0.01,
       `0.05 EO: ${(shallow.diag.hotLayer * 100).toFixed(0)}% of `
@@ -522,7 +562,7 @@ export function run() {
     // 1 Myr with +179 W/m² of imbalance under it, and is a 4000 K magma ocean by
     // 10 Myr. A first version of the sweep behind these numbers ran on elapsed
     // time and reported a 657 K stable Hycean that does not exist.
-    const run = (over, cap = 60) => {
+    const toSettlement = (over, cap = 60) => {
       const s = new Simulation({ ...hy, startT: 300, ...over });
       for (let i = 0; i < cap && Math.abs(s.world.diag.imbalance) > 0.5; i++) s.runYears(2e6);
       return s;
@@ -530,14 +570,14 @@ export function run() {
     // A branch nothing can reach is not a feature, it is a claim the readout
     // makes and the model cannot honour. Every state added here is reached from
     // parameters, not asserted from a hand-built diagnostic.
-    const temperate = run({ h2Bar: 20, insolation: 0.105 });
-    const cold = run({ h2Bar: 60, insolation: 0.001, internalHeat: 2, startT: 290 });
+    const temperate = toSettlement({ h2Bar: 20, insolation: 0.105 });
+    const cold = toSettlement({ h2Bar: 60, insolation: 0.001, internalHeat: 2, startT: 290 });
     // Started hot, and at a twentieth of the insolation the temperate one gets.
     // Settled, every supercritical world above about 0.05 S⊕ ends past 1400 K
     // and `magma` catches it first -- correctly, since the silicates under that
     // fluid really would be molten. The envelope state is the cooler end of the
     // hot branch, and it is only reachable from a hot start: see the next check.
-    const sup = run({ h2Bar: 20, insolation: 0.03, startT: 900 });
+    const sup = toSettlement({ h2Bar: 20, insolation: 0.03, startT: 900 });
     const got = [classify(temperate.world), classify(cold.world), classify(sup.world)];
     check('Every Hycean state this build ships can actually be reached',
       got[0].id === 'hycean' && got[1].id === 'coldHycean'
@@ -569,7 +609,7 @@ export function run() {
     // going anywhere. The hot-layer machinery is what carries the memory, and
     // the seeding rule -- a world built at 900 K has been supercritical since
     // before the clock started -- is what decides which basin it falls into.
-    const coldStart = run({ h2Bar: 20, insolation: 0.03, startT: 300 });
+    const coldStart = toSettlement({ h2Bar: 20, insolation: 0.03, startT: 300 });
     check('One planet, one star, two settled states, and only history between them',
       classify(sup.world).id === 'supercriticalEnvelope' && classify(coldStart.world).id !== 'supercriticalEnvelope'
         && sup.world.diag.Tmean > coldStart.world.diag.Tmean + 500
@@ -2003,7 +2043,7 @@ export function run() {
         // was: the world begins at an age of `at` and the event is placed 50 Myr
         // in. The control is elapsed time now, not age, so that it cannot be
         // set behind the clock -- see resurfacingBoost.
-        const run = (boost) => {
+        const withBoost = (boost) => {
           const s = new Simulation({ ...venusish, resurfacingAge: 0.05,
             resurfacingBoost: boost });
           let g = 0;
@@ -2013,7 +2053,7 @@ export function run() {
           }
           return s.world;
         };
-        const quiet = run(1), repaved = run(70);
+        const quiet = withBoost(1), repaved = withBoost(70);
         check('…and one the size of Venus\u2019s puts Venus\u2019s atmosphere into the air',
           repaved.diag.pCO2 > 60 && repaved.diag.pCO2 < 200
             && repaved.diag.pCO2 > quiet.diag.pCO2 * 4,
@@ -2122,14 +2162,14 @@ export function run() {
     // different planets, and only the walk can reach the hot branch on purpose.
     {
       const base = { ...EARTH, outgassing: 0, emissions: 0, fossilUsed: 0, biosphere: 0 };
-      const run = (smooth) => {
+      const withSmoothing = (smooth) => {
         const s = new Simulation({ ...base, smoothInsolation: smooth });
         s.runYears(3e6, 2e5);
         s.setParams({ insolation: 1.36 });
         s.runYears(2e8, 5e5);
         return s.world;
       };
-      const jumped = run(false), walked = run(true);
+      const jumped = withSmoothing(false), walked = withSmoothing(true);
       check('The same change of starlight, walked to rather than jumped to, keeps the ocean',
         lostItsOcean(jumped) && walked.water.ocean > 0.8 && walked.diag.Tmean > 320,
         `1.00 → 1.36 S⊕: at once ${(jumped.diag.Tmean - 273.15).toFixed(0)} °C and no sea, ` +
@@ -3918,14 +3958,6 @@ export function run() {
 
   // ---- 7g. the hydrogen envelope -------------------------------------------
   {
-    const run = (over, years = 2e7, cap = 1e4) => {
-      const sim = new Simulation({ ...EARTH, emissions: 0, brightening: 0,
-        realisticGeology: false, biosphere: 0, ...over });
-      const w = sim.world;
-      for (let i = 0; i < 400000 && w.time < years; i++) sim.stepOnce(Math.min(maxStep(w), cap));
-      return w;
-    };
-
     // The invariant the whole phase rests on. Every world that existed before
     // hydrogen did carries none of it, so the envelope terms are multiplied by
     // zero everywhere and cannot reach it. Asserted over all of them rather than
@@ -3955,8 +3987,8 @@ export function run() {
     // and the gap between those two numbers is the entire point of the phase.
     const cold = { mass: 3, insolation: 0.01, co2Bar: 0, ch4Bar: 0, o2Bar: 0,
                    n2Bar: 0, water: 1, startT: 285, life: false };
-    const withH2 = run({ ...cold, h2Bar: 40, heliumFrac: 0 });
-    const bare = run({ ...cold, h2Bar: 0 });
+    const withH2 = settledWorld({ ...cold, h2Bar: 40, heliumFrac: 0 });
+    const bare = settledWorld({ ...cold, h2Bar: 0 });
     check('40 bar of hydrogen holds an ocean ten AU from a G star',
       near(withH2.diag.Tmean, 280, 5),
       `${withH2.diag.Tmean.toFixed(1)} K against Pierrehumbert & Gaidos's 280`);
@@ -3969,9 +4001,9 @@ export function run() {
     // gas in this model. CO2 goes logarithmic and stops paying; hydrogen keeps
     // paying. Ten times the envelope has to be worth much more than one more
     // doubling would be.
-    const t1 = run({ ...cold, h2Bar: 4 }).diag.Tmean;
-    const t2 = run({ ...cold, h2Bar: 40 }).diag.Tmean;
-    const t3 = run({ ...cold, h2Bar: 400 }).diag.Tmean;
+    const t1 = settledWorld({ ...cold, h2Bar: 4 }).diag.Tmean;
+    const t2 = settledWorld({ ...cold, h2Bar: 40 }).diag.Tmean;
+    const t3 = settledWorld({ ...cold, h2Bar: 400 }).diag.Tmean;
     check('Hydrogen never saturates: each ten-fold is worth more than the last',
       t3 - t2 > t2 - t1 && t2 > t1,
       `4→40 bar: +${(t2 - t1).toFixed(0)} K, 40→400 bar: +${(t3 - t2).toFixed(0)} K`);
@@ -4012,7 +4044,7 @@ export function run() {
     // atmosphere that has become mostly steam spends it on water and the
     // hydrogen underneath is left alone.
     {
-      const hot = run({ mass: 1, insolation: 0.3, h2Bar: 10, co2Bar: 0, ch4Bar: 0,
+      const hot = settledWorld({ mass: 1, insolation: 0.3, h2Bar: 10, co2Bar: 0, ch4Bar: 0,
         o2Bar: 0, n2Bar: 0, water: 5, startT: 300, life: false,
         xuvFraction: 3.4e-6 * 30, magneticField: 0 }, 2e7, 1e5);
       check('…and a runaway shields the envelope, because the escape budget is shared',
@@ -4025,7 +4057,7 @@ export function run() {
     // a snapshot that dropped it would restore a Hycean world as a bare rock
     // at the same temperature, which would then freeze while you watched.
     {
-      const w = run({ ...cold, h2Bar: 40, heliumFrac: 0.1 }, 1e6);
+      const w = settledWorld({ ...cold, h2Bar: 40, heliumFrac: 0.1 }, 1e6);
       const shot = captureWorld(w);
       const sim2 = new Simulation({ ...EARTH });
       const back = applyWorld(sim2, shot);
@@ -4131,7 +4163,7 @@ export function run() {
     // Earth's ocean is the calibration nobody has to look up: 3.7 km deep on
     // average, on rock, under about 380 bar at the floor.
     {
-      const w = run({}, 1e5);
+      const w = settledWorld({}, 1e5);
       const ob = w.diag.oceanBase;
       check('Earth\u2019s ocean comes out the depth Earth\u2019s ocean is',
         ob.depth > 3000 && ob.depth < 4500 && ob.basePhase === 'rock' && ob.iceDepth === 0,
@@ -4396,6 +4428,28 @@ export function run() {
 
     check('Every control survives a slider round-trip', worst < 3e-3,
       `worst ${(worst * 100).toFixed(3)}% on ${worstKey}`);
+
+    // Slovak is keyed by the English string, so editing a note in controls.js
+    // silently orphans its translation: nothing throws, nothing looks wrong in
+    // English, and the panel just quietly speaks the wrong language. Two notes
+    // were in that state when this check was written -- `water`, orphaned by
+    // widening its own note for the sub-Neptunes, and `landFraction`, which
+    // arrived that way from altdev. A fallback that works is exactly what makes
+    // this worth pinning: the failure has no symptom in the language the author
+    // is reading.
+    {
+      const tables = Object.values(SK).filter((v) => v && typeof v === 'object');
+      const known = (str) => tables.some((t) => Object.prototype.hasOwnProperty.call(t, str));
+      const untranslated = [];
+      for (const d of SLIDERS) {
+        if (d.label && !known(d.label)) untranslated.push(`${d.key} label`);
+        if (d.note && !known(d.note)) untranslated.push(`${d.key} note`);
+      }
+      check('Every slider label and note still has the Slovak it was written with',
+        untranslated.length === 0,
+        untranslated.length ? untranslated.join(', ')
+          : `${SLIDERS.length} controls, labels and notes both`);
+    }
   }
 
   const summary = `${pass} passed, ${fail} failed`;

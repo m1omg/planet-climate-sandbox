@@ -11,8 +11,8 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 269 physics, coverage, determinism and control checks
-node tools/calibrate.mjs        # 23 observational anchors + 3 reported known gaps
+node src/selftest.js            # 341 physics, coverage, determinism and control checks
+node tools/calibrate.mjs        # 31 observational anchors + 8 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # compiles them on a real GL driver
@@ -2568,6 +2568,55 @@ Which is the note to end on anyway. The Hycean interpretation of both worlds is 
 there are competing miscible-metal-rich-envelope and gas-dwarf readings, and recent analyses
 argue K2-18 b is unlikely to be Hycean at all. This model will let you build the world. It
 does not claim the world exists.
+
+### The self-test that never finished, and the sixteen checks nobody had ever run
+
+Worth writing down because nothing failed, which is exactly what made it survive so long.
+
+`selftest.js` is one long function. A helper declared in one block and called from another
+resolves — silently, with no syntax error — to whatever else is in scope by that name, and
+in this file the name in scope is `run`: **the self-test itself**. One line, added with the
+ocean-floor work, read `const w = run({}, 1e5)` and meant the settle helper eighty lines
+above it, whose block had already closed. It got `run()`, which takes no arguments, ignored
+both, and re-ran the entire battery. Which reached the same line, and did it again.
+
+So `node src/selftest.js` **never terminated**. It was not slow and it was not hung: it
+recursed, at a full core, printing a complete and entirely passing battery every time
+round, until the heap gave out. One run was killed at **four hours and twenty-seven
+minutes**. The tell, once looked for, is unmistakable — one process, ten
+`— Planet Climate Sandbox: self-test —` headers, and output repeating on an exact 325-line
+period, every cycle ending on the check immediately before the bad line.
+
+It hid two real bugs, because **the sixteen checks after that line had never executed, in
+any run, ever**. Both were in work this same branch had added and called verified:
+
+- The **water slider could not read its own label back.** Past a thousand oceans the panel
+  prints `1.02k EO`, and `parseValue` had no `keo` unit, so typing what the panel had just
+  written set 1.02 oceans instead of 1020 — three orders of magnitude, from dragging versus
+  typing the same control. `snapToDisplay` then correctly declined to snap at all, which is
+  why the number on screen was never round.
+- The **Cold Hycean preset sat below its own slider's floor.** It runs at 0.0005 S⊕ — the
+  point of the state is a world liquid on internal heat with the star effectively off — and
+  the starlight control stopped at 0.005. A preset a slider cannot represent shows the wrong
+  value the moment it loads and snaps the world elsewhere the first time anyone touches it.
+  The control's own note already recorded this exact bug being fixed once, one decade higher
+  up; the range now runs six decades. Raising the preset instead was the tempting fix and
+  the wrong one: at 0.005 S⊕ the star supplies about a third of that world's energy against
+  its internal heat, so the preset would no longer have been the thing it is named for.
+
+Chasing those turned up a third, of the same silent kind: **Slovak is keyed by the English
+string**, so widening a note in `controls.js` orphans its translation with no symptom in the
+language the author is reading. Two were in that state — `water`, orphaned by this branch,
+and `landFraction`, which arrived that way.
+
+Three checks came out of it. A **re-entrancy guard** on `run()`, which turns four hours of
+silence into a named error in the first line of output. A check that **every slider label and
+note still has the Slovak it was written with**. And, cheapest of all, no helper in the file
+is named `run` any more: they are named for what they settle, so a missed shadow resolves to
+nothing and throws at once instead of quietly working.
+
+The self-test now finishes in **nine and a half minutes**, which it turns out it always
+could have.
 
 ## Known deviations from the literature
 

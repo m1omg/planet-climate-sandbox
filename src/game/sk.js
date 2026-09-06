@@ -262,14 +262,14 @@ export const SK = {
     'Sets radius, gravity and how well the world holds its air.':
       'Určuje polomer, gravitáciu a to, ako dobre si svet udrží atmosféru.',
     'Water inventory ': 'Zásoba vody ',
-    '1 EO = one Earth ocean. Tracks what is left as the planet loses water.':
-      '1 EO = jeden pozemský oceán. Ukazuje, koľko vody planéte zostáva, ako o ňu prichádza.',
+    '1 EO = one Earth ocean. Tracks what is left as the planet loses water. Past what the basins can hold — 7.3 EO on an Earth-sized world — the rest is not an ocean on the planet but a layer of it, and the planet is measurably bigger for it.':
+      '1 EO = jeden pozemský oceán. Ukazuje, koľko vody planéte zostáva, ako o ňu prichádza. Za hranicou toho, čo unesú panvy — 7,3 EO na svete veľkosti Zeme — zvyšok už nie je oceán na planéte, ale vrstva samotnej planéty, a planéta je o ňu merateľne väčšia.',
     'Basin geometry': 'Geometria panví',
-    'How much of this world would stand above the sea at Earth-like water. Actual coverage is worked out from the water it really has — see the readout.':
-      'Aká časť sveta by pri pozemskom množstve vody vyčnievala nad hladinu. Skutočné zaliatie sa dopočíta z vody, ktorú planéta naozaj má — pozri údaje vpravo.',
+    'Reference high-ground share at one Earth ocean. Basins have finite depth, so enough water overtops even the maximum setting. Actual coverage is in the readout.':
+      'Referenčný podiel vysočiny pri jednom pozemskom oceáne. Panvy majú konečnú hĺbku, takže dosť vody preleje aj to najvyššie nastavenie. Skutočné zaliatie je v údajoch vpravo.',
     'Starlight received': 'Prijaté žiarenie hviezdy',
-    'Relative to Earth. 1 S⊕ = 1361 W/m². Four decades wide because real bodies are: Titan gets 0.011 and GJ 1132 b takes 18.8, and a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it.':
-      'Vzťahuje sa na Zem. 1 S⊕ = 1361 W/m². Rozsah štyroch rádov, lebo taký je aj rozsah skutočných telies: Titan dostáva 0,011 a GJ 1132 b 18,8. Posuvník od 0,05 do 4 by tri z dodávaných svetov vôbec nezobrazil.',
+    'Relative to Earth. 1 S⊕ = 1361 W/m². Six decades wide because real bodies are: Titan gets 0.011, GJ 1132 b takes 18.8, and the Cold Hycean world is held liquid by its own internal heat under starlight of 0.0005 — a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it, and one that stopped at 0.005 could not represent that one.':
+      'Vzťahuje sa na Zem. 1 S⊕ = 1361 W/m². Rozsah šiestich rádov, lebo taký je aj rozsah skutočných telies: Titan dostáva 0,011, GJ 1132 b 18,8 a studený hyceánsky svet drží vodu kvapalnú vlastným vnútorným teplom pri žiarení 0,0005 — posuvník od 0,05 do 4 by tri z dodávaných svetov vôbec nezobrazil a ten, ktorý by končil na 0,005, by nezobrazil tento.',
     'The star brightens by 10% every billion years, and the control follows it. The Sun’s real track is 7.4%/Gyr averaged over its life.':
       'Hviezda sa každú miliardu rokov zjasní o 10 % a ovládací prvok sa hýbe s ňou. Skutočná dráha Slnka je v priemere 7,4 % za miliardu rokov.',
     "The star brightens by 10% every billion years, and the control follows it. The Sun's real track is 7.4%/Gyr averaged over its life.":

@@ -92,7 +92,12 @@ export const SLIDERS = [
       // inventory, so presets, saves and shared links are unaffected.
       : v >= 1000 ? `${(v / 1000).toFixed(v < 9995 ? 2 : 1)}k EO`
       : `${v.toFixed(v < 0.09995 ? 4 : v < 0.9995 ? 3 : 2)} EO`,
-    units: { eo: 1, ocean: 1, oceans: 1, mm: 1 / 2.75e6, m: 1 / 2750, km: 1000 / 2750 },
+    // "keo" is here because the formatter above prints one. A label the panel
+    // cannot read back is not a display choice, it is a broken control: typing
+    // the "1.02k EO" it had just written set 1.02 oceans, and snapToDisplay
+    // then declined to snap at all, so dragging and typing disagreed by three
+    // orders of magnitude. Every abbreviation fmt() invents needs its inverse.
+    units: { eo: 1, ocean: 1, oceans: 1, keo: 1000, mm: 1 / 2.75e6, m: 1 / 2750, km: 1000 / 2750 },
     unitFor: (v) => (v > 0 && v < 1e-6 ? 'mm' : v < 1e-3 ? 'm' : 'EO'),
     note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water. Past what the basins can hold — 7.3 EO on an Earth-sized world — the rest is not an ocean on the planet but a layer of it, and the planet is measurably bigger for it.' },
   { g: 'body', key: 'landFraction', label: 'Basin geometry', min: 0, max: 1,
@@ -103,11 +108,11 @@ export const SLIDERS = [
       { v: 0.32, n: 'Noachian Mars' }, { v: 0.43, n: 'Mars' },
       { v: 0.77, n: 'Archean' }, { v: 1, n: 'Earth' },
       { v: 1.40, n: 'Early Venus' }, { v: 1.91, n: 'Venus' },
-      { v: 4.15, n: 'TRAPPIST-1b' }, { v: 18.8, n: 'GJ 1132 b' }], label: 'Starlight received', min: 0.005, max: 100, log: true,
+      { v: 4.15, n: 'TRAPPIST-1b' }, { v: 18.8, n: 'GJ 1132 b' }], label: 'Starlight received', min: 1e-4, max: 100, log: true,
     live: 'insolation',
     fmt: (v) => `${v.toFixed(3)} S⊕`,
     units: { s: 1, 'se': 1, 's⊕': 1, 'w/m2': 1 / 1361, 'w/m²': 1 / 1361, w: 1 / 1361 },
-    note: 'Relative to Earth. 1 S⊕ = 1361 W/m². Four decades wide because real bodies are: Titan gets 0.011 and GJ 1132 b takes 18.8, and a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it.',
+    note: 'Relative to Earth. 1 S⊕ = 1361 W/m². Six decades wide because real bodies are: Titan gets 0.011, GJ 1132 b takes 18.8, and the Cold Hycean world is held liquid by its own internal heat under starlight of 0.0005 — a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it, and one that stopped at 0.005 could not represent that one.',
     // Main-sequence stars brighten as they burn: helium ash makes the core
     // denser, it contracts, and it fuses faster. The Sun has gained about 40%
     // since it formed (Gough 1981), which is 7.4% per billion years compounded
