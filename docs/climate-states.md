@@ -100,7 +100,7 @@ so a world that began nearly dry cannot qualify on a technicality.
 envShare > 0.5  AND  water > 0.005 EO, then in order:
     superShare > 0.5                          -> Supercritical Envelope
     liquidShare <= 0.1                        -> fall through
-    p.insolation < 0.01                       -> Cold Hycean World
+    p.insolation < 0.01                       -> Low Sunlight Hycean
     T > 273.16 K                              -> Hycean World
 ```
 It sits here, after the dry runaway and before the wet one, because `T > 420 K` below is
@@ -126,7 +126,7 @@ thin air, and thin air is not a Hycean. Shipping a branch that cannot fire would
 worse than not having one — it would read as a state the model supports.
 
 **And the Hycean World the model reaches is the temperate one only.** The literature's band
-is 350–550 K; the hottest one here whose energy budget actually closes is 335 K, and
+is 350–550 K; the hottest one here whose energy budget actually closes is 317 K, and
 everything warmer is a way-station on the road to a runaway. Measured on elapsed time instead
 the way-stations look like states — K2-18 b as this model builds it reads a convincing 401 K
 Hycean at one million years with +179 W/m² of imbalance under it, and is a 4000 K magma ocean
@@ -292,7 +292,7 @@ Separate from the state name, and stricter than "temperate":
 
 ```
 habitable = (temperate | waterworld | dune | eyeball | lobster | hothouse | waterbelt
-             | nightfrost | twilight | hycean | coldHycean)
+             | nightfrost | twilight | hycean | lowSunHycean)
             AND water > 0.005 EO
 ```
 
@@ -315,7 +315,7 @@ there; the 350–550 K band then splits itself, liveable below ~395 K and a ster
 ocean above. A self-test pins that the two modules still agree, because the moment either
 number moves is the moment a duplicated ceiling would start lying. It is worth knowing that
 this model cannot presently take a Hycean world to either side of that line — it tops out
-at 335 K — so the agreement matters for the day the vertical structure arrives, not today.
+at 317 K — so the agreement matters for the day the vertical structure arrives, not today.
 
 ## Things worth knowing about the edges
 
@@ -334,5 +334,5 @@ at 335 K — so the agreement matters for the day the vertical structure arrives
   `trapped`, `nightfrost` and `nightfrozen` — and `lockFactor` is a hard 0-or-1 on `p.tidallyLocked` —
   a slowly rotating world is never partially locked as far as the classifier is concerned.
 - **The README's list at "Climate states it recognises" used to be incomplete** — it omitted
-  `twilight`, `nightfrost`, `thincold`, `baked` and `frozen`. It now carries all twenty-five names
+  `twilight`, `nightfrost`, `thincold`, `baked` and `frozen`. It now carries all twenty-six names
   and points here for the conditions.

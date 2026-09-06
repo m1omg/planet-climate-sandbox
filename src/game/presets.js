@@ -624,7 +624,7 @@ export const PRESETS = {
   // away before it gets there. 335 K is as far as it goes. See the Hycean World
   // state text and the GAP row in tools/calibrate.mjs.
   hycean: { name: 'Hycean World', icon: '🌊', params: { ...HYCEAN,
-    mass: 10, water: 500, h2Bar: 20, insolation: 0.10, startT: 300 } },
+    mass: 10, water: 500, h2Bar: 20, insolation: 0.08, startT: 300 } },
 
   // The same idea with the star removed altogether. Sixty bar of hydrogen over a
   // warm interior holds a 68 C ocean, 376 km deep on ice VII, at five
@@ -633,7 +633,7 @@ export const PRESETS = {
   // negligible rather than on the temperature: the temperature is the result,
   // and it is the absent star that makes it worth a name. "Cold" is about the
   // sky, not the sea.
-  coldHycean: { name: 'Cold Hycean World', icon: '🌑', params: { ...HYCEAN,
+  lowSunHycean: { name: 'Low Sunlight Hycean', icon: '🌑', params: { ...HYCEAN,
     mass: 5, water: 500, h2Bar: 60, insolation: 0.0005, internalHeat: 2, startT: 290 } },
 
   // ---- the same planet twice, and only history between them ----------------
@@ -662,5 +662,5 @@ export const PRESETS = {
   // will eventually be driven across; the point of watching is how long the hot
   // layer takes to eat down through water that is not helping it.
   coldStart: { name: 'Cold-Start Waterworld', icon: '❄️', params: { ...HYCEAN,
-    mass: 10, water: 60, h2Bar: 20, insolation: 0.03, startT: 290 } },
+    mass: 10, water: 60, h2Bar: 20, insolation: 0.033, startT: 220, brightening: 1 } },
 };

@@ -26,7 +26,8 @@ export const STATES = {
   thincold:   { name: 'Thin Cold Desert',     color: '#b08a6e', blurb: 'A thin, frigid, desiccated atmosphere over bare ground — Mars today. The air has not collapsed: it is simply all there is. Turn up the volcanoes and it will thicken, warm, and eventually hold liquid water again.' },
   baked:      { name: 'Baked Desert',         color: '#e08a3a', blurb: 'A hot, waterless world of bare rock. Whatever water it had is long gone, so nothing moderates the surface and the day side simply bakes.' },
   hycean:     { name: 'Hycean World',          color: '#3fbfa8', blurb: 'A water-rich sub-Neptune under a hydrogen envelope, with a liquid ocean at the bottom of it \u2014 hundreds of kilometres deep, standing on high-pressure ice rather than rock. The envelope keeps the surface warm far outside a rocky planet\u2019s habitable zone: the worlds here sit at about a tenth of Earth\u2019s sunlight and are still temperate (Madhusudhan et al. 2021). What the literature also claims, and this model does not produce, is the hot end of the band \u2014 a stable ocean at 400 to 550 K. Here the hottest Hycean whose energy budget actually closes is 335 K and anything warmer runs away instead, because the stabiliser that holds the hot branch up is vertical structure a semi-grey scheme has nowhere to put. So this is the temperate Hycean, said plainly \u2014 and the reading of any real planet as Hycean at all is contested.' },
-  coldHycean: { name: 'Cold Hycean World',     color: '#4a7fb5', blurb: 'A Hycean world with effectively no starlight, holding a liquid ocean on its own internal heat under a deep hydrogen envelope. It needs the envelope to be thick: at these temperatures the greenhouse is doing all the work, and the ocean is liquid because of the pressure over it rather than because of anything the star does. The free-floating and far-orbit version of the state.' },
+  lowSunHycean: { name: 'Low Sunlight Hycean',     color: '#4a7fb5', blurb: 'A Hycean world with effectively no starlight, holding a liquid ocean on its own internal heat under a deep hydrogen envelope. It needs the envelope to be thick: at these temperatures the greenhouse is doing all the work, and the ocean is liquid because of the pressure over it rather than because of anything the star does. The free-floating and far-orbit version of the state.' },
+  buriedOcean: { name: 'Buried Ocean',        color: '#7a5fa8', blurb: 'A runaway caught part-way down. The top of the water column is past its critical point and the bottom is still a cold liquid ocean, with a stable buoyancy gradient between them that heat has to fight its way across \u2014 so the hot layer advances toward the centre over geological time instead of arriving all at once (Pierrehumbert & Furth 2023). It is the state a world can only reach by starting cold and being warmed: one that was always hot has no cold interior left to bury. There really is an ocean down there, and on this model\u2019s own timescales it is still there a long time after the surface stopped being one.' },
   supercriticalEnvelope: { name: 'Supercritical Envelope', color: '#a05fc0', blurb: 'Past the critical point there is no surface. The liquid and the vapour are one fluid, the atmospheric adiabat runs seamlessly into the supercritical water adiabat and down into the interior, and there is no boundary anywhere to call an ocean (Pierrehumbert & Furth 2023). Which planet you get depends on the path: a world that was always hot equilibrates like this, while one that cooled first and was heated later spends a long time as a hot layer sitting on cold water before it becomes this.' },
   airless:    { name: 'Airless Rock',         color: '#8a8a8a', blurb: 'Beyond the cosmic shoreline: stellar XUV has stripped the atmosphere faster than the planet’s gravity could hold it. No climate to speak of.' },
 };
@@ -81,6 +82,9 @@ export function classify(w) {
   // How much of the surface is past the critical point, from the same function
   // the vapour ceiling is built on rather than a second threshold of its own.
   const superShare = dg.hotTarget ?? 0;
+  // How much of the column has actually converted, against how much the
+  // surface says should have. Equal means the conversion is done.
+  const hotDone = (dg.hotLayer ?? superShare) >= superShare - 0.05;
 
   // Which Hycean state, or none. Returns null when the world has an envelope
   // but nothing under it worth naming, and the chain then carries on to the
@@ -89,7 +93,18 @@ export function classify(w) {
     if (envShare <= 0.5 || water <= 0.005) return null;
     // No surface at all comes first, because every state under it is a claim
     // about where an ocean is, and there isn't one.
-    if (superShare > 0.5) return 'supercriticalEnvelope';
+    // The finished article: the whole column has gone over, and `hotLayer` --
+    // which is how much of it actually has, not how much wants to -- has caught
+    // up with the surface. Until it does, the world is the state below.
+    if (superShare > 0.5 && hotDone) return 'supercriticalEnvelope';
+    // Part-way down, which is the configuration the cold-start machinery exists
+    // to produce and had no name until now. The surface is past the critical
+    // point, the layer has not reached the bottom, and what is under it is
+    // still liquid. Tested on the LAG rather than on temperature: a world that
+    // was always hot converts as fast as it heats and never shows this, while
+    // one warmed from a cold start spends a long time here, because heat has to
+    // mix downward against a stable buoyancy gradient to get anywhere.
+    if (superShare > 0.5 && !hotDone) return 'buriedOcean';
     if (liquidShare <= 0.1) return null;
     // Then the two about WHERE the ocean is rather than whether it exists. A
     // locked world whose day side has no surface and whose night side holds
@@ -112,7 +127,7 @@ export function classify(w) {
     // rather than on temperature, because the temperature is the *result*: an
     // envelope this thick over any internal heat at all lands somewhere warm,
     // and it is the absent star that makes the state worth a name.
-    if ((p.insolation ?? 0) < 0.01) return 'coldHycean';
+    if ((p.insolation ?? 0) < 0.01) return 'lowSunHycean';
     return T > 273.16 ? 'hycean' : null;
   };
   const hyceanId = hyceanState();
@@ -121,7 +136,16 @@ export function classify(w) {
   // A real collapse means a good part of the air is lying on the ground as
   // dry ice -- not merely that the atmosphere is thin and cold.
   const collapsed = w.co2Frozen > 0.25 * (w.co2 + w.co2Frozen + 1e-12) && w.co2Frozen > 1e-3;
-  if (T > 1400) id = 'magma';
+  // Buried Ocean goes above magma, and it is the only member of the Hycean
+  // group that has to. The others are all cooler than 1400 K by construction,
+  // but this one is a hot surface BY DEFINITION -- past the critical point is
+  // where it starts -- so magma catches it first on temperature alone and
+  // reports bare rock on a planet with a liquid ocean two hundred kilometres
+  // down. Which is exactly the mistake wetRunaway was making one branch lower.
+  // The surface really is molten-hot; it is just not the whole planet, and the
+  // water underneath is the part worth naming.
+  if (hyceanId === 'buriedOcean') id = 'buriedOcean';
+  else if (T > 1400) id = 'magma';
   else if (pTot < 0.0015 && water < 0.05) id = 'airless';
   // Two very different worlds share the one condition, and they were sharing a
   // name as well. On a rotating planet the air freezes onto the WINTER pole and
@@ -267,7 +291,7 @@ export function classify(w) {
   const habitable = (id === 'temperate' || id === 'waterworld' || id === 'dune' ||
                      id === 'eyeball' || id === 'lobster' || id === 'hothouse' ||
                      id === 'waterbelt' || id === 'nightfrost' || id === 'twilight' ||
-                     id === 'hycean' || id === 'coldHycean')
+                     id === 'hycean' || id === 'lowSunHycean')
                     && water > 0.005;
 
   return { id, name: s.name, color: s.color, blurb: s.blurb, habitable, Tsub, Tanti };

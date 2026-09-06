@@ -268,7 +268,7 @@ export const SK = {
     'Reference high-ground share at one Earth ocean. Basins have finite depth, so enough water overtops even the maximum setting. Actual coverage is in the readout.':
       'Referenčný podiel vysočiny pri jednom pozemskom oceáne. Panvy majú konečnú hĺbku, takže dosť vody preleje aj to najvyššie nastavenie. Skutočné zaliatie je v údajoch vpravo.',
     'Starlight received': 'Prijaté žiarenie hviezdy',
-    'Relative to Earth. 1 S⊕ = 1361 W/m². Six decades wide because real bodies are: Titan gets 0.011, GJ 1132 b takes 18.8, and the Cold Hycean world is held liquid by its own internal heat under starlight of 0.0005 — a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it, and one that stopped at 0.005 could not represent that one.':
+    'Relative to Earth. 1 S⊕ = 1361 W/m². Six decades wide because real bodies are: Titan gets 0.011, GJ 1132 b takes 18.8, and the Low Sunlight Hycean is held liquid by its own internal heat under starlight of 0.0005 — a slider that ran 0.05 to 4 could not represent three of the worlds shipped with it, and one that stopped at 0.005 could not represent that one.':
       'Vzťahuje sa na Zem. 1 S⊕ = 1361 W/m². Rozsah šiestich rádov, lebo taký je aj rozsah skutočných telies: Titan dostáva 0,011, GJ 1132 b 18,8 a studený hyceánsky svet drží vodu kvapalnú vlastným vnútorným teplom pri žiarení 0,0005 — posuvník od 0,05 do 4 by tri z dodávaných svetov vôbec nezobrazil a ten, ktorý by končil na 0,005, by nezobrazil tento.',
     'The star brightens by 10% every billion years, and the control follows it. The Sun’s real track is 7.4%/Gyr averaged over its life.':
       'Hviezda sa každú miliardu rokov zjasní o 10 % a ovládací prvok sa hýbe s ňou. Skutočná dráha Slnka je v priemere 7,4 % za miliardu rokov.',
@@ -515,8 +515,10 @@ export const SK = {
       blurb: 'Za hranicou, kde planéty ešte držia atmosféru: hviezdne XUV strhlo vzduch rýchlejšie, než ho gravitácia dokázala udržať. O klíme sa nedá hovoriť.' },
     hycean: { name: 'Hyceánsky svet',
       blurb: 'Sub-Neptún bohatý na vodu pod vodíkovou obálkou a s kvapalným oceánom na jej dne — hlbokým stovky kilometrov, stojacim na vysokotlakovom ľade, nie na hornine. Obálka udrží povrch teplý ďaleko za obývateľnou zónou kamennej planéty: svety v tomto stave dostávajú asi desatinu slnečného svitu Zeme a sú stále mierne teplé (Madhusudhan a kol. 2021). Literatúra však tvrdí aj to, čo tento model nedokáže vyrobiť — stabilný oceán pri 400 až 550 K. Tu najhorúcejší hyceánsky svet, ktorému sa energetická bilancia skutočne uzavrie, má 335 K a čokoľvek teplejšie sa rozbehne do nekontrolovateľného skleníka, lebo stabilizátor, ktorý drží horúcu vetvu, je vo vertikálnej štruktúre a polosivá schéma ju nemá kam uložiť. Toto je teda mierne teplý hyceánsky svet, povedané priamo — a výklad ktorejkoľvek skutočnej planéty ako hyceánskej je aj tak sporný.' },
-    coldHycean: { name: 'Studený hyceánsky svet',
+    lowSunHycean: { name: 'Hyceánsky svet so slabým svetlom',
       blurb: 'Hyceánsky svet prakticky bez hviezdneho svetla, ktorý drží kvapalný oceán z vlastného vnútorného tepla pod hlbokou vodíkovou obálkou. Obálka musí byť hrubá: pri týchto teplotách robí všetku prácu skleníkový efekt a voda je kvapalná vďaka tlaku nad ňou, nie vďaka niečomu, čo robí hviezda. Verzia stavu pre voľne letiace planéty a veľmi vzdialené obežné dráhy.' },
+    buriedOcean: { name: 'Pochovaný oceán',
+      blurb: 'Skleníkový útek zastihnutý v polovici cesty nadol. Vrch vodného stĺpca je už za kritickým bodom, spodok je stále chladný kvapalný oceán a medzi nimi stojí stabilné vrstvenie hustoty, cez ktoré sa teplo musí prebíjať — horúca vrstva tak postupuje k stredu planéty v geologickom čase, nie naraz (Pierrehumbert a Furth 2023). Do tohto stavu sa svet dostane len tak, že začal studený a bol zohriaty: ten, ktorý bol horúci vždy, už nemá studené vnútro, ktoré by mohol pochovať. Dole naozaj je oceán a v časových mierkach tohto modelu tam ostáva ešte dlho po tom, čo povrch prestal byť povrchom.' },
     supercriticalEnvelope: { name: 'Nadkritická obálka',
       blurb: 'Za kritickým bodom niet povrchu. Kvapalina a para sú jedna tekutina, atmosférická adiabata plynulo prechádza do nadkritickej vodnej adiabaty a pokračuje do vnútra planéty — nikde nie je rozhranie, ktoré by sa dalo nazvať oceánom (Pierrehumbert a Furth 2023). Ktorú planétu dostanete, závisí od cesty: svet, ktorý bol vždy horúci, sa ustáli takto, kým ten, ktorý najprv vychladol a zohrial sa až potom, strávi dlhý čas ako horúca vrstva ležiaca na studenej vode, než sa ním stane.' },
   },
@@ -594,7 +596,7 @@ export const SK = {
     hotStar: 'Horúci oceán · žiarenie hviezdy',
     brink: 'Za hranou',
     hycean: 'Hyceánsky svet',
-    coldHycean: 'Studený hyceánsky svet',
+    lowSunHycean: 'Hyceánsky svet so slabým svetlom',
     superRunaway: 'Vodný svet za hranou nekontrolovateľnosti',
     coldStart: 'Vodný svet so studeným štartom',
   },

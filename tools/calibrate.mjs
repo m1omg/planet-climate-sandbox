@@ -406,15 +406,51 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     for (let i = 0; i < 60 && Math.abs(s.world.diag.imbalance) > 0.5; i++) s.runYears(2e6);
     return s;
   };
-  const best = settle(0.10), over = settle(0.14);
+  // Re-bracketed when volcanic delivery through an ice floor was throttled.
+  // The old pair, 0.10 and 0.14, was chosen while a Hycean's carbon cycle was
+  // running through a quarter of a million metres of ice VII -- the CO2 that
+  // bought was holding the world on the cool branch, and 0.10 was stable only
+  // because of it. It is past the cliff now, which is the honest answer and
+  // also a warning about brackets: this row reported 0 K rather than a wrong
+  // number, which is the behaviour worth having.
+  const best = settle(0.085), over = settle(0.10);
   const hottest = classify(best.world).id === 'hycean' ? best.world.diag.Tmean : 0;
   deviation('Hottest settled Hycean surface', hottest, 350, 550, 'K',
     'Madhusudhan et al. 2021 put the Hycean band at 350-550 K, habitable to ' +
-    '~400 K. One step further in (0.14 S+) this same world is ' +
+    '~400 K. One step further in (0.10 S+) this same world is ' +
     `${classify(over.world).id} at ${over.world.diag.Tmean.toFixed(0)} K, so the ` +
     'ceiling is bracketed rather than merely reported. The cause is the ' +
     'inner-edge gap above: inhibition is carried as extra optical depth, which ' +
     'warms a surface but cannot hold it up.');
+}
+
+// ---- what a floor of ice lets through -------------------------------------
+//
+// The other unmeasured number. An ocean on rock delivers all of its volcanic
+// carbon to the air; one standing on hundreds of kilometres of high-pressure
+// ice delivers a fraction of it, and the fraction is a guess with a literature
+// behind it rather than a value anyone has measured.
+{
+  const rocky = new Simulation({ ...EARTH });
+  rocky.runYears(1e5);
+  const iced = new Simulation({ ...PRESETS.lowSunHycean.params });
+  iced.runYears(1e5);
+  const km = (iced.world.diag.oceanBase?.iceDepth ?? 0) / 1000;
+  deviation('Volcanic carbon reaching the air, 200 km ice', 21, 5, 60, '%',
+    'No measurement exists for this, and the two papers that bear on it point in '
+    + 'opposite directions from the old sealed-lid picture. Kalousova & Sotin 2018 '
+    + 'have melt at the silicate interface rising efficiently to the ocean when '
+    + 'convection is weak, and the path narrowing as the shell thickens with age. '
+    + 'Hernandez et al. 2022 dissolve 2.5 wt% NaCl into dense ice and find '
+    + 'thermo-compositional convection carries it across, concluding the mantle is '
+    + 'permeable rather than a barrier. Against that, ATMOSPHERIC carbon is a '
+    + 'narrower question than nutrient transport: a Hycean ocean is an enormous '
+    + 'dissolved-carbon buffer this model has no reservoir for, and Nakayama et al. '
+    + '2019 find seafloor weathering ENHANCED by high-pressure ice melting. So the '
+    + 'range here is a bound on plausibility, not a fit. It matters: at full '
+    + 'delivery this preset heated itself from 63 to 265 C on carbon that could '
+    + `never have got there, and at zero its ocean floor is ${km.toFixed(0)} km of ice `
+    + 'pretending the volcanoes underneath it do not exist.');
 }
 
 // ---- the hot layer, and the one number in it that nobody has measured -------
