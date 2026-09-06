@@ -85,6 +85,23 @@ export function classify(w) {
   // How much of the column has actually converted, against how much the
   // surface says should have. Equal means the conversion is done.
   const hotDone = (dg.hotLayer ?? superShare) >= superShare - 0.05;
+  // Buried Ocean is decided here rather than inside hyceanState(), and that is
+  // a correction rather than a tidy-up. It was behind the same envelope gate as
+  // the rest of the group -- hydrogen has to be more than half the DRY air --
+  // and on a runaway that test destroys itself: the steam is the air. Measured
+  // through the crossing, a world went from envShare 1.000 to 0.066 in fifteen
+  // million years as the steam deck grew past ten thousand bar against a fixed
+  // seventeen of hydrogen, and the state switched to `magma` while four hundred
+  // and fifty Earth-oceans of liquid water were still sitting underneath it.
+  //
+  // So it is tested on the thing it actually claims: the surface is past the
+  // critical point, the hot layer has NOT reached the bottom, and a real part of
+  // the inventory is still liquid. No envelope requirement -- a cold-started
+  // waterworld with no hydrogen at all can bury its ocean the same way, and
+  // Pierrehumbert & Furth describe the mechanism for waterworlds, not for
+  // Hyceans specifically.
+  const buriedOcean = superShare > 0.5 && !hotDone
+    && water > 0.005 && w.water.ocean > 0.05 * water;
 
   // Which Hycean state, or none. Returns null when the world has an envelope
   // but nothing under it worth naming, and the chain then carries on to the
@@ -95,16 +112,9 @@ export function classify(w) {
     // about where an ocean is, and there isn't one.
     // The finished article: the whole column has gone over, and `hotLayer` --
     // which is how much of it actually has, not how much wants to -- has caught
-    // up with the surface. Until it does, the world is the state below.
+    // up with the surface. The part-way case is NOT here: see buriedOcean,
+    // decided outside this gate and for a reason worth reading.
     if (superShare > 0.5 && hotDone) return 'supercriticalEnvelope';
-    // Part-way down, which is the configuration the cold-start machinery exists
-    // to produce and had no name until now. The surface is past the critical
-    // point, the layer has not reached the bottom, and what is under it is
-    // still liquid. Tested on the LAG rather than on temperature: a world that
-    // was always hot converts as fast as it heats and never shows this, while
-    // one warmed from a cold start spends a long time here, because heat has to
-    // mix downward against a stable buoyancy gradient to get anywhere.
-    if (superShare > 0.5 && !hotDone) return 'buriedOcean';
     if (liquidShare <= 0.1) return null;
     // Then the two about WHERE the ocean is rather than whether it exists. A
     // locked world whose day side has no surface and whose night side holds
@@ -144,7 +154,7 @@ export function classify(w) {
   // down. Which is exactly the mistake wetRunaway was making one branch lower.
   // The surface really is molten-hot; it is just not the whole planet, and the
   // water underneath is the part worth naming.
-  if (hyceanId === 'buriedOcean') id = 'buriedOcean';
+  if (buriedOcean) id = 'buriedOcean';
   else if (T > 1400) id = 'magma';
   else if (pTot < 0.0015 && water < 0.05) id = 'airless';
   // Two very different worlds share the one condition, and they were sharing a
