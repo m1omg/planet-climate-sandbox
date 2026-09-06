@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>[altdev2] Planet Climate Sandbox</title>
+<meta name="description" content="Build a terrestrial planet and watch its climate evolve over geological time — snowball, habitable, dune world, moist greenhouse, runaway greenhouse.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<script>window.__assetBase = "../assets/";</script>
+<div id="devbar"><span class="devbar-tag">ALTDEV2</span><span class="devbar-msg">A fork of /altdev/ reaching past rocky worlds: hydrogen envelopes, oceans hundreds of kilometres deep, and climates that stay liquid well above the boiling point.</span><a class="devbar-link" href="../">stable site</a><a class="devbar-link" href="../dev/">dev</a><a class="devbar-link" href="../altdev/">altdev</a><button type="button" class="devbar-x" aria-label="Dismiss">&#215;</button></div>
+<style>
+#devbar{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;gap:.5rem;
+  padding:.15rem .5rem;background:rgba(28,64,110,.94);color:#dceaff;
+  font:11px/1.5 system-ui,-apple-system,sans-serif;
+  /* A notice must never eat a click meant for the app underneath it. */
+  pointer-events:none}
+#devbar.gone{display:none}
+.devbar-tag{font-weight:700;letter-spacing:.06em;flex:none}
+.devbar-msg{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.92}
+.devbar-link{color:#a8ccff;flex:none;pointer-events:auto}
+.devbar-x{flex:none;pointer-events:auto;cursor:pointer;background:none;border:0;color:#dceaff;
+  font-size:15px;line-height:1;padding:0 .2rem}
+@media (max-width:900px){.devbar-msg{display:none}}
+</style>
+<script>
+(function(){
+  var bar=document.getElementById('devbar');
+  try{ if(localStorage.getItem('planetclimate.altdev2.devbar.v1')==='1') bar.classList.add('gone'); }catch(e){}
+  bar.querySelector('.devbar-x').addEventListener('click',function(){
+    bar.classList.add('gone');
+    try{ localStorage.setItem('planetclimate.altdev2.devbar.v1','1'); }catch(e){}
+  });
+})();
+</script>
+
+
+<div id="app">
+
+  <!-- ================= LEFT: controls ================= -->
+  <aside id="controls" class="panel">
+    <header class="panel-head">
+      <h1>Planet Climate<span>Sandbox</span></h1>
+    </header>
+
+    <div class="scroller">
+      <section class="group">
+        <h2>Worlds</h2>
+        <div id="presets" class="chip-row"></div>
+      </section>
+
+      <section class="group">
+        <h2>Saves</h2>
+        <label class="name-row" for="world-name">
+          <span>Name</span>
+          <input id="world-name" type="text" maxlength="40" autocomplete="off"
+                 spellcheck="false" placeholder="Custom world"
+                 title="What to call this world. It goes into the save slots, the export file and the log line when you load it. Loading a preset puts its own name back.">
+        </label>
+        <div id="slots" class="slot-row"></div>
+        <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
+          class="supply-btn">Save…</button> then pick a slot to overwrite. Slot 1 keeps itself.<br>
+          <button type="button" id="btn-saves-export" class="supply-btn"
+            title="Every saved world in one file, to keep somewhere that is not this browser">Export all…</button>
+          <button type="button" id="btn-saves-import" class="supply-btn"
+            title="Merge a saves file in. Slots the file does not mention are left alone.">Import…</button>
+          <input type="file" id="saves-file" accept="application/json,.json" hidden>
+          <br>A single world also travels in the address bar — copy the URL.</div>
+      </section>
+
+      <p class="panel-note">Every control is live. Change one mid-run and the planet keeps its
+      current temperature, ice and history — you are intervening on a running world, not restarting
+      it. The four highlighted below also move on their own as the simulation evolves them.
+      Click any value to type it exactly.</p>
+
+      <section class="group">
+        <h2>Body</h2>
+        <div id="sliders-body"></div>
+        <div class="derived" id="derived"></div>
+      </section>
+
+      <section class="group">
+        <h2>Orbit &amp; Star</h2>
+        <div id="sliders-star"></div>
+      </section>
+
+      <section class="group">
+        <h2>Atmosphere</h2>
+        <div id="sliders-atmo"></div>
+      </section>
+
+      <section class="group">
+        <h2>Surface &amp; Interior</h2>
+        <div id="sliders-surface"></div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ================= CENTRE: planet ================= -->
+  <main id="stage">
+    <canvas id="planet"></canvas>
+
+    <div id="state-banner">
+      <div class="state-name"><span class="swatch"></span><span class="txt">—</span></div>
+      <div class="state-reason">—</div>
+    </div>
+
+    <div id="scenario-banner" hidden>
+      <div class="sc-head"><span class="sc-icon"></span><strong class="sc-name"></strong>
+        <button class="sc-close" title="Abandon scenario">✕</button></div>
+      <p class="sc-brief"></p>
+      <div class="sc-status"></div>
+    </div>
+
+    <div id="view-controls">
+      <button id="btn-spin" class="icon-btn" title="Pause the planet's rotation" aria-pressed="false">⟳</button>
+      <button id="btn-view" class="icon-btn" title="Recentre the view">⌖</button>
+      <select id="pan-speed" class="icon-btn renderer-btn pan-select" title="Panning speed: 1×" aria-label="Panning speed: 1×">
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+      </select>
+      <button id="btn-gfx" class="icon-btn" title="Surface graphics" aria-pressed="true">🛰</button>
+      <button id="btn-quality" class="icon-btn" title="Detail: high" aria-pressed="false">◆</button>
+      <button id="btn-atmo" class="icon-btn" title="Atmosphere: stylised" aria-pressed="false">◍</button>
+      <button id="btn-clouds" class="icon-btn" title="Clouds: shown" aria-pressed="true">☁</button>
+      <button id="btn-renderer" class="icon-btn renderer-btn" title="Renderer">GPU</button>
+      <button id="btn-lang" class="icon-btn lang-btn" title="Language">EN</button>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- ================= BOTTOM: clock ================= -->
+    <div id="timebar">
+      <button id="btn-play" class="icon-btn play-btn" title="Pause the simulation (space)">❚❚  Pause</button>
+      <button id="btn-settle" class="icon-btn wide" title="Run until the climate stops changing">Settle</button>
+      <button id="btn-reset" class="icon-btn wide" title="Restart this world at t = 0">Reset</button>
+      <label id="reset-paused-wrap" class="reset-paused"
+             title="Start paused after a reset, so you can set the world up before it runs">
+        <input type="checkbox" id="chk-reset-paused" checked> pause on reset
+      </label>
+
+      <div class="clock">
+        <div class="t-row"><span class="t-label">age</span><span id="worldage">4.57 Gyr</span></div>
+        <div class="t-row"><span class="t-label">elapsed</span><span id="simtime">0 yr</span></div>
+        <div class="t-row" id="since-row" hidden>
+          <span class="t-label" id="since-label">since mark</span><span id="sincetime">0 yr</span>
+        </div>
+      </div>
+      <button id="btn-mark" class="icon-btn mark-btn"
+              title="Mark this moment. The clock then also counts from the mark, so you can time an event you are watching.">⚑</button>
+
+      <div class="rate">
+        <label for="rate">time acceleration</label>
+        <input id="rate" type="range" min="0" max="8.69897" step="0.01" value="0">
+        <span class="rate-entry">
+          <input id="rate-out" class="rate-val" type="text" inputmode="decimal"
+                 spellcheck="false" value="1.0"
+                 aria-label="Time acceleration, type to set exactly"
+                 title="Type a number — the unit is the menu beside it. A whole rate works too: 500 yr, 2 Myr, 1.5 Gyr.">
+          <select id="rate-unit" class="rate-unit" aria-label="Time acceleration unit">
+            <option value="1">yr / s</option>
+            <option value="1000">kyr / s</option>
+            <option value="1000000">Myr / s</option>
+            <option value="1000000000">Gyr / s</option>
+          </select>
+        </span>
+        <div class="rate-stops" id="rate-stops">
+          <select id="rate-menu" aria-label="Jump to a time acceleration"></select>
+          <button type="button" id="btn-slow" class="stop slow-toggle"
+                  title="Ease off automatically when the climate tips">ease</button>
+          <button type="button" id="btn-fast" class="stop fast-toggle">fast</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= RIGHT: readout ================= -->
+  <aside id="readout" class="panel">
+    <div class="scroller">
+      <section class="group">
+        <h2>Diagnostics</h2>
+        <div id="stats" class="stats"></div>
+      </section>
+
+      <section class="group" id="marks-group" hidden>
+        <h2>Milestones <small>time between the things you marked</small></h2>
+        <div id="marks-list" class="marks"></div>
+        <button id="marks-clear" class="icon-btn wide" type="button"
+                title="Remove every milestone">Clear all</button>
+      </section>
+
+      <section class="group" id="epochs-group" hidden>
+        <h2>Climate epochs <small>what this world has been, and for how long</small></h2>
+        <div id="epochs-list" class="epochs"></div>
+      </section>
+
+      <section class="group">
+        <h2>Temperature history <small>scroll to zoom · shift-scroll to pan · drag to go back</small></h2>
+        <canvas class="chart scrub" id="chart-history"
+          title="Drag along this chart to put the world back into its own past. Change something from there and it takes a different route — the path you left is dropped unless you saved it."></canvas>
+      </section>
+
+      <section class="group">
+        <h2>Energy balance <small>where the curves cross, the climate rests</small></h2>
+        <canvas class="chart" id="chart-phase"></canvas>
+      </section>
+
+      <section class="group">
+        <h2>Zonal profile <small>hover for one latitude</small></h2>
+        <div class="chart-wrap">
+          <canvas class="chart probe" id="chart-profile"
+            title="Each point is one of the eighteen equal-area bands the model actually solves. Hover or drag along it to read that band."></canvas>
+          <div class="chart-tip" id="profile-tip" hidden></div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Water inventory</h2>
+        <canvas class="chart" id="chart-water"></canvas>
+      </section>
+
+      <section class="group">
+        <h2>Scenarios</h2>
+        <div id="scenarios" class="chip-col"></div>
+      </section>
+
+      <section class="group">
+        <h2>Discovered climates <small><span id="found-count">0</span>/<span id="total-count">17</span></small></h2>
+        <div id="statelog" class="state-grid"></div>
+        <div id="state-detail" class="state-detail">Reach a climate state to unlock its entry.</div>
+      </section>
+
+      <section class="group about">
+        <h2>About the model</h2>
+        <p>A zonal energy-balance model over 18 equal-area bands. Longwave radiation uses a semi-grey
+        two-stream fit anchored to modern Earth (240 W/m²), Venus (161 W/m²) and the
+        <em>Simpson–Nakajima runaway limit</em> of 283 W/m² — which the fit reproduces rather than
+        imposes, so the runaway greenhouse emerges from the physics.</p>
+        <p>Slow processes run on the same accelerated clock: the carbonate–silicate thermostat
+        (~1 Myr), snowball CO₂ build-up (5–50 Myr), and hydrogen escape (10⁸–10⁹ yr to lose an ocean).
+        Physics advances on simulated time only — the trajectory is identical at any frame rate.</p>
+        <p><a href="https://github.com/m1omg/planet-climate-sandbox" id="repo-link" target="_blank" rel="noopener">Source &amp; references</a></p>
+        <p class="licence">Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a> or later, with
+        <strong>no warranty</strong>. The page you are running is its own source: every module
+        arrives unminified, and the repository above is the corresponding source in full.
+        Surface maps are third-party and keep their own terms.</p>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<button id="panel-left" class="panel-tab" title="Planet controls" aria-pressed="false" aria-label="Show the planet controls">
+      <span aria-hidden="true">☰</span><span class="tab-label">Controls</span>
+    </button>
+    <button id="panel-right" class="panel-tab" title="Readout and scenarios" aria-pressed="false" aria-label="Show the readout and scenarios">
+      <span class="tab-label">Readout</span><span aria-hidden="true">☰</span>
+    </button>
+    <div id="panel-scrim" hidden></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

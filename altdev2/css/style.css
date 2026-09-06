@@ -1,0 +1,601 @@
+:root{
+  --bg:#070a12;
+  --panel:rgba(14,19,32,0.82);
+  --panel-2:rgba(20,27,44,0.7);
+  --line:rgba(255,255,255,0.09);
+  --line-2:rgba(255,255,255,0.16);
+  --fg:#e9f0ff;
+  --fg-dim:rgba(233,240,255,0.58);
+  --fg-faint:rgba(233,240,255,0.36);
+  --accent:#7fd4ff;
+  --accent-2:#ffc46b;
+  --good:#4ec98a;
+  --bad:#ff6b57;
+  --radius:12px;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+#app{
+  display:grid;
+  grid-template-columns:320px minmax(0,1fr) 360px;
+  height:100dvh;
+}
+
+/* ---------------- panels ---------------- */
+.panel{
+  background:var(--panel);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  display:flex;flex-direction:column;min-height:0;
+  border-right:1px solid var(--line);
+  position:relative;z-index:3;
+}
+#readout{border-right:none;border-left:1px solid var(--line)}
+.scroller{overflow-y:auto;overflow-x:hidden;padding:4px 16px 28px;flex:1;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.scroller::-webkit-scrollbar{width:9px}
+.scroller::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px;border:3px solid transparent;background-clip:content-box}
+
+.panel-head{padding:18px 16px 10px}
+.panel-head h1{
+  margin:0;font-size:15px;font-weight:650;letter-spacing:.02em;line-height:1.25;
+}
+.panel-head h1 span{display:block;font-weight:400;color:var(--fg-faint);font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+
+.group{padding:14px 0;border-top:1px solid var(--line)}
+.group:first-child{border-top:none}
+.group>h2{
+  margin:0 0 10px;font-size:10.5px;font-weight:650;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--fg-faint);
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+}
+.group>h2 small{font-weight:400;letter-spacing:.02em;text-transform:none;font-size:10.5px;opacity:.85}
+
+/* ---------------- sliders ---------------- */
+.ctl{margin-bottom:13px}
+.ctl-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.ctl-top label{font-size:12px;color:var(--fg-dim)}
+.ctl-top input.val{font:11.5px/1 var(--mono);color:var(--fg);background:var(--panel-2);
+  padding:4px 6px;border-radius:5px;border:1px solid var(--line);white-space:nowrap;
+  width:92px;text-align:right;transition:border-color .15s,background .15s}
+.ctl-top input.val:hover{border-color:var(--line-2)}
+.ctl-top input.val:focus{outline:none;border-color:var(--accent);background:rgba(127,212,255,.10);
+  color:var(--fg);text-align:left}
+.ctl-top input.val.bad{border-color:var(--bad);color:var(--bad)}
+.ctl-note{font-size:10.5px;color:var(--fg-faint);margin-top:3px}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:grab;display:block;
+}
+input[type=range]:active{cursor:grabbing}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent) var(--fill,50%),rgba(255,255,255,0.12) var(--fill,50%))}
+input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:rgba(255,255,255,0.12)}
+input[type=range]::-moz-range-progress{height:3px;border-radius:2px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;
+  margin-top:-5px;border:none;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.5);
+  transition:transform .12s ease}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.18)}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:#fff;border:none}
+
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.toggle label{font-size:12px;color:var(--fg-dim)}
+.switch{position:relative;width:38px;height:21px;border-radius:11px;background:rgba(255,255,255,0.12);
+  border:1px solid var(--line);cursor:pointer;transition:background .18s;flex:none}
+.switch::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:#fff;transition:transform .18s cubic-bezier(.3,1.4,.5,1)}
+.switch[aria-pressed=true]{background:var(--accent)}
+.switch[aria-pressed=true]::after{transform:translateX(17px)}
+
+.panel-note{font-size:11px;line-height:1.55;color:var(--fg-faint);margin:2px 0 0;
+  padding:9px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px}
+
+/* controls the simulation drives by itself */
+.ctl.live .ctl-top label::after{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--accent);margin-left:6px;vertical-align:middle;opacity:.75}
+.ctl.live input.val{color:var(--accent)}
+
+.derived{
+  display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-top:10px;
+  padding:9px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+  font:11px/1.35 var(--mono);color:var(--fg-dim);
+}
+.derived b{color:var(--fg);font-weight:500}
+
+/* ---------------- chips ---------------- */
+.chip-row{display:flex;flex-wrap:wrap;gap:6px}
+.chip-col{display:flex;flex-direction:column;gap:6px}
+.chip{
+  font:inherit;font-size:12px;color:var(--fg-dim);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer;
+  transition:.15s;display:inline-flex;align-items:center;gap:6px;
+}
+.chip:hover{color:var(--fg);border-color:var(--line-2);background:rgba(255,255,255,.07)}
+.chip.active{color:#071018;background:var(--accent);border-color:var(--accent);font-weight:600}
+.chip-col .chip{border-radius:9px;text-align:left;justify-content:flex-start;padding:9px 11px;line-height:1.35}
+.chip-col .chip b{display:block;color:var(--fg);font-weight:600;font-size:12.5px}
+.chip-col .chip.active b{color:#071018}
+.chip-col .chip span{font-size:11px;opacity:.75}
+
+/* Real-interior pairs under the internal-heat slider. Smaller than the world
+   chips: these live inside a control rather than above the panel. */
+.chip-row.body-heat{margin-top:8px;gap:4px}
+.chip-row.body-heat .chip{font-size:11px;padding:3px 8px;border-radius:7px}
+
+/* ---------------- stage ---------------- */
+#stage{position:relative;min-width:0;overflow:hidden;background:#05070d}
+#planet{position:absolute;inset:0;width:100%;height:100%;display:block;
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+#planet.dragging{cursor:grabbing}
+/* software rendering: the planet is drawn small and scaled up, so let the
+   browser smooth it rather than showing the pixels */
+body.software-render #planet{image-rendering:auto}
+
+#view-controls{position:absolute;right:16px;bottom:70px;z-index:4;display:flex;flex-direction:column;gap:6px}
+#view-controls .icon-btn{width:32px;font-size:15px;line-height:1}
+#view-controls .icon-btn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+#view-controls .icon-btn:disabled{opacity:.4}
+#view-controls #btn-quality[aria-pressed=true]{color:var(--accent-2);border-color:var(--accent-2)}
+/* Which renderer is running, and the switch between them. Reads as a label
+   because that is mostly what it is: the state matters more than the action. */
+#view-controls .renderer-btn{width:auto;padding:0 8px;font:10px/1 var(--mono);letter-spacing:.08em}
+#view-controls .pan-select{min-width:58px;padding:0 4px;color-scheme:dark;text-align:center}
+/* The rail's --panel-2 is translucent, which is right for a button sitting over
+   the planet and wrong for the popup the browser paints from it: the option
+   list came out as dark text on the dark canvas showing through. The open menu
+   needs its own opaque ground. */
+#view-controls .pan-select option{background:#131b2c;color:var(--fg)}
+#view-controls .pan-select option:checked{background:#1e2a44;color:var(--accent)}
+#view-controls .renderer-btn[data-kind=software]{color:var(--accent-2);border-color:var(--accent-2)}
+#view-controls .renderer-btn[data-kind=gpu]{color:var(--good);border-color:rgba(78,201,138,.5)}
+
+#state-banner{
+  position:absolute;top:18px;left:50%;transform:translateX(-50%);
+  text-align:center;pointer-events:none;z-index:2;max-width:min(560px,86%);
+}
+.state-name{display:flex;align-items:center;justify-content:center;gap:9px;
+  font-size:20px;font-weight:600;letter-spacing:.01em;
+  text-shadow:0 2px 18px rgba(0,0,0,.85),0 0 40px rgba(0,0,0,.6)}
+.state-name .swatch{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 12px currentColor}
+.state-reason{margin-top:4px;font:11.5px/1.45 var(--mono);color:rgba(233,240,255,.72);
+  text-shadow:0 1px 10px rgba(0,0,0,.9)}
+
+#scenario-banner{
+  position:absolute;top:16px;left:16px;width:290px;z-index:4;
+  background:var(--panel);backdrop-filter:blur(18px);border:1px solid var(--line-2);
+  border-radius:var(--radius);padding:12px 13px;box-shadow:0 12px 40px rgba(0,0,0,.5);
+}
+.sc-head{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.sc-head .sc-icon{font-size:16px}
+.sc-close{margin-left:auto;background:none;border:none;color:var(--fg-faint);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:4px}
+.sc-close:hover{color:var(--fg);background:rgba(255,255,255,.08)}
+.sc-brief{margin:7px 0 0;font-size:11.5px;line-height:1.5;color:var(--fg-dim)}
+.sc-status{margin-top:9px;font:11px/1.4 var(--mono);color:var(--accent-2)}
+.sc-status.win{color:var(--good)}
+.sc-status.lose{color:var(--bad)}
+
+#toast{
+  position:absolute;left:50%;bottom:96px;transform:translate(-50%,14px);
+  background:var(--panel);border:1px solid var(--line-2);border-radius:10px;
+  padding:9px 15px;font-size:12.5px;opacity:0;pointer-events:none;transition:.35s;
+  box-shadow:0 10px 32px rgba(0,0,0,.55);z-index:5;max-width:78%;text-align:center;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------------- time bar ---------------- */
+#timebar{
+  position:absolute;left:16px;right:16px;bottom:16px;z-index:4;
+  display:flex;align-items:center;gap:10px;
+  background:var(--panel);backdrop-filter:blur(18px);
+  border:1px solid var(--line);border-radius:var(--radius);padding:9px 12px;
+  box-shadow:0 10px 34px rgba(0,0,0,.45);
+}
+.icon-btn{
+  font:inherit;font-size:13px;color:var(--fg-dim);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:8px;height:30px;min-width:32px;padding:0 9px;
+  cursor:pointer;transition:.15s;flex:none;
+}
+.icon-btn:hover{color:var(--fg);border-color:var(--line-2);background:rgba(255,255,255,.08)}
+.icon-btn.wide{padding:0 12px}
+.icon-btn:disabled{opacity:.45;cursor:default}
+
+/* The play/pause control is the one button people hunt for, so give it a real
+   label, a fixed width so it does not jump when the label changes, and a colour
+   that says at a glance which state the simulation is in. */
+.play-btn{
+  min-width:92px;font-weight:600;letter-spacing:.02em;
+  color:#071018;background:var(--accent);border-color:var(--accent);
+}
+.play-btn:hover{color:#071018;background:#9adeff;border-color:#9adeff}
+.play-btn.paused{color:#071018;background:var(--good);border-color:var(--good)}
+.play-btn.paused:hover{background:#6fdca2;border-color:#6fdca2}
+.icon-btn.busy{color:var(--accent-2);border-color:var(--accent-2)}
+/* Three clocks, because "how long has this been running" is three different
+   questions. `age` is how old the object is including everything before the
+   simulation started -- a preset that begins in the Archean is already 1.15 Gyr
+   old at t=0 and saying "elapsed 2 Gyr" hides that. `elapsed` is the run.
+   `since` is time from the last milestone the player dropped, and it appears
+   only once there is one. */
+.clock{display:flex;flex-direction:column;line-height:1.1;padding:0 6px;flex:none;min-width:128px}
+.clock .t-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.clock .t-label{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--fg-faint);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:9ch}
+#simtime{font:13px/1.25 var(--mono);color:var(--fg)}
+#worldage{font:11px/1.25 var(--mono);color:var(--fg-dim)}
+#sincetime{font:11px/1.25 var(--mono);color:var(--accent-2)}
+#since-row .t-label{color:var(--accent-2);opacity:.75}
+.mark-btn{flex:none;padding:0 9px;font-size:14px;line-height:1}
+.mark-btn.has-mark{color:var(--accent-2);border-color:var(--accent-2)}
+.rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
+.rate input{flex:1;min-width:60px}
+.rate output{font:11.5px/1 var(--mono);color:var(--accent);min-width:78px;text-align:right;flex:none;transition:color .2s}
+.rate output.throttled{color:var(--accent-2)}
+.rate output.throttled::after{content:' ⏳'}
+
+/* ---------------- stats & charts ---------------- */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.stat .k{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-faint);
+  /* Two lines, not one and an ellipsis. A truncated label is worse than a tall
+     tile -- "REZERVA DO NEKONTROL…" names nothing -- and translations are
+     routinely longer than the English they replace. The grid row stretches to
+     whichever tile needs the second line, which is what it is for. */
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  line-height:1.25;overflow-wrap:anywhere}
+.stat .v{font:14px/1.25 var(--mono);color:var(--fg);margin-top:2px}
+.stat .v small{font-size:10px;color:var(--fg-dim)}
+.stat.wide{grid-column:span 2}
+.stat.warn .v{color:var(--accent-2)}
+.stat.bad .v{color:var(--bad)}
+
+.chart{width:100%;height:118px;display:block;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:8px}
+#chart-phase{height:132px}
+
+/* ---------------- discovery log ---------------- */
+.state-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.state-card{
+  display:flex;align-items:center;gap:7px;text-align:left;
+  background:var(--panel-2);border:1px solid var(--line);border-radius:7px;
+  padding:6px 8px;font:inherit;font-size:11px;color:var(--fg-faint);cursor:pointer;
+  transition:.18s;overflow:hidden;
+}
+.state-card .dot{width:7px;height:7px;border-radius:50%;flex:none;opacity:.28;transition:.25s}
+.state-card .nm{
+  /* Same reason as the readout tiles: a Slovak climate name is routinely twice
+     the width of the English one, and "Suchý nekontrolo…" identifies nothing.
+     Up to three lines here -- the grid row stretches, and the two columns stay
+     level with each other because flex items in a row share a height. */
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+  line-height:1.3;overflow-wrap:anywhere}
+.state-card.found{color:var(--fg)}
+.state-card.found .dot{opacity:1;box-shadow:0 0 9px currentColor}
+.state-card:hover{border-color:var(--line-2);background:rgba(255,255,255,.06)}
+.state-card.just-found{animation:pop 2.2s ease}
+@keyframes pop{
+  0%{transform:scale(1)}12%{transform:scale(1.07);box-shadow:0 0 0 3px rgba(127,212,255,.28)}
+  40%{transform:scale(1)}100%{box-shadow:0 0 0 0 rgba(127,212,255,0)}
+}
+.state-detail{margin-top:9px;font-size:11.5px;line-height:1.55;color:var(--fg-dim);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+
+.about p{font-size:11.5px;line-height:1.6;color:var(--fg-dim);margin:0 0 9px}
+/* Two letters, same footprint as the renderer button beside it. */
+.lang-btn{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em}
+/* The GPL asks an interactive program to show the notice; it is a footnote to the
+   panel rather than part of the argument, so it sits a size down and behind a rule. */
+.about p.licence{font-size:10.5px;opacity:.78;border-top:1px solid var(--line);padding-top:8px}
+.about a{color:var(--accent)}
+
+/* Panel tabs, phone only. One at each edge, at thumb height, each opening the
+   panel it points at -- rather than one button cycling through three states,
+   which gave no clue what the next tap would do. */
+.panel-tab{
+  display:none;position:fixed;top:50%;transform:translateY(-50%);z-index:30;
+  align-items:center;gap:6px;padding:14px 8px;
+  background:rgba(18,24,40,.92);border:1px solid var(--line);color:var(--fg-dim);
+  backdrop-filter:blur(8px);cursor:pointer;
+  writing-mode:vertical-rl;font:11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+}
+#panel-left{left:0;border-left:0;border-radius:0 10px 10px 0}
+#panel-right{right:0;border-right:0;border-radius:10px 0 0 10px;rotate:180deg}
+.panel-tab[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+.panel-tab:active{background:rgba(30,40,64,.95)}
+#panel-scrim{display:none}
+
+/* ---------------- responsive ---------------- */
+@media (max-width:1180px){
+  #app{grid-template-columns:290px minmax(0,1fr) 310px}
+}
+/* The drawer layout, and what puts the page into it.
+   Three columns need about 1100px before the middle one stops being a slot: at
+   1000px the two panels are 600 of it and the planet gets 400. So the width
+   trigger is 1080, not the 940 it used to be -- between the two the page was
+   technically "desktop" and unusable.
+   A short window is the same problem turned ninety degrees: the panels scroll,
+   but the timebar, the view controls and the planet have to share what is left,
+   and under 600px they do not fit. Either condition alone is enough. */
+@media (max-width:1080px), (max-height:600px){
+  #app{grid-template-columns:1fr}
+  .panel{
+    position:fixed;top:0;bottom:0;width:min(340px,86vw);z-index:20;
+    transform:translateX(-102%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+    box-shadow:0 0 60px rgba(0,0,0,.6);
+  }
+  #controls{left:0}
+  #readout{right:0;left:auto;transform:translateX(102%);border-left:1px solid var(--line)}
+  body.show-left #controls,body.show-right #readout{transform:translateX(0)}
+  .panel-tab{display:flex}
+  /* A panel is open: the tab would sit on top of it, and tapping the darkened
+     rest of the screen should put it away again. */
+  body.show-left #panel-left,body.show-right #panel-right{opacity:0;pointer-events:none}
+  #panel-scrim{position:fixed;inset:0;z-index:19;background:rgba(4,7,14,.5)}
+  body.show-left #panel-scrim,body.show-right #panel-scrim{display:block}
+  /* The view controls run along the bottom instead of stacking up the side.
+     Stacked, the column grew past the top of the wrapped timebar and the
+     renderer button was clipped off the screen entirely. --bar is the timebar's
+     measured height, because it wraps to two rows on a narrow screen. */
+  #view-controls{
+    flex-direction:row;flex-wrap:wrap;justify-content:flex-end;
+    left:10px;right:10px;bottom:calc(var(--bar,104px) + 10px);gap:8px;
+  }
+  #view-controls .icon-btn{width:38px;height:34px;font-size:16px}
+  #view-controls .renderer-btn{height:34px}
+  #view-controls .pan-select{width:auto;min-width:62px;font-size:12px}
+  #scenario-banner{width:min(280px,72vw);top:56px}
+  #timebar{flex-wrap:wrap;gap:8px}
+  .rate{order:5;width:100%;flex-basis:100%}
+  /* The clock is three rows now, so give it room to be narrow instead of tall:
+     at this width it shares the first row with four buttons and a checkbox. */
+  .clock{min-width:96px;padding:0 2px}
+  .clock .t-label{max-width:7ch}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
+/* Atmospheric composition: a proportion bar with the numbers under it. The bar
+   alone cannot show a trace gas, and 0.04% CO2 is the whole modern greenhouse,
+   so the numbers carry what the bar physically cannot. */
+.stat.wide{grid-column:1/-1}
+.comp-bar{display:flex;height:9px;border-radius:3px;overflow:hidden;
+  background:rgba(255,255,255,.07);margin:3px 0 5px}
+.comp-bar i{display:block;height:100%}
+.comp-list{font:10px/1.55 var(--mono);color:var(--fg-dim);
+  display:flex;flex-wrap:wrap;gap:2px 10px}
+.comp-list b{font-weight:600}
+.comp-none{font:11px/1 var(--mono);color:var(--fg-dim)}
+
+/* ---- the fossil reserve, under the Industrial CO2 slider ---------------- */
+.supply {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 7px; font-size: 11px;
+}
+.supply-bar {
+  flex: 1 1 auto; height: 5px; min-width: 40px;
+  border-radius: 3px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.10);
+}
+.supply-bar > i {
+  display: block; height: 100%; width: 100%;
+  background: linear-gradient(90deg, #6d8bb0, #b08a5a);
+  transition: width 0.25s linear;
+}
+.supply-bar > i.spent { background: #7c4a3a; }
+.supply-left {
+  flex: 0 0 auto; min-width: 3.6em; text-align: right;
+  color: var(--dim, #9aa4b2); font-variant-numeric: tabular-nums;
+}
+.supply-left.spent { color: #d08a6a; }
+.supply-btn {
+  flex: 0 0 auto; cursor: pointer;
+  padding: 2px 7px; font: inherit; font-size: 11px;
+  color: var(--dim, #9aa4b2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 5px;
+}
+.supply-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.13); }
+.supply-inf {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+  cursor: pointer; color: var(--dim, #9aa4b2); white-space: nowrap;
+}
+.supply-inf input { accent-color: #b08a5a; margin: 0; }
+
+/* ---- pause-on-reset, beside the Reset button ---------------------------- */
+.reset-paused {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: -2px; font-size: 11px; white-space: nowrap;
+  color: var(--dim, #9aa4b2); cursor: pointer; user-select: none;
+}
+.reset-paused input { accent-color: #6d8bb0; margin: 0; }
+.reset-paused:hover { color: #fff; }
+@media (max-width:1080px), (max-height:600px) { .reset-paused { display: none; } }
+
+/* ---- save slots --------------------------------------------------------- */
+.slot-row { display: flex; flex-direction: column; gap: 4px; }
+.slot {
+  display: grid; grid-template-columns: 1.4em 1fr auto auto; align-items: baseline; gap: 8px;
+  width: 100%; padding: 5px 9px; cursor: pointer; text-align: left;
+  font: inherit; font-size: 12px; color: var(--fg, #e8edf4);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 7px;
+}
+.slot:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(255, 255, 255, 0.22); }
+.slot.empty { color: var(--dim, #9aa4b2); }
+.slot.armed { border-color: #b08a5a; box-shadow: 0 0 0 1px rgba(176, 138, 90, 0.35) inset; }
+.slot-n { color: var(--dim, #9aa4b2); font-variant-numeric: tabular-nums; }
+.slot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-sub { color: var(--dim, #9aa4b2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.slot-hint { margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--dim, #9aa4b2); }
+.slot-hint .supply-btn { margin: 0 2px; }
+/* Slot 1 says what it is, quietly. Its own grid column, and the column is there
+   on every slot even when the badge is not, so the elapsed time stays lined up
+   down the row. Adding a fourth child to a three-column grid was what pushed
+   the time onto a second line. */
+.slot-auto {
+  font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--dim, #9aa4b2); border: 1px solid var(--line, rgba(255,255,255,.14));
+  border-radius: 999px; padding: 1px 5px; opacity: .8;
+}
+.slot-auto:empty { border: 0; padding: 0; }
+
+/* The temperature chart is a control as well as a picture: drag along it to put
+   the world back into its own past. */
+.chart.scrub { cursor: ew-resize; touch-action: none; }
+.supply-btn.busy { color: #f0d9b8; background: rgba(176, 138, 90, 0.25); border-color: #b08a5a; }
+
+/* A readout that follows the pointer along the zonal profile. The chart draws
+   eighteen bands and there is no room to label any of them, so the numbers live
+   here instead: the band the pointer is over, and what it is doing. */
+.chart-wrap{position:relative}
+.chart.probe{cursor:crosshair;touch-action:none}
+.chart-tip{
+  position:absolute;top:6px;pointer-events:none;z-index:4;
+  background:rgba(10,15,26,.94);border:1px solid var(--line-2);border-radius:6px;
+  padding:5px 7px;font:11px/1.45 var(--mono);color:var(--fg);white-space:nowrap;
+  box-shadow:0 4px 16px rgba(0,0,0,.45);
+}
+.chart-tip b{color:var(--accent-2);font-weight:600}
+.chart-tip .tip-sub{color:var(--fg-dim);display:block}
+
+/* Naming a world. Sits above the slots because the name is what the slots show,
+   and because it is the one field here that is about the world rather than
+   about its physics. */
+.name-row{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.name-row>span{font:11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--fg-faint);flex:0 0 auto}
+.name-row input{
+  flex:1 1 auto;min-width:0;background:var(--panel-2);color:var(--fg);
+  border:1px solid var(--line);border-radius:6px;padding:5px 7px;
+  font:12px/1.3 var(--mono);
+}
+.name-row input:focus{outline:none;border-color:var(--accent)}
+.name-row input::placeholder{color:var(--fg-faint)}
+
+/* Two populations, two bars. The faint bar behind each one is what the climate
+   could support: the gap between it and the filled part is life that has not
+   got there yet, which on the eukaryote line can be most of a billion years. */
+.life-row{display:grid;grid-template-columns:74px 1fr auto;align-items:center;gap:7px;margin:3px 0}
+.life-k{font:10px/1 var(--mono);color:var(--fg-faint);letter-spacing:.03em}
+.life-bar{position:relative;height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+.life-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.life-room{background:rgba(255,255,255,.13)}
+.life-fill{transition:width .25s}
+.life-v{font:10px/1 var(--mono);color:var(--fg-dim);white-space:nowrap}
+
+/* Tappable stops under a slider. A logarithmic control covering nine decades
+   cannot be driven with a thumb -- a millimetre is a factor of ten -- so the
+   values worth landing on exactly get a button, and the slider covers the rest. */
+.stop{
+  flex:0 0 auto;background:var(--panel-2);border:1px solid var(--line);
+  color:var(--fg-dim);border-radius:999px;padding:3px 9px;cursor:pointer;
+  font:11px/1.25 var(--mono);letter-spacing:.02em;transition:.15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.stop:hover{color:var(--fg);border-color:var(--line-2)}
+.stop:active{background:rgba(30,40,64,.95)}
+.stop.active{color:var(--accent);border-color:var(--accent);background:rgba(127,212,255,.10)}
+.rate-stops{display:flex;align-items:center;gap:8px;margin-top:6px;grid-column:1/-1}
+/* The acceleration menu. A dropdown rather than a row of chips because the row
+   did not fit a tablet: seven buttons wrapped to two lines and pushed the
+   timebar over the planet. A select is one line at any width, and on a phone or
+   tablet the platform opens it as a full-height list, which is the easiest
+   possible thing to hit with a thumb. */
+#rate-menu{
+  flex:1 1 auto;min-width:0;background:var(--panel-2);color:var(--fg);
+  border:1px solid var(--line);border-radius:7px;padding:6px 8px;
+  font:12px/1.3 var(--mono);cursor:pointer;
+}
+#rate-menu:focus{outline:none;border-color:var(--accent)}
+/* The typed rate. This was a bare <input> with no rules of its own, which in a
+   dark interface means the browser's own white box with a black caret in it --
+   the one obviously foreign thing on the page. It is two controls now: a number
+   and its unit, because "type 250000000" is not a reasonable thing to ask of
+   someone who wants a quarter of a billion years a second. */
+.rate-entry{display:flex;align-items:stretch;flex:none;
+  border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel-2)}
+.rate-entry:focus-within{border-color:var(--accent)}
+.rate-val{
+  width:5.5ch;text-align:right;background:transparent;border:0;color:var(--accent);
+  font:12px/1 var(--mono);padding:6px 2px 6px 8px;
+}
+.rate-val:focus{outline:none}
+.rate-val.throttled{color:var(--accent-2)}
+/* Eased reads as a deliberate act rather than a struggle, so it gets the same
+   amber as the switch that caused it but says so with a flag, not an hourglass. */
+.rate-val.eased{color:var(--accent-2)}
+.rate-entry:has(.rate-val.eased){border-color:var(--accent-2)}
+.rate-entry:has(.rate-val.throttled){border-color:var(--accent-2)}
+.rate-unit{
+  background:transparent;border:0;border-left:1px solid var(--line);color:var(--fg-dim);
+  font:11px/1 var(--mono);padding:0 4px 0 6px;cursor:pointer;
+}
+.rate-unit:focus{outline:none;color:var(--fg)}
+@media (pointer:coarse){ .rate-val{font-size:13px;padding:9px 2px 9px 9px}
+                         .rate-unit{font-size:12px} }
+
+/* The auto-ease switch, next to fast for the same reason: it decides how fast
+   this runs. Amber rather than blue because when it is on it is taking the
+   clock off the player, and that should look like a state and not a default. */
+.slow-toggle{border-style:dashed}
+.slow-toggle.active{border-style:solid;color:var(--accent-2);border-color:var(--accent-2);
+  background:rgba(255,190,120,.10)}
+.slow-toggle.easing{animation:easepulse 1.1s ease-in-out infinite}
+@keyframes easepulse{50%{background:rgba(255,190,120,.28)}}
+@media (pointer:coarse){ #rate-menu{padding:9px 10px;font-size:13px} }
+.ctl-stops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 2px}
+/* Touch targets: on a coarse pointer the chips get taller, because the whole
+   point of them is to be hittable with a thumb. */
+@media (pointer:coarse){ .stop{padding:7px 12px;font-size:12px} }
+
+/* The accuracy switch sits with the speed stops because it is the other speed
+   control, but it is a mode rather than a value -- hence the separator. */
+.fast-toggle{margin-left:auto;border-style:dashed}
+.fast-toggle.active{border-style:solid}
+
+/* ---------------- milestones ---------------- */
+/* One row per mark: what it was called, when it happened, and how long after
+   the mark before it -- which is the number the whole feature exists for. */
+.marks{display:flex;flex-direction:column;gap:4px}
+.mark-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:6px;
+  background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:5px 7px}
+.mark-row input{background:transparent;border:0;color:var(--fg);font:12px/1.2 var(--sans,inherit);
+  min-width:0;padding:1px 2px;border-radius:4px}
+.mark-row input:focus{outline:none;background:rgba(255,255,255,.07)}
+.mark-when{font:10.5px/1.2 var(--mono);color:var(--fg-faint);white-space:nowrap;
+  background:none;border:0;padding:2px 4px;border-radius:4px;cursor:pointer}
+.mark-when:hover:not(:disabled){color:var(--accent);background:rgba(255,255,255,.07)}
+.mark-when:disabled{cursor:default}
+
+/* ---------------- climate epochs ---------------- */
+.epochs{display:flex;flex-direction:column;gap:3px}
+.epoch-row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:7px;
+  padding:4px 6px;border-radius:6px;background:var(--panel-2);border:1px solid var(--line)}
+.epoch-row.current{border-color:var(--line-2)}
+.epoch-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.epoch-row.current .epoch-dot{box-shadow:0 0 8px currentColor}
+.epoch-name{font-size:11px;color:var(--fg);overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  line-height:1.25;overflow-wrap:anywhere}
+.epoch-span{font:10.5px/1.2 var(--mono);color:var(--fg-faint);white-space:nowrap}
+.epoch-row.current .epoch-span{color:var(--accent-2)}
+.epoch-back{background:none;border:0;color:var(--fg-faint);cursor:pointer;font-size:13px;
+  line-height:1;padding:2px 4px;border-radius:4px}
+.epoch-back:hover:not(:disabled){color:var(--accent);background:rgba(255,255,255,.07)}
+.epoch-back:disabled{opacity:.3;cursor:default}
+#marks-clear{margin-top:6px;font-size:11px;width:100%}
+.mark-gap{font:10.5px/1.2 var(--mono);color:var(--accent-2);white-space:nowrap}
+.mark-drop{background:none;border:0;color:var(--fg-faint);cursor:pointer;font-size:13px;
+  line-height:1;padding:0 2px}
+.mark-drop:hover{color:var(--bad)}
