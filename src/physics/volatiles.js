@@ -984,9 +984,23 @@ export function stepVolatiles(w, dtYears) {
   const wLand = (landExposed / 0.3)
               * Math.pow(pCO2rel, 0.3)
               * Math.exp(clamp((dg.Tmean - 288) / 13.7, -8, 8));
+  // Seafloor weathering is ocean water circulating through fresh basalt, so it
+  // needs a seafloor made of basalt. On a world deep enough to freeze at its
+  // base there is no water-rock contact at all -- the same shell of
+  // high-pressure ice that keeps the volcanoes from reaching the air keeps the
+  // ocean from reaching the rock -- and it is sealed by the same factor, since
+  // it is the same interface seen from the other side.
+  //
+  // Leaving this out while sealing the outgassing made the carbon cycle
+  // one-sided: the Cold-Start world was weathering at three times its own
+  // volcanic supply through a hundred and eighty kilometres of ice, which is a
+  // sink with nothing on the other end of it. It also cost real time, because
+  // the step controller bounds on |V - W| and that difference was large and
+  // entirely fictional.
   const wSea = (dg.flooded / 0.7)
              * Math.pow(pCO2rel, 0.23)
-             * Math.exp(clamp((dg.Tmean - 288) / 28.0, -8, 8));
+             * Math.exp(clamp((dg.Tmean - 288) / 28.0, -8, 8))
+             * sealFactor(w);
   const Wr = OUTGAS_EARTH * outgassingScale(p.mass)
            * ((1 - SEAFLOOR_SHARE) * wLand + SEAFLOOR_SHARE * wSea)
            * liquid;
