@@ -751,11 +751,17 @@ function runChecks() {
       const cp = dgb && dgb.coldPool;
       const layers = found ? columnLayers(found, dgb, 5 * scaleHeight(dgb)) : [];
       const kinds = layers.map((l) => l.kind);
-      const liquid = layers.find((l) => l.kind === 'ocean');
-      check('A buried ocean is drawn with the liquid water it is named for',
-        !!cp && cp.liquidDepth > 1e3 && !!liquid && liquid.metres > 1e3,
-        found ? `${((cp && cp.liquidDepth || 0) / 1000).toFixed(0)} km of liquid under the lid, `
-          + `standing on ${cp && cp.basePhase}` : 'no path reached buriedOcean');
+      // Under the lid, and drawn: liquid where it is liquid, supercritical where
+      // the adiabat has taken it past the critical temperature. What the state
+      // is named for is that this water is THERE, not that all of it is liquid.
+      const water = layers.slice(1).filter((l) => l.kind === 'ocean' || l.kind === 'supercritical');
+      const waterM = water.reduce((a, l) => a + l.metres, 0);
+      check('A buried ocean is drawn with the water it is named for',
+        !!cp && cp.liquidDepth > 1e3 && waterM > 1e3
+          && Math.abs(waterM - cp.liquidDepth) < 1,
+        found ? `${((cp && cp.liquidDepth || 0) / 1000).toFixed(0)} km of water under the lid `
+          + `(${water.map((l) => l.kind).join(' + ')}), standing on ${cp && cp.basePhase}`
+          : 'no path reached buriedOcean');
       check('…with the hot lid above it rather than instead of it',
         kinds.indexOf('supercritical') === 0 && kinds.indexOf('ocean') === 1,
         kinds.join(' → '));
@@ -827,6 +833,13 @@ function runChecks() {
             floor: dgc.oceanBase.baseTemperature };
         }
       }
+      // The WATER, not the band called liquid. Most of this pool is past the
+      // critical temperature and is drawn as the supercritical fluid it is; the
+      // thing that has to be continuous across the crossing is the column, in
+      // whatever phase the column happens to be in.
+      const fluid = after && after.layers.slice(1).filter((l) => l.kind === 'ocean'
+        || l.kind === 'supercritical');
+      const fluidM = fluid ? fluid.reduce((a, l) => a + l.metres, 0) : 0;
       const sea = after && after.layers.find((l) => l.kind === 'ocean');
       // Bracketed rather than pinned: the pool keeps the temperature of the last
       // INTEGRATION step that had a sea surface, and this loop samples every
@@ -853,9 +866,64 @@ function runChecks() {
           : 'no liquid band');
 
       check('…so the column does not jump when it closes',
-        !!sea && sea.metres > 0.5 * before.liq && sea.metres < 2 * before.liq,
-        after ? `${(before.liq / 1000).toFixed(0)} km of liquid before, `
-          + `${(sea.metres / 1000).toFixed(0)} km after` : 'never got buried');
+        fluidM > 0.5 * before.liq && fluidM < 2 * before.liq,
+        after ? `${(before.liq / 1000).toFixed(0)} km of water before, `
+          + `${(fluidM / 1000).toFixed(0)} km after` : 'never got buried');
+    }
+
+    // Water above 373.95 °C is not a liquid at any pressure -- that is what a
+    // critical temperature IS -- and the cross-section drew a band labelled
+    // "liquid ocean · 373 → 554 °C". The solver was never confused about it:
+    // it had already called that floor `supercritical interior`. Only the
+    // drawing was, and it was drawing it across the phase boundary.
+    {
+      const sim = new Simulation({ ...PRESETS.coldStart.params });
+      let dgs = null;
+      for (let yr = 0; yr <= 1.2e8; yr += 2e5) {
+        sim.runYears(yr - sim.world.time);
+        if (classify(sim.world).id === 'buriedOcean') { dgs = sim.world.diag; break; }
+      }
+      const layers = dgs ? columnLayers(sim.world, dgs, 5 * scaleHeight(dgs)) : [];
+      const wet = layers.filter((l) => l.kind === 'ocean');
+      const deep = layers.filter((l) => l.kind === 'supercritical');
+      check('No band called liquid is drawn above the critical temperature',
+        !!dgs && wet.every((l) => l.T.every((T) => T <= T_CRIT_H2O + 1e-9)),
+        wet.map((l) => `${(l.T[0] - 273.15).toFixed(0)} → `
+          + `${(l.T[l.T.length - 1] - 273.15).toFixed(0)} °C`).join(', ')
+          || 'no liquid band at all');
+      // ...and what is above it is drawn, rather than dropped: the column is
+      // still the whole column, and the water below the crossing is the same
+      // water -- supercritical, dense, and hundreds of kilometres of it.
+      const total = layers.filter((l) => l.kind === 'ocean' || l.kind === 'supercritical')
+        .reduce((a, l) => a + l.metres, 0);
+      check('…and the water above it is drawn as the supercritical fluid it is',
+        !!dgs && deep.length === 2 && total > dgs.coldPool.liquidDepth * 0.99
+          + (5 * scaleHeight(dgs)),
+        `${layers.map((l) => l.kind).join(' → ')}; `
+          + `${(dgs.coldPool.liquidDepth / 1000).toFixed(0)} km of fluid under the lid`);
+    }
+
+    // The crossing itself, in the solver rather than in the picture: where the
+    // adiabat reaches the critical temperature, and nowhere if it never does.
+    {
+      const sim = new Simulation({ ...PRESETS.hycean.params });
+      sim.runYears(1e5);
+      const ob = sim.world.diag.oceanBase;
+      const warm = new Simulation({ ...PRESETS.coldStart.params });
+      for (let yr = 0; yr <= 1.2e8; yr += 2e5) {
+        warm.runYears(yr - warm.world.time);
+        if (classify(warm.world).id === 'buriedOcean') break;
+      }
+      const cp = warm.world.diag.coldPool;
+      check('A column that never reaches the critical temperature has no supercritical part',
+        ob.superDepth === 0 && ob.baseTemperature < T_CRIT_H2O,
+        `Hycean World floor ${(ob.baseTemperature - 273.15).toFixed(0)} °C, `
+          + `${(ob.superDepth / 1000).toFixed(1)} km supercritical`);
+      check('…and one that does is split where it crosses',
+        cp.superDepth > 0 && cp.superDepth < cp.liquidDepth
+          && cp.baseTemperature > T_CRIT_H2O,
+        `${((cp.liquidDepth - cp.superDepth) / 1000).toFixed(1)} km liquid over `
+          + `${(cp.superDepth / 1000).toFixed(0)} km supercritical`);
     }
 
     // High-pressure ice is named for the phase it is actually in. Ice VII is

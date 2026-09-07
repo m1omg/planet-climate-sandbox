@@ -328,7 +328,7 @@ export const SK = {
     '{0}% converted': 'premenených {0} %',
     // Kratšie ako „{0} % je stále studených“: pásmo prierezu má na úzkom paneli
     // miesto na jeden riadok a názov vrstvy sa oň delí.
-    '{0}% still cold': 'studených {0} %',
+    '{0}% not converted': 'nepremenených {0} %',
     '{0} GPa at the floor': '{0} GPa na dne',
     'supercritical interior': 'superkritické vnútro',
     'deep water is supercritical': 'hlbinná voda je superkritická',

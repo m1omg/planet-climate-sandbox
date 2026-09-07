@@ -80,7 +80,7 @@ export function meltingPressure(T) {
 // pressure is what decides both the density and the phase.
 export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   const out = {
-    depth: 0, liquidDepth: 0, iceDepth: 0,
+    depth: 0, liquidDepth: 0, iceDepth: 0, superDepth: 0,
     basePressure: 0, basePhase: 'none', pMelt: meltingPressure(Tsurf),
   };
   if (!(columnKg > 0) || !(g > 0)) return out;
@@ -216,6 +216,21 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
     return { z, mass };
   };
 
+  // Where the column stops being a liquid. Above 647.096 K there is no liquid
+  // water at any pressure -- that is what a critical temperature is -- so a deep
+  // enough adiabat crosses out of the liquid field on its way down and what is
+  // under the crossing is supercritical fluid: dense, continuous with the water
+  // above it, and not an ocean. The cross-section used to draw the whole column
+  // as one liquid band reading "373 → 554 °C", straight across the boundary.
+  //
+  // Solved rather than searched, from the same closed-form adiabat: it is
+  // T = Tsurf(1 + k·ln(1 + Δp/K0)), so the crossing is at
+  // Δp = K0·(exp((Tc/Tsurf − 1)/k) − 1). A column whose top is already past the
+  // critical temperature is supercritical from the top down and returns zero.
+  const pCrit = Tsurf >= T_CRIT_H2O ? pTop
+    : pTop + K0 * Math.expm1((T_CRIT_H2O / Tsurf - 1) / K_ADIABAT);
+  const superFrom = (pEnd) => (pCrit >= pEnd ? 0 : depthTo(pEnd).z - depthTo(Math.max(pCrit, pTop)).z);
+
   if (pFreeze > pTop) {
     const liq = depthTo(pFreeze);
     if (liq.mass < columnKg) {
@@ -234,6 +249,7 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
       // rather than as a fourth phase, because there is no boundary to draw --
       // that is what supercritical means.
       out.superLayer = out.baseTemperature > T_CRIT_H2O;
+      out.superDepth = superFrom(pFreeze);
       return out;
     }
   }
@@ -251,6 +267,11 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   // the rock to be reachable, too warm for the water ever to freeze.
   out.basePhase = out.basePressure > P_VI_VII && out.baseTemperature > T_CRIT_H2O
     ? 'supercritical interior' : 'rock';
+  // Reported in both branches now, not just the one that freezes: the readout's
+  // "deep water is supercritical" line was silent on an ocean standing on rock
+  // whose floor is past the critical point, which is exactly the buried pool.
+  out.superDepth = superFrom(pTop + pBase);
+  out.superLayer = out.superDepth > 0;
   return out;
 }
 
@@ -326,6 +347,18 @@ export function columnLayers(w, dg, airThick) {
   const add = (kind, metres, T, note, args) => {
     if (metres > 0) layers.push({ kind, metres, T, note, noteArgs: args || [] });
   };
+  // A water column drawn as the phases it is actually in. Above the critical
+  // temperature there is no liquid at any pressure, so a column whose adiabat
+  // crosses it is an ocean over a supercritical layer and has to be drawn as
+  // two bands -- one of them was drawn as a single "liquid ocean · 373 → 554 °C",
+  // which names a phase water does not have at 554 °C.
+  const addWater = (st, depth, topT, note, args) => {
+    const deep = Math.min(st.superDepth ?? 0, depth);
+    const baseT = st.baseTemperature ?? topT;
+    add('ocean', depth - deep, [topT, Math.min(baseT, T_CRIT_H2O)], note, args);
+    add('supercritical', deep, [Math.max(topT, T_CRIT_H2O), baseT],
+      depth > deep ? null : note, depth > deep ? [] : args);
+  };
 
   const pTot = dg.pTotMean ?? 0;
   // Past the critical point the air and the fluid under it are one medium, so
@@ -347,8 +380,10 @@ export function columnLayers(w, dg, airThick) {
     if (cp && cp.liquidDepth > 0) {
       const cold = 100 * (1 - clamp(dg.hotLayer ?? 1, 0, 1));
       const top = dg.coldT ?? T_COLD_POOL;
-      add('ocean', cp.liquidDepth, [top, cp.baseTemperature ?? top],
-        '{0}% still cold', [cold.toFixed(0)]);
+      // "still cold" was written when this water was assumed to be at freezing.
+      // It is the share of the inventory the hot layer has not taken, and on this
+      // world that water is at 373 °C, which is not cold by any reading.
+      addWater(cp, cp.liquidDepth, top, '{0}% not converted', [cold.toFixed(0)]);
       if (cp.iceDepth > 0) {
         add(iceKind(cp.pMelt, cp.basePressure), cp.iceDepth,
           [cp.baseTemperature], '{0} GPa at the floor', [(cp.basePressure / 1e9).toFixed(1)]);
@@ -361,12 +396,12 @@ export function columnLayers(w, dg, airThick) {
     const liquid = ob.liquidDepth ?? 0;
     if (hot > 0.005 && liquid > 0) {
       add('supercritical', liquid * hot, [Ts], '{0}% converted', [(hot * 100).toFixed(0)]);
-      add('ocean', liquid * (1 - hot), [Ts, ob.baseTemperature ?? Ts], 'still liquid');
+      addWater(ob, liquid * (1 - hot), Ts, 'still liquid');
     } else {
       const ice = (w.water.seaIce ?? 0) + (w.water.landIce ?? 0);
       const tot = ice + (w.water.ocean ?? 0);
       if (tot > 0 && ice / tot > 0.5) add('seaice', liquid || 1000, [Ts], 'frozen over');
-      else add('ocean', liquid, [Ts, ob.baseTemperature ?? Ts]);
+      else addWater(ob, liquid, Ts);
     }
     if (ob.iceDepth > 0) {
       add(iceKind(ob.pMelt, ob.basePressure ?? 0), ob.iceDepth,
