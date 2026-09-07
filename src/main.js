@@ -1114,7 +1114,19 @@ function updateReadout() {
     stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : t('negligible'),
       lossGyr > 0.05 ? 'bad' : lossGyr > 1e-3 ? 'warn' : '') +
     stat(t('Stratospheric H₂O'), `${(w.escape?.fStrat ?? 0).toExponential(1)}`,
-      (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '');
+      (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '') +
+    // Water loss above is water leaving the PLANET, on a gigayear scale. This
+    // is liquid water ceasing to be liquid, which is a different thing on a
+    // different clock: a moist world loses it to space, a runaway boils it, a
+    // buried ocean has it converted from above, and on the worlds where any of
+    // that is happening the question a player has is how long the sea has. Only
+    // shown while it is actually moving -- on Earth it is noise around zero.
+    (Math.abs(dg.liquidRate ?? 0) * 1e6 > 0.01
+      ? stat(t('Liquid water'), `${((dg.liquidRate > 0 ? -1 : 1) * Math.abs(dg.liquidRate) * 1e6)
+          .toFixed(Math.abs(dg.liquidRate) * 1e6 < 10 ? 2 : 0)}<small> EO/Myr</small>`,
+        dg.liquidRate > 0 ? 'warn' : '',
+        t('How fast the liquid water is going — boiled, converted under a hot layer, or lost to space. Negative while the sea is disappearing, positive while it is coming back.'))
+      : '');
 
   // Two radii, and only when they differ. The structural one is what gravity is
   // computed at; the transit one adds the envelope, which is what a telescope

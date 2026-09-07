@@ -829,7 +829,7 @@ function runChecks() {
           after = { T: dgc.Tmean, cold: dgc.coldT, cp: dgc.coldPool,
             layers: columnLayers(sim.world, dgc, 5 * scaleHeight(dgc)) };
         } else {
-          before = { T: dgc.Tmean, liq: dgc.oceanBase.liquidDepth,
+          before = { T: dgc.Tmean, cold: dgc.coldT, liq: dgc.oceanBase.liquidDepth,
             floor: dgc.oceanBase.baseTemperature };
         }
       }
@@ -841,16 +841,19 @@ function runChecks() {
         || l.kind === 'supercritical');
       const fluidM = fluid ? fluid.reduce((a, l) => a + l.metres, 0) : 0;
       const sea = after && after.layers.find((l) => l.kind === 'ocean');
-      // Bracketed rather than pinned: the pool keeps the temperature of the last
-      // INTEGRATION step that had a sea surface, and this loop samples every
-      // 200 kyr, so the exact value sits somewhere between the last sample and
-      // the critical point the world was climbing towards. Anywhere in that
-      // bracket is the water's own temperature; 273.15 K is not in it.
-      check('The water under a closing lid keeps the temperature it had',
-        !!after && after.cold >= before.T - 1 && after.cold <= T_CRIT_H2O,
-        after ? `sea surface ${(before.T - 273.15).toFixed(0)} °C on the last sample with one, `
-          + `pool ${(after.cold - 273.15).toFixed(0)} °C after, `
-          + `against ${(T_CRIT_H2O - 273.15).toFixed(0)} °C critical`
+      // The pool is not the surface and does not follow it over. It carries its
+      // own heat capacity -- a quarter of a million kilometres of water, warmed
+      // through a stable gradient at two percent of the flux -- so when the lid
+      // closes over a surface at 338 °C the water underneath is still at 80,
+      // which is what makes this a COLD start rather than a hot column with a
+      // hotter one on top of it. What it must NOT be is either extreme: pinned
+      // to the surface, or at the freezing point it was assumed to be at.
+      check('The water under a closing lid is still cold, because it lags',
+        !!after && after.cold < before.T - 100 && after.cold > 300
+          && Math.abs(after.cold - before.cold) < 5,
+        after ? `surface ${(before.T - 273.15).toFixed(0)} °C at the crossing, `
+          + `pool ${(after.cold - 273.15).toFixed(0)} °C, and it was `
+          + `${(before.cold - 273.15).toFixed(0)} °C the sample before`
           : 'never got buried');
 
       // ...and the column it makes is the same column, not a different world.
@@ -885,7 +888,6 @@ function runChecks() {
       }
       const layers = dgs ? columnLayers(sim.world, dgs, 5 * scaleHeight(dgs)) : [];
       const wet = layers.filter((l) => l.kind === 'ocean');
-      const deep = layers.filter((l) => l.kind === 'supercritical');
       check('No band called liquid is drawn above the critical temperature',
         !!dgs && wet.every((l) => l.T.every((T) => T <= T_CRIT_H2O + 1e-9)),
         wet.map((l) => `${(l.T[0] - 273.15).toFixed(0)} → `
@@ -894,13 +896,18 @@ function runChecks() {
       // ...and what is above it is drawn, rather than dropped: the column is
       // still the whole column, and the water below the crossing is the same
       // water -- supercritical, dense, and hundreds of kilometres of it.
-      const total = layers.filter((l) => l.kind === 'ocean' || l.kind === 'supercritical')
+      // ...and everything under the lid is drawn, in whatever phase it is in:
+      // liquid where it is liquid, supercritical where the adiabat has taken it
+      // past the critical point, high-pressure ice where the pressure has. The
+      // fluid part has to add up to the pool the solver reports.
+      const fluid = layers.slice(1).filter((l) => l.kind === 'ocean' || l.kind === 'supercritical')
         .reduce((a, l) => a + l.metres, 0);
-      check('…and the water above it is drawn as the supercritical fluid it is',
-        !!dgs && deep.length === 2 && total > dgs.coldPool.liquidDepth * 0.99
-          + (5 * scaleHeight(dgs)),
+      const iced = layers.filter((l) => /^ice/.test(l.kind)).reduce((a, l) => a + l.metres, 0);
+      check('…and everything under the lid is drawn, in the phase it is in',
+        !!dgs && Math.abs(fluid - dgs.coldPool.liquidDepth) < 1
+          && Math.abs(iced - dgs.coldPool.iceDepth) < 1 && fluid > 1e4,
         `${layers.map((l) => l.kind).join(' → ')}; `
-          + `${(dgs.coldPool.liquidDepth / 1000).toFixed(0)} km of fluid under the lid`);
+          + `${(fluid / 1000).toFixed(0)} km of fluid over ${(iced / 1000).toFixed(0)} km of ice`);
     }
 
     // The crossing itself, in the solver rather than in the picture: where the
@@ -909,21 +916,21 @@ function runChecks() {
       const sim = new Simulation({ ...PRESETS.hycean.params });
       sim.runYears(1e5);
       const ob = sim.world.diag.oceanBase;
-      const warm = new Simulation({ ...PRESETS.coldStart.params });
-      for (let yr = 0; yr <= 1.2e8; yr += 2e5) {
-        warm.runYears(yr - warm.world.time);
-        if (classify(warm.world).id === 'buriedOcean') break;
-      }
-      const cp = warm.world.diag.coldPool;
+      // Driven straight, because the crossing is a property of the solver and
+      // not of any particular world: a column this warm at the top reaches the
+      // critical temperature part-way down whatever put it there. 400 EO under
+      // 300 bar at 600 K.
+      const hot = oceanStructure(400 * 2.75e6, 9.8, 600, 300);
       check('A column that never reaches the critical temperature has no supercritical part',
         ob.superDepth === 0 && ob.baseTemperature < T_CRIT_H2O,
         `Hycean World floor ${(ob.baseTemperature - 273.15).toFixed(0)} °C, `
           + `${(ob.superDepth / 1000).toFixed(1)} km supercritical`);
       check('…and one that does is split where it crosses',
-        cp.superDepth > 0 && cp.superDepth < cp.liquidDepth
-          && cp.baseTemperature > T_CRIT_H2O,
-        `${((cp.liquidDepth - cp.superDepth) / 1000).toFixed(1)} km liquid over `
-          + `${(cp.superDepth / 1000).toFixed(0)} km supercritical`);
+        hot.superDepth > 0 && hot.superDepth < hot.liquidDepth
+          && hot.baseTemperature > T_CRIT_H2O,
+        `${((hot.liquidDepth - hot.superDepth) / 1000).toFixed(1)} km liquid over `
+          + `${(hot.superDepth / 1000).toFixed(0)} km supercritical, `
+          + `floor ${(hot.baseTemperature - 273.15).toFixed(0)} °C`);
     }
 
     // "mean surface 1676 °C" on a world whose whole point is the water under it
@@ -1024,56 +1031,103 @@ function runChecks() {
           + `Venus ${dry.world.diag.totalWater.toFixed(4)} EO → ${classify(dry.world).id}`);
     }
 
-    // Which end the supercritical layer grows from, played through the crossing.
-    // An ocean is on an adiabat, so its FLOOR is the hottest water in it and the
-    // floor reaches the critical temperature first: the supercritical layer
-    // appears at the bottom and eats upward, and only then does the surface go
-    // over and put a lid on top. That is Nixon & Madhusudhan's third regime, and
-    // it is the order the picture has to show.
+    // The pool arrives cold, and how cold depends on how much of it there is.
+    //
+    // An ocean heated from above is stably stratified: the heat has to be mixed
+    // down against the buoyancy gradient, which is the same difficulty
+    // advanceHotLayer already charges for moving the conversion boundary. So
+    // the water below carries its own temperature and its own heat capacity,
+    // and a big enough ocean cannot keep up with a surface running away from
+    // it. That is what "retained by sheer quantity" means, and it is what makes
+    // Pierrehumbert & Furth's cold start a COLD start: their hot layer sits on
+    // "a cold liquid or ice boundary", not on water at the critical point.
+    //
+    // Tracking the surface instead put the pool at 373 °C -- one kelvin under
+    // critical -- on every gradually heated world, which drew a buried ocean as
+    // 700 m of liquid over 260 km of supercritical fluid.
+    {
+      const rows = [];
+      for (const water of [1, 60, 300]) {
+        const sim = new Simulation({ ...PRESETS.earlyVenus.params, h2Bar: 2, water });
+        for (let yr = 0; yr <= 1e7; yr += 2e4) {
+          sim.runYears(yr - sim.world.time);
+          if (classify(sim.world).id === 'buriedOcean') break;
+        }
+        const dgp = sim.world.diag;
+        rows.push({ water, cold: dgp.coldT, T: dgp.Tmean,
+          buried: classify(sim.world).id === 'buriedOcean',
+          liquid: dgp.coldPool ? dgp.coldPool.liquidDepth - dgp.coldPool.superDepth : 0 });
+      }
+      const big = rows[rows.length - 1];
+      check('A deep ocean cannot keep up with a surface running away from it',
+        big.buried && big.cold < T_CRIT_H2O - 100 && big.liquid > 1e4,
+        rows.map((r) => `${r.water} EO: pool ${(r.cold - 273.15).toFixed(0)} °C under a `
+          + `${(r.T - 273.15).toFixed(0)} °C sky, ${(r.liquid / 1000).toFixed(0)} km still liquid`)
+          .join(' · '));
+      // ...and a small one keeps up easily, which is why nothing Earth-sized
+      // moves: 1 EO is 76 years per kelvin against a surface that takes
+      // thousands to change by one.
+      check('…and a small one keeps up, so an Earth-sized inventory is unaffected',
+        Math.abs(rows[0].cold - Math.min(rows[0].T, T_CRIT_H2O)) < 30
+          || rows[0].cold > T_CRIT_H2O - 30,
+        `1 EO: pool ${(rows[0].cold - 273.15).toFixed(0)} °C under a `
+          + `${(rows[0].T - 273.15).toFixed(0)} °C sky`);
+    }
+
+    // Which end the supercritical part arrives from, and the answer is: it
+    // depends on whether the interior has caught up, which is a fact about the
+    // world's history rather than about water.
+    //
+    // On a column that is all one adiabat -- a settled world, where `coldT` has
+    // had time to reach the surface -- the deepest water is the hottest and the
+    // supercritical region is at the BOTTOM. That is the equilibrated
+    // super-runaway interior of Pierrehumbert (2023), and it is checked against
+    // the solver directly further down.
+    //
+    // On a world being heated fast, the interior lags: the deepest water is the
+    // COLDEST, it makes high-pressure ice rather than supercritical fluid, and
+    // what arrives is the lid, from the top. Both are drawn; this pins the
+    // second, because it is the one the cold-start path takes and the one that
+    // changed when the pool stopped being assumed to sit at the surface
+    // temperature.
     {
       const sim = new Simulation({ ...PRESETS.coldStart.params });
       sim.runYears(5.9e7);
       const seq = [];
-      for (let yr = 5.9e7; yr <= 6.0e7; yr += 5e4) {
+      for (let yr = 5.9e7; yr <= 6.05e7; yr += 5e4) {
         sim.runYears(yr - sim.world.time);
         const dgx = sim.world.diag;
         const L = columnLayers(sim.world, dgx, 5 * scaleHeight(dgx));
-        const water = L.filter((l) => l.kind === 'ocean' || l.kind === 'supercritical'
-          || l.kind === 'seaice');
+        const water = L.slice(1).filter((l) => l.kind !== 'rock');
         seq.push({
-          yr,
           lid: L[0].kind === 'supercritical',
-          liquid: L.filter((l) => l.kind === 'ocean').reduce((a, l) => a + l.metres, 0),
-          deep: water.filter((l, i) => i > 0 && l.kind === 'supercritical')
-            .reduce((a, l) => a + l.metres, 0),
+          deepSuper: water.some((l) => l.kind === 'supercritical'),
+          liquid: water.filter((l) => l.kind === 'ocean').reduce((a, l) => a + l.metres, 0),
+          ice: water.filter((l) => /^ice/.test(l.kind)).reduce((a, l) => a + l.metres, 0),
           total: water.reduce((a, l) => a + l.metres, 0),
         });
       }
-      // Somewhere in there the deep layer is growing while the liquid above it
-      // shrinks, and the surface has not gone over yet.
-      const growing = seq.filter((r, i) => i > 0 && !r.lid && r.deep > seq[i - 1].deep
-        && r.liquid < seq[i - 1].liquid && r.liquid > 0);
-      check('The supercritical layer grows from the ocean floor upward, before any lid',
-        growing.length >= 5 && growing.every((r) => !r.lid),
-        growing.length ? `${growing.length} steps of it: `
-          + `${(growing[0].deep / 1000).toFixed(0)} km deep under `
-          + `${(growing[0].liquid / 1000).toFixed(0)} km of liquid, `
-          + `to ${(growing[growing.length - 1].deep / 1000).toFixed(0)} km under `
-          + `${(growing[growing.length - 1].liquid / 1000).toFixed(0)} km`
-          : 'never grew from below');
+      const before = seq.filter((r) => !r.lid), after = seq.filter((r) => r.lid);
+      check('A lagging interior freezes rather than going supercritical, and the lid comes from above',
+        before.length > 3 && after.length > 3
+          && before.every((r) => !r.deepSuper && r.liquid > 1e4 && r.ice > 1e4)
+          && after.every((r) => r.liquid > 1e4),
+        `before: ${(before[0].liquid / 1000).toFixed(0)} km liquid over `
+          + `${(before[0].ice / 1000).toFixed(0)} km ice, none of it supercritical; `
+          + `after: lid over ${(after[0].liquid / 1000).toFixed(0)} km liquid`);
 
-      // ...and the column does not balloon on the way through. `oceanBase`
-      // divides the water by the FLOODED fraction, which is the right question
-      // for a sea in basins and the wrong one for a world whose surface is
-      // going supercritical: flooded → 0 as the sea stops being a sea, and the
-      // drawn column tripled to 926 km for a hundred thousand years before
-      // snapping back to 267. The `ease` control exists to stretch exactly this
-      // moment out, so a transient here is a transient you watch.
+      // ...and the column does not jump as the lid closes. It used to: the
+      // visible ocean was solved at the surface temperature and the pool at its
+      // own, so the same water was 268 km one step and 95 km the next. One
+      // temperature for the water, whether you can see it or not.
       const settled = seq[seq.length - 1].total;
       const worst = seq.reduce((a, r) => Math.max(a, r.total), 0);
-      check('…and the water column does not balloon on the way through',
-        worst < 1.25 * settled,
-        `worst ${(worst / 1000).toFixed(0)} km against ${(settled / 1000).toFixed(0)} km settled`);
+      const step = seq.reduce((a, r, i) => (i === 0 ? a
+        : Math.max(a, Math.abs(r.total - seq[i - 1].total) / settled)), 0);
+      check('…and the water column does not jump or balloon on the way through',
+        worst < 1.4 * settled && step < 0.4,
+        `worst ${(worst / 1000).toFixed(0)} km against ${(settled / 1000).toFixed(0)} km settled, `
+          + `biggest single step ${(step * 100).toFixed(0)}%`);
     }
 
     // The line between liquid and supercritical is a name, not an interface.
@@ -1084,18 +1138,19 @@ function runChecks() {
     // straight through it. A band edge drawn without saying so is a boundary the
     // player can see and the world does not have.
     {
-      const sim = new Simulation({ ...PRESETS.coldStart.params });
-      for (let yr = 0; yr <= 1.2e8; yr += 2e5) {
-        sim.runYears(yr - sim.world.time);
-        if (classify(sim.world).id === 'buriedOcean') break;
-      }
+      // The world that shows it is one whose pool has had time to warm into the
+      // critical point -- the cold-start pool starts at 80 °C and takes tens of
+      // megayears to get there, which is the whole point of it lagging.
+      const sim = new Simulation({ ...PRESETS.earlyVenus.params, h2Bar: 2, water: 300 });
+      sim.runYears(1e7);
       const dgn = sim.world.diag;
       const L = columnLayers(sim.world, dgn, 5 * scaleHeight(dgn));
       const under = L.findIndex((l, i) => i > 0 && l.kind === 'supercritical'
         && L[i - 1].kind === 'ocean');
       check('A supercritical layer under an ocean says it is not a boundary',
         under > 0 && L[under].note === 'no boundary',
-        under > 0 ? `${L[under].kind}: ${L[under].note}` : 'no such band');
+        under > 0 ? `${L[under].kind}: ${L[under].note}`
+          : `no such band: ${L.map((l) => l.kind).join(' → ')}`);
     }
 
     // High-pressure ice is named for the phase it is actually in. Ice VII is

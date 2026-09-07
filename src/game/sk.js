@@ -200,6 +200,9 @@ export const SK = {
     // modul nemusel poznať jazyky.
     'sky {0} °C, water {1} °C': 'obloha {0} °C, voda {1} °C',
     'Fluid top': 'Vrch tekutiny',
+    'Liquid water': 'Tekutá voda',
+    'How fast the liquid water is going — boiled, converted under a hot layer, or lost to space. Negative while the sea is disappearing, positive while it is coming back.':
+      'Ako rýchlo ubúda tekutá voda — vyvarená, premenená pod horúcou vrstvou alebo stratená do vesmíru. Záporné, kým more mizne, kladné, kým sa vracia.',
     'Water below': 'Voda pod ňou',
     'There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.':
       'Pri tejto teplote niet povrchu: vzduch a voda pod ním sú jedna tekutina. Toto je jej vrch.',
