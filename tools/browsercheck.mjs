@@ -232,6 +232,127 @@ try {
   ok(menuPaint.alpha === 1, 'The open pan-speed menu has an opaque background',
     `${menuPaint.bg} on ${menuPaint.color}`);
 
+  // The Worlds and Saves menus. Everything here lives in a click handler, so a
+  // Node test can only look at the source; whether the menu actually opens,
+  // covers the panel and gets out of the way again is a browser question.
+  const menu0 = await evaluate(`(() => {
+    const hidden = document.querySelector('#menu-worlds').hidden;
+    document.querySelector('#btn-worlds').click();
+    const m = document.querySelector('#menu-worlds');
+    const r = m.getBoundingClientRect();
+    const chip = m.querySelector('[data-preset]').getBoundingClientRect();
+    return { hidden, open: !m.hidden, top: Math.round(r.top), width: Math.round(r.width),
+      expanded: document.querySelector('#btn-worlds').getAttribute('aria-expanded'),
+      chipVisible: chip.width > 0 && chip.height > 0,
+      shelfBottom: Math.round(document.querySelector('.shelf').getBoundingClientRect().bottom) };
+  })()`);
+  ok(menu0.hidden && menu0.open && menu0.expanded === 'true' && menu0.chipVisible
+    && menu0.top >= menu0.shelfBottom,
+    'The Worlds button opens a menu of presets under the shelf',
+    `${menu0.width}px wide at y=${menu0.top}, shelf ends at ${menu0.shelfBottom}`);
+
+  // Only one at a time, or the second opens underneath the first.
+  const swap = await evaluate(`(() => {
+    document.querySelector('#btn-saves').click();
+    return { worlds: !document.querySelector('#menu-worlds').hidden,
+             saves: !document.querySelector('#menu-saves').hidden,
+             slots: !!document.querySelector('#menu-saves #slots') };
+  })()`);
+  ok(!swap.worlds && swap.saves && swap.slots,
+    'Opening Saves puts Worlds away, and the slots are in it',
+    `worlds ${swap.worlds}, saves ${swap.saves}`);
+
+  const away = await evaluate(`(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const afterEsc = document.querySelector('#menu-saves').hidden;
+    document.querySelector('#btn-worlds').click();
+    document.querySelector('#menu-scrim').click();
+    const afterScrim = document.querySelector('#menu-worlds').hidden;
+    return { afterEsc, afterScrim, scrim: document.querySelector('#menu-scrim').hidden };
+  })()`);
+  ok(away.afterEsc && away.afterScrim && away.scrim,
+    'Escape and a click outside both put the menu away');
+
+  // Choosing a world closes the menu and leaves its name on the button, which
+  // is the whole reason the list can be folded away without costing anything.
+  const chose = await evaluate(`(async () => {
+    document.querySelector('#btn-worlds').click();
+    document.querySelector('[data-preset="venus"]').click();
+    await new Promise((r) => setTimeout(r, 120));
+    return { hidden: document.querySelector('#menu-worlds').hidden,
+             shelf: document.querySelector('#shelf-world').textContent,
+             body: __app.sim.world.params.insolation };
+  })()`);
+  ok(chose.hidden && /Venus/i.test(chose.shelf),
+    'Picking a world loads it and puts the menu away', `the button now reads "${chose.shelf}"`);
+
+  // And the point of the whole arrangement: the sliders start above the fold
+  // instead of below 782px of world list.
+  const fold = await evaluate(`(() => {
+    const r = document.querySelector('#sliders-body').getBoundingClientRect();
+    return { top: Math.round(r.top), h: window.innerHeight };
+  })()`);
+  ok(fold.top < fold.h * 0.5, 'The first climate slider is above the fold',
+    `at ${fold.top}px of ${fold.h}`);
+
+  // The cross-section, and the state it was getting wrong. A Buried Ocean is a
+  // hot lid on cold liquid water; the readout drew the lid, then rock, and left
+  // out the ocean the state is named for. Driven here rather than in Node
+  // because it is the rendered stack that was wrong, not the numbers behind it.
+  //
+  // The clock is advanced in two evaluates rather than one: a hundred million
+  // years of this world is fifteen seconds of physics, and the CDP call gives up
+  // at twenty. Nothing is rendered in between -- runYears is the model alone.
+  // From a fresh page. Loading a preset merges its parameters onto whatever is
+  // already set rather than replacing them, so a world loaded after Venus is
+  // not the world the preset describes -- it inherits every field Venus set and
+  // this one does not mention.
+  await call('Page.reload', { ignoreCache: true }, sessionId);
+  await waitFor("document.readyState === 'complete' && !!window.__app?.view");
+  await waitFor('window.__app.view.ready || window.__app.view.software', 30_000);
+  //
+  // Loading the world and running it have to be separate evaluates. loadPreset
+  // finishes asynchronously -- the real surface map arrives later and resets the
+  // simulation when it does -- so fifty million years run in the same call as
+  // the load are thrown away by that reset, and the check then reads a world
+  // fifty million years younger than it thinks. It reported a temperate Hycean
+  // and was right about the world it was looking at.
+  await evaluate(`(async () => {
+    __app.loadPreset('coldStart');
+    await new Promise((r) => setTimeout(r, 400));
+    return __app.sim.world.time;
+  })()`);
+  await evaluate('__app.sim.runYears(5e7)');
+  const stack = await evaluate(`(() => {
+    __app.sim.runYears(5e7);
+    const age = __app.sim.world.time;
+    // The readout redraws on a clock of its own -- a tenth of a second of REAL
+    // time, so that a running model does not rebuild forty tiles a frame -- and
+    // tick(0) advances that clock by nothing. Asking for the state after a
+    // hundred million years and reading a panel drawn before them is how this
+    // check first "found" a temperate Hycean sitting on a 1949 K supercritical
+    // atmosphere. Pause first, so the quarter second buys a redraw and not a
+    // different world.
+    __app.sim.paused = true;
+    __app.tick(0.25);
+    const rows = [...document.querySelectorAll('#structure .layer')].map((el) => ({
+      name: el.querySelector('.layer-name').textContent,
+      size: el.querySelector('.layer-size').textContent,
+    }));
+    return { rows, age, state: document.querySelector('.state-name .txt').textContent };
+  })()`);
+  ok(stack.age > 9.9e7, 'The cold-start world really did run its hundred million years',
+    `${(stack.age / 1e6).toFixed(0)} Myr`);
+  const kinds = stack.rows.map((r) => r.name);
+  const sea = stack.rows.find((r) => /liquid ocean|tekutý oceán/i.test(r.name));
+  ok(/buried|pochovan/i.test(stack.state) && !!sea && /km/.test(sea.size)
+    && kinds.indexOf(sea.name) === 1,
+    'A Buried Ocean draws the liquid water it is named for, under the lid',
+    `${stack.state}: ${kinds.join(' → ')}  ·  ${sea ? sea.size : 'no liquid band'}`);
+  ok(stack.rows.every((r) => /rock|hornina/i.test(r.name) || /°C/.test(r.size)),
+    'Every band of the cross-section says how hot it is',
+    stack.rows.map((r) => `${r.name}: ${r.size}`).join(' | '));
+
   // Slovak, end to end: the button, the runtime-composed banner line under the
   // state name, the canvas-drawn chart furniture and the menu's decimal comma.
   const slovak = await evaluate(`(async () => {

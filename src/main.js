@@ -10,6 +10,7 @@ import { derive, maxWaterEO } from './physics/planet.js';
 import { scaleHeight } from './render/atmosphere.js';
 import { runawayLimit, iceFraction } from './physics/radiation.js';
 import { transitRadius, waterMassFraction } from './physics/planet.js';
+import { columnLayers } from './physics/ocean.js';
 import { NBANDS, lockFactor, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
@@ -641,6 +642,21 @@ function setPresetActive(id) {
   activePreset = id;
   document.querySelectorAll('[data-preset]').forEach((b) =>
     b.classList.toggle('active', b.dataset.preset === id));
+  syncShelf();
+}
+
+// The Worlds button carries the current world's name, so folding the list away
+// does not cost you the one thing it was telling you.
+function syncShelf() {
+  const el = $('#shelf-world');
+  if (!el) return;
+  // The typed name as typed -- it is what the save slot and the export file
+  // will carry -- but a preset's own name in the language the page is in, the
+  // same way its chip is written.
+  const typed = (worldName ?? '').trim();
+  el.textContent = typed
+    || (activePreset && (tx('presets', activePreset) || PRESETS[activePreset]?.name))
+    || t('Custom world');
 }
 
 // ---------------------------------------------------------------------------
@@ -663,6 +679,7 @@ function setWorldName(v, { toField = true } = {}) {
   if (el && toField) el.value = worldName ?? '';
   if (el) el.placeholder = PRESETS[activePreset]?.name || 'Custom world';
   syncSlots();
+  syncShelf();
 }
 // Which real world, if any, this preset is. Geography is not a function of
 // climate: warming Earth does not move its continents, so the map stays put
@@ -878,7 +895,14 @@ function stat(k, v, cls = '', tip = '') {
 // span from Earth's 8 km of air to a Hycean's 250 km of ice is three orders of
 // magnitude and a linear column would render most layers as nothing. Every
 // visible band therefore carries its own depth as text: the picture gives the
-// order and the proportion, the label gives the number.
+// order and the proportion, the label gives the number -- and its temperature
+// beside it, because a descent whose whole subject is what it is like down
+// there was printing every depth and no conditions.
+//
+// The stack itself is `columnLayers` in physics/ocean.js. It is there rather
+// than here so that the self-test can read it: a band that is missing, or drawn
+// at an invented thickness, is a claim about the world and belongs where claims
+// about the world are checked.
 const LAYER_STYLE = {
   envelope:      ['#6f8fc7', 'hydrogen envelope'],
   air:           ['#8fb8e0', 'atmosphere'],
@@ -894,51 +918,14 @@ const LAYER_STYLE = {
 function drawStructure(w, d, dg) {
   const host = $('#structure');
   if (!host) return;
-  const ob = dg.oceanBase || {};
+  // How deep the sky looks. The transit extent is the right number when there
+  // is an envelope -- it is what the readout prints as "with envelope" -- but it
+  // collapses to nothing on a rocky world, and drawing Earth with no atmosphere
+  // at all would be a worse lie than drawing it thin. So it is whichever is
+  // larger: what a transit would see, or the five scale heights the renderer
+  // already treats as the visible depth of the sky.
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
-  const layers = [];
-  const add = (kind, metres, note) => {
-    if (metres > 0) layers.push({ kind, metres, note });
-  };
-
-  // Air first. The transit extent is the right number when there is an envelope
-  // -- it is what the readout prints as "with envelope" -- but it collapses to
-  // nothing on a rocky world, and drawing Earth with no atmosphere at all would
-  // be a worse lie than drawing it thin. So the band is whichever is larger:
-  // what a transit would see, or the five scale heights the renderer already
-  // treats as the visible depth of the sky.
-  const airThick = Math.max(rTr - d.R, 5 * scaleHeight(dg));
-  const envShare = (dg.pH2 ?? 0) + (dg.pHe ?? 0);
-  // pTot is per-band and a typed array, so Array.isArray does not see it.
-  const pRaw = dg.pTot;
-  const pTot = (pRaw != null && typeof pRaw.length === 'number') ? (pRaw[0] ?? 0) : (pRaw ?? 0);
-  add(envShare > 0.5 * pTot ? 'envelope' : 'air', airThick || 1,
-    `${pTot >= 1 ? pTot.toFixed(0) : pTot.toFixed(3)} bar`);
-
-  // Then the water column, in whatever phases it is actually in.
-  if (ob.basePhase === 'supercritical') {
-    add('supercritical', Math.max(ob.depth, 1e5), 'no surface');
-  } else {
-    // A cold-started world converts from the top down, and `hotLayer` is how
-    // much of the column has actually gone over rather than how much wants to.
-    // That fraction, drawn, is the whole point of the Buried Ocean state.
-    const hot = clamp(dg.hotLayer ?? 0, 0, 1);
-    const liquid = ob.liquidDepth ?? 0;
-    if (hot > 0.005 && liquid > 0) {
-      add('supercritical', liquid * hot, `${(hot * 100).toFixed(0)}% converted`);
-      add('ocean', liquid * (1 - hot), 'still liquid');
-    } else {
-      const ice = (w.water.seaIce ?? 0) + (w.water.landIce ?? 0);
-      const tot = ice + (w.water.ocean ?? 0);
-      if (tot > 0 && ice / tot > 0.5) add('seaice', liquid || 1000, 'frozen over');
-      else add('ocean', liquid, null);
-    }
-    if (ob.iceDepth > 0) {
-      add(ob.basePhase === 'ice VII' ? 'iceVII' : 'iceVI', ob.iceDepth,
-        `${(ob.basePressure / 1e9).toFixed(1)} GPa at the floor`);
-    }
-  }
-  add('rock', Math.max(d.R * 0.35, 1), 'silicate interior');
+  const layers = columnLayers(w, dg, Math.max(rTr - d.R, 5 * scaleHeight(dg)));
 
   // Cube-root compression, then a floor so a thin layer is still a band.
   const H = 210, PAD = 2;
@@ -951,14 +938,27 @@ function drawStructure(w, d, dg) {
   const fmt = (m) => (m >= 1e6 ? `${(m / 1000).toFixed(0)} km`
     : m >= 1e4 ? `${(m / 1000).toFixed(1)} km`
     : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(0)} m`);
+  // One number where the model has one, two where it has both ends of the
+  // descent -- a sea surface and the floor its adiabat reaches. Half a degree
+  // is the resolution the printed number has, so anything under that is one
+  // temperature written twice.
+  const C = (K) => (K - 273.15).toFixed(K - 273.15 >= 100 || K < 173 ? 0 : 1);
+  const temp = (T) => (!T || !T.length ? ''
+    : T.length > 1 && Math.abs(T[1] - T[0]) >= 0.5 ? `${C(T[0])} → ${C(T[1])} °C`
+    : `${C(T[0])} °C`);
 
   host.innerHTML = layers.map((l, i) => {
     const [colour, label] = LAYER_STYLE[l.kind];
     const h = px[i];
-    return `<div class="layer" style="height:${h.toFixed(1)}px;background:${colour}">`
+    const bits = [l.kind === 'rock' ? '' : fmt(l.metres), temp(l.T),
+      l.note ? tp(l.note, ...l.noteArgs) : ''].filter(Boolean);
+    // The label is what fits and the tooltip is the whole line: a 14px band on a
+    // narrow panel has room for "supercriti…" and the numbers, and the numbers
+    // are the half worth keeping whole.
+    const full = [t(label), ...bits].join(' · ').replace(/"/g, '&quot;');
+    return `<div class="layer" title="${full}" style="height:${h.toFixed(1)}px;background:${colour}">`
       + `<span class="layer-name">${t(label)}</span>`
-      + `<span class="layer-size">${l.kind === 'rock' ? '' : fmt(l.metres)}`
-      + `${l.note ? ` · ${t(l.note)}` : ''}</span></div>`;
+      + `<span class="layer-size">${bits.join(' · ')}</span></div>`;
   }).join('');
 }
 
@@ -2424,6 +2424,37 @@ function bindControls() {
   $('#panel-right').addEventListener('click', () => showPanel('right'));
   $('#panel-scrim').addEventListener('click', () => showPanel(null));
   addEventListener('keydown', (e) => { if (e.key === 'Escape') showPanel(null); });
+
+  // --- the Worlds / Saves menus --------------------------------------------
+  // They open over the panel instead of living in it. Only one at a time, and
+  // anything that completes -- picking a world, picking a slot -- puts the menu
+  // away, because a menu still covering the thing you just chose is in the way.
+  // Arming a save is NOT completing: `Save…` sits outside #slots precisely so
+  // that arming leaves the menu up for you to pick a slot into.
+  const MENUS = [['#btn-worlds', '#menu-worlds'], ['#btn-saves', '#menu-saves']];
+  const openMenu = (want) => {
+    for (const [btn, menu] of MENUS) {
+      const on = menu === want;
+      $(menu).hidden = !on;
+      $(btn).setAttribute('aria-expanded', String(on));
+    }
+    $('#menu-scrim').hidden = !want;
+    if (want) {
+      // Anchor the menu under the shelf rather than at a guessed offset: the
+      // header is a different height once the title wraps, and it wraps in
+      // Slovak at widths where it does not in English.
+      const r = $('.shelf').getBoundingClientRect();
+      const p = $('#controls').getBoundingClientRect();
+      $('#controls').style.setProperty('--shelf-bottom', `${Math.round(r.bottom - p.top + 8)}px`);
+    }
+  };
+  for (const [btn, menu] of MENUS) {
+    $(btn).addEventListener('click', () => openMenu($(menu).hidden ? menu : null));
+  }
+  $('#menu-scrim').addEventListener('click', () => openMenu(null));
+  $('#presets').addEventListener('click', () => openMenu(null));
+  $('#slots').addEventListener('click', () => openMenu(null));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') openMenu(null); });
 
   // The timebar wraps to two rows on a narrow screen, so how much room the view
   // controls have above it is not a constant. Measure it instead of guessing:

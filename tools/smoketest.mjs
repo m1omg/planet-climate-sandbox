@@ -814,5 +814,58 @@ if (created < 20) {
 }
 
 
+// The Worlds and Saves lists open as menus over the panel rather than sitting at
+// the top of its scroller, and the difference is 782px of scroll before the
+// first climate slider. The behaviour lives in a click handler, which the DOM
+// stub here never fires, so this is a source-level guard: the markup has to be
+// arranged the way the handler assumes, and the handler has to exist.
+{
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const between = (from, to) => {
+    const a = html.indexOf(from);
+    return a < 0 ? '' : html.slice(a, html.indexOf(to, a));
+  };
+  const wrong = [];
+  // The shelf lives in the panel head, not the scroller: one that scrolls away
+  // takes the only way back to the menus with it.
+  const head = between('<header class="panel-head">', '</header>');
+  if (!head.includes('id="btn-worlds"') || !head.includes('id="btn-saves"')) {
+    wrong.push('the shelf buttons are not in the panel head');
+  }
+  const scroller = between('<div class="scroller">', '<div id="menu-scrim"');
+  if (scroller.includes('id="presets"') || scroller.includes('id="slots"')) {
+    wrong.push('the lists are still in the scroller');
+  }
+  if (!between('id="menu-worlds"', '</aside>').includes('id="presets"')) {
+    wrong.push('#presets is not in #menu-worlds');
+  }
+  if (!between('id="menu-saves"', '</aside>').includes('id="slots"')) {
+    wrong.push('#slots is not in #menu-saves');
+  }
+  if (!html.includes('id="menu-scrim"')) wrong.push('no scrim to catch the click that closes them');
+  if (!src.includes('const openMenu = ')) wrong.push('main.js has no openMenu');
+  // Every way out has to close them: the scrim, choosing a world, choosing a
+  // slot, and Escape. A menu that stays up over the thing you just chose is the
+  // failure this arrangement is for.
+  for (const sel of ['#menu-scrim', '#presets', '#slots']) {
+    if (!src.includes(`$('${sel}').addEventListener('click', () => openMenu(null))`)) {
+      wrong.push(`${sel} does not close the menu`);
+    }
+  }
+  if (!src.includes("'Escape') openMenu(null)")) wrong.push('Escape does not close the menu');
+  if (!html.includes('id="shelf-world"') || !src.includes('function syncShelf')) {
+    wrong.push('the Worlds button does not carry the world name');
+  }
+  if (wrong.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  the Worlds/Saves menus are not wired up: ${wrong.join(', ')}`);
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  Worlds and Saves open as menus over the panel, and every '
+      + 'way out of them closes them');
+  }
+}
+
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);

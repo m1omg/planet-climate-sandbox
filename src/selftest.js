@@ -17,7 +17,8 @@ import { SK } from './game/sk.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
-import { oceanStructure, meltingPressure, waterDensity } from './physics/ocean.js';
+import { oceanStructure, meltingPressure, waterDensity,
+         columnLayers, T_COLD_POOL } from './physics/ocean.js';
 import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
@@ -727,6 +728,96 @@ function runChecks() {
       check('…and stops being one when the hot layer reaches the bottom',
         (dgz.hotLayer ?? 0) > 0.95 && classify(sim.world).id !== 'buriedOcean',
         `layer ${(100 * (dgz.hotLayer ?? 0)).toFixed(0)}% converted → ${classify(sim.world).id}`);
+    }
+
+    // The cross-section is the only place a player can see that a Buried Ocean
+    // has an ocean in it, and it drew the opposite. `oceanStructure` decides the
+    // whole column from the SURFACE, so past the critical point it returns "no
+    // surface" and no depths at all -- correct for a world that has finished
+    // converting, and a flat contradiction of the state's own definition for one
+    // part-way through it. Measured on the path below: 489 Earth-oceans of
+    // liquid water in the reservoir, `hotLayer` 0.7% converted, and a readout
+    // showing a hundred kilometres of supercritical fluid standing on rock.
+    // `coldPool` is that water, and the band is the whole point of the state.
+    {
+      const sim = new Simulation({ ...PRESETS.hycean.params, water: 500,
+        insolation: 3, startT: 290 });
+      let found = null;
+      for (const yrs of [1e4, 1e5, 1e6, 1e7]) {
+        sim.runYears(yrs - sim.world.time);
+        if (classify(sim.world).id === 'buriedOcean') { found = sim.world; break; }
+      }
+      const dgb = found && found.diag;
+      const cp = dgb && dgb.coldPool;
+      const layers = found ? columnLayers(found, dgb, 5 * scaleHeight(dgb)) : [];
+      const kinds = layers.map((l) => l.kind);
+      const liquid = layers.find((l) => l.kind === 'ocean');
+      check('A buried ocean is drawn with the liquid water it is named for',
+        !!cp && cp.liquidDepth > 1e3 && !!liquid && liquid.metres > 1e3,
+        found ? `${((cp && cp.liquidDepth || 0) / 1000).toFixed(0)} km of liquid under the lid, `
+          + `standing on ${cp && cp.basePhase}` : 'no path reached buriedOcean');
+      check('…with the hot lid above it rather than instead of it',
+        kinds.indexOf('supercritical') === 0 && kinds.indexOf('ocean') === 1,
+        kinds.join(' → '));
+    }
+
+    // ...and the opposite case, because a band that appears whatever the world
+    // is doing is not evidence of anything. Once the conversion finishes there
+    // is no cold water left and no liquid band to draw, and the fluid really
+    // does run from the top of the air to the rock.
+    {
+      const sim = new Simulation({ ...PRESETS.hycean.params, water: 60,
+        insolation: 3, startT: 290 });
+      sim.runYears(1e8);
+      const dgf = sim.world.diag;
+      const kinds = columnLayers(sim.world, dgf, 5 * scaleHeight(dgf)).map((l) => l.kind);
+      check('…and nothing liquid is drawn once the lid reaches the bottom',
+        (dgf.hotLayer ?? 0) > 0.95 && !kinds.includes('ocean'),
+        `${(100 * (dgf.hotLayer ?? 0)).toFixed(0)}% converted: ${kinds.join(' → ')}`);
+    }
+
+    // Every band says how hot it is. A cross-section is a descent, and the one
+    // question a descent answers is what it is like down there: an ocean floor
+    // that is thirty kelvin warmer than the sea surface, an ice VII layer at the
+    // temperature its melting curve puts it at, a lid at the surface
+    // temperature. The thicknesses were shipped without any of it.
+    {
+      const bad = [];
+      for (const id of Object.keys(PRESETS)) {
+        const sim = new Simulation({ ...PRESETS[id].params });
+        sim.runYears(1e5);
+        const dgl = sim.world.diag;
+        const layers = columnLayers(sim.world, dgl, 5 * scaleHeight(dgl));
+        for (const l of layers) {
+          if (!(l.metres > 0)) bad.push(`${id}:${l.kind} has no thickness`);
+          if (l.kind === 'rock') continue;
+          if (!Array.isArray(l.T) || !l.T.length || !l.T.every((x) => isFinite(x) && x > 0)) {
+            bad.push(`${id}:${l.kind} has no temperature`);
+          }
+        }
+        if (layers[layers.length - 1].kind !== 'rock') bad.push(`${id}: does not end on rock`);
+      }
+      check('Every band of every cross-section carries a thickness and a temperature',
+        bad.length === 0, bad.length ? bad.slice(0, 4).join(' · ')
+          : `${Object.keys(PRESETS).length} presets, every band`);
+    }
+
+    // Earth's own column, because the general check above would pass on a
+    // constant. The floor of a 3.9 km ocean is warmer than its surface by the
+    // adiabat and by a knowable amount, and the air above it is at the
+    // temperature the headline number prints.
+    {
+      const sim = new Simulation({ ...PRESETS.earth.params });
+      sim.runYears(1e5);
+      const dge = sim.world.diag;
+      const layers = columnLayers(sim.world, dge, 5 * scaleHeight(dge));
+      const air = layers[0], sea = layers.find((l) => l.kind === 'ocean');
+      check('Earth reads air → ocean → rock, and its sea floor is the warmer end',
+        layers.map((l) => l.kind).join() === 'air,ocean,rock'
+          && Math.abs(air.T[0] - dge.Tmean) < 1e-9
+          && sea.T[1] > sea.T[0] && sea.T[1] - sea.T[0] < 5,
+        `${layers.map((l) => l.kind).join(' → ')}; sea ${(sea.T[0] - 273.15).toFixed(1)} `
+          + `→ ${(sea.T[1] - 273.15).toFixed(1)} °C`);
     }
 
     // An ice floor throttles what volcanism delivers to the air; it does not

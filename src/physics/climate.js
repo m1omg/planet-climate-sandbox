@@ -3,7 +3,7 @@ import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_
 import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
-import { oceanStructure } from './ocean.js';
+import { oceanStructure, coldPoolStructure } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
 
 import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN } from './volatiles.js';
@@ -615,11 +615,21 @@ export function update(w, dt) {
   // number nobody had asked for. Computed here, it costs that only when read,
   // and once per update at most.
   let oceanBaseCache = null;
+  let coldPoolCache = null;
   w.diag = {
     get oceanBase() {
       return oceanBaseCache ?? (oceanBaseCache = oceanStructure(
         (w.water.ocean + w.water.seaIce) * d.eoColumn / Math.max(this.flooded, 1e-3),
         this.g, this.Tmean, this.pTotMean));
+    },
+    // The cold water under a supercritical lid, and null whenever there is a sea
+    // surface -- with one, `oceanBase` IS the ocean and a second answer about
+    // the same water could only disagree with the first. Lazy for the same
+    // reason as oceanBase: it costs a bisection and two integrations, nothing in
+    // the physics reads it, and the readout looks once a frame.
+    get coldPool() {
+      if (this.oceanBase.basePhase !== 'supercritical') return null;
+      return coldPoolCache ?? (coldPoolCache = coldPoolStructure(this));
     },
     g, d, pN2, pCO2, pCH4, pO2, pH2, pHe, pH2O, pTot: pTotArr, pTotMean, Fint,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,

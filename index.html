@@ -43,33 +43,25 @@
   <aside id="controls" class="panel">
     <header class="panel-head">
       <h1>Planet Climate<span>Sandbox</span></h1>
+      <!-- Worlds and Saves fold into menus instead of sitting at the top of the
+           scroller. Measured on this build: the two of them cost 782px and put
+           the first climate slider below the fold on every screen it was tried
+           on, a 1512px laptop included, so the panel opened on the two things
+           you use once and pushed away the sliders you came for. The shelf
+           lives in the head rather than the scroller so it cannot scroll away,
+           and the Worlds button carries the current world's name so folding the
+           list away costs nothing it was telling you. -->
+      <div class="shelf">
+        <button type="button" id="btn-worlds" class="shelf-btn" aria-expanded="false"
+          aria-controls="menu-worlds" title="Pick a world to start from, and name it">
+          <span aria-hidden="true">🌍</span> Worlds <b id="shelf-world">Earth</b></button>
+        <button type="button" id="btn-saves" class="shelf-btn" aria-expanded="false"
+          aria-controls="menu-saves" title="Save slots, import and export">
+          <span aria-hidden="true">💾</span> Saves</button>
+      </div>
     </header>
 
     <div class="scroller">
-      <section class="group">
-        <h2>Worlds <small>presets — click one to load it</small></h2>
-        <div id="presets" class="chip-row"></div>
-      </section>
-
-      <section class="group">
-        <h2>Saves</h2>
-        <label class="name-row" for="world-name">
-          <span>Name</span>
-          <input id="world-name" type="text" maxlength="40" autocomplete="off"
-                 spellcheck="false" placeholder="Custom world"
-                 title="What to call this world. It goes into the save slots, the export file and the log line when you load it. Loading a preset puts its own name back.">
-        </label>
-        <div id="slots" class="slot-row"></div>
-        <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
-          class="supply-btn">Save…</button> then pick a slot to overwrite. Slot 1 keeps itself.<br>
-          <button type="button" id="btn-saves-export" class="supply-btn"
-            title="Every saved world in one file, to keep somewhere that is not this browser">Export all…</button>
-          <button type="button" id="btn-saves-import" class="supply-btn"
-            title="Merge a saves file in. Slots the file does not mention are left alone.">Import…</button>
-          <input type="file" id="saves-file" accept="application/json,.json" hidden>
-          <br>A single world also travels in the address bar — copy the URL.</div>
-      </section>
-
       <p class="panel-note">Every control is live. Change one mid-run and the planet keeps its
       current temperature, ice and history — you are intervening on a running world, not restarting
       it. The four highlighted below also move on their own as the simulation evolves them.
@@ -95,6 +87,40 @@
         <h2>Surface &amp; Interior</h2>
         <div id="sliders-surface"></div>
       </section>
+    </div>
+
+    <!-- The menus are siblings of .scroller, not children: a child would be
+         clipped by the scroller's own overflow and would scroll away underneath
+         the button that opened it. -->
+    <div id="menu-scrim" hidden></div>
+
+    <div class="menu" id="menu-worlds" hidden>
+      <section class="group">
+        <h2>Worlds <small>presets — click one to load it</small></h2>
+        <div id="presets" class="chip-row"></div>
+      </section>
+    </div>
+
+    <div class="menu" id="menu-saves" hidden>
+      <section class="group">
+        <h2>Saves</h2>
+        <label class="name-row" for="world-name">
+          <span>Name</span>
+          <input id="world-name" type="text" maxlength="40" autocomplete="off"
+                 spellcheck="false" placeholder="Custom world"
+                 title="What to call this world. It goes into the save slots, the export file and the log line when you load it. Loading a preset puts its own name back.">
+        </label>
+        <div id="slots" class="slot-row"></div>
+        <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
+          class="supply-btn">Save…</button> then pick a slot to overwrite. Slot 1 keeps itself.<br>
+          <button type="button" id="btn-saves-export" class="supply-btn"
+            title="Every saved world in one file, to keep somewhere that is not this browser">Export all…</button>
+          <button type="button" id="btn-saves-import" class="supply-btn"
+            title="Merge a saves file in. Slots the file does not mention are left alone.">Import…</button>
+          <input type="file" id="saves-file" accept="application/json,.json" hidden>
+          <br>A single world also travels in the address bar — copy the URL.</div>
+      </section>
+
     </div>
   </aside>
 

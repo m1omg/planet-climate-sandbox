@@ -11,8 +11,8 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 341 physics, coverage, determinism and control checks
-node tools/calibrate.mjs        # 31 observational anchors + 8 reported known gaps
+node src/selftest.js            # 350 physics, coverage, determinism and control checks
+node tools/calibrate.mjs        # 31 observational anchors + 9 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # compiles them on a real GL driver
@@ -23,6 +23,7 @@ node tools/bodycheck.mjs        # do the real surface maps reach both surface st
 node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
 node tools/resumecheck.mjs      # does the tab survive being switched away from?
 node tools/identity.mjs         # every preset's whole state, to compare against before a change
+node tools/browsercheck.mjs     # drives a real headless Chrome; needs the page served
 ```
 
 Shipping is one step longer here than on the stable site, and the difference is
@@ -49,7 +50,7 @@ Verify after pushing by hash-matching a file you touched against
 status is not proof the change is out there. See `CLAUDE.md`.
 
 All twelve, before pushing — `calibrate.mjs` above all, because a change that
-fixes one anchor almost always moves three others, and the three `GAP` rows are
+fixes one anchor almost always moves three others, and its nine `GAP` rows are
 known deviations that report every run rather than failing. `identity.mjs` is the
 newest and answers the opposite question: not whether the anchors still hold, but
 whether anything moved that had no business moving. It runs every preset ten
@@ -110,10 +111,12 @@ A single power law fitted Venus and got Earth badly wrong: it made **every doubl
 the last** (7.9, 9.6, 11.4 W/m²…), which tipped the planet into a runaway at 1.8% CO₂ — an outcome
 the literature places a hundred times further out.
 
-`tools/calibrate.mjs` checks twenty-three anchors against published values in one run, and reports
-three known gaps that are deliberately not fixed — snowball deglaciation CO₂ (0.010 bar against a
-literature 0.08–0.4), snowball duration (0.22 Myr against 3–60) and the warmest a 0.35 S⊕ world can
-be forced to (+67.7 °C, where the maximum greenhouse says it should not reach 0 °C):
+`tools/calibrate.mjs` checks thirty-one anchors against published values in one run, and reports
+nine known gaps that are deliberately not fixed — among them snowball deglaciation CO₂ (0.010 bar
+against a literature 0.08–0.4), snowball duration (0.22 Myr against 3–60) and the warmest a 0.35 S⊕
+world can be forced to (+67.7 °C, where the maximum greenhouse says it should not reach 0 °C). Every
+one of them prints its own numbers on every run, and the largest are taken apart under known
+deviations below:
 
 | Anchor | Literature | Model |
 |---|---|---|
@@ -2731,6 +2734,96 @@ The scale is compressed by a cube root, since Earth's 8 km of air and a Hycean's
 ice are three orders of magnitude apart and a linear column renders most layers as nothing;
 every band therefore carries its own number. The picture gives the order, the label gives
 the depth.
+
+### The state that was named for the thing it did not draw
+
+The cross-section drew a Buried Ocean as a hundred kilometres of supercritical
+fluid standing on bare rock. The water it is named for — the cold liquid ocean
+under the hot lid — was not in the picture at all, and neither was the number
+that says how much of it there is.
+
+The cause is one early return. `oceanStructure` decides the whole column from the
+**surface**, so once the surface is past the critical point it answers "no
+surface" and hands back zeroes: no depth, no floor, no phases. That is exactly
+right for a world that has finished converting, where there is no boundary
+anywhere between the top of the air and the rock. It is a flat contradiction of
+the state for one part-way through it. Measured on the cold-start path: 489
+Earth-oceans in the reservoir, `hotLayer` 0.7% converted, and a readout drawing
+nothing under the lid. The hundred kilometres were not measured either — they
+were a `Math.max(depth, 1e5)` floor over a depth that was zero, which is to say
+an invented band standing in for a real one.
+
+So the cold pool is now solved as its own column, `coldPool`. Its mass is the
+share of the inventory the hot layer has **not** taken — the same
+`availCol · hotShare` split the vapour ceiling is built on, so there is one
+definition of how much water is up in the air rather than two that can drift
+apart. It stands under the whole weight of the atmosphere, which is why the
+pressure at its top is the surface pressure and not zero, and it freezes into
+high-pressure ice exactly as any other deep ocean does. The Cold-Start Runaway at
+100 Myr now reads:
+
+| | |
+|---|---|
+| supercritical | 1987 km · 1676 °C · no surface |
+| liquid ocean | 209.1 km · 0 → 70 °C · 82% still cold |
+| rock | silicate interior |
+
+Its temperature is an assumption and is written down as one: 273.15 K, the same
+0 °C that `hotCapacity` measures the cost of converting a kilogram of this water
+from. The model carries no separate temperature for water below the lid — its
+band temperatures are the surface's — so a second number here would be an
+invention where the energy bookkeeping already commits to one.
+
+The invented lid band is gone rather than fixed. Past the critical point the air
+and the fluid beneath it are one medium and there is no second boundary to draw,
+which is the model's own position everywhere else; the top band simply *is* the
+supercritical column, and it says so. Two self-tests hold both halves: a buried
+world has a liquid band under its lid, and a fully converted one has none.
+
+`columnLayers` — the stack itself — moved out of `main.js` and into
+`physics/ocean.js` for this. A band that is missing, or drawn at a thickness
+nobody measured, is a claim about the world, and claims about the world belong
+where they can be checked from Node rather than only seen in a browser.
+
+### How hot it is down there
+
+Every band carries its temperature now. The picture was a descent that printed
+every depth and no conditions, which leaves out the reason for looking: that
+Earth's sea floor is a degree warmer than its surface and a Hycean's is thirty,
+that the ice VI under a Hycean ocean sits at the temperature its own melting
+curve puts it at, that a lid can be at 1676 °C with liquid water at 0 °C two
+hundred kilometres beneath it.
+
+One number where the model has one, two where it has both ends of the descent:
+
+```
+atmosphere      42.5 km · 15.2 °C
+liquid ocean    3.89 km · 15.2 → 16.0 °C
+rock            silicate interior
+```
+
+Rock carries none, because nothing here models an interior temperature and a
+plausible-looking number is worse than a blank. The surface pressure came *off*
+the air band in the same edit — it is a tile of its own two rows above — because
+a line with a thickness, a temperature and a pressure on it starts eating its own
+label on a narrow panel. What is left fits at 1280px in both languages, and every
+band carries the whole line as a tooltip for when it does not.
+
+### Worlds and Saves fold into menus
+
+Ported from `/dev/`, where the same measurement was made: the two lists cost
+782px at the top of the panel and put the first climate slider at 294px only
+after they were gone. They are the two things you use once; the sliders are what
+you came for. So they are two buttons on a shelf in the panel head — which
+cannot scroll away — opening menus over the panel, one at a time, closed by the
+scrim, by Escape, or by choosing something. The Worlds button carries the current
+world's name, in the language the page is in, so folding the list away costs
+nothing it was telling you.
+
+The behaviour lives in a click handler, which the DOM stub in `smoketest.mjs`
+never fires, so it is held at both ends: a source-level guard that the markup is
+arranged the way the handler assumes, and four checks in `browsercheck.mjs` that
+drive a real Chrome and measure where the first slider actually lands.
 
 ## Known deviations from the literature
 
