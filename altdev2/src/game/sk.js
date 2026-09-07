@@ -311,6 +311,24 @@ export const SK = {
     'ice VI': 'ľad VI',
     'ice VII': 'ľad VII',
     'rock': 'hornina',
+
+    // ---- prierez planétou (Štruktúra) --------------------------------------
+    'Structure': 'Štruktúra',
+    'what you would pass through on the way down':
+      'čím by ste prechádzali smerom nadol',
+    'atmosphere': 'atmosféra',
+    'hydrogen envelope': 'vodíková obálka',
+    'steam': 'para',
+    'liquid ocean': 'tekutý oceán',
+    'silicate interior': 'silikátové vnútro',
+    'no surface': 'bez povrchu',
+    'still liquid': 'stále tekutý',
+    'frozen over': 'zamrznutý',
+    '{0}% converted': 'premenených {0} %',
+    // Kratšie ako „{0} % je stále studených“: pásmo prierezu má na úzkom paneli
+    // miesto na jeden riadok a názov vrstvy sa oň delí.
+    '{0}% still cold': 'studených {0} %',
+    '{0} GPa at the floor': '{0} GPa na dne',
     'supercritical interior': 'superkritické vnútro',
     'deep water is supercritical': 'hlbinná voda je superkritická',
     'with envelope': 's obálkou',

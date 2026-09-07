@@ -253,3 +253,110 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
     ? 'supercritical interior' : 'rock';
   return out;
 }
+
+// --- what is under a supercritical lid -------------------------------------
+//
+// `oceanStructure` decides the entire column from the surface, and past the
+// critical point that is a two-line answer: no surface, no depths, nothing to
+// report. Right for a world that has finished converting. Flatly wrong for one
+// part-way through it -- which is the whole of the Buried Ocean state, where a
+// hot isothermal lid stands on cold liquid water that has not converted yet
+// (Pierrehumbert & Furth 2023). Measured on the cold-start path: 489 Earth
+// oceans in the reservoir, `hotLayer` 0.7% converted, and a cross-section
+// drawing a hundred kilometres of supercritical fluid resting on bare rock.
+//
+// So the cold pool is solved as its own column. Its mass is the share of the
+// inventory the hot layer has NOT taken -- the same `availCol * hotShare` split
+// the vapour ceiling is built on, so there is one definition of how much water
+// is up in the air and not two that can disagree. It stands under the whole
+// weight of the atmosphere above it, which is why the pressure at its top is
+// the surface pressure rather than zero, and it freezes into high-pressure ice
+// exactly as any other deep ocean does.
+//
+// Its temperature is an assumption, and is stated as one rather than dressed up
+// as a result: T_COLD_POOL, the same 0 °C that `hotCapacity` measures the cost
+// of converting a kilogram of this water from. The model carries no separate
+// temperature for water below the lid -- its band temperatures are the
+// surface's -- so inventing a second number here would be worse than using the
+// one the energy bookkeeping already commits to.
+export const T_COLD_POOL = 273.15;
+
+export function coldPoolStructure(dg) {
+  const share = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
+  const col = Math.max((dg.totalWater ?? 0) * (dg.d?.eoColumn ?? 0) * share, 0);
+  return oceanStructure(col, dg.g, T_COLD_POOL, dg.pTotMean ?? 0);
+}
+
+// --- the cross-section, as data --------------------------------------------
+//
+// The stack the readout draws, built here rather than in the renderer so that
+// the self-test can read it. What it returns is numbers and English keys: the
+// page translates the labels and formats the depths, exactly as it does with
+// the state names `classify()` returns.
+//
+// `airThick` is passed in rather than computed. The visible depth of the sky is
+// a rendering question -- five scale heights, or what a transit would see if
+// there is an envelope -- and the shortest way for a physics module to answer it
+// is to import the renderer, which is the wrong direction.
+//
+// `T` is what the model knows about the temperature of a band: one number where
+// it has one, two where it has both ends of a descent (a sea surface and the
+// floor its adiabat reaches). Rock carries none, because nothing here models an
+// interior temperature and a plausible-looking number would be an invention.
+export function columnLayers(w, dg, airThick) {
+  const ob = dg.oceanBase || {};
+  const Ts = dg.Tmean;
+  const layers = [];
+  const add = (kind, metres, T, note, args) => {
+    if (metres > 0) layers.push({ kind, metres, T, note, noteArgs: args || [] });
+  };
+
+  const pTot = dg.pTotMean ?? 0;
+  // Past the critical point the air and the fluid under it are one medium, so
+  // the top band IS the supercritical column -- there is no second boundary to
+  // draw beneath it and no thickness to give one. A separate band was drawn
+  // there once, at a hard-coded hundred kilometres, and it was an invention on
+  // top of a contradiction: the water it claimed to show was the water the
+  // liquid band below was missing.
+  const lid = ob.basePhase === 'supercritical';
+  const envShare = (dg.pH2 ?? 0) + (dg.pHe ?? 0);
+  // No pressure on the air band: it is a tile of its own two rows above this in
+  // the readout, and the line is long enough with a thickness and a temperature
+  // on it to start losing its own label to an ellipsis on a narrow panel.
+  add(lid ? 'supercritical' : envShare > 0.5 * pTot ? 'envelope' : 'air',
+    Math.max(airThick, 1), [Ts], lid ? 'no surface' : null);
+
+  if (lid) {
+    const cp = dg.coldPool;
+    if (cp && cp.liquidDepth > 0) {
+      const cold = 100 * (1 - clamp(dg.hotLayer ?? 1, 0, 1));
+      add('ocean', cp.liquidDepth, [T_COLD_POOL, cp.baseTemperature ?? T_COLD_POOL],
+        '{0}% still cold', [cold.toFixed(0)]);
+      if (cp.iceDepth > 0) {
+        add(cp.basePhase === 'ice VII' ? 'iceVII' : 'iceVI', cp.iceDepth,
+          [cp.baseTemperature], '{0} GPa at the floor', [(cp.basePressure / 1e9).toFixed(1)]);
+      }
+    }
+  } else {
+    // A cold-started world converts from the top down, and `hotLayer` is how
+    // much of the column has actually gone over rather than how much wants to.
+    const hot = clamp(dg.hotLayer ?? 0, 0, 1);
+    const liquid = ob.liquidDepth ?? 0;
+    if (hot > 0.005 && liquid > 0) {
+      add('supercritical', liquid * hot, [Ts], '{0}% converted', [(hot * 100).toFixed(0)]);
+      add('ocean', liquid * (1 - hot), [Ts, ob.baseTemperature ?? Ts], 'still liquid');
+    } else {
+      const ice = (w.water.seaIce ?? 0) + (w.water.landIce ?? 0);
+      const tot = ice + (w.water.ocean ?? 0);
+      if (tot > 0 && ice / tot > 0.5) add('seaice', liquid || 1000, [Ts], 'frozen over');
+      else add('ocean', liquid, [Ts, ob.baseTemperature ?? Ts]);
+    }
+    if (ob.iceDepth > 0) {
+      add(ob.basePhase === 'ice VII' ? 'iceVII' : 'iceVI', ob.iceDepth,
+        [ob.baseTemperature ?? Ts], '{0} GPa at the floor',
+        [((ob.basePressure ?? 0) / 1e9).toFixed(1)]);
+    }
+  }
+  add('rock', Math.max((dg.d?.R ?? 6.371e6) * 0.35, 1), null, 'silicate interior');
+  return layers;
+}
