@@ -1,7 +1,9 @@
 import {
   clamp, smoothstep, psatH2O, psatCO2, frostPointCO2, YEAR,
   OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH, M_EARTH,
+  T_CRIT_H2O,
 } from './constants.js';
+import { T_COLD_POOL } from './ocean.js';
 import { iceFraction } from './radiation.js';
 import { nonThermalEscape, resurfacingProgress } from './evolution.js';
 import { stepLife } from './biosphere.js';
@@ -661,6 +663,33 @@ function advanceIceSheet(w, dtYears) {
 // changes. Every preset this branch inherited is in that category.
 export const MIX_EFF_DOWN = 0.02;
 
+// The temperature of the water the hot layer is eating into.
+//
+// While the world still has a sea surface, the water under it is at the surface
+// temperature -- that is what the ocean adiabat in oceanStructure is built on,
+// and it is the only temperature this model has for an ocean. Once the surface
+// goes past the critical point there is no longer a surface for it to be in
+// contact with, so the pool keeps the last one it had: nothing in this model
+// warms it, because every watt that crosses the interface is spent converting
+// water rather than heating what is left.
+//
+// That is a bound, not a claim of exactness -- the real pool warms a little as
+// the boundary descends into water that was deeper and hotter on the old
+// adiabat -- and it is a great deal closer than freezing, which is what stood
+// here before and which no water in this scenario has ever been.
+function advanceColdPool(w) {
+  const dg = w.diag;
+  // Both halves of "still has a sea surface" are needed, and the second one was
+  // learned the hard way: an area share below a half is not the same as a
+  // surface below the critical point, and a world tracked on the share alone
+  // pinned its pool at 647 K on the way through -- which is not a liquid at
+  // all, so oceanStructure answered "no surface" and the ocean vanished from
+  // the picture a second time, by a different route.
+  const seaSurface = (dg.hotTarget ?? 0) < 0.5 && dg.Tmean < T_CRIT_H2O;
+  if (seaSurface) w.coldT = Math.min(dg.Tmean, T_CRIT_H2O - 1);
+  else if (w.coldT == null) w.coldT = T_COLD_POOL;
+}
+
 function advanceHotLayer(w, dtYears) {
   const dg = w.diag;
   const target = dg.hotTarget ?? 0;
@@ -849,6 +878,7 @@ const BIO_GROW = 5000;    // yr
 
 export function stepVolatiles(w, dtYears) {
   advanceIceSheet(w, dtYears);
+  advanceColdPool(w);
   advanceHotLayer(w, dtYears);
   // Who is living here. Reads the climate, changes nothing about it -- see
   // biosphere.js for why that separation is deliberate.

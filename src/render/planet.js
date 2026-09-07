@@ -1,7 +1,7 @@
 import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
-import { atmosphereLook, cloudLook, volcanoLook } from './atmosphere.js';
+import { atmosphereLook, cloudLook, volcanoLook, surfaceHidden } from './atmosphere.js';
 import { seaLevelForLand, vegetationColor } from './terrain.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
@@ -299,7 +299,7 @@ export class PlanetView {
 
     this.u = {};
     for (const name of ['uRes', 'uTime', 'uSpin', 'uSunDir', 'uStarColor', 'uVegColor', 'uSeed',
-      'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uMagma', 'uLocked',
+      'uOceanFrac', 'uWaterCap', 'uGlaciated', 'uCloud', 'uSteam', 'uPTot', 'uCO2', 'uBareRock', 'uLocked',
       'uNightGlow', 'uCam', 'uVolcano', 'uUseTex', 'uRelief', 'uCloudDetail',
       'uAtmoThick', 'uVeil', 'uHaze', 'uZoom', 'uTilt', 'uSeaLevel', 'uBio',
       'uBodyMap', 'uBodyHeight', 'uBodyMix', 'uBodyHasHeight', 'uBodySeaLevel',
@@ -852,15 +852,26 @@ export class PlanetView {
     // with clamp(uCloud + uLocked*sub*0.35, 0, 1) -- a negative cover clamps to
     // nothing on its own, on a locked world's substellar pile-up as well.
     gl.uniform1f(this.u.uCloud, this.showClouds === false ? -1 : cloudMean);
-    // Steam is drawn through the same mask and has to go with them, or a
-    // boiling world keeps its white shroud with the clouds switched off.
-    gl.uniform1f(this.u.uSteam, this.showClouds === false ? 0 : steam);
+    // Steam is drawn through the same mask and goes with them -- a boiling world
+    // should not keep a white shroud with the clouds switched off -- except for
+    // the part of it that is not weather. Past the critical point the envelope
+    // IS the outside of the planet, with two hundred kilometres of ocean under
+    // it, and taking it away does not reveal the ground: there is no ground to
+    // reveal, and what was drawn instead was bare rock the model has buried.
+    const hidden = surfaceHidden(dg, steam);
+    gl.uniform1f(this.u.uSteam, this.showClouds === false ? steam * hidden : steam);
     gl.uniform1f(this.u.uAtmoThick, atmo.thickness);
     gl.uniform1f(this.u.uVeil, atmo.veil);
     gl.uniform1f(this.u.uHaze, atmo.haze);
     gl.uniform1f(this.u.uPTot, dg.pTotMean);
     gl.uniform1f(this.u.uCO2, co2Frac);
-    gl.uniform1f(this.u.uMagma, clamp((dg.Tmean - 1200) / 400, 0, 1));
+    // Whether there is rock to see. The shader takes the molten look from the
+    // local band temperature and always has; what it never had was a way to know
+    // that the temperature belongs to the top of a fluid envelope with liquid
+    // water under it. Sent through the slot uMagma occupied -- declared, never
+    // read, and the fragment stage is at its uniform budget.
+    gl.uniform1f(this.u.uBareRock, 1 - hidden);
+    const molten = clamp((dg.Tmean - 1200) / 400, 0, 1) * (1 - hidden);
     gl.uniform1f(this.u.uLocked, lam);
     // A gate, not a magnitude: the shader takes the brightness from the local
     // band temperature. See thermalGlow() in terrain.js.
@@ -869,7 +880,7 @@ export class PlanetView {
     // molten world: a magma ocean is already drawn as molten everywhere, and
     // painting vents onto it would be claiming a distinction that is not there.
     const volc = volcanoLook(world);
-    const notMolten = 1 - clamp((dg.Tmean - 1200) / 400, 0, 1);
+    const notMolten = 1 - molten;
     gl.uniform2f(this.u.uVolcano, volc.vents * notMolten, volc.ash * notMolten);
     // Cross-fade rather than snap, so toggling the surface style is a dissolve.
     const target = (this.wantTextures && this.texturesLoaded) ? 1 : 0;

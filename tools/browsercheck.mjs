@@ -353,6 +353,30 @@ try {
     'Every band of the cross-section says how hot it is',
     stack.rows.map((r) => `${r.name}: ${r.size}`).join(' | '));
 
+  // ...and the planet in the middle of the screen agrees with the panel. This
+  // world was drawn as a lava ball with cracks glowing through, on a planet
+  // whose own cross-section has 260 km of liquid water over that rock, and
+  // switching the clouds off took the envelope away and showed the ground.
+  const look = await evaluate(`(() => {
+    const v = __app.view;
+    const read = () => (v.software
+      ? { bare: v.lastBareRock, steam: v.lastSteam }
+      : { bare: v.gl.getUniform(v.prog, v.u.uBareRock),
+          steam: v.gl.getUniform(v.prog, v.u.uSteam) });
+    __app.tick(0.25);
+    const on = read();
+    v.showClouds = false; __app.tick(0.25);
+    const off = read();
+    v.showClouds = true; __app.tick(0.25);
+    return { on, off, T: __app.sim.world.diag.Tmean };
+  })()`);
+  ok(look.on.bare === 0 && look.T > 1150,
+    'A buried ocean is not painted as molten rock',
+    `${look.T.toFixed(0)} K, bare-rock gate ${look.on.bare}`);
+  ok(look.off.steam === 1,
+    'and hiding the clouds does not strip an envelope there is no ground under',
+    `steam ${look.on.steam} → ${look.off.steam} with the clouds off`);
+
   // Slovak, end to end: the button, the runtime-composed banner line under the
   // state name, the canvas-drawn chart furniture and the menu's decimal comma.
   const slovak = await evaluate(`(async () => {

@@ -23,7 +23,7 @@ import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
-import { atmosphereLook, cloudLook, scaleHeight } from './render/atmosphere.js';
+import { atmosphereLook, cloudLook, scaleHeight, surfaceHidden } from './render/atmosphere.js';
 import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B, vegetationColor,
          SOLAR_VEGETATION, stellarVegetation } from './render/terrain.js';
 import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE, dynamoLifetime,
@@ -800,6 +800,106 @@ function runChecks() {
       check('Every band of every cross-section carries a thickness and a temperature',
         bad.length === 0, bad.length ? bad.slice(0, 4).join(' · ')
           : `${Object.keys(PRESETS).length} presets, every band`);
+    }
+
+    // What the water under the lid is actually at. The cross-section printed
+    // 0.0 °C for it and that number was an assumption, not a measurement: the
+    // same 273.15 K `hotCapacity` costs the conversion from. Played forwards,
+    // the assumption is plainly false -- the step before this world's lid closes
+    // its ocean is 178 °C at the top and 303 °C at the floor, and one step later
+    // the readout claimed it had cooled to freezing. Water does not lose three
+    // hundred kelvin in a step; nothing carries heat out of it. So the pool
+    // keeps the temperature it had when it last had a surface.
+    {
+      // Sampled finely across the crossing, because what the pool keeps is the
+      // temperature of the LAST step that had a sea surface, and this world is
+      // warming fast enough that a megayear either side is a different number.
+      const sim = new Simulation({ ...PRESETS.coldStart.params });
+      let before = null, after = null;
+      for (let yr = 0; yr <= 1.2e8 && !after; yr += 2e5) {
+        sim.runYears(yr - sim.world.time);
+        const dgc = sim.world.diag;
+        if (classify(sim.world).id === 'buriedOcean') {
+          after = { T: dgc.Tmean, cold: dgc.coldT, cp: dgc.coldPool,
+            layers: columnLayers(sim.world, dgc, 5 * scaleHeight(dgc)) };
+        } else {
+          before = { T: dgc.Tmean, liq: dgc.oceanBase.liquidDepth,
+            floor: dgc.oceanBase.baseTemperature };
+        }
+      }
+      const sea = after && after.layers.find((l) => l.kind === 'ocean');
+      // Bracketed rather than pinned: the pool keeps the temperature of the last
+      // INTEGRATION step that had a sea surface, and this loop samples every
+      // 200 kyr, so the exact value sits somewhere between the last sample and
+      // the critical point the world was climbing towards. Anywhere in that
+      // bracket is the water's own temperature; 273.15 K is not in it.
+      check('The water under a closing lid keeps the temperature it had',
+        !!after && after.cold >= before.T - 1 && after.cold <= T_CRIT_H2O,
+        after ? `sea surface ${(before.T - 273.15).toFixed(0)} °C on the last sample with one, `
+          + `pool ${(after.cold - 273.15).toFixed(0)} °C after, `
+          + `against ${(T_CRIT_H2O - 273.15).toFixed(0)} °C critical`
+          : 'never got buried');
+
+      // ...and the column it makes is the same column, not a different world.
+      // At 273.15 K the melting curve is met at 0.9 GPa, so the same ocean that
+      // was 262 km of liquid froze into 28 km of liquid under 224 km of ice
+      // between one step and the next, and grew an ice shell out of nothing.
+      // The BAND, not just the number behind it: the first version of this took
+      // the pool's temperature from the diagnostic and drew the constant, so the
+      // cross-section still printed 0.0 °C at the top of a 553 °C column.
+      check('…and the band that is drawn says so too',
+        !!sea && Math.abs(sea.T[0] - after.cold) < 1e-9 && sea.T[1] > sea.T[0],
+        sea ? `${(sea.T[0] - 273.15).toFixed(0)} → ${(sea.T[1] - 273.15).toFixed(0)} °C drawn`
+          : 'no liquid band');
+
+      check('…so the column does not jump when it closes',
+        !!sea && sea.metres > 0.5 * before.liq && sea.metres < 2 * before.liq,
+        after ? `${(before.liq / 1000).toFixed(0)} km of liquid before, `
+          + `${(sea.metres / 1000).toFixed(0)} km after` : 'never got buried');
+    }
+
+    // High-pressure ice is named for the phase it is actually in. Ice VII is
+    // everything above 2.216 GPa (Bridgman's VI/VII point) and the band under a
+    // deep ocean routinely spans both: this world's runs 0.9 to 11 GPa, so
+    // seven eighths of it is ice VII and all of it was labelled ice VI. The
+    // label was taken from the temperature at the TOP of the band, which is the
+    // one place the ice is coldest and shallowest.
+    {
+      const sim = new Simulation({ ...PRESETS.hycean.params });
+      sim.runYears(1e5);
+      const dgi = sim.world.diag;
+      const kinds = columnLayers(sim.world, dgi, 5 * scaleHeight(dgi)).map((l) => l.kind);
+      const ob = dgi.oceanBase;
+      const crosses = ob.iceDepth > 0 && ob.basePressure > 2.216e9 && ob.pMelt < 2.216e9;
+      check('An ice band that crosses the VI/VII point is not called ice VI',
+        crosses && kinds.includes('iceHP') && !kinds.includes('iceVI')
+          && ob.baseTemperature < 355,
+        `${(ob.pMelt / 1e9).toFixed(2)} → ${(ob.basePressure / 1e9).toFixed(1)} GPa: `
+          + kinds.join(' → '));
+    }
+
+    // A world whose rock is under two hundred kilometres of water and a
+    // thousand of supercritical steam is not a lava planet, whatever the
+    // surface temperature says. The renderer took `Tmean > 1200` as molten rock
+    // and painted lava cracks onto the top of a fluid envelope; with the clouds
+    // switched off it took the envelope away too and showed bare glowing ground
+    // that the model does not have exposed.
+    {
+      const buried = new Simulation({ ...PRESETS.coldStart.params });
+      for (let yr = 0; yr <= 1.2e8 && classify(buried.world).id !== 'buriedOcean'; yr += 1e6) {
+        buried.runYears(yr - buried.world.time);
+      }
+      // Against a world that IS molten rock in the open: 1652 K, no water at all,
+      // so nothing is hiding it and it must keep every lava crack it ever had.
+      // The melt itself comes from the band temperature in both renderers; this
+      // is the gate multiplying it.
+      const dry = new Simulation({ ...PRESETS.venus.params, water: 0, insolation: 50 });
+      dry.runYears(1e7);
+      const hidden = surfaceHidden(buried.world.diag), bare = surfaceHidden(dry.world.diag);
+      check('Rock under an ocean of steam is hidden; molten rock in the open is not',
+        hidden > 0.9 && bare < 0.02 && dry.world.diag.Tmean > 1500,
+        `buried ocean ${hidden.toFixed(2)}; ${(dry.world.diag.Tmean - 273.15).toFixed(0)} °C `
+          + `magma world ${bare.toFixed(2)}`);
     }
 
     // Earth's own column, because the general check above would pass on a

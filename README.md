@@ -2785,6 +2785,105 @@ world has a liquid band under its lid, and a fully converted one has none.
 nobody measured, is a claim about the world, and claims about the world belong
 where they can be checked from Node rather than only seen in a browser.
 
+### The pool was not at freezing, and it was never going to be
+
+Three things wrong with the buried column, all reported from playing it, and all
+downstream of one number that was written down as an assumption and then read as
+a measurement.
+
+`coldPool` took the water under the lid to be at **273.15 K** — the same 0 °C
+`hotCapacity` charges the conversion from. Played forwards, that is plainly
+false. The Cold-Start Runaway crosses at 60 Myr, and on the last step it still
+has a sea surface that surface is at **373 °C**, with an ocean floor at 554 °C
+under 267 km of water. One step later the readout claimed the same water was at
+freezing. Nothing carries three hundred kelvin out of an ocean in a step, and
+nothing in this model even tries: every watt that crosses the interface is spent
+converting water, not cooling what is left.
+
+The rest followed from it. At 273 K the melting curve is met at 0.9 GPa, so the
+262 km ocean was drawn as **28 km of liquid under 224 km of ice VI that should
+not exist** — a hot ocean does not freeze, and this one is nowhere near the
+curve. That is the "it cools even more before the ice" the picture was showing:
+not physics, an artefact of the assumed temperature.
+
+So the pool now keeps the temperature it had. `coldT` is a state variable
+tracked in `stepVolatiles`: while the world still has a sea surface, the water
+under it is at the surface temperature — the same thing `oceanStructure`'s
+adiabat assumes everywhere else, and the only temperature this model has for an
+ocean. Once the surface goes past the critical point there is no surface left to
+be in contact with, so it keeps the last one it had. Both halves of that test are
+needed: an area share below a half is not the same as a surface below the
+critical point, and gating on the share alone pinned a pool at 647 K, which is
+not a liquid at all — `oceanStructure` answered "no surface" and the ocean
+vanished from the picture a second time by a different route.
+
+The same number goes into `hotCapacity`, because two definitions of how hot this
+water is would eventually disagree. It makes the conversion about a tenth
+cheaper on this world and moves nothing else: `identity.mjs` reports every
+preset's state vector **byte-identical**, with `diag.hotCapacity` the only line
+that changes anywhere, because on all thirty the layer is where it wants to be
+and the capacity is reported without ever being spent.
+
+What the cross-section reads now, at the same moment as before:
+
+| | |
+|---|---|
+| supercritical | 1192 km · 896 °C · no surface |
+| liquid ocean | 260.6 km · 373 → 553 °C · 98% still cold |
+| rock | silicate interior |
+
+Continuous across the crossing — 268 km of liquid before, 268 km after — where
+it used to lose 234 km of it and grow an ice shell in a single step.
+
+It is still a bound rather than a measurement, and the README says which way it
+is wrong: the real pool warms a little as the boundary descends into water that
+was deeper and hotter on the old adiabat. It is a great deal closer than
+freezing, which is a temperature no water in this scenario has ever had.
+
+### Ice VI, ice VII, and reading the label off the wrong end
+
+A floor's phase was named from the temperature at the **top** of the ice — the
+one place it is coldest and shallowest. The Hycean World's ice runs from 2.08 to
+10.94 GPa and came out as "ice VI", when Bridgman's VI/VII point is 2.216 GPa and
+everything below that depth is ice VII: 94% of the band by pressure, labelled as
+the phase it is not.
+
+Named from the pressures it spans now, and a band that crosses the point is
+called **high-pressure ice** rather than split in two. The model has exactly one
+temperature in the ice — where the water froze, at the top — and inventing a
+second to justify a second band would be a worse answer than naming the band
+honestly.
+
+### A buried ocean is not a lava planet
+
+With the clouds switched off, a Buried Ocean was drawn as glowing rock with lava
+cracks in it, on a world whose own cross-section has 260 km of liquid water and
+1200 km of supercritical steam between that rock and the sky.
+
+Two mechanisms, both of them the renderer taking a temperature at face value:
+
+* The molten look comes from `smoothstep(1150, 1500, T)` on the local band
+  temperature, in the shader and in `cpushade` alike. Nothing asked whether the
+  rock was there to see. (`uMagma` had been declared in `planet.frag` and never
+  read — the melt has always come from the band temperature — so the gate went
+  through that slot, which costs nothing on a fragment stage already at its
+  uniform budget. It is `uBareRock` now, and it says what it does.)
+* The clouds toggle zeroed the steam envelope with the cloud deck. On a world
+  with a sea and weather that is exactly right. Past the critical point the
+  envelope **is** the outside of the planet, and taking it away does not reveal
+  the ground — there is no ground to reveal, and what got drawn instead was rock
+  the model has buried under a quarter of its own radius of water.
+
+`surfaceHidden()` is the one place that decides, shared by both renderers:
+`hotTarget` — the model's own share of the surface past the critical point, the
+same one the vapour ceiling and the classifier use — times how opaque the water
+above it is. Both factors are needed. A dry magma world at 1652 K has nothing
+over it, scores zero, and keeps every lava crack it ever had; the buried world
+scores 1.00 and is drawn as what it is, an opaque fluid envelope. A world that
+has finished converting scores 1.00 too, and that is right as well: its rock is
+certainly molten, and it is certainly under four thousand kelvin of supercritical
+water you cannot see through.
+
 ### How hot it is down there
 
 Every band carries its temperature now. The picture was a descent that printed

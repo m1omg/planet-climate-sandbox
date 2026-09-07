@@ -320,6 +320,7 @@ export const SK = {
     'hydrogen envelope': 'vodíková obálka',
     'steam': 'para',
     'liquid ocean': 'tekutý oceán',
+    'high-pressure ice': 'vysokotlakový ľad',
     'silicate interior': 'silikátové vnútro',
     'no surface': 'bez povrchu',
     'still liquid': 'stále tekutý',

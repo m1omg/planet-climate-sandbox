@@ -490,5 +490,28 @@ const decomment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*
   }
 }
 
+// ...and about when a surface is molten. Both paths take the melt from the local
+// band temperature, and both have to take the same gate with it: a Buried Ocean
+// is 1400 K at the top of a fluid envelope with liquid water underneath, and
+// temperature alone painted lava cracks onto it. Two melt sites in the shader --
+// procedural and textured -- and one in cpushade; a gate missing from any of
+// them is a machine that draws a different planet.
+{
+  const frag = readFileSync(new URL('../src/render/glsl/planet.frag', import.meta.url), 'utf8');
+  const cpu = readFileSync(new URL('../src/render/cpushade.js', import.meta.url), 'utf8');
+  const sites = [...frag.matchAll(/float melt = smoothstep\(1150\.0,1500\.0,T\)([^;]*);/g)]
+    .map((m) => m[1].trim());
+  const ungated = sites.filter((tail) => !/\*\s*uBareRock/.test(tail));
+  const cpuGated = /smoothstep\(1150, 1500, T\)\s*\*\s*\(s\.bareRock/.test(cpu);
+  if (sites.length !== 2 || ungated.length || !cpuGated) {
+    failed++;
+    console.log(`\x1b[31mFAIL\x1b[0m  molten rock is not gated on the rock being visible: `
+      + `${sites.length} shader melt sites, ${ungated.length} ungated, `
+      + `cpushade ${cpuGated ? 'gated' : 'NOT gated'}`);
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  both renderers gate molten rock on the ground being exposed');
+  }
+}
+
 console.log(failed ? `\n${failed} shader problem(s)` : '\nshaders parse cleanly');
 process.exit(failed ? 1 : 0);
