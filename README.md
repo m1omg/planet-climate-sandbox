@@ -2921,6 +2921,47 @@ has finished converting scores 1.00 too, and that is right as well: its rock is
 certainly molten, and it is certainly under four thousand kelvin of supercritical
 water you cannot see through.
 
+### Which end it starts from, and the line that is not there
+
+Asked from watching a run: the supercritical layer appears at the **bottom**
+first. It does, and it should. An ocean is on an adiabat, so the hottest water
+in it is at the floor, and the floor is what reaches the critical temperature
+first. Played through the Cold-Start Runaway's crossing at 50 kyr a step:
+
+```
+59.10 Myr   235 °C surface    ocean 257 km / supercritical  11 km
+59.25 Myr   267 °C            ocean 148 km / supercritical 120 km
+59.40 Myr   305 °C            ocean  73 km / supercritical 195 km
+59.60 Myr   366 °C            ocean   6 km / supercritical 261 km
+59.70 Myr   408 °C            the surface goes over, and the lid closes on top
+```
+
+The layer eats upward for six hundred thousand years, and only then does the
+surface cross and put a lid over what is left. That is Nixon & Madhusudhan's
+third regime — "what sits between the ocean and its floor is neither liquid nor
+vapour" — arrived at from the bottom, which is the only end it can be arrived at
+from.
+
+**The edge between them is a name, not an interface**, and the band now says so.
+Above the critical *pressure* liquid and supercritical are one continuous fluid
+with no transition of any kind between them, and this crossing happens at **478
+times** the critical pressure. In this model there is not even a modelled one:
+`waterDensity()` is a function of pressure alone, so the density runs straight
+through the line. A drawn edge is a boundary the eye believes, so the band under
+an ocean carries `no boundary` beside its depth.
+
+Watching the same crossing turned up something that was not a naming question.
+`oceanBase` divides the water by the **flooded** fraction, which is the right
+question for a sea sitting in basins and the wrong one for a world whose surface
+is going supercritical: `flooded` falls to zero as the sea stops being a sea, and
+the drawn column tripled — **926 km, for a hundred thousand years, then back to
+267** — on a divisor rather than on any water moving. The picture switches to the
+global column on `hotTarget > 0.5` now, which is the same test the classifier
+names Buried Ocean on, so the column and the state change at the same moment and
+the worst excursion left is eight percent. It matters more than a tenth of a
+megayear sounds: the `ease` control exists to stretch exactly this crossing out,
+so a transient here is one the player is watching on purpose.
+
 ### How hot it is down there
 
 Every band carries its temperature now. The picture was a descent that printed

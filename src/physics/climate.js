@@ -636,7 +636,15 @@ export function update(w, dt) {
     // reason as oceanBase: it costs a bisection and two integrations, nothing in
     // the physics reads it, and the readout looks once a frame.
     get coldPool() {
-      if (this.oceanBase.basePhase !== 'supercritical') return null;
+      // Gated on the surface having gone over, which is `hotTarget > 0.5` --
+      // the same test the classifier names Buried Ocean on, so the picture and
+      // the state change at the same moment. It used to wait for oceanBase to
+      // report "supercritical", which is later: in between, oceanBase is still
+      // solving a sea confined to the shrinking flooded fraction, and dividing
+      // the water by a flooded area on its way to zero tripled the drawn column
+      // for a hundred thousand years before it snapped back.
+      if (!((this.hotTarget ?? 0) > 0.5)
+          && this.oceanBase.basePhase !== 'supercritical') return null;
       return coldPoolCache ?? (coldPoolCache = coldPoolStructure(this));
     },
     g, d, pN2, pCO2, pCH4, pO2, pH2, pHe, pH2O, pTot: pTotArr, pTotMean, Fint,
@@ -687,6 +695,32 @@ export function tendency(w) {
 
 // Largest step we may take: bounded by how fast anything is actually moving,
 // never by the frame rate. Returned in years.
+// Set how much water this world has, from the control.
+//
+// It lives here rather than in the slider handler because of what it gets
+// wrong when it is wrong. The control shows the water still PRESENT, so the
+// reservoirs are scaled to it and the record of what has already escaped is
+// left alone -- and `waterInitial`, which is what the world started with, has
+// to follow: this world has `target` now and has lost `lost`, so it started
+// with the sum. That line used to take the maximum of the old value and the new
+// one, which never came down. A 10 M⊕ planet built at 9000 EO and dialled back
+// to 500 remembered 9000 for ever, and classify()'s "has it lost almost all its
+// water" then answered yes about nine thousand oceans that were never there:
+// five hundred Earth oceans, a 226 km sea in the cross-section, and a banner
+// reading Dry Runaway Greenhouse.
+export function setWaterInventory(w, targetEO) {
+  const cur = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
+  const target = Math.max(0, targetEO);
+  if (cur > 1e-9) {
+    const f = target / cur;
+    w.water.ocean *= f; w.water.seaIce *= f; w.water.landIce *= f; w.water.vapour *= f;
+  } else {
+    w.water.ocean = target;
+  }
+  w.waterInitial = target + (w.water.lost ?? 0);
+  return w;
+}
+
 export function maxStep(w, maxDeltaT = 2.5) {
   const dg = w.diag;
   // maxStep and the step that follows it need the same tendency and the same

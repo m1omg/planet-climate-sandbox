@@ -198,6 +198,13 @@ export const SK = {
     // ---- riadok pod názvom stavu ------------------------------------------
     // Skladá ho reasonText(); prekladač doň ide ako parameter, aby fyzikálny
     // modul nemusel poznať jazyky.
+    'sky {0} °C, water {1} °C': 'obloha {0} °C, voda {1} °C',
+    'Fluid top': 'Vrch tekutiny',
+    'Water below': 'Voda pod ňou',
+    'There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.':
+      'Pri tejto teplote niet povrchu: vzduch a voda pod ním sú jedna tekutina. Toto je jej vrch.',
+    'The water the hot layer has not converted yet, at the temperature it had when it last had a surface. Nothing in this model warms it: every watt that crosses the boundary is spent converting water rather than heating what is left.':
+      'Voda, ktorú horúca vrstva ešte nepremenila, pri teplote, akú mala naposledy pri povrchu. Nič ju v tomto modeli neohrieva: každý watt, čo prejde rozhraním, sa minie na premenu vody, nie na ohrev zvyšku.',
     'mean surface {0} °C': 'priemer na povrchu {0} °C',
     'day {0} °C, night {1} °C': 'deň {0} °C, noc {1} °C',
     'equator {0} °C, poles {1} °C': 'rovník {0} °C, póly {1} °C',
@@ -323,6 +330,7 @@ export const SK = {
     'high-pressure ice': 'vysokotlakový ľad',
     'silicate interior': 'silikátové vnútro',
     'no surface': 'bez povrchu',
+    'no boundary': 'bez rozhrania',
     'still liquid': 'stále tekutý',
     'frozen over': 'zamrznutý',
     '{0}% converted': 'premenených {0} %',

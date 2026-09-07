@@ -187,7 +187,13 @@ export function classify(w) {
       ? (liquidShare > 0.02 && dg.flooded > 0.01 ? 'nightfrost' : 'nightfrozen')
       : 'marslike';
   }
-  else if (T > 470 && water < 0.06 * Math.max(initialWater, 0.05)) id = 'dryRunaway';
+  // Dry is a statement about having no water, so what it is measured against is
+  // capped at Earth's own ocean. As a bare share of the starting inventory it
+  // called a world with THIRTY Earth oceans left dry, because it started with
+  // five hundred. The floor at the other end is why Venus still qualifies: a
+  // world that began with almost nothing needs to have lost almost all of that,
+  // not six percent of a sea it never had.
+  else if (T > 470 && water < 0.06 * clamp(initialWater, 0.05, 1)) id = 'dryRunaway';
   // The Hycean group. It goes here, after dryRunaway and before wetRunaway,
   // because `T > 420` would otherwise swallow every one of them: a 400 K ocean
   // under thirty bar of hydrogen is the state this whole branch exists to
@@ -319,7 +325,17 @@ function enFormat(s, ...args) {
 export function reasonText(w, st, tr = enFormat) {
   const dg = w.diag, esc = w.escape ?? {};
   const bits = [];
-  bits.push(tr('mean surface {0} °C', (dg.Tmean - 273.15).toFixed(1)));
+  // What the number is a temperature OF. Past the critical point there is no
+  // surface -- that is the whole content of the state -- so calling 1676 °C a
+  // mean surface temperature on a world named for the water underneath it
+  // answers a question nobody asked. The sky and the water are two numbers and
+  // the banner carries both: the pool's is `coldT`, the temperature it had when
+  // it last had a surface to be in contact with.
+  const buried = dg.coldPool && dg.coldPool.liquidDepth > 0 && dg.coldT != null;
+  bits.push(buried
+    ? tr('sky {0} °C, water {1} °C', (dg.Tmean - 273.15).toFixed(0),
+      (dg.coldT - 273.15).toFixed(0))
+    : tr('mean surface {0} °C', (dg.Tmean - 273.15).toFixed(1)));
   // On a locked world the mean is a number no part of the planet has: it sits
   // between a face that never sets and one that never sees the star. The stats
   // panel already splits them; the banner is the line people actually read, and

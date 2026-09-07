@@ -104,6 +104,7 @@ body{
 .ctl-top input.val:focus{outline:none;border-color:var(--accent);background:rgba(127,212,255,.10);
   color:var(--fg);text-align:left}
 .ctl-top input.val.bad{border-color:var(--bad);color:var(--bad)}
+.ctl-sub{font:11px/1.35 var(--mono);color:var(--fg-dim);margin-top:3px;opacity:.85}
 .ctl-note{font-size:10.5px;color:var(--fg-faint);margin-top:3px}
 
 input[type=range]{
