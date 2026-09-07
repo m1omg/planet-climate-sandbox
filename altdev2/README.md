@@ -2541,7 +2541,7 @@ stable Hycean that does not exist.
 | **Hycean World** — 10 M⊕, 500 EO, 20 bar H₂, **0.10 S⊕** | 61 °C | 262 km, on ice VII | Hycean World |
 | **Low Sunlight Hycean** — 5 M⊕, 500 EO, 60 bar H₂, 0.0005 S⊕ | 84 °C | 376 km, on ice VII | Low Sunlight Hycean |
 | **Super-Runaway Waterworld** — 10 M⊕, 60 EO, 20 bar H₂, 0.03 S⊕, built at 900 K | 1073 °C | none, no surface | Supercritical Envelope |
-| **Cold-Start Waterworld** — 10 M⊕, 500 EO, 20 bar H₂, 0.094 S⊕, brightening | temperate → runaway | ocean buried under a hot lid | Hycean → **Buried Ocean** → magma |
+| **Cold-Start Runaway** — 10 M⊕, 500 EO, 20 bar H₂, 0.099 S⊕, brightening | temperate → runaway | ocean buried under a hot lid | Hycean → **Buried Ocean** → magma |
 
 The first is the Hycean argument in one preset: at **a tenth of Earth's sunlight**, where a
 rocky planet is a snowball, this one has a warm 262 km sea. It carries five hundred oceans
@@ -2641,9 +2641,9 @@ works in. Shrink the planet under a big ocean and the water comes with it.
 carried `brightening: 0`, so the one thing it existed to demonstrate could not happen. The
 first fix made it thaw, which was still the wrong story — the point of a cold start is not
 that it is cold, it is that a *condensed interior* gets driven across the runaway and then
-has to be eaten from the top down. It now runs the whole arc: **temperate ocean for 1.86
-billion years, then a crossing, then 240 million years with its ocean buried under a hot
-lid**, before the lid finally reaches the bottom.
+has to be eaten from the top down. It now runs the whole arc, and starts close enough to
+the edge to watch it: **temperate for 75 million years, then a crossing, then 295 million
+years with its ocean buried under a hot lid** before the lid reaches the bottom.
 
 **And the one that mattered: the "Cold" Hycean heated itself to 265 °C.** Not a display
 bug. Every Hycean preset inherited `outgassing: 1` from Earth, so volcanoes were pumping
@@ -2671,6 +2671,35 @@ in two things this model cannot represent separately and which both push the sam
 there is no reservoir for, and Nakayama et al. (2019) find seafloor weathering *enhanced*
 by high-pressure ice melting. `calibrate.mjs` carries it as a `GAP` with a plausibility
 range rather than an anchor, because nobody has measured it.
+
+### The other half of the ice floor, and why the water worlds crawled
+
+Reported from a tablet: the sub-Neptunes ran at a few million years a second while Earth
+managed hundreds. Per-step cost was not the problem — a Hycean step is *cheaper* than an
+Earth step. The step *size* was: Earth strode 1.5×10⁵ years at a time and the water worlds
+managed 1.2×10³, thirty to four hundred times worse.
+
+The binding constraint turned out to be the CO₂ reservoir bound, which exists so a slow
+reservoir cannot jump discontinuously. It bounds on |V − W|, volcanic supply against
+silicate weathering — and on these worlds that difference was large and **entirely
+fictional**. Sealing the volcanism through an ice floor without sealing the weathering had
+left the carbon cycle one-sided: the Cold-Start world was weathering at *three times its
+own volcanic supply* through 180 km of ice, a sink with nothing on the other end of it.
+
+Seafloor weathering is ocean water circulating through fresh basalt, so it needs a seafloor
+made of basalt. It is the same interface the volcanism crosses, seen from the other side,
+and it is sealed by the same factor. That is the whole fix, and it is physics rather than
+a tuning: **77× on the Hycean World, 410× on the Low Sunlight Hycean**, with Earth and
+Titan bit-identical because `sealFactor` is exactly 1.0 on a world whose ocean stands on
+rock.
+
+Worth recording what did *not* work, because it nearly shipped. The first attempt exempted
+a drained CO₂ reservoir from the bound directly — nothing to protect, so no bound — which
+is true and was still wrong. That bound had been doing tipping-point duty by accident: CO₂
+tracks temperature, so bounding on it stopped the solver striding over a threshold whose
+tendency at the *start* of the step was still small. Lifting it made a rocky world at the
+brink cross its own runaway, and three self-tests that had guarded that exact behaviour
+since long before this branch caught it.
 
 ### Buried Ocean, the state the machinery already had and never named
 
