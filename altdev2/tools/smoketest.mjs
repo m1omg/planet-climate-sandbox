@@ -814,6 +814,26 @@ if (created < 20) {
 }
 
 
+// A control is written from two places -- syncSliders, and syncLiveControls for
+// the four reservoirs the planet moves on its own -- and both have to write ALL
+// of it. When the second line under the water slider was added to one of them
+// only, the box tracked a world losing its ocean while the line under it kept
+// showing the inventory from whenever a slider was last touched.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const writes = [...src.matchAll(/\be\.out\.value\s*=/g)].length;
+  const inHelper = /function writeControl\(d, v\) \{[\s\S]*?e\.out\.value = d\.fmt\(v, params\);[\s\S]*?\n\}/.test(src);
+  const both = (src.match(/writeControl\(d, /g) || []).length >= 2;
+  if (writes !== 1 || !inHelper || !both) {
+    console.log(`\x1b[31mFAIL\x1b[0m  a control's value is written in ${writes} places, `
+      + `not one: syncSliders and syncLiveControls must share it`);
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  both sync paths write a control through the same function');
+  }
+}
+
 // The Worlds and Saves lists open as menus over the panel rather than sitting at
 // the top of its scroller, and the difference is 782px of scroll before the
 // first climate slider. The behaviour lives in a click handler, which the DOM
