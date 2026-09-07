@@ -405,7 +405,7 @@ function buildSliders() {
     input.addEventListener('input', () => {
       const v = Math.min(snapToDisplay(d, fromSlider(d, +input.value)), physicalMax(d));
       params[d.key] = v;
-      if (!els[d.key].editing) out.value = d.fmt(v, params);
+      if (!els[d.key].editing) writeControl(d, v);
       input.style.setProperty('--fill', `${input.value / 10}%`);
       applyParams(d.key);
     });
@@ -417,7 +417,7 @@ function buildSliders() {
     out.addEventListener('blur', () => { els[d.key].editing = false; commitTyped(d); });
     out.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); out.blur(); }
-      if (e.key === 'Escape') { els[d.key].editing = false; out.value = d.fmt(params[d.key], params); out.blur(); }
+      if (e.key === 'Escape') { els[d.key].editing = false; writeControl(d, params[d.key]); out.blur(); }
     });
   }
 
@@ -440,13 +440,13 @@ function buildSliders() {
 function commitTyped(d) {
   const e = els[d.key];
   const v = parseValue(d, e.out.value, params[d.key], params);
-  if (v === null || !isFinite(v)) { e.out.value = d.fmt(params[d.key], params); e.out.classList.remove('bad'); return; }
+  if (v === null || !isFinite(v)) { writeControl(d, params[d.key]); e.out.classList.remove('bad'); return; }
   const clamped = clamp(v, d.zero ? 0 : d.min, physicalMax(d));
   params[d.key] = clamped;
   const sPos = clamp(toSlider(d, clamped), 0, 1000);
   e.input.value = String(sPos);
   e.input.style.setProperty('--fill', `${sPos / 10}%`);
-  e.out.value = d.fmt(clamped, params);
+  writeControl(d, clamped);
   if (Math.abs(clamped - v) > Math.abs(v) * 1e-6) {
     e.out.classList.add('bad');
     setTimeout(() => e.out.classList.remove('bad'), 900);
@@ -485,19 +485,28 @@ function markStops(d) {
   }
 }
 
+// What a control says it holds: the box, and the second line under the slider
+// where one is defined. One function, because there are two paths that write a
+// control -- syncSliders and syncLiveControls -- and the water control is on
+// both: it is typed into AND moved by the planet as it loses water. Written in
+// two places, the live path updated the box and left the line under it showing
+// the inventory from whenever a slider was last touched.
+function writeControl(d, v) {
+  const e = els[d.key];
+  if (!e) return;
+  e.out.value = d.fmt(v, params);
+  if (!d.sub) return;
+  const el = $(`#sub-${d.key}`);
+  if (el) el.textContent = d.sub(v, params) || '';
+}
+
 function syncSliders() {
   for (const d of SLIDERS) {
     const e = els[d.key];
     const s = clamp(toSlider(d, params[d.key]), 0, 1000);
     e.input.value = String(s);
     e.input.style.setProperty('--fill', `${s / 10}%`);
-    e.out.value = d.fmt(params[d.key], params);
-    // The second number, where there is room for it. The box is 92px and holds
-    // the one you type; this holds the one you want to read.
-    if (d.sub) {
-      const el = $(`#sub-${d.key}`);
-      if (el) el.textContent = t(d.sub(params[d.key], params) || '');
-    }
+    writeControl(d, params[d.key]);
     markStops(d);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
@@ -550,7 +559,7 @@ function syncLiveControls() {
     const pos = clamp(toSlider(d, v), 0, 1000);
     e.input.value = String(pos);
     e.input.style.setProperty('--fill', `${pos / 10}%`);
-    e.out.value = d.fmt(v, params);
+    writeControl(d, v);
     markStops(d);
   }
 }
@@ -1203,7 +1212,7 @@ function updateReadout() {
           const pos = clamp(toSlider(e.def, v), 0, 1000);
           e.input.value = String(pos);
           e.input.style.setProperty('--fill', `${pos / 10}%`);
-          e.out.value = e.def.fmt(v, params);
+          writeControl(e.def, v);
         }
       }
     }

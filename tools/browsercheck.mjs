@@ -383,6 +383,28 @@ try {
     'and hiding the clouds does not strip an envelope there is no ground under',
     `steam ${look.on.steam} → ${look.off.steam} with the clouds off`);
 
+  // The water control after a hundred million years of a world that has been
+  // evolving its own inventory. The box carries the share of the planet's mass
+  // and the line under the slider carries the inventory, and BOTH have to be
+  // the water the world has now: the live path writes this control every frame,
+  // and when it wrote only the box the line under it kept whatever value a
+  // slider had last been touched at.
+  const wctl = await evaluate(`(() => {
+    __app.tick(0.25);
+    return { box: document.querySelector('#o-water').value,
+             sub: document.querySelector('#sub-water').textContent,
+             water: __app.sim.world.params.water,
+             mass: __app.sim.world.params.mass };
+  })()`);
+  const subEO = parseFloat(wctl.sub) * (/k EO/.test(wctl.sub) ? 1000 : 1);
+  const boxPct = parseFloat(wctl.box);
+  const wantPct = wctl.water * 1.4e21 / (wctl.mass * 5.972e24) * 100;
+  ok(Math.abs(subEO - wctl.water) / wctl.water < 0.01
+    && Math.abs(boxPct - wantPct) / wantPct < 0.02,
+    'The water control shows the water the world has now, in both numbers',
+    `box "${wctl.box}" over "${wctl.sub}" against ${wctl.water.toFixed(2)} EO `
+      + `on ${wctl.mass} M⊕ (${wantPct.toFixed(3)}%)`);
+
   // Slovak, end to end: the button, the runtime-composed banner line under the
   // state name, the canvas-drawn chart furniture and the menu's decimal comma.
   const slovak = await evaluate(`(async () => {
@@ -400,8 +422,15 @@ try {
       title: document.querySelector('#pan-speed').getAttribute('aria-label'),
     };
   })()`);
-  ok(slovak.lang === 'sk' && !/mean surface|equator|poles|imbalance/.test(slovak.reason)
-    && /priemer na povrchu/.test(slovak.reason),
+  // Either opening, because which one the line takes is a fact about the world
+  // this check happens to be looking at: a planet with a surface reads "priemer
+  // na povrchu", and one with a lid over its water reads "obloha … voda …",
+  // since calling the top of a fluid column a mean surface temperature is the
+  // thing that phrasing exists to stop. What is being checked is that neither
+  // of them is in English.
+  ok(slovak.lang === 'sk'
+    && !/mean surface|sky \d|water \d|equator|poles|imbalance/.test(slovak.reason)
+    && /priemer na povrchu|obloha .* voda /.test(slovak.reason),
     'The state banner’s subtitle is translated, not just its title', slovak.reason);
   ok(slovak.option === '0,5×' && /0,5×/.test(slovak.title || ''),
     'The pan-speed menu uses a Slovak decimal comma', `${slovak.option} · ${slovak.title}`);
