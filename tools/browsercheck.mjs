@@ -344,11 +344,17 @@ try {
   ok(stack.age > 9.9e7, 'The cold-start world really did run its hundred million years',
     `${(stack.age / 1e6).toFixed(0)} Myr`);
   const kinds = stack.rows.map((r) => r.name);
+  // Water under the lid, in whatever phase it is in: a liquid band down to the
+  // critical temperature and a supercritical one below it. What the state is
+  // named for is that the water is there, not that all of it is liquid.
   const sea = stack.rows.find((r) => /liquid ocean|tekutý oceán/i.test(r.name));
-  ok(/buried|pochovan/i.test(stack.state) && !!sea && /km/.test(sea.size)
-    && kinds.indexOf(sea.name) === 1,
-    'A Buried Ocean draws the liquid water it is named for, under the lid',
-    `${stack.state}: ${kinds.join(' → ')}  ·  ${sea ? sea.size : 'no liquid band'}`);
+  const under = stack.rows.slice(1, -1).filter((r) => /ocean|oceán|supercrit|nadkrit/i.test(r.name));
+  // Metres or kilometres: the liquid part of this pool is 700 m thick, because
+  // the water it closed over was already at the critical temperature.
+  ok(/buried|pochovan/i.test(stack.state) && !!sea && under.length >= 1
+    && under.every((r) => /\d\s*k?m\b/.test(r.size)) && kinds.indexOf(sea.name) === 1,
+    'A Buried Ocean draws the water it is named for, under the lid',
+    `${stack.state}: ${kinds.join(' → ')}  ·  ${under.map((r) => r.size).join(' + ')}`);
   ok(stack.rows.every((r) => /rock|hornina/i.test(r.name) || /°C/.test(r.size)),
     'Every band of the cross-section says how hot it is',
     stack.rows.map((r) => `${r.name}: ${r.size}`).join(' | '));

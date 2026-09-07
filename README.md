@@ -2824,21 +2824,58 @@ preset's state vector **byte-identical**, with `diag.hotCapacity` the only line
 that changes anywhere, because on all thirty the layer is where it wants to be
 and the capacity is reported without ever being spent.
 
-What the cross-section reads now, at the same moment as before:
+Continuous across the crossing — 268 km of water before, 268 km after — where
+it used to lose 234 km of it and grow an ice shell in a single step.
+
+**And it is an upper bound, which is worth stating plainly, because the number
+it replaced was a lower one.** This model has no ocean thermal inertia: an ocean
+is at its surface temperature, everywhere, by construction — `oceanStructure`
+takes one temperature and runs an adiabat down from it. So a world that heats
+gradually reaches the critical point at the surface with its whole ocean at the
+critical point, and the pool the lid closes over is the hottest water it could
+possibly be. The real one lags, by the same slow mixing across a stable interface
+that `hotLayer` already models for the boundary's motion and does not model for
+the sensible heat that crosses with it. Between a bound that is certainly too
+cold and one that is certainly too hot, this is the one that agrees with the rest
+of the model.
+
+### Nothing above 374 °C is liquid, whatever the label says
+
+Which is where the next thing reported from playing it came in: the band read
+**"liquid ocean · 373 → 554 °C"**, and above 373.95 °C water has no liquid phase
+at any pressure. That is what a critical temperature is.
+
+The solver was never confused about this — it had already called that floor
+`supercritical interior`, and the text readout has been saying "deep water is
+supercritical" for as long as the state has existed. Only the picture was, and it
+was drawing a single band straight across the phase boundary.
+
+`oceanStructure` now returns `superDepth`, the part of the fluid column below the
+point where its adiabat crosses the critical temperature. Solved in closed form
+from the adiabat it already has — Δp = K₀·(exp((T_c/T_surf − 1)/k) − 1) — rather
+than searched for. The cross-section draws the column as the phases it is in:
 
 | | |
 |---|---|
 | supercritical | 1192 km · 896 °C · no surface |
-| liquid ocean | 260.6 km · 373 → 553 °C · 98% still cold |
+| liquid ocean | 0.7 km · 373 → 374 °C · 98% not converted |
+| supercritical | 262.8 km · 374 → 554 °C |
 | rock | silicate interior |
 
-Continuous across the crossing — 268 km of liquid before, 268 km after — where
-it used to lose 234 km of it and grow an ice shell in a single step.
+Which says something about this world that no label was admitting: **the buried
+ocean is 700 metres of liquid over 263 km of supercritical fluid.** It follows
+from the paragraph above — the pool is at the critical temperature because the
+model's ocean is always at its surface temperature, so a hair of depth takes it
+over. Pierrehumbert & Furth's cold start has a *cold* liquid or ice boundary
+under the lid; this model reaches the same configuration with a hot one, and the
+missing piece is the ocean's own thermal inertia rather than anything in the
+drawing. It is reported, and the classifier still names the state from the
+reservoir — the water is condensed, and it is under a lid — which is the tension
+worth knowing about rather than papering over.
 
-It is still a bound rather than a measurement, and the README says which way it
-is wrong: the real pool warms a little as the boundary descends into water that
-was deeper and hotter on the old adiabat. It is a great deal closer than
-freezing, which is a temperature no water in this scenario has ever had.
+"still cold" went with it: that phrase was written when this water was assumed to
+be at freezing, and 373 °C is not cold by any reading. The band says what the
+number actually is — the share of the inventory the hot layer has not taken.
 
 ### Ice VI, ice VII, and reading the label off the wrong end
 
