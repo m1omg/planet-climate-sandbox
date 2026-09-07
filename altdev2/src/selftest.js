@@ -10,7 +10,7 @@ import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhite
          planetaryAlbedo, inhibitionMoleFraction, inhibitionFactor } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile,
-         createWorld, update, supercriticalShare } from './physics/climate.js';
+         createWorld, update, supercriticalShare, setWaterInventory } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { SK } from './game/sk.js';
@@ -924,6 +924,178 @@ function runChecks() {
           && cp.baseTemperature > T_CRIT_H2O,
         `${((cp.liquidDepth - cp.superDepth) / 1000).toFixed(1)} km liquid over `
           + `${(cp.superDepth / 1000).toFixed(0)} km supercritical`);
+    }
+
+    // "mean surface 1676 °C" on a world whose whole point is the water under it
+    // answers the wrong question. There is no surface up there -- that is what
+    // the state means -- and the temperature of the water is the other half of
+    // the picture, so the banner carries both.
+    {
+      const sim = new Simulation({ ...PRESETS.coldStart.params });
+      for (let yr = 0; yr <= 1.2e8; yr += 2e5) {
+        sim.runYears(yr - sim.world.time);
+        if (classify(sim.world).id === 'buriedOcean') break;
+      }
+      const line = reasonText(sim.world, classify(sim.world));
+      const dgb = sim.world.diag;
+      check('A buried ocean says how hot the water is, not just the sky',
+        /water \d+ °C/.test(line) && line.includes(`${(dgb.coldT - 273.15).toFixed(0)}`),
+        line.slice(0, 110));
+      // ...and a world with an actual surface still says "mean surface".
+      const earth = new Simulation({ ...PRESETS.earth.params });
+      earth.runYears(1e5);
+      const eline = reasonText(earth.world, classify(earth.world));
+      check('…and a world with a surface still reports one',
+        /mean surface/.test(eline) && !/water \d+ °C/.test(eline), eline.slice(0, 80));
+    }
+
+    // The water control leads with the share of the planet's mass, because that
+    // is the number that means something on a world that is not Earth-sized:
+    // five hundred oceans is 1.2% of a ten-Earth-mass planet and eleven times
+    // the mass of a one-Earth-mass one. The inventory in oceans comes second,
+    // and both have to read back -- a label the panel cannot parse is a broken
+    // control, not a display choice.
+    {
+      const d = SLIDERS.find((x) => x.key === 'water');
+      const p10 = { mass: 10 }, p1 = { mass: 1 };
+      const lab = d.fmt(500, p10), sub = d.sub(500, p10);
+      const bad = [];
+      if (!/^1\.17%$/.test(lab)) bad.push(`box reads "${lab}"`);
+      if (sub !== '500.00 EO') bad.push(`no inventory under it: "${sub}"`);
+      // Typed back: the label itself, both units, and a bare number meaning the
+      // share the box is showing. The round trip has to land on the world the
+      // label names, which is why the share carries three significant figures.
+      const cases = [[d.fmt(500, p10), p10, 500], [d.fmt(1, p1), p1, 1],
+        ['500 EO', p10, 500], ['1.17', p10, 500], ['0.0234', p1, 1]];
+      for (const [text, pp, want] of cases) {
+        const got = parseValue(d, text, 1, pp);
+        if (!(got > 0) || Math.abs(got - want) / want > 0.005) {
+          bad.push(`"${text}" → ${got === null ? 'null' : got.toFixed(3)}, wanted ${want}`);
+        }
+      }
+      check('The water control leads with mass share and reads its own label back',
+        bad.length === 0, bad.length ? bad.join(' · ')
+          : `"${lab}" over "${sub}", and five forms parse to within 0.5%`);
+    }
+
+    // "Dry Runaway Greenhouse", reported from a world with five hundred Earth
+    // oceans on it and a 226 km sea in its own cross-section. Two separate
+    // things had to go wrong for that, and both of them are here.
+    //
+    // The first: the water control ratcheted. `waterInitial` is what the world
+    // STARTED with, and setting the control to less than the world has was
+    // taking the maximum of the old value and the new one -- so a 10 M⊕ planet
+    // built at 9000 EO and then dialled down to 500 remembered 9000 for ever,
+    // and "has it lost 94% of its water" answered yes about water that was
+    // never there. Dialling the control down builds a smaller world; it does
+    // not evaporate an ocean.
+    {
+      const sim = new Simulation({ ...PRESETS.hycean.params, mass: 10, water: 9000,
+        insolation: 1.4 });
+      sim.runYears(1e3);
+      const lost = sim.world.water.lost;
+      setWaterInventory(sim.world, 500);
+      check('Dialling the water control down rebases what the world started with',
+        Math.abs(sim.world.waterInitial - (500 + lost)) < 1e-9,
+        `9000 EO built, 500 EO set, ${sim.world.waterInitial.toFixed(2)} EO on record`);
+      sim.runYears(4e4);
+      const id = classify(sim.world).id;
+      check('…and a world with five hundred oceans on it is not called dry',
+        id !== 'dryRunaway' && sim.world.diag.totalWater > 400,
+        `${id} at ${(sim.world.diag.Tmean - 273.15).toFixed(0)} °C with `
+          + `${sim.world.diag.totalWater.toFixed(0)} EO`);
+    }
+
+    // The second: "dry" was a share of what the world started with and nothing
+    // else, so six percent of five hundred oceans -- thirty of them -- counted
+    // as a dry planet. It is a statement about having no water, so the inventory
+    // it is measured against is capped at Earth's own ocean: Venus keeps the
+    // 3 mEO threshold the floor gives it, Earth keeps 0.06, and no world with a
+    // sea in it can reach either.
+    {
+      const wet = new Simulation({ ...PRESETS.superRunaway.params });
+      wet.runYears(1e6);
+      const dry = new Simulation({ ...PRESETS.venus.params });
+      dry.runYears(1e6);
+      const stillWet = classify(wet.world).id;
+      check('Dry means dry, whatever the world started with',
+        stillWet !== 'dryRunaway' && classify(dry.world).id === 'dryRunaway',
+        `${wet.world.diag.totalWater.toFixed(0)} EO → ${stillWet}; `
+          + `Venus ${dry.world.diag.totalWater.toFixed(4)} EO → ${classify(dry.world).id}`);
+    }
+
+    // Which end the supercritical layer grows from, played through the crossing.
+    // An ocean is on an adiabat, so its FLOOR is the hottest water in it and the
+    // floor reaches the critical temperature first: the supercritical layer
+    // appears at the bottom and eats upward, and only then does the surface go
+    // over and put a lid on top. That is Nixon & Madhusudhan's third regime, and
+    // it is the order the picture has to show.
+    {
+      const sim = new Simulation({ ...PRESETS.coldStart.params });
+      sim.runYears(5.9e7);
+      const seq = [];
+      for (let yr = 5.9e7; yr <= 6.0e7; yr += 5e4) {
+        sim.runYears(yr - sim.world.time);
+        const dgx = sim.world.diag;
+        const L = columnLayers(sim.world, dgx, 5 * scaleHeight(dgx));
+        const water = L.filter((l) => l.kind === 'ocean' || l.kind === 'supercritical'
+          || l.kind === 'seaice');
+        seq.push({
+          yr,
+          lid: L[0].kind === 'supercritical',
+          liquid: L.filter((l) => l.kind === 'ocean').reduce((a, l) => a + l.metres, 0),
+          deep: water.filter((l, i) => i > 0 && l.kind === 'supercritical')
+            .reduce((a, l) => a + l.metres, 0),
+          total: water.reduce((a, l) => a + l.metres, 0),
+        });
+      }
+      // Somewhere in there the deep layer is growing while the liquid above it
+      // shrinks, and the surface has not gone over yet.
+      const growing = seq.filter((r, i) => i > 0 && !r.lid && r.deep > seq[i - 1].deep
+        && r.liquid < seq[i - 1].liquid && r.liquid > 0);
+      check('The supercritical layer grows from the ocean floor upward, before any lid',
+        growing.length >= 5 && growing.every((r) => !r.lid),
+        growing.length ? `${growing.length} steps of it: `
+          + `${(growing[0].deep / 1000).toFixed(0)} km deep under `
+          + `${(growing[0].liquid / 1000).toFixed(0)} km of liquid, `
+          + `to ${(growing[growing.length - 1].deep / 1000).toFixed(0)} km under `
+          + `${(growing[growing.length - 1].liquid / 1000).toFixed(0)} km`
+          : 'never grew from below');
+
+      // ...and the column does not balloon on the way through. `oceanBase`
+      // divides the water by the FLOODED fraction, which is the right question
+      // for a sea in basins and the wrong one for a world whose surface is
+      // going supercritical: flooded → 0 as the sea stops being a sea, and the
+      // drawn column tripled to 926 km for a hundred thousand years before
+      // snapping back to 267. The `ease` control exists to stretch exactly this
+      // moment out, so a transient here is a transient you watch.
+      const settled = seq[seq.length - 1].total;
+      const worst = seq.reduce((a, r) => Math.max(a, r.total), 0);
+      check('…and the water column does not balloon on the way through',
+        worst < 1.25 * settled,
+        `worst ${(worst / 1000).toFixed(0)} km against ${(settled / 1000).toFixed(0)} km settled`);
+    }
+
+    // The line between liquid and supercritical is a name, not an interface.
+    // Above the critical PRESSURE the two are one continuous fluid with no
+    // transition of any kind between them -- this crossing happens at 478 times
+    // the critical pressure -- and in this model there is not even a modelled
+    // one: waterDensity() is a function of pressure alone, so the density runs
+    // straight through it. A band edge drawn without saying so is a boundary the
+    // player can see and the world does not have.
+    {
+      const sim = new Simulation({ ...PRESETS.coldStart.params });
+      for (let yr = 0; yr <= 1.2e8; yr += 2e5) {
+        sim.runYears(yr - sim.world.time);
+        if (classify(sim.world).id === 'buriedOcean') break;
+      }
+      const dgn = sim.world.diag;
+      const L = columnLayers(sim.world, dgn, 5 * scaleHeight(dgn));
+      const under = L.findIndex((l, i) => i > 0 && l.kind === 'supercritical'
+        && L[i - 1].kind === 'ocean');
+      check('A supercritical layer under an ocean says it is not a boundary',
+        under > 0 && L[under].note === 'no boundary',
+        under > 0 ? `${L[under].kind}: ${L[under].note}` : 'no such band');
     }
 
     // High-pressure ice is named for the phase it is actually in. Ice VII is

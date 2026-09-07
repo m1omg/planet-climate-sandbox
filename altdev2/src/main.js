@@ -11,7 +11,7 @@ import { scaleHeight } from './render/atmosphere.js';
 import { runawayLimit, iceFraction } from './physics/radiation.js';
 import { transitRadius, waterMassFraction } from './physics/planet.js';
 import { columnLayers } from './physics/ocean.js';
-import { NBANDS, lockFactor, X as BAND_X } from './physics/climate.js';
+import { NBANDS, lockFactor, setWaterInventory, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
 import { DEFAULT_PAN_SPEED, PAN_SPEEDS, wheelZoomFactor, panRadiansPerPixel } from './render/camera.js';
@@ -332,6 +332,7 @@ function buildSliders() {
       </div>
       <input id="s-${d.key}" type="range" min="0" max="1000" step="1"
              aria-label="${d.label}">
+      ${d.sub ? `<div class="ctl-sub" id="sub-${d.key}"></div>` : ''}
       ${d.note ? `<div class="ctl-note">${d.note}</div>` : ''}
       ${d.extra || ''}`;
     host.appendChild(wrap);
@@ -438,7 +439,7 @@ function buildSliders() {
 
 function commitTyped(d) {
   const e = els[d.key];
-  const v = parseValue(d, e.out.value, params[d.key]);
+  const v = parseValue(d, e.out.value, params[d.key], params);
   if (v === null || !isFinite(v)) { e.out.value = d.fmt(params[d.key], params); e.out.classList.remove('bad'); return; }
   const clamped = clamp(v, d.zero ? 0 : d.min, physicalMax(d));
   params[d.key] = clamped;
@@ -491,6 +492,12 @@ function syncSliders() {
     e.input.value = String(s);
     e.input.style.setProperty('--fill', `${s / 10}%`);
     e.out.value = d.fmt(params[d.key], params);
+    // The second number, where there is room for it. The box is 92px and holds
+    // the one you type; this holds the one you want to read.
+    if (d.sub) {
+      const el = $(`#sub-${d.key}`);
+      if (el) el.textContent = t(d.sub(params[d.key], params) || '');
+    }
     markStops(d);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
@@ -607,17 +614,10 @@ function applyParams(key) {
         toast(tp('{0} limited to {1}', t(wd.label), wd.fmt(cap, params)));
       }
     }
-    if (key === 'water') {
-      // The control shows the water still present, so set that directly and
-      // leave the record of what has already been lost to space intact.
-      const cur = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
-      const target = Math.max(0, params.water);
-      if (cur > 1e-9) {
-        const f = target / cur;
-        w.water.ocean *= f; w.water.seaIce *= f; w.water.landIce *= f; w.water.vapour *= f;
-      } else { w.water.ocean = target; }
-      w.waterInitial = Math.max(w.waterInitial ?? 0, target + w.water.lost);
-    }
+    // The control shows the water still present: setWaterInventory scales the
+    // reservoirs to it, keeps what has escaped, and rebases what the world
+    // started with. In climate.js so the self-test can drive it.
+    if (key === 'water') setWaterInventory(w, params.water);
     sim.setParams({});
   }
   setPresetActive(null);
@@ -997,8 +997,19 @@ function updateReadout() {
   // insolation would read comfortable while the ocean boiled.
   const margin = rl.flux - (dg.absorbed + dg.Fint);
 
+  // The tile calls the number what it is. On a world with a lid there is no
+  // surface for it to be the temperature of -- the cross-section says "no
+  // surface" three rows down -- so it reads as the top of the fluid, and the
+  // water under it gets a tile of its own rather than being a number you can
+  // only find by opening the structure.
+  const pool = dg.coldPool && dg.coldPool.liquidDepth > 0 && dg.coldT != null
+    ? dg.coldT : null;
   $('#stats').innerHTML =
-    stat(t('Mean surface'), `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`) +
+    stat(pool ? t('Fluid top') : t('Mean surface'),
+      `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`,
+      '', pool ? t('There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.') : '') +
+    (pool ? stat(t('Water below'), `${(pool - 273.15).toFixed(0)}<small> °C</small>`, '',
+      t('The water the hot layer has not converted yet, at the temperature it had when it last had a surface. Nothing in this model warms it: every watt that crosses the boundary is spent converting water rather than heating what is left.')) : '') +
     // On a locked world the mean is a number no part of the planet has. It sits
     // between a day side that never sets and a night side that never sees the
     // star, and on TRAPPIST-1b those are 237 °C and −186 °C -- so a mean of

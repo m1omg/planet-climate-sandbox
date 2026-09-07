@@ -356,8 +356,13 @@ export function columnLayers(w, dg, airThick) {
     const deep = Math.min(st.superDepth ?? 0, depth);
     const baseT = st.baseTemperature ?? topT;
     add('ocean', depth - deep, [topT, Math.min(baseT, T_CRIT_H2O)], note, args);
+    // Above the critical pressure -- and this crossing is at 478 times it --
+    // liquid and supercritical are one continuous fluid with no transition
+    // between them, so the band edge is where the name changes and not where
+    // anything happens. Said on the band, because a drawn line is a boundary
+    // the eye believes.
     add('supercritical', deep, [Math.max(topT, T_CRIT_H2O), baseT],
-      depth > deep ? null : note, depth > deep ? [] : args);
+      depth > deep ? 'no boundary' : note, depth > deep ? [] : args);
   };
 
   const pTot = dg.pTotMean ?? 0;
@@ -367,7 +372,10 @@ export function columnLayers(w, dg, airThick) {
   // there once, at a hard-coded hundred kilometres, and it was an invention on
   // top of a contradiction: the water it claimed to show was the water the
   // liquid band below was missing.
-  const lid = ob.basePhase === 'supercritical';
+  // "The surface has gone over": the classifier's own test rather than the
+  // ocean solver's later one, so the column the picture draws switches from the
+  // sea to the pool at the moment the state does.
+  const lid = (dg.hotTarget ?? 0) > 0.5 || ob.basePhase === 'supercritical';
   const envShare = (dg.pH2 ?? 0) + (dg.pHe ?? 0);
   // No pressure on the air band: it is a tile of its own two rows above this in
   // the readout, and the line is long enough with a thickness and a temperature

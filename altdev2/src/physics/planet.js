@@ -44,6 +44,14 @@ export function waterShareOfMass(massEarths, waterEO) {
   return waterEO * EO_MASS / (massEarths * M_EARTH);
 }
 
+// The inverse, for the control: how much water IS a given share of this
+// planet's mass. The panel leads with the share, so the share has to be a thing
+// you can type -- a label the control cannot read back is a broken control.
+export function waterForShareOfMass(massEarths, share) {
+  if (!(share > 0) || !(massEarths > 0)) return 0;
+  return share * massEarths * M_EARTH / EO_MASS;
+}
+
 // The ceiling the sub-Neptune literature actually works in: past about seventy
 // per cent water by mass there is not enough rock left to call it a planet with
 // an ocean. Madhusudhan's Hycean compositions sit well under it, and every world

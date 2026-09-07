@@ -1,7 +1,7 @@
 // Definitions of every control in the left-hand panel: range, units, how a value
 // is displayed, and how a typed value is read back. Kept free of the DOM so the
 // parsing rules can be tested on their own.
-import { waterShareOfMass } from '../physics/planet.js';
+import { waterShareOfMass, waterForShareOfMass } from '../physics/planet.js';
 const fmtBar = (v) => v >= 1 ? `${v.toFixed(v < 10 ? 2 : 0)} bar`
   : v >= 1e-3 ? `${(v * 1e3).toFixed(v * 1e3 < 10 ? 2 : 0)} mbar`
   : `${(v * 1e6).toFixed(0)} µbar`;
@@ -81,10 +81,14 @@ function waterLabel(v) {
 // other.
 function sharePct(f) {
   const pct = f * 100;
-  return pct >= 10 ? `${pct.toFixed(0)}%`
-    : pct >= 1 ? `${pct.toFixed(1)}%`
-    : pct >= 0.01 ? `${pct.toFixed(2)}%`
-    : `${pct.toExponential(1)}%`;
+  // Three significant figures, not two. This is a control's own label now, and
+  // a label that cannot be typed back to the world it names is a broken
+  // control: at two figures Earth's ocean printed "0.02%", which reads back as
+  // 0.85 EO -- fifteen per cent of an ocean lost in the rounding.
+  return pct >= 10 ? `${pct.toFixed(1)}%`
+    : pct >= 1 ? `${pct.toFixed(2)}%`
+    : pct >= 0.01 ? `${pct.toFixed(4)}%`
+    : `${pct.toExponential(2)}%`;
 }
 
 export const SLIDERS = [
@@ -116,16 +120,34 @@ export const SLIDERS = [
     // refuses anything past MAX_WATER_FRACTION for the mass currently set.
     // Second argument is the params being described, absent in contexts that
     // have no planet in hand -- then it reads as it always did.
-    fmt: (v, p) => waterLabel(v) + (p && p.mass > 0 && v > 0
-      ? ` · ${sharePct(waterShareOfMass(p.mass, v))} by mass` : ''),
+    // The share leads. An inventory in Earth oceans means nothing without the
+    // planet under it -- five hundred oceans is 1.2% of a ten-Earth-mass world
+    // and eleven times the mass of a one-Earth-mass one -- so the share of the
+    // planet's mass is the number that says what kind of world this is, and the
+    // inventory follows it. Both read back: see the '%' unit below. With no
+    // planet in hand (snapToDisplay, which round-trips the label against
+    // itself) it reads as it always did, in oceans.
+    // The box holds the share and nothing else -- it is 92px wide, and the old
+    // compound label was already being clipped at "500.00 EO ·" with the share
+    // off the end of it. The inventory in Earth oceans is the SUB line, which
+    // has the full width of the control under the slider. With no planet in
+    // hand (snapToDisplay, which round-trips the label against itself) it reads
+    // in oceans, as it always did.
+    fmt: (v, p) => (p && p.mass > 0 && v > 0
+      ? sharePct(waterShareOfMass(p.mass, v)) : waterLabel(v)),
+    sub: (v, p) => (p && p.mass > 0 && v > 0 ? waterLabel(v) : null),
     fmtBare: (v) => waterLabel(v),
     // "keo" is here because the formatter above prints one. A label the panel
     // cannot read back is not a display choice, it is a broken control: typing
     // the "1.02k EO" it had just written set 1.02 oceans, and snapToDisplay
     // then declined to snap at all, so dragging and typing disagreed by three
     // orders of magnitude. Every abbreviation fmt() invents needs its inverse.
-    units: { eo: 1, ocean: 1, oceans: 1, keo: 1000, mm: 1 / 2.75e6, m: 1 / 2750, km: 1000 / 2750 },
-    unitFor: (v) => (v > 0 && v < 1e-6 ? 'mm' : v < 1e-3 ? 'm' : 'EO'),
+    units: { eo: 1, ocean: 1, oceans: 1, keo: 1000, mm: 1 / 2.75e6, m: 1 / 2750, km: 1000 / 2750,
+      '%': (n, p) => waterForShareOfMass(p.mass, n / 100) },
+    // What a bare number means. It has to be what the box is showing, or typing
+    // back the number you can see sets something else: the box reads "0.0234%",
+    // so 0.0234 is a share and 6 EO still has to say EO.
+    unitFor: () => '%',
     note: '1 EO = one Earth ocean. Tracks what is left as the planet loses water. Past what the basins can hold — 7.3 EO on an Earth-sized world — the rest is not an ocean on the planet but a layer of it, and the planet is measurably bigger for it.' },
   { g: 'body', key: 'landFraction', label: 'Basin geometry', min: 0, max: 1,
     fmt: (v) => `${(v * 100).toFixed(0)} % high ground`, units: { '%': 0.01 }, unitFor: () => '%',
@@ -346,7 +368,12 @@ export const SLIDERS = [
 // Parse a typed value like "0.3 bar", "420ppm", "2 days", "18 %". A bare number
 // is read in whatever unit the control is currently displaying, so what you type
 // matches what you just saw.
-export function parseValue(d, raw, current) {
+// `p` is the world the value belongs to, and only one control needs it: water
+// can be typed as a share of the planet's mass, which is not a fixed multiple of
+// an Earth ocean -- it depends on the mass currently set. So a unit's value may
+// be a function (n, p) => value as well as a multiplier, and a unit that needs a
+// planet and is given none declines rather than guessing one.
+export function parseValue(d, raw, current, p) {
   let t = String(raw).trim().toLowerCase().replace(',', '.');
   if (!t) return null;
   if (t === 'none' || t === 'dead' || t === 'never' || t === '-') return 0;
@@ -369,7 +396,10 @@ export function parseValue(d, raw, current) {
       .map(([u, mult]) => [u.replace(/[⊕\s]/g, '').toLowerCase(), mult])
       .sort((a, b) => b[0].length - a[0].length);
     for (const [key, mult] of keys) {
-      if (key && (unit === key || unit.startsWith(key))) return n * mult;
+      if (!key || !(unit === key || unit.startsWith(key))) continue;
+      if (typeof mult !== 'function') return n * mult;
+      if (!p) return null;
+      return mult(n, p);
     }
   }
   return d.parseScale ? n * d.parseScale : n;   // unknown suffix: take the number
