@@ -2921,31 +2921,61 @@ has finished converting scores 1.00 too, and that is right as well: its rock is
 certainly molten, and it is certainly under four thousand kelvin of supercritical
 water you cannot see through.
 
-### Which end it starts from, and the line that is not there
+### The pool has its own temperature, and its own thermal inertia
 
-Asked from watching a run: the supercritical layer appears at the **bottom**
-first. It does, and it should. An ocean is on an adiabat, so the hottest water
-in it is at the floor, and the floor is what reaches the critical temperature
-first. Played through the Cold-Start Runaway's crossing at 50 kyr a step:
+The water under the lid was taken to be at whatever the surface was when the lid
+closed. That is an upper bound and the README said so; it is also, on any
+gradually heated world, the critical point — the surface climbs through 647 K and
+the pool is assumed to climb with it, so a "cold start" arrives with nothing cold
+in it. Drawn, that was 700 m of liquid over 260 km of supercritical fluid, which
+is not the configuration the state is named for.
+
+**An ocean heated from above is stably stratified.** That is the same difficulty
+`advanceHotLayer` already charges for moving the conversion boundary — heat has
+to be mixed down against a buoyancy gradient — so the water below now carries its
+own temperature and its own heat capacity, and only `MIX_EFF_DOWN` of the flux
+reaches it. Coming back up it overturns and gives its heat away as fast as the
+planet can radiate, the same asymmetry as the boundary.
+
+The timescale falls out of the inventory rather than being chosen. One Earth
+ocean is 76 years per kelvin against a surface that takes thousands to move by
+one — Earth's pool tracks its surface and nothing about Earth changes. Three
+hundred oceans is 23 000 years per kelvin, and such a world cannot keep up with a
+runaway at all. **That is what "retained by sheer quantity" means, and it is now
+a consequence of the water rather than an assumption about it.**
+
+The Cold-Start Runaway through its crossing, at 50 kyr a step:
 
 ```
-59.10 Myr   235 °C surface    ocean 257 km / supercritical  11 km
-59.25 Myr   267 °C            ocean 148 km / supercritical 120 km
-59.40 Myr   305 °C            ocean  73 km / supercritical 195 km
-59.60 Myr   366 °C            ocean   6 km / supercritical 261 km
-59.70 Myr   408 °C            the surface goes over, and the lid closes on top
+59.10 Myr   sky 237 °C   pool 74 °C    air 69 km / ocean 89 km / ice VII 174 km
+59.60 Myr   sky 373 °C   pool 79 °C    air 59 km / ocean 94 km / ice VII 170 km
+59.70 Myr   sky 675 °C   pool 80 °C    supercritical 83 km / ocean 94 km / ice VII 169 km
+60.50 Myr   sky 925 °C   pool 88 °C    supercritical 101 km / ocean 101 km / ice VII 161 km
 ```
 
-The layer eats upward for six hundred thousand years, and only then does the
-surface cross and put a lid over what is left. That is Nixon & Madhusudhan's
-third regime — "what sits between the ocean and its floor is neither liquid nor
-vapour" — arrived at from the bottom, which is the only end it can be arrived at
-from.
+A hot lid on cold liquid water on high-pressure ice — Pierrehumbert & Furth's
+cold start, with the cold in it.
 
-**The edge between them is a name, not an interface**, and the band now says so.
-Above the critical *pressure* liquid and supercritical are one continuous fluid
-with no transition of any kind between them, and this crossing happens at **478
-times** the critical pressure. In this model there is not even a modelled one:
+`oceanBase` is solved at the same temperature, and that is not a detail. Solved
+at the surface while the pool was solved at its own, the same water was 268 km of
+column one step and 95 km the next: one number for the water, whether you can see
+it or not. All 31 anchors hold and no preset changes state; the ice floors move,
+because a colder interior freezes shallower, and that is the point.
+
+**Which end the supercritical part arrives from depends on this.** On a column
+that is all one adiabat — a settled world, where the pool has caught up — the
+deepest water is the hottest and the supercritical region is at the bottom: the
+equilibrated super-runaway interior. On a world being heated fast the interior
+lags, the deepest water is the *coldest*, it makes ice rather than fluid, and
+what arrives is the lid from above. Both are drawn, and which one you get is a
+fact about the world's history rather than about water.
+
+### The line that is not there
+
+The edge between liquid and supercritical is a name, not an interface, and the
+band says so. Above the critical *pressure* the two are one continuous fluid with
+no transition of any kind between them, and the crossing on these worlds happens
+at hundreds of times it. In this model there is not even a modelled one:
 `waterDensity()` is a function of pressure alone, so the density runs straight
 through the line. A drawn edge is a boundary the eye believes, so the band under
 an ocean carries `no boundary` beside its depth.
@@ -2956,11 +2986,36 @@ question for a sea sitting in basins and the wrong one for a world whose surface
 is going supercritical: `flooded` falls to zero as the sea stops being a sea, and
 the drawn column tripled — **926 km, for a hundred thousand years, then back to
 267** — on a divisor rather than on any water moving. The picture switches to the
-global column on `hotTarget > 0.5` now, which is the same test the classifier
-names Buried Ocean on, so the column and the state change at the same moment and
-the worst excursion left is eight percent. It matters more than a tenth of a
-megayear sounds: the `ease` control exists to stretch exactly this crossing out,
-so a transient here is one the player is watching on purpose.
+global column on `hotTarget > 0.5` now, the same test the classifier names Buried
+Ocean on, so the column and the state change at the same moment. What is left is
+a third for one sample, and it is bounded by a check.
+
+### Magma is a claim about the ground, so it is tested on the ground
+
+`T > 1400` was the surface temperature, which on a world wearing a quarter of a
+million kilometres of water is not a statement about rock. The cold-start world
+reads **3294 °C at the top of its fluid and 467 °C at 6.9 GPa where the rock
+actually is** — solid silicate by any melting curve, with 300 km of water and ice
+between it and the sky. The test now reads the temperature at the bottom of the
+water column when there is one, and the surface when there is not. It costs a
+bisection, so it is asked only inside a branch that already knows the sky is hot
+enough for the question to arise. No preset is above 1400 K, so nothing moves.
+
+### How fast the sea is going
+
+"Water loss" is water leaving the *planet*, on a gigayear scale. Liquid water
+ceasing to be liquid is a different thing on a different clock — a moist world
+loses it to space, a runaway boils it, a buried ocean has it converted from above
+— and on the worlds where any of that is happening, the question is how long the
+sea has. One number covers all three, measured rather than derived, because the
+three mechanisms live in three different places.
+
+Measured over a window of simulated time rather than step to step: the ocean and
+the vapour trade a little back and forth every step and the adaptive controller
+can be taking tenth-of-a-year steps, so a bare difference divided by dt reported
+a **settled Earth as losing three and a third oceans per megayear**, which is
+noise over a very small number. A 1 EO world boiling at 1.9 S⊕ reads 35, then
+520, then 1430 EO/Myr through the transient, and is dry inside a thousand years.
 
 ### How hot it is down there
 

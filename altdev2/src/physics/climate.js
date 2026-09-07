@@ -1,5 +1,6 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
-         P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O } from './constants.js';
+         P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O, CP_WATER,
+} from './constants.js';
 import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
@@ -29,7 +30,7 @@ export const X = new Float64Array(NBANDS);
 export const DX = 2 / NBANDS;
 for (let i = 0; i < NBANDS; i++) X[i] = -1 + DX * (i + 0.5);
 
-const CP_WATER = 4200, RHO_WATER = 1000;
+const RHO_WATER = 1000;
 const C_LAND = 6.0e6;          // J/m^2/K, a few metres of rock
 const L_VAP = 2.4e6;           // J/kg
 const L_FUS = 3.34e5;          // J/kg, latent heat of fusion
@@ -628,7 +629,7 @@ export function update(w, dt) {
     get oceanBase() {
       return oceanBaseCache ?? (oceanBaseCache = oceanStructure(
         (w.water.ocean + w.water.seaIce) * d.eoColumn / Math.max(this.flooded, 1e-3),
-        this.g, this.Tmean, this.pTotMean));
+        this.g, w.coldT ?? this.Tmean, this.pTotMean));
     },
     // The cold water under a supercritical lid, and null whenever there is a sea
     // surface -- with one, `oceanBase` IS the ocean and a second answer about
@@ -657,6 +658,10 @@ export function update(w, dt) {
     iceSheetTarget,
     glaciatedShare,
     hotTarget, hotCapacity, hotLayer: hotShare, hotBinds, coldT: coldPoolT,
+    // Earth oceans per year, positive while the liquid is going. Written by
+    // stepVolatiles; zero on the first step of a world, before there are two
+    // states to difference.
+    liquidRate: w.liquidRate ?? 0,
     // `absorbed` stays absorbed *sunlight*; the interior is reported separately.
     // The imbalance, though, is the whole energy budget -- Settle stops when it
     // reaches zero, so leaving the interior out of it would park a tidally

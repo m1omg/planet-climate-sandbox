@@ -32,6 +32,15 @@ export const STATES = {
   airless:    { name: 'Airless Rock',         color: '#8a8a8a', blurb: 'Beyond the cosmic shoreline: stellar XUV has stripped the atmosphere faster than the planet’s gravity could hold it. No climate to speak of.' },
 };
 
+// How hot it is where the rock is: under the water if there is any, at the
+// surface if there is not. `coldPool` is the column under a lid and `oceanBase`
+// the one under a sea; either way the solver already reports the temperature at
+// the bottom of it.
+function rockTemperature(dg, surfaceT) {
+  const col = dg.coldPool && dg.coldPool.depth > 0 ? dg.coldPool : dg.oceanBase;
+  return col && col.depth > 0 && col.baseTemperature != null ? col.baseTemperature : surfaceT;
+}
+
 export function classify(w) {
   const dg = w.diag, p = w.params;
   const lam = lockFactor(p);
@@ -155,7 +164,16 @@ export function classify(w) {
   // The surface really is molten-hot; it is just not the whole planet, and the
   // water underneath is the part worth naming.
   if (buriedOcean) id = 'buriedOcean';
-  else if (T > 1400) id = 'magma';
+  // Molten rock, tested where the rock is. A surface temperature is the top of
+  // whatever the planet is wearing, and on a world with a quarter of a million
+  // kilometres of water on it that is not a statement about the ground: the
+  // cold-start world reads 3294 °C at the top of its fluid and 467 °C at
+  // 6.9 GPa where the rock actually is, which is solid silicate by any melting
+  // curve. The column's own base temperature is the number, and it costs a
+  // bisection -- so it is asked for only inside a branch that already knows the
+  // sky is hot enough to be worth asking about. A world with no water on it
+  // answers with its surface, as it always did.
+  else if (T > 1400 && rockTemperature(dg, T) > 1400) id = 'magma';
   else if (pTot < 0.0015 && water < 0.05) id = 'airless';
   // Two very different worlds share the one condition, and they were sharing a
   // name as well. On a rotating planet the air freezes onto the WINTER pole and

@@ -58,6 +58,9 @@ export function smoothstep(e0, e1, x) {
 // above the critical point (water can no longer condense at all).
 const IAPWS = [-7.85951783, 1.84408259, -11.7866497, 22.6807411, -15.9618719, 1.80122502];
 export const T_CRIT_H2O = 647.096;
+// Specific heat of liquid water. Shared, because the hot layer's conversion
+// cost and the pool's own heat capacity have to be the same number.
+export const CP_WATER = 4200;
 export const P_CRIT_H2O = 22.064e6;      // Pa, not bar
 
 // How opaque a steam envelope looks, 0 to 1. Both renderers use this, so they
