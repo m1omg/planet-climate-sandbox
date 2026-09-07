@@ -1,7 +1,7 @@
 import { bakeTerrain, bakeClouds, renderPlanet, renderSky } from './cpushade.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
-import { atmosphereLook, cloudLook, volcanoLook } from './atmosphere.js';
+import { atmosphereLook, cloudLook, volcanoLook, surfaceHidden } from './atmosphere.js';
 import { seaLevelForLand, vegetationColor } from './terrain.js';
 
 // A software renderer, used when the machine cannot give us WebGL2.
@@ -180,7 +180,13 @@ export class SoftwareView {
     const sc = SoftwareView.starColor(p.starTemp);
 
     const atmo = atmosphereLook(world, clamp(steamOpacity(pH2O), 0, 1), this.realistic);
-    const vRaw = volcanoLook(world), notMolten = 1 - clamp((dg.Tmean - 1200) / 400, 0, 1);
+    // The same two rules as the GL path, or the button and the planet would mean
+    // different things depending on the machine: molten rock only where rock is
+    // exposed, and a supercritical envelope is not weather to be switched off.
+    const steam = clamp(steamOpacity(pH2O), 0, 1);
+    const hidden = surfaceHidden(dg, steam);
+    const molten = clamp((dg.Tmean - 1200) / 400, 0, 1) * (1 - hidden);
+    const vRaw = volcanoLook(world), notMolten = 1 - molten;
     const volc = { vents: vRaw.vents * notMolten, ash: vRaw.ash * notMolten };
     renderPlanet(this.image.data, W, H, {
       atmoThick: atmo.thickness, veil: atmo.veil, haze: atmo.haze,
@@ -199,8 +205,11 @@ export class SoftwareView {
       // path, so the two renderers cannot disagree about how volcanic a world
       // looks.
       volcano: this.lastVolcano = volc.vents, ash: this.lastAsh = volc.ash,
+      // Recorded as well as passed, so the browser check can read it here the
+      // way it reads the uniform on the GL path.
+      bareRock: this.lastBareRock = 1 - hidden,
       locked: lam, cloud: this.lastCloud = this.showClouds === false ? 0 : cloud,
-      steam: this.lastSteam = this.showClouds === false ? 0 : steamOpacity(pH2O),
+      steam: this.lastSteam = this.showClouds === false ? steam * hidden : steam,
       pTot: dg.pTotMean, co2: clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1),
       // A gate, not a magnitude -- cpushade takes the brightness from the
       // local band temperature, as the GL path does. See thermalGlow().

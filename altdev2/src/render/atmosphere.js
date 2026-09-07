@@ -1,4 +1,4 @@
-import { clamp } from '../physics/constants.js';
+import { clamp, steamOpacity } from '../physics/constants.js';
 
 // How the atmosphere should look, in the two modes.
 //
@@ -60,6 +60,27 @@ export function cloudLook(coverMean, pH2Obar) {
   const humid = clamp((pH2Obar - 0.015) / (0.15 - 0.015), 0, 1);
   const thickness = humid * humid * (3 - 2 * humid);      // smoothstep
   return clamp(coverMean, 0, 1) * (0.72 + 0.28 * thickness);
+}
+
+// How completely the ground is buried under fluid rather than facing space.
+//
+// Past the critical point there is no sea surface and no sky-and-ground: the
+// water is one continuous medium from the rock to the top of the atmosphere,
+// which is the model's own position everywhere else and is what the readout
+// prints as "no surface". A renderer that ignores it paints the rock: a Buried
+// Ocean came out as a lava planet with cracks glowing through, on a world whose
+// own cross-section has two hundred kilometres of liquid water and a thousand
+// of supercritical steam between that rock and the sky.
+//
+// Two factors, and both are needed. `hotTarget` is the share of the surface
+// past the critical point -- the model's one definition of "no sea surface",
+// shared with the vapour ceiling and the classifier. `steam` is how opaque the
+// water above is, which is what stops a dry magma world from claiming to be
+// hidden: it is every bit as hot and has nothing over it, so it is drawn molten
+// as it always was.
+export function surfaceHidden(dg, steam) {
+  const wet = steam ?? steamOpacity(dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length);
+  return clamp((dg.hotTarget ?? 0) * wet, 0, 1);
 }
 
 // What volcanism looks like from orbit, from the melt production the physics

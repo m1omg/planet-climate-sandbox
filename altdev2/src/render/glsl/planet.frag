@@ -41,7 +41,9 @@ uniform float uVeil;        // 0..1 how completely the air hides the ground
 uniform float uHaze;        // 0..1 organic haze, orange and opaque
 uniform float uPTot;        // bar
 uniform float uCO2;         // 0..1 how CO2-dominated the air is
-uniform float uMagma;       // 0..1 molten surface
+uniform float uBareRock;    // 1 = the ground faces space, 0 = it is under fluid
+                            // (this slot was uMagma, declared and never read: the
+                            //  melt below has always come from the band temperature)
 uniform float uLocked;      // 0 = free rotator, 1 = tidally locked
 uniform float uZoom;        // camera distance, 1 = default framing
 uniform float uTilt;        // obliquity, radians: the spin axis leans this far
@@ -305,7 +307,10 @@ vec3 surfaceColor(vec3 sp, float T, float ice, out float shininess, out float he
   float iceMask = max(seaIceMask, sheetMask);
   shininess = mix(shininess, 0.18, iceMask);
 
-  float melt = smoothstep(1150.0,1500.0,T);
+  // Molten rock, gated on the rock being there to see. A Buried Ocean is 1400 K
+  // at the top of a fluid column with two hundred kilometres of liquid water in
+  // it, and temperature alone painted lava cracks across the sky above it.
+  float melt = smoothstep(1150.0,1500.0,T) * uBareRock;
   if(melt > 0.001){
     // The lava crust is the one field still evaluated live: it only ever runs
     // on a molten planet, and only inside this branch.
@@ -397,7 +402,7 @@ vec3 surfaceTextured(vec3 sp, float T, float ice, out float shininess, out float
   col = mix(col, tIce, smoothstep(0.06,0.52,seaIceAmt) * (1.0 - land));
   col = mix(col, tIce, smoothstep(0.06,0.52,sheetAmt) * land);
 
-  float melt = smoothstep(1150.0,1500.0,T);
+  float melt = smoothstep(1150.0,1500.0,T) * uBareRock;
   col = mix(col, tLava, melt);
 
   // Keep a little of the procedural tint so climate colour cues survive.

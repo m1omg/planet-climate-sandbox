@@ -912,6 +912,7 @@ const LAYER_STYLE = {
   seaice:        ['#cfe6f5', 'sea ice'],
   iceVI:         ['#9fc6d8', 'ice VI'],
   iceVII:        ['#7fa8bd', 'ice VII'],
+  iceHP:         ['#8bb7cb', 'high-pressure ice'],
   rock:          ['#6b5a4a', 'rock'],
 };
 

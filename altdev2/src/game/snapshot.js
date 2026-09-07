@@ -32,6 +32,7 @@ export function captureWorld(w) {
     // cold-start world as a hot-start one -- same star, same water, different
     // planet -- which is exactly the distinction it exists to carry.
     hotLayer: w.hotLayer,
+    coldT: w.coldT,
     landIceMass: w.landIceMass,
     life: w.life ? { ...w.life } : null,
     co2Frozen: w.co2Frozen,
@@ -68,6 +69,7 @@ export function applyWorld(sim, s, params = s.params) {
   w.waterInitial = s.waterInitial ?? w.waterInitial;
   w.iceSheet = s.iceSheet ?? null;
   w.hotLayer = s.hotLayer ?? null;
+  w.coldT = s.coldT ?? null;
   w.landIceMass = s.landIceMass ?? null;
   w.life = s.life ? { ...s.life } : { pro: 0, euk: 0 };
   w.co2Frozen = s.co2Frozen ?? 0;

@@ -3,7 +3,7 @@ import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_
 import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
-import { oceanStructure, coldPoolStructure } from './ocean.js';
+import { oceanStructure, coldPoolStructure, T_COLD_POOL } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
 
 import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN } from './volatiles.js';
@@ -167,6 +167,7 @@ export function resetWorld(w, params) {
   w.dtPrev = 0;
   w.iceSheet = null;   // rebuilt from the fresh state on the next update
   w.hotLayer = null;   // and so is the depth of the hot layer, from how hot this world starts
+  w.coldT = null;      // and the water under it is at whatever this world's sea was
   w.landIceMass = null;  // and so is the mass the cold trap has moved
   w.life = null;       // seeded on the first step, from whether this world has a biosphere
   // A world that starts with industry running has been running it for a while:
@@ -393,7 +394,14 @@ export function update(w, dt) {
   // being a liquid. Roughly 2 MJ/kg either way, so the two terms are the same
   // size and neither can be dropped. Per square metre of the whole inventory,
   // which is what advanceHotLayer divides the available flux by.
-  const hotCapacity = availCol * (CP_WATER * Math.max(hotTbar - 273.15, 0) + L_VAP);
+  // Measured from the water's own temperature rather than from freezing. It
+  // used to be 273.15 K flat, which is a floor and not a state: this world's
+  // ocean is 451 K at the moment its lid closes, so charging the conversion for
+  // 178 K of sensible heat that the water already has overstates the cost by
+  // about a tenth -- and, drawn, claimed a sea had lost three hundred kelvin
+  // between two steps. `coldT` is that temperature, tracked in stepVolatiles.
+  const coldPoolT = w.coldT ?? T_COLD_POOL;
+  const hotCapacity = availCol * (CP_WATER * Math.max(hotTbar - coldPoolT, 0) + L_VAP);
 
   // Demanded vapour per band, then rescaled if the planet hasn't got the water.
   //
@@ -640,7 +648,7 @@ export function update(w, dt) {
     landIceFrac: clamp((1 - flooded) * glaciatedShare, 0, 1),
     iceSheetTarget,
     glaciatedShare,
-    hotTarget, hotCapacity, hotLayer: hotShare, hotBinds,
+    hotTarget, hotCapacity, hotLayer: hotShare, hotBinds, coldT: coldPoolT,
     // `absorbed` stays absorbed *sunlight*; the interior is reported separately.
     // The imbalance, though, is the whole energy budget -- Settle stops when it
     // reaches zero, so leaving the interior out of it would park a tidally

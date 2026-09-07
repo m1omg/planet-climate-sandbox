@@ -254,6 +254,22 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   return out;
 }
 
+
+// Which high-pressure ice a floor is made of, from the PRESSURES it spans
+// rather than from the temperature at its top. Bridgman's VI/VII point is
+// 2.216 GPa, and a band under a deep ocean routinely crosses it: the Low
+// Sunlight Hycean's runs from 0.9 to 11 GPa, so seven eighths of it is ice VII
+// and all of it was labelled ice VI, because the label was read off the one
+// place the ice is coldest and shallowest. A band that crosses is named for
+// both -- the model has one temperature in the ice, the point where the water
+// froze, and inventing a second to justify splitting the band would be worse
+// than naming it honestly.
+export function iceKind(pTop, pBase) {
+  if (pBase <= P_VI_VII) return 'iceVI';
+  if (pTop >= P_VI_VII) return 'iceVII';
+  return 'iceHP';
+}
+
 // --- what is under a supercritical lid -------------------------------------
 //
 // `oceanStructure` decides the entire column from the surface, and past the
@@ -284,7 +300,7 @@ export const T_COLD_POOL = 273.15;
 export function coldPoolStructure(dg) {
   const share = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
   const col = Math.max((dg.totalWater ?? 0) * (dg.d?.eoColumn ?? 0) * share, 0);
-  return oceanStructure(col, dg.g, T_COLD_POOL, dg.pTotMean ?? 0);
+  return oceanStructure(col, dg.g, dg.coldT ?? T_COLD_POOL, dg.pTotMean ?? 0);
 }
 
 // --- the cross-section, as data --------------------------------------------
@@ -330,10 +346,11 @@ export function columnLayers(w, dg, airThick) {
     const cp = dg.coldPool;
     if (cp && cp.liquidDepth > 0) {
       const cold = 100 * (1 - clamp(dg.hotLayer ?? 1, 0, 1));
-      add('ocean', cp.liquidDepth, [T_COLD_POOL, cp.baseTemperature ?? T_COLD_POOL],
+      const top = dg.coldT ?? T_COLD_POOL;
+      add('ocean', cp.liquidDepth, [top, cp.baseTemperature ?? top],
         '{0}% still cold', [cold.toFixed(0)]);
       if (cp.iceDepth > 0) {
-        add(cp.basePhase === 'ice VII' ? 'iceVII' : 'iceVI', cp.iceDepth,
+        add(iceKind(cp.pMelt, cp.basePressure), cp.iceDepth,
           [cp.baseTemperature], '{0} GPa at the floor', [(cp.basePressure / 1e9).toFixed(1)]);
       }
     }
@@ -352,7 +369,7 @@ export function columnLayers(w, dg, airThick) {
       else add('ocean', liquid, [Ts, ob.baseTemperature ?? Ts]);
     }
     if (ob.iceDepth > 0) {
-      add(ob.basePhase === 'ice VII' ? 'iceVII' : 'iceVI', ob.iceDepth,
+      add(iceKind(ob.pMelt, ob.basePressure ?? 0), ob.iceDepth,
         [ob.baseTemperature ?? Ts], '{0} GPa at the floor',
         [((ob.basePressure ?? 0) / 1e9).toFixed(1)]);
     }

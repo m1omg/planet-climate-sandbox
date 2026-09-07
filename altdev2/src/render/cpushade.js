@@ -413,7 +413,7 @@ export function renderPlanet(rgba, W, H, s) {
         cr = mix(cr, 0.88, sheetM); cg = mix(cg, 0.92, sheetM); cb = mix(cb, 0.96, sheetM);
         shin = mix(shin, 0.18, Math.max(seaIceM, sheetM));
 
-        const melt = smoothstep(1150, 1500, T);
+        const melt = smoothstep(1150, 1500, T) * (s.bareRock ?? 1);
         if (melt > 0.001) {
           cr = mix(cr, 0.75, melt); cg = mix(cg, 0.22, melt); cb = mix(cb, 0.05, melt);
         }
