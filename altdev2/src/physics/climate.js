@@ -2,6 +2,7 @@ import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_
          P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O, CP_WATER,
 } from './constants.js';
 import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
+         runawayLimit,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
 import { oceanStructure, coldPoolStructure, T_COLD_POOL } from './ocean.js';
@@ -625,11 +626,25 @@ export function update(w, dt) {
   // and once per update at most.
   let oceanBaseCache = null;
   let coldPoolCache = null;
+  let runawayCache = null;
   w.diag = {
     get oceanBase() {
       return oceanBaseCache ?? (oceanBaseCache = oceanStructure(
         (w.water.ocean + w.water.seaIce) * d.eoColumn / Math.max(this.flooded, 1e-3),
         this.g, w.coldT ?? this.Tmean, this.pTotMean));
+    },
+    // How far this world is from having no equilibrium at all: the
+    // Simpson-Nakajima limit for its air, less the sunlight AND the interior
+    // heat it is actually absorbing. Negative means a runaway is under way.
+    //
+    // Lazy, like the columns below it, because runawayLimit is a fit evaluation
+    // and update() runs many times a step while this is read once a frame -- by
+    // the readout, which used to compute it itself, and now by classify(), which
+    // needs it to tell a runaway with an ocean under it from one without.
+    get runawayMargin() {
+      return runawayCache ?? (runawayCache = runawayLimit(this.pCO2,
+        this.pN2 + this.pCH4, this.pH2 ?? 0, this.g, this.pHe ?? 0).flux
+        - (this.absorbed + this.Fint));
     },
     // The cold water under a supercritical lid, and null whenever there is a sea
     // surface -- with one, `oceanBase` IS the ocean and a second answer about
@@ -658,6 +673,12 @@ export function update(w, dt) {
     iceSheetTarget,
     glaciatedShare,
     hotTarget, hotCapacity, hotLayer: hotShare, hotBinds, coldT: coldPoolT,
+    // What actually crosses a stable interface: the fraction of the incoming
+    // flux that stratified mixing carries down. advanceHotLayer moves the
+    // conversion boundary with it and advanceColdPool warms the pool with it,
+    // and the cross-section sizes the thermal boundary layer from it, so it is
+    // computed once here rather than three times from three call sites.
+    mixedFlux: MIX_EFF_DOWN * Math.max(absorbed + Fint, 0),
     // Earth oceans per year, positive while the liquid is going. Written by
     // stepVolatiles; zero on the first step of a world, before there are two
     // states to difference.

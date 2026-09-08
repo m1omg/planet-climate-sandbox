@@ -609,6 +609,7 @@ if (created < 20) {
     {
       const { readFileSync } = await import('node:fs');
       const { SLIDERS } = await import('../src/game/controls.js');
+      const { LAYER_KINDS } = await import('../src/physics/ocean.js');
       const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
       const set = src.match(/const RESERVOIR_KEYS = new Set\(\[([^\]]*)\]/);
       const listed = set ? [...set[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
@@ -619,6 +620,26 @@ if (created < 20) {
         failed++;
       } else {
         console.log(`\x1b[32mPASS\x1b[0m  every gas control refills the reservoir it names  —  ${gasKeys.join(', ')}`);
+      }
+
+      // And every band the water column can be made of must have a colour and a
+      // label. `drawStructure` destructures LAYER_STYLE[kind] with no fallback,
+      // so a kind the table has never heard of is not a grey band -- it is a
+      // TypeError inside the readout, which takes the whole panel down on the
+      // first frame that draws one. That shipped once, with the conductive
+      // `interface` band. The check runs both ways: an unstyled kind is a broken
+      // page, and a styled kind that no longer exists is a dead entry.
+      const styled = [...(src.match(/const LAYER_STYLE = \{[\s\S]*?\n\};/) || [''])[0]
+        .matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]);
+      const unstyled = LAYER_KINDS.filter((k) => !styled.includes(k));
+      const dead = styled.filter((k) => !LAYER_KINDS.includes(k));
+      if (unstyled.length || dead.length) {
+        console.log(`\x1b[31mFAIL\x1b[0m  layer style table out of step`
+          + `${unstyled.length ? `: no style for ${unstyled.join(', ')}` : ''}`
+          + `${dead.length ? `: style for a kind that no longer exists: ${dead.join(', ')}` : ''}`);
+        failed++;
+      } else {
+        console.log(`\x1b[32mPASS\x1b[0m  every layer kind has a colour and a label (${LAYER_KINDS.length} kinds)`);
       }
     }
   }
@@ -786,7 +807,7 @@ if (created < 20) {
   }
   const wanted = 'nekontrolovateľný skleníkový efekt';
   const named = SK.states.dryRunaway.name.includes('nekontrolovateľný skleníkový efekt')
-    && SK.states.wetRunaway.name.includes('nekontrolovateľný skleníkový efekt');
+    && SK.states.steamRunaway.name.includes('nekontrolovateľný skleníkový efekt');
   if (offenders.length || !named) {
     console.log(`\x1b[31mFAIL\x1b[0m  runaway greenhouse mistranslated as escape: `
       + (offenders.join(' · ') || `the two runaway states must be named "${wanted}"`));

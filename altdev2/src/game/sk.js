@@ -199,6 +199,7 @@ export const SK = {
     // Skladá ho reasonText(); prekladač doň ide ako parameter, aby fyzikálny
     // modul nemusel poznať jazyky.
     'sky {0} °C, water {1} °C': 'obloha {0} °C, voda {1} °C',
+    'water below {0} °C': 'voda pod ním {0} °C',
     'Fluid top': 'Vrch tekutiny',
     'Liquid water': 'Tekutá voda',
     'How fast the liquid water is going — boiled, converted under a hot layer, or lost to space. Negative while the sea is disappearing, positive while it is coming back.':
@@ -206,8 +207,8 @@ export const SK = {
     'Water below': 'Voda pod ňou',
     'There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.':
       'Pri tejto teplote niet povrchu: vzduch a voda pod ním sú jedna tekutina. Toto je jej vrch.',
-    'The water the hot layer has not converted yet, at the temperature it had when it last had a surface. Nothing in this model warms it: every watt that crosses the boundary is spent converting water rather than heating what is left.':
-      'Voda, ktorú horúca vrstva ešte nepremenila, pri teplote, akú mala naposledy pri povrchu. Nič ju v tomto modeli neohrieva: každý watt, čo prejde rozhraním, sa minie na premenu vody, nie na ohrev zvyšku.',
+    'The bulk of the water the hot layer has not converted yet. It is not held at the temperature it started with -- heat crosses the boundary above it and warms it -- but it crosses slowly, because an ocean heated from above is stably stratified, and a column hundreds of kilometres deep takes a long time to feel it.':
+      'Väčšina vody, ktorú horúca vrstva ešte nepremenila. Nedrží si teplotu, s ktorou začala — teplo cez rozhranie nad ňou prechádza a ohrieva ju — no prechádza pomaly, lebo oceán ohrievaný zhora je stabilne vrstvený a stovky kilometrov hlboký stĺpec to pocíti až po dlhom čase.',
     'mean surface {0} °C': 'priemer na povrchu {0} °C',
     'day {0} °C, night {1} °C': 'deň {0} °C, noc {1} °C',
     'equator {0} °C, poles {1} °C': 'rovník {0} °C, póly {1} °C',
@@ -331,6 +332,8 @@ export const SK = {
     'steam': 'para',
     'liquid ocean': 'tekutý oceán',
     'high-pressure ice': 'vysokotlakový ľad',
+    'thermal boundary': 'tepelné rozhranie',
+    '{0} W/m² across it': 'prechádza ním {0} W/m²',
     'silicate interior': 'silikátové vnútro',
     'no surface': 'bez povrchu',
     'no boundary': 'bez rozhrania',
@@ -503,8 +506,8 @@ export const SK = {
       blurb: 'Povrch je roztavená hornina. Nad približne 1400 K sa kremičitany tavia a planéta žiari v blízkej infračervenej oblasti; atmosféru, ak nejakú má, tvorí horúca zmes horninových pár a vodnej pary.' },
     dryRunaway: { name: 'Suchý nekontrolovateľný skleníkový efekt',
       blurb: 'Venuša. Oceán je preč — vyparil sa, rozložilo ho svetlo a vodík odviala do vesmíru — a zostala hustá suchá atmosféra CO₂ nad povrchom horúcim natoľko, že slabo žiari. V ľudských časových mierkach nezvratné.' },
-    wetRunaway: { name: 'Vlhký nekontrolovateľný skleníkový efekt',
-      blurb: 'Pohltené žiarenie hviezdy spolu s vlastným teplom planéty prekročilo Simpsonovu–Nakajimovu hranicu (~282 W/m²), takže rovnováha neexistuje pri žiadnej teplote. Dokáže to aj samotné slapové teplo, na svete, ktorý by hviezda nechala obývateľný (Barnes a kol. 2013). Oceán sa vyvára do mohutnej parnej atmosféry; skupenské teplo naťahuje tento prechod na ~10⁵ rokov a samotná strata vody trvá ďalších 10⁸–10⁹.' },
+    steamRunaway: { name: 'Parný nekontrolovateľný skleníkový efekt',
+      blurb: 'Pohltené žiarenie hviezdy spolu s vlastným teplom planéty prekročilo Simpsonovu–Nakajimovu hranicu (~282 W/m²), takže rovnováha neexistuje pri žiadnej teplote — a more už je hore. Všetka voda je stále tu, ako mohutná parná obálka, pod ktorou nie je nič tekuté; jej strata do vesmíru trvá odtiaľto 10⁸–10⁹ rokov. Svet, ktorého oceán je príliš veľký na to, aby sa vyvaril, zostane namiesto toho v stave Pochovaný oceán, kým sa vrstva prepracúva nadol.' },
     moist: { name: 'Vlhký skleníkový režim',
       blurb: 'Voda je stále kvapalná, ale chladná pasca zlyhala: podiel vody v stratosfére presiahol 10⁻³ a vodík uniká plynule. Krátkodobo obývateľný svet, ktorý však počas stoviek miliónov rokov vyschne (Kasting 1988).' },
     hothouse: { name: 'Skleník bez ľadu',
@@ -548,7 +551,7 @@ export const SK = {
     lowSunHycean: { name: 'Hyceánsky svet so slabým svetlom',
       blurb: 'Hyceánsky svet prakticky bez hviezdneho svetla, ktorý drží kvapalný oceán z vlastného vnútorného tepla pod hlbokou vodíkovou obálkou. Obálka musí byť hrubá: pri týchto teplotách robí všetku prácu skleníkový efekt a voda je kvapalná vďaka tlaku nad ňou, nie vďaka niečomu, čo robí hviezda. Verzia stavu pre voľne letiace planéty a veľmi vzdialené obežné dráhy.' },
     buriedOcean: { name: 'Pochovaný oceán',
-      blurb: 'Skleníkový útek zastihnutý v polovici cesty nadol. Vrch vodného stĺpca je už za kritickým bodom, spodok je stále chladný kvapalný oceán a medzi nimi stojí stabilné vrstvenie hustoty, cez ktoré sa teplo musí prebíjať — horúca vrstva tak postupuje k stredu planéty v geologickom čase, nie naraz (Pierrehumbert a Furth 2023). Do tohto stavu sa svet dostane len tak, že začal studený a bol zohriaty: ten, ktorý bol horúci vždy, už nemá studené vnútro, ktoré by mohol pochovať. Dole naozaj je oceán a v časových mierkach tohto modelu tam ostáva ešte dlho po tom, čo povrch prestal byť povrchom.' },
+      blurb: 'Nekontrolovateľný skleníkový efekt s oceánom pod ním. Rovnováha neexistuje pri žiadnej teplote a more sa dvíha do neba — lenže vody je tu viac, než koľko nebo pojme, takže zvyšok zostáva tekutý, pochovaný pod parou či nadkritickou tekutinou a chladnejší než povrch, pretože teplo sa k nemu musí premiešať cez stabilný vztlakový gradient (Pierrehumbert a Furth 2023). Vrstva postupuje k stredu geologicky pomaly namiesto naraz: pár stoviek oceánov znamená desiatky miliónov rokov. Ten oceán tam naozaj je, dlho po tom, čo povrch prestal byť povrchom.' },
     supercriticalEnvelope: { name: 'Nadkritická obálka',
       blurb: 'Za kritickým bodom niet povrchu. Kvapalina a para sú jedna tekutina, atmosférická adiabata plynulo prechádza do nadkritickej vodnej adiabaty a pokračuje do vnútra planéty — nikde nie je rozhranie, ktoré by sa dalo nazvať oceánom (Pierrehumbert a Furth 2023). Ktorú planétu dostanete, závisí od cesty: svet, ktorý bol vždy horúci, sa ustáli takto, kým ten, ktorý najprv vychladol a zohrial sa až potom, strávi dlhý čas ako horúca vrstva ležiaca na studenej vode, než sa ním stane.' },
   },

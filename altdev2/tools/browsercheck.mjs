@@ -351,8 +351,16 @@ try {
   const under = stack.rows.slice(1, -1).filter((r) => /ocean|oceán|supercrit|nadkrit/i.test(r.name));
   // Metres or kilometres: the liquid part of this pool is 700 m thick, because
   // the water it closed over was already at the critical temperature.
+  //
+  // The water starts immediately under the lid, with nothing between the two but
+  // the conductive boundary that carries the flux across the jump -- this was
+  // pinned at index 1, which was right until that boundary existed and became a
+  // failure about a band that is supposed to be there.
+  const seaAt = kinds.indexOf(sea ? sea.name : '\u0000');
+  const rightUnder = seaAt === 1
+    || (seaAt === 2 && /thermal boundary|tepeln/i.test(kinds[1] ?? ''));
   ok(/buried|pochovan/i.test(stack.state) && !!sea && under.length >= 1
-    && under.every((r) => /\d\s*k?m\b/.test(r.size)) && kinds.indexOf(sea.name) === 1,
+    && under.every((r) => /\d\s*k?m\b/.test(r.size)) && rightUnder,
     'A Buried Ocean draws the water it is named for, under the lid',
     `${stack.state}: ${kinds.join(' → ')}  ·  ${under.map((r) => r.size).join(' + ')}`);
   ok(stack.rows.every((r) => /rock|hornina/i.test(r.name) || /°C/.test(r.size)),

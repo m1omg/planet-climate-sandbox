@@ -665,18 +665,18 @@ export const MIX_EFF_DOWN = 0.02;
 
 // The temperature of the water the hot layer is eating into.
 //
-// While the world still has a sea surface, the water under it is at the surface
-// temperature -- that is what the ocean adiabat in oceanStructure is built on,
-// and it is the only temperature this model has for an ocean. Once the surface
-// goes past the critical point there is no longer a surface for it to be in
-// contact with, so the pool keeps the last one it had: nothing in this model
-// warms it, because every watt that crosses the interface is spent converting
-// water rather than heating what is left.
+// It is a state variable with a heat capacity, not a number copied off the
+// surface. It was the latter once -- the pool held whatever the surface was when
+// the lid closed -- and on any gradually heated world that is the critical
+// point, so a "cold start" arrived with nothing cold in it.
 //
-// That is a bound, not a claim of exactness -- the real pool warms a little as
-// the boundary descends into water that was deeper and hotter on the old
-// adiabat -- and it is a great deal closer than freezing, which is what stood
-// here before and which no water in this scenario has ever been.
+// An ocean heated from above is stably stratified, which is the same difficulty
+// `advanceHotLayer` charges for moving the conversion boundary, so only
+// MIX_EFF_DOWN of the flux reaches the water below. Coming back up it overturns
+// and gives its heat away as fast as the planet can radiate. The timescale then
+// falls out of the inventory rather than being chosen: one Earth ocean is 76
+// years per kelvin and tracks its surface, three hundred oceans is 23 000 and
+// cannot keep up with a runaway at all.
 function advanceColdPool(w, dtYears) {
   const dg = w.diag;
   const Ts = dg.Tmean;
