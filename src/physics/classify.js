@@ -6,7 +6,7 @@ import { clamp, T_CRIT_H2O as T_CRIT } from './constants.js';
 export const STATES = {
   magma:      { name: 'Magma Ocean',          color: '#ff5a2b', blurb: 'The surface is molten rock. Above roughly 1400 K silicates melt and the planet radiates in the near-infrared; any atmosphere is a hot rock-vapour and steam envelope.' },
   dryRunaway: { name: 'Dry Runaway Greenhouse', color: '#e0553a', blurb: 'Venus. The ocean is gone — evaporated, photolysed, and the hydrogen dragged off to space — leaving a thick dry CO2 atmosphere and a surface hot enough to glow faintly. Irreversible on any human timescale.' },
-  wetRunaway: { name: 'Wet Runaway Greenhouse', color: '#ff8340', blurb: 'Absorbed sunlight plus the planet\u2019s own internal heat exceeds the Simpson\u2013Nakajima limit (~282 W/m2), so no equilibrium exists at any temperature. Tidal heating alone can do it, on a world the star would have left habitable (Barnes et al. 2013). The ocean is boiling into a massive steam atmosphere; latent heat makes this transient take ~10^5 years, and losing the water takes 10^8–10^9 more.' },
+  steamRunaway: { name: 'Steam Runaway Greenhouse', color: '#ff8340', blurb: 'Absorbed sunlight plus the planet\u2019s own internal heat exceeds the Simpson\u2013Nakajima limit (~282 W/m2), so no equilibrium exists at any temperature \u2014 and the sea has already gone into the sky. The water is all still here, as a massive steam envelope with nothing liquid under it, and losing it to space takes 10^8\u201310^9 years from this point. A world whose ocean is too big to boil away stops at Buried Ocean instead, and stays there while the lid works downward.' },
   moist:      { name: 'Moist Greenhouse',     color: '#ffb03a', blurb: 'Still liquid, but the cold trap has failed: stratospheric water exceeds a mixing ratio of 10^-3, so hydrogen escapes steadily. Habitable in the short run, drying out over hundreds of millions of years (Kasting 1988).' },
   hothouse:   { name: 'Ice-Free Hothouse',    color: '#f2c14e', blurb: 'No permanent ice anywhere, tropics near the limit of complex life. Earth looked like this in the Cretaceous and the PETM.' },
   temperate:  { name: 'Temperate & Habitable', color: '#4ec98a', blurb: 'Liquid water across much of the surface with stable polar ice. The carbonate–silicate thermostat holds this state against slow changes in starlight over ~1 Myr.' },
@@ -27,7 +27,7 @@ export const STATES = {
   baked:      { name: 'Baked Desert',         color: '#e08a3a', blurb: 'A hot, waterless world of bare rock. Whatever water it had is long gone, so nothing moderates the surface and the day side simply bakes.' },
   hycean:     { name: 'Hycean World',          color: '#3fbfa8', blurb: 'A water-rich sub-Neptune under a hydrogen envelope, with a liquid ocean at the bottom of it \u2014 hundreds of kilometres deep, standing on high-pressure ice rather than rock. The envelope keeps the surface warm far outside a rocky planet\u2019s habitable zone: the worlds here sit at about a tenth of Earth\u2019s sunlight and are still temperate (Madhusudhan et al. 2021). What the literature also claims, and this model does not produce, is the hot end of the band \u2014 a stable ocean at 400 to 550 K. Here the hottest Hycean whose energy budget actually closes is 335 K and anything warmer runs away instead, because the stabiliser that holds the hot branch up is vertical structure a semi-grey scheme has nowhere to put. So this is the temperate Hycean, said plainly \u2014 and the reading of any real planet as Hycean at all is contested.' },
   lowSunHycean: { name: 'Low Sunlight Hycean',     color: '#4a7fb5', blurb: 'A Hycean world with effectively no starlight, holding a liquid ocean on its own internal heat under a deep hydrogen envelope. It needs the envelope to be thick: at these temperatures the greenhouse is doing all the work, and the ocean is liquid because of the pressure over it rather than because of anything the star does. The free-floating and far-orbit version of the state.' },
-  buriedOcean: { name: 'Buried Ocean',        color: '#7a5fa8', blurb: 'A runaway caught part-way down. The top of the water column is past its critical point and the bottom is still a cold liquid ocean, with a stable buoyancy gradient between them that heat has to fight its way across \u2014 so the hot layer advances toward the centre over geological time instead of arriving all at once (Pierrehumbert & Furth 2023). It is the state a world can only reach by starting cold and being warmed: one that was always hot has no cold interior left to bury. There really is an ocean down there, and on this model\u2019s own timescales it is still there a long time after the surface stopped being one.' },
+  buriedOcean: { name: 'Buried Ocean',        color: '#7a5fa8', blurb: 'A runaway with an ocean still under it. There is no equilibrium at any temperature and the sea is going into the sky \u2014 but there is more water here than the sky can take, so what is left is liquid, buried under steam or supercritical fluid, and cooler than the surface because heat has to be mixed down against a stable buoyancy gradient to reach it (Pierrehumbert & Furth 2023). The lid advances toward the centre over geological time instead of arriving all at once: a few hundred oceans buys tens of millions of years of it. There really is an ocean down there, long after the surface stopped being one.' },
   supercriticalEnvelope: { name: 'Supercritical Envelope', color: '#a05fc0', blurb: 'Past the critical point there is no surface. The liquid and the vapour are one fluid, the atmospheric adiabat runs seamlessly into the supercritical water adiabat and down into the interior, and there is no boundary anywhere to call an ocean (Pierrehumbert & Furth 2023). Which planet you get depends on the path: a world that was always hot equilibrates like this, while one that cooled first and was heated later spends a long time as a hot layer sitting on cold water before it becomes this.' },
   airless:    { name: 'Airless Rock',         color: '#8a8a8a', blurb: 'Beyond the cosmic shoreline: stellar XUV has stripped the atmosphere faster than the planet’s gravity could hold it. No climate to speak of.' },
 };
@@ -103,14 +103,56 @@ export function classify(w) {
   // seventeen of hydrogen, and the state switched to `magma` while four hundred
   // and fifty Earth-oceans of liquid water were still sitting underneath it.
   //
-  // So it is tested on the thing it actually claims: the surface is past the
-  // critical point, the hot layer has NOT reached the bottom, and a real part of
-  // the inventory is still liquid. No envelope requirement -- a cold-started
-  // waterworld with no hydrogen at all can bury its ocean the same way, and
-  // Pierrehumbert & Furth describe the mechanism for waterworlds, not for
-  // Hyceans specifically.
-  const buriedOcean = superShare > 0.5 && !hotDone
-    && water > 0.005 && w.water.ocean > 0.05 * water;
+  // So it is tested on the thing it actually claims, and the claim is not about
+  // the surface: a runaway is under way, and there is still liquid water under
+  // it. Requiring the SURFACE to be past the critical point was one particular
+  // marker of that rather than the state itself -- an ocean is buried by
+  // whatever is on top of it, steam or supercritical fluid alike, and the world
+  // that makes this state worth having is the one whose sea is simply too big to
+  // boil away. It cannot swallow a state that lasts: measured, every wet runaway
+  // in a 0.5 to 500 EO sweep has NOTHING liquid left within 1 to 135 kyr.
+  //
+  // Liquid, not merely condensed. Water in the ocean reservoir at a temperature
+  // past the critical point is not a liquid, and `coldT` is the temperature that
+  // water is actually at. Both terms are cheap: no column solve in a function
+  // that runs every frame.
+  //
+  // No envelope requirement either. A cold-started waterworld with no hydrogen
+  // at all buries its ocean the same way -- 60 EO at 1.6 S(+) spends 2.3 Myr
+  // doing it, 500 EO twenty-one -- and Pierrehumbert & Furth describe the
+  // mechanism for waterworlds, not for Hyceans.
+  // Buried by something. A runaway that has only just started is a sea with
+  // weather over it, not an ocean under a lid: the margin goes negative long
+  // before anything is covering the water, and gating on it alone called a 61 °C
+  // world with an open ocean and 212 km of hydrogen over it a Buried Ocean.
+  //
+  // What buries it is the sea itself, gone into the sky. So either the surface
+  // has passed the critical point -- the lid case, where there is no longer a
+  // surface at all -- or the runaway is under way AND the air above the water is
+  // mostly water: steam that was ocean, standing on the ocean it came from.
+  // Half the column is the same threshold `superShare` uses for the surface, and
+  // for the same reason: it is the point where the thing being measured is what
+  // the world is mostly made of.
+  const steamShare = pH2Omean / Math.max(pTot, 1e-12);
+  const runawayNow = (dg.runawayMargin ?? 1) < 0;
+  const covered = superShare > 0.5 || (runawayNow && steamShare > 0.5);
+  //
+  // And there has to be some of it left. This was written as `coldT < T_CRIT`,
+  // which reads right and is unreachable by construction: `advanceColdPool`
+  // caps the pool one kelvin BELOW the critical point on purpose, because water
+  // that hot is the hot layer and moving that boundary costs latent heat that
+  // the pool's own budget does not pay. So the test fired the moment the pool
+  // saturated against its own ceiling -- and it saturates while the column is
+  // still four-fifths unconverted, which is the middle of the state, not the end
+  // of it. A hundred-Myr cold start came out labelled Steam Runaway Greenhouse
+  // with 200 km of liquid water drawn underneath it.
+  //
+  // What actually decides it is how much of the column has gone over, which is
+  // the number `advanceHotLayer` integrates and the cross-section draws.
+  const unconverted = 1 - clamp(dg.hotLayer ?? 0, 0, 1);
+  const stillLiquid = water > 0.005 && w.water.ocean > 0.02 * water
+    && unconverted > 0.02;
+  const buriedOcean = covered && stillLiquid;
 
   // Which Hycean state, or none. Returns null when the world has an envelope
   // but nothing under it worth naming, and the chain then carries on to the
@@ -160,7 +202,7 @@ export function classify(w) {
   // but this one is a hot surface BY DEFINITION -- past the critical point is
   // where it starts -- so magma catches it first on temperature alone and
   // reports bare rock on a planet with a liquid ocean two hundred kilometres
-  // down. Which is exactly the mistake wetRunaway was making one branch lower.
+  // down. Which is exactly the mistake the runaway branch was making below.
   // The surface really is molten-hot; it is just not the whole planet, and the
   // water underneath is the part worth naming.
   if (buriedOcean) id = 'buriedOcean';
@@ -212,8 +254,8 @@ export function classify(w) {
   // world that began with almost nothing needs to have lost almost all of that,
   // not six percent of a sea it never had.
   else if (T > 470 && water < 0.06 * clamp(initialWater, 0.05, 1)) id = 'dryRunaway';
-  // The Hycean group. It goes here, after dryRunaway and before wetRunaway,
-  // because `T > 420` would otherwise swallow every one of them: a 400 K ocean
+  // The Hycean group. It goes here, after dryRunaway and before the runaway
+  // states, because `T > 420` would otherwise swallow every one of them: a 400 K ocean
   // under thirty bar of hydrogen is the state this whole branch exists to
   // represent, and the classifier called it a boiling Earth.
   //
@@ -222,7 +264,11 @@ export function classify(w) {
   // the states below it, and it cannot -- hyceanState returns null and the
   // chain carries on, or it returns a name and the chain stops.
   else if (hyceanId) id = hyceanId;
-  else if (T > 420) id = 'wetRunaway';
+  // What is left of the old wetRunaway once Buried Ocean has taken the half that
+  // still has an ocean in it: a runaway whose sea is already in the sky. The
+  // name says which half this is, because "wet" was doing duty for both and the
+  // two are seven orders of magnitude apart in how long they last.
+  else if (T > 420) id = 'steamRunaway';
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
   else if (water < 0.015) id = T > 290 ? 'baked' : 'frozen';
@@ -349,11 +395,22 @@ export function reasonText(w, st, tr = enFormat) {
   // answers a question nobody asked. The sky and the water are two numbers and
   // the banner carries both: the pool's is `coldT`, the temperature it had when
   // it last had a surface to be in contact with.
-  const buried = dg.coldPool && dg.coldPool.liquidDepth > 0 && dg.coldT != null;
-  bits.push(buried
-    ? tr('sky {0} °C, water {1} °C', (dg.Tmean - 273.15).toFixed(0),
-      (dg.coldT - 273.15).toFixed(0))
-    : tr('mean surface {0} °C', (dg.Tmean - 273.15).toFixed(1)));
+  // Two questions, and which one the line answers depends on whether there is a
+  // surface. Past the critical point there is not -- that is the whole content
+  // of the state -- so calling 1676 °C a mean surface temperature on a world
+  // named for the water underneath it answers neither. And even where there IS
+  // a surface, a deep ocean's interior lags it: a sea at 239 °C over water at
+  // 74 is two numbers, and the second one is the one the state is about.
+  const noSurface = (dg.hotTarget ?? 0) > 0.5;
+  const bulk = dg.coldT;
+  const split = bulk != null && dg.Tmean - bulk > 5 && (dg.totalWater ?? 0) > 0.005;
+  if (split && noSurface) {
+    bits.push(tr('sky {0} °C, water {1} °C', (dg.Tmean - 273.15).toFixed(0),
+      (bulk - 273.15).toFixed(0)));
+  } else {
+    bits.push(tr('mean surface {0} °C', (dg.Tmean - 273.15).toFixed(1)));
+    if (split) bits.push(tr('water below {0} °C', (bulk - 273.15).toFixed(0)));
+  }
   // On a locked world the mean is a number no part of the planet has: it sits
   // between a face that never sets and one that never sees the star. The stats
   // panel already splits them; the banner is the line people actually read, and

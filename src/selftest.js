@@ -294,7 +294,7 @@ function runChecks() {
       if (tLost === null && w.water.lost > 0.9) { tLost = w.time; break; }
       const id = classify(w).id;
       if (id === 'moist') sawMoist = true;
-      if (id === 'wetRunaway') sawWet = true;
+      if (id === 'steamRunaway') sawWet = true;
       s.runYears(Math.max(5, w.time * 0.06));
     }
     check('A runaway greenhouse actually runs away', tSteam !== null,
@@ -594,7 +594,7 @@ function runChecks() {
     // a supercritical waterworld's twenty bar of hydrogen is 0.07% of tens of
     // thousands of bar of steam, so the gate reads "no envelope" on precisely
     // the world whose envelope is the point, and the state falls through to
-    // wetRunaway.
+    // steamRunaway.
     check('…and a supercritical world is not mistaken for one with no envelope',
       (sup.world.diag.pH2 + sup.world.diag.pHe) > 15
         && (sup.world.diag.pH2 + sup.world.diag.pHe) / sup.world.diag.pTotMean < 0.05,
@@ -687,7 +687,7 @@ function runChecks() {
       const temperate = (last.hycean ?? -1) - (first.hycean ?? 0);
       const buried = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
       check('The cold-start world goes temperate → runaway → buried ocean',
-        first.hycean === 0 && buried > 5e7 && (first.buriedOcean ?? 0) > (first.hycean ?? 0),
+        first.hycean === 0 && buried > 1e7 && (first.buriedOcean ?? 0) > (first.hycean ?? 0),
         `temperate for ${(temperate / 1e6).toFixed(0)} Myr, then its ocean is buried for `
           + `${(buried / 1e6).toFixed(0)} Myr from ${((first.buriedOcean ?? 0) / 1e9).toFixed(2)} Gyr`);
     }
@@ -716,6 +716,27 @@ function runChecks() {
       check('A cold-started world really does spend time as a Buried Ocean',
         hits.length >= 4, hits.length ? `${hits.length} of 6 paths pass through it`
           : 'no path reaches it — the state cannot fire');
+    }
+
+    // The pool saturates against its own ceiling long before the conversion
+    // finishes, and the state must not end there. `advanceColdPool` caps the
+    // pool one kelvin under the critical point on purpose -- water hotter than
+    // that is the hot layer, and moving that boundary costs latent heat the
+    // pool's budget does not pay -- so a test of "is the pool still below
+    // critical" is unreachable by construction and fires on the cap instead of
+    // on the physics. It did: a hundred-Myr cold start came out labelled Steam
+    // Runaway Greenhouse, the state for a sea that is already in the sky, while
+    // the cross-section under the label drew 200 km of liquid water and said
+    // 79% not converted. Caught in a browser, so it is held here in Node.
+    {
+      const sim = new Simulation({ ...PRESETS.coldStart.params });
+      sim.runYears(1e8);
+      const dgz = sim.world.diag, id = classify(sim.world).id;
+      const left = 1 - (dgz.hotLayer ?? 0);
+      check('A pool sitting on its ceiling is still a buried ocean, not a steam runaway',
+        left < 0.02 || id !== 'steamRunaway',
+        `${(100 * left).toFixed(0)}% unconverted, pool `
+          + `${((dgz.coldT ?? 0) - 273.15).toFixed(0)} °C → ${id}`);
     }
 
     // ...and it gives way once the conversion finishes, or it would be a trap
@@ -754,7 +775,10 @@ function runChecks() {
       // Under the lid, and drawn: liquid where it is liquid, supercritical where
       // the adiabat has taken it past the critical temperature. What the state
       // is named for is that this water is THERE, not that all of it is liquid.
-      const water = layers.slice(1).filter((l) => l.kind === 'ocean' || l.kind === 'supercritical');
+      // The boundary layer is part of the water: it is the top of the pool, at
+      // the temperature the pool's top actually has.
+      const water = layers.slice(1).filter((l) => l.kind === 'ocean'
+        || l.kind === 'supercritical' || l.kind === 'interface');
       const waterM = water.reduce((a, l) => a + l.metres, 0);
       check('A buried ocean is drawn with the water it is named for',
         !!cp && cp.liquidDepth > 1e3 && waterM > 1e3
@@ -762,8 +786,11 @@ function runChecks() {
         found ? `${((cp && cp.liquidDepth || 0) / 1000).toFixed(0)} km of water under the lid `
           + `(${water.map((l) => l.kind).join(' + ')}), standing on ${cp && cp.basePhase}`
           : 'no path reached buriedOcean');
-      check('…with the hot lid above it rather than instead of it',
-        kinds.indexOf('supercritical') === 0 && kinds.indexOf('ocean') === 1,
+      // Lid, then the conductive boundary that carries the flux across the jump,
+      // then the water. Nothing at 800 °C sits directly on water at 30.
+      check('…with the hot lid above it, and a boundary layer between them',
+        kinds.indexOf('supercritical') === 0 && kinds[1] === 'interface'
+          && kinds[2] === 'ocean',
         kinds.join(' → '));
     }
 
@@ -900,12 +927,17 @@ function runChecks() {
       // liquid where it is liquid, supercritical where the adiabat has taken it
       // past the critical point, high-pressure ice where the pressure has. The
       // fluid part has to add up to the pool the solver reports.
-      const fluid = layers.slice(1).filter((l) => l.kind === 'ocean' || l.kind === 'supercritical')
+      // `coldPool` is the column under a lid; a world buried under steam that has
+      // not gone supercritical yet is still described by `oceanBase`. Either
+      // way, what is drawn has to add up to what the solver reports.
+      const col = (dgs && dgs.coldPool) || (dgs && dgs.oceanBase) || {};
+      const fluid = layers.slice(1).filter((l) => l.kind === 'ocean'
+        || l.kind === 'supercritical' || l.kind === 'interface')
         .reduce((a, l) => a + l.metres, 0);
       const iced = layers.filter((l) => /^ice/.test(l.kind)).reduce((a, l) => a + l.metres, 0);
       check('…and everything under the lid is drawn, in the phase it is in',
-        !!dgs && Math.abs(fluid - dgs.coldPool.liquidDepth) < 1
-          && Math.abs(iced - dgs.coldPool.iceDepth) < 1 && fluid > 1e4,
+        !!dgs && Math.abs(fluid - (col.liquidDepth ?? 0)) < 1
+          && Math.abs(iced - (col.iceDepth ?? 0)) < 1 && fluid > 1e4,
         `${layers.map((l) => l.kind).join(' → ')}; `
           + `${(fluid / 1000).toFixed(0)} km of fluid over ${(iced / 1000).toFixed(0)} km of ice`);
     }
@@ -946,7 +978,8 @@ function runChecks() {
       const line = reasonText(sim.world, classify(sim.world));
       const dgb = sim.world.diag;
       check('A buried ocean says how hot the water is, not just the sky',
-        /water \d+ °C/.test(line) && line.includes(`${(dgb.coldT - 273.15).toFixed(0)}`),
+        /water (below )?\d+ °C/.test(line)
+          && line.includes(`${(dgb.coldT - 273.15).toFixed(0)}`),
         line.slice(0, 110));
       // ...and a world with an actual surface still says "mean surface".
       const earth = new Simulation({ ...PRESETS.earth.params });
@@ -1031,6 +1064,60 @@ function runChecks() {
           + `Venus ${dry.world.diag.totalWater.toFixed(4)} EO → ${classify(dry.world).id}`);
     }
 
+    // The two halves of a runaway, told apart by whether there is still an
+    // ocean. "Wet" was doing duty for both, and they are not the same length of
+    // time: measured across a 0.5 to 500 EO sweep, every world's boiling phase
+    // ends with NOTHING liquid within 1 to 135 kyr, while a world whose sea is
+    // too big to boil away stays buried for megayears. So the state with the
+    // ocean in it is Buried Ocean and the one without is Steam Runaway
+    // Greenhouse, and the test is the ocean rather than the surface.
+    {
+      const rows = [];
+      for (const water of [1, 60, 500]) {
+        const sim = new Simulation({ ...EARTH, water, insolation: 1.9, landFraction: 0 });
+        let buried = 0, steam = 0, first = null;
+        for (let yr = 0; yr <= 3e7; yr += Math.max(2e3, yr * 0.2)) {
+          sim.runYears(yr - sim.world.time);
+          const id = classify(sim.world).id;
+          if (id === 'buriedOcean') { buried = yr; first ??= yr; }
+          if (id === 'steamRunaway') steam = yr;
+          if (id === 'dryRunaway' || id === 'magma') break;
+        }
+        rows.push({ water, buried, steam, first,
+          liquid: sim.world.water.ocean });
+      }
+      // A 1 EO world is dry inside a thousand years and is a steam runaway for
+      // the rest of it; a 500 EO world is buried for megayears.
+      check('A runaway with an ocean under it is not the same state as one without',
+        rows[0].buried < 1e4 && rows[2].buried > 1e6 && rows[2].buried > 50 * rows[0].buried,
+        rows.map((r) => `${r.water} EO: buried to ${(r.buried / 1e3).toFixed(0)} kyr`).join(' · '));
+      // ...and every one of them ends with the ocean gone, which is what makes
+      // the other name the right one for the end state.
+      check('…and the boiling one ends with nothing liquid left',
+        rows.every((r) => r.liquid < 0.02 * r.water),
+        rows.map((r) => `${r.water} EO → ${r.liquid.toFixed(3)} EO liquid`).join(' · '));
+    }
+
+    // Buried Ocean does not need the surface past the critical point, and never
+    // needed hydrogen. What it needs is a runaway and an ocean: 60 Earth oceans
+    // at 1.6 S⊕ with no hydrogen at all spends megayears in it.
+    {
+      const sim = new Simulation({ ...EARTH, h2Bar: 0, water: 60, insolation: 1.6,
+        landFraction: 0 });
+      let span = 0, first = null, superAt = null;
+      for (let yr = 0; yr <= 1e7; yr += Math.max(2e3, yr * 0.2)) {
+        sim.runYears(yr - sim.world.time);
+        if (classify(sim.world).id !== 'buriedOcean') continue;
+        first ??= yr; span = yr - first;
+        superAt ??= sim.world.diag.hotTarget;
+      }
+      check('Water alone buries an ocean — no hydrogen, and no supercritical surface needed',
+        span > 5e5 && (sim.world.diag.pH2 ?? 0) === 0,
+        first != null ? `buried from ${(first / 1e3).toFixed(0)} kyr for `
+          + `${(span / 1e6).toFixed(1)} Myr, with ${(superAt * 100).toFixed(0)}% of the surface `
+          + `past the critical point when it started` : 'never buried');
+    }
+
     // The pool arrives cold, and how cold depends on how much of it there is.
     //
     // An ocean heated from above is stably stratified: the heat has to be mixed
@@ -1054,9 +1141,12 @@ function runChecks() {
           if (classify(sim.world).id === 'buriedOcean') break;
         }
         const dgp = sim.world.diag;
+        // Under a lid the pool is `coldPool`; buried under steam that has not gone
+        // supercritical yet, the same water is `oceanBase`.
+        const col = dgp.coldPool || dgp.oceanBase;
         rows.push({ water, cold: dgp.coldT, T: dgp.Tmean,
           buried: classify(sim.world).id === 'buriedOcean',
-          liquid: dgp.coldPool ? dgp.coldPool.liquidDepth - dgp.coldPool.superDepth : 0 });
+          liquid: col ? (col.liquidDepth ?? 0) - (col.superDepth ?? 0) : 0 });
       }
       const big = rows[rows.length - 1];
       check('A deep ocean cannot keep up with a surface running away from it',

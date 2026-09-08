@@ -318,6 +318,10 @@ export function iceKind(pTop, pBase) {
 // one the energy bookkeeping already commits to.
 export const T_COLD_POOL = 273.15;
 
+// Thermal conductivity of liquid water, W/(m·K). Only the cross-section uses it,
+// to size the boundary layer that carries the flux across the interface.
+const K_WATER = 0.6;
+
 export function coldPoolStructure(dg) {
   const share = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
   const col = Math.max((dg.totalWater ?? 0) * (dg.d?.eoColumn ?? 0) * share, 0);
@@ -340,11 +344,21 @@ export function coldPoolStructure(dg) {
 // it has one, two where it has both ends of a descent (a sea surface and the
 // floor its adiabat reaches). Rock carries none, because nothing here models an
 // interior temperature and a plausible-looking number would be an invention.
+// The kinds a column can be made of, named once. The renderer keys a colour and
+// a label off each one, and there is no way for it to find out that a new kind
+// exists except by being told: adding an `interface` band and forgetting the
+// entry threw on the first frame that drew one, which is a blank page rather
+// than a wrong pixel. So the list lives here, `add` refuses anything not on it,
+// and the smoketest holds it against the renderer's table in both directions.
+export const LAYER_KINDS = ['envelope', 'air', 'supercritical', 'steam',
+  'interface', 'ocean', 'seaice', 'iceVI', 'iceVII', 'iceHP', 'rock'];
+
 export function columnLayers(w, dg, airThick) {
   const ob = dg.oceanBase || {};
   const Ts = dg.Tmean;
   const layers = [];
   const add = (kind, metres, T, note, args) => {
+    if (!LAYER_KINDS.includes(kind)) throw new Error(`unknown layer kind: ${kind}`);
     if (metres > 0) layers.push({ kind, metres, T, note, noteArgs: args || [] });
   };
   // A water column drawn as the phases it is actually in. Above the critical
@@ -352,10 +366,38 @@ export function columnLayers(w, dg, airThick) {
   // crosses it is an ocean over a supercritical layer and has to be drawn as
   // two bands -- one of them was drawn as a single "liquid ocean · 373 → 554 °C",
   // which names a phase water does not have at 554 °C.
-  const addWater = (st, depth, topT, note, args) => {
-    const deep = Math.min(st.superDepth ?? 0, depth);
-    const baseT = st.baseTemperature ?? topT;
-    add('ocean', depth - deep, [topT, Math.min(baseT, T_CRIT_H2O)], note, args);
+  // A water column, drawn as the phases AND the temperatures it is actually in.
+  //
+  // `topT` is the temperature at the top of the water -- the sea surface on an
+  // open ocean, the critical point under a lid, since that is where the fluid
+  // above stops being supercritical. `bulkT` is the water below, which is not
+  // the same number: an ocean heated from above is stably stratified, so the
+  // interior lags and the model carries that lag as `coldT`.
+  //
+  // Between them is a conductive boundary layer, and its thickness is not a free
+  // parameter: it is the layer that carries the flux crossing it. F = k·ΔT/δ
+  // with water's own conductivity, so δ = k·ΔT/F -- tens of metres on a world
+  // absorbing a few hundred watts, hundreds on a dim one. Thin against a column
+  // hundreds of kilometres deep, which is exactly what makes it reasonable to
+  // hold one temperature for everything under it, and drawing the two without it
+  // is what put 800 °C fluid directly on 30 °C water.
+  const addWater = (st, depth, topT, bulkT, note, args) => {
+    if (!(depth > 0)) return;
+    const jump = topT - bulkT;
+    const flux = Math.max(dg.mixedFlux ?? 0, 1e-6);
+    // Never more than a fiftieth of the water it sits on. A dim world with a big
+    // jump can put k*dT/F above the whole column, and a boundary layer thicker
+    // than the thing it bounds is not a boundary layer -- it means the column is
+    // too thin to be stratified at all, so the cap swallows it and the water is
+    // drawn as one temperature. The metre floor is the other end: below that it
+    // is a sliver nobody can see and a number nobody can read.
+    const skin = jump > 0.5
+      ? clamp(K_WATER * jump / flux, Math.min(1, depth), Math.max(0.02 * depth, 0)) : 0;
+    if (skin > 0) add('interface', skin, [topT, bulkT], '{0} W/m² across it', [flux < 1 ? flux.toFixed(2) : flux.toFixed(1)]);
+    const rest = Math.max(depth - skin, 0);
+    const deep = Math.min(st.superDepth ?? 0, rest);
+    const baseT = st.baseTemperature ?? bulkT;
+    add('ocean', rest - deep, [bulkT, Math.min(baseT, T_CRIT_H2O)], note, args);
     // Above the critical pressure -- and this crossing is at 478 times it --
     // liquid and supercritical are one continuous fluid with no transition
     // between them, so the band edge is where the name changes and not where
@@ -380,18 +422,32 @@ export function columnLayers(w, dg, airThick) {
   // No pressure on the air band: it is a tile of its own two rows above this in
   // the readout, and the line is long enough with a thickness and a temperature
   // on it to start losing its own label to an ellipsis on a narrow panel.
+  // With a pool under it the lid's own base is at the critical temperature --
+  // that is where it stops being supercritical -- so it reads as the descent it
+  // is rather than as one number belonging to its top.
+  const overPool = lid && dg.coldPool && dg.coldPool.liquidDepth > 0;
   add(lid ? 'supercritical' : envShare > 0.5 * pTot ? 'envelope' : 'air',
-    Math.max(airThick, 1), [Ts], lid ? 'no surface' : null);
+    Math.max(airThick, 1),
+    overPool && Ts > T_CRIT_H2O + 1 ? [Ts, T_CRIT_H2O] : [Ts],
+    lid ? 'no surface' : null);
 
   if (lid) {
     const cp = dg.coldPool;
     if (cp && cp.liquidDepth > 0) {
       const cold = 100 * (1 - clamp(dg.hotLayer ?? 1, 0, 1));
       const top = dg.coldT ?? T_COLD_POOL;
+      // Nothing sits at 800 °C directly on water at 30. What is between them is a
+      // conductive boundary layer, and how thick it is is not a free parameter:
+      // it is the layer that carries the flux crossing the interface, F = k·ΔT/δ
+      // with water's own conductivity, so δ = k·ΔT/F. Tens of metres on a world
+      // absorbing a few hundred watts and hundreds on a dim one -- thin against
+      // a column hundreds of kilometres deep, which is exactly what makes it
+      // reasonable to hold one temperature for everything under it.
+      //
       // "still cold" was written when this water was assumed to be at freezing.
-      // It is the share of the inventory the hot layer has not taken, and on this
-      // world that water is at 373 °C, which is not cold by any reading.
-      addWater(cp, cp.liquidDepth, top, '{0}% not converted', [cold.toFixed(0)]);
+      // It is the share of the inventory the hot layer has not taken.
+      addWater(cp, cp.liquidDepth, Math.min(T_CRIT_H2O, Math.max(Ts, top)), top,
+        '{0}% not converted', [cold.toFixed(0)]);
       if (cp.iceDepth > 0) {
         add(iceKind(cp.pMelt, cp.basePressure), cp.iceDepth,
           [cp.baseTemperature], '{0} GPa at the floor', [(cp.basePressure / 1e9).toFixed(1)]);
@@ -402,14 +458,18 @@ export function columnLayers(w, dg, airThick) {
     // much of the column has actually gone over rather than how much wants to.
     const hot = clamp(dg.hotLayer ?? 0, 0, 1);
     const liquid = ob.liquidDepth ?? 0;
+    // The water under the surface skin. Never warmer than the surface: a pool
+    // that has been left behind by a COOLING surface overturns rather than
+    // sitting there, which is the asymmetry advanceColdPool already carries.
+    const bulk = Math.min(dg.coldT ?? Ts, Ts);
     if (hot > 0.005 && liquid > 0) {
       add('supercritical', liquid * hot, [Ts], '{0}% converted', [(hot * 100).toFixed(0)]);
-      addWater(ob, liquid * (1 - hot), Ts, 'still liquid');
+      addWater(ob, liquid * (1 - hot), Math.min(Ts, T_CRIT_H2O), bulk, 'still liquid');
     } else {
       const ice = (w.water.seaIce ?? 0) + (w.water.landIce ?? 0);
       const tot = ice + (w.water.ocean ?? 0);
       if (tot > 0 && ice / tot > 0.5) add('seaice', liquid || 1000, [Ts], 'frozen over');
-      else addWater(ob, liquid, Ts);
+      else addWater(ob, liquid, Math.min(Ts, T_CRIT_H2O), bulk);
     }
     if (ob.iceDepth > 0) {
       add(iceKind(ob.pMelt, ob.basePressure ?? 0), ob.iceDepth,

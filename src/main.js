@@ -8,7 +8,7 @@ import { captureWorld, applyWorld } from './game/snapshot.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
 import { derive, maxWaterEO } from './physics/planet.js';
 import { scaleHeight } from './render/atmosphere.js';
-import { runawayLimit, iceFraction } from './physics/radiation.js';
+import { iceFraction } from './physics/radiation.js';
 import { transitRadius, waterMassFraction } from './physics/planet.js';
 import { columnLayers } from './physics/ocean.js';
 import { NBANDS, lockFactor, setWaterInventory, X as BAND_X } from './physics/climate.js';
@@ -922,6 +922,7 @@ const LAYER_STYLE = {
   iceVI:         ['#9fc6d8', 'ice VI'],
   iceVII:        ['#7fa8bd', 'ice VII'],
   iceHP:         ['#8bb7cb', 'high-pressure ice'],
+  interface:     ['#7a6fc4', 'thermal boundary'],
   rock:          ['#6b5a4a', 'rock'],
 };
 
@@ -1000,11 +1001,13 @@ function updateReadout() {
   }
 
   const lossGyr = (w.escape?.water ?? 0) * 1e9 / d.eoColumn;
-  const rl = runawayLimit(dg.pCO2, dg.pN2 + dg.pCH4, dg.pH2 ?? 0, dg.g, dg.pHe ?? 0);
   // Sunlight *and* the planet's own heat. A tidally heated world can be past the
   // Simpson-Nakajima limit on its interior alone, and a margin computed from
-  // insolation would read comfortable while the ocean boiled.
-  const margin = rl.flux - (dg.absorbed + dg.Fint);
+  // insolation would read comfortable while the ocean boiled. Computed in the
+  // diagnostics now rather than here: the classifier needs the same number to
+  // tell a runaway with an ocean under it from one without, and two places
+  // computing it is two places for them to disagree.
+  const margin = dg.runawayMargin;
 
   // The tile calls the number what it is. On a world with a lid there is no
   // surface for it to be the temperature of -- the cross-section says "no
@@ -1018,7 +1021,7 @@ function updateReadout() {
       `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`,
       '', pool ? t('There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.') : '') +
     (pool ? stat(t('Water below'), `${(pool - 273.15).toFixed(0)}<small> °C</small>`, '',
-      t('The water the hot layer has not converted yet, at the temperature it had when it last had a surface. Nothing in this model warms it: every watt that crosses the boundary is spent converting water rather than heating what is left.')) : '') +
+      t('The bulk of the water the hot layer has not converted yet. It is not held at the temperature it started with -- heat crosses the boundary above it and warms it -- but it crosses slowly, because an ocean heated from above is stably stratified, and a column hundreds of kilometres deep takes a long time to feel it.')) : '') +
     // On a locked world the mean is a number no part of the planet has. It sits
     // between a day side that never sets and a night side that never sees the
     // star, and on TRAPPIST-1b those are 237 °C and −186 °C -- so a mean of

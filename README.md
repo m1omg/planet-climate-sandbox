@@ -2921,6 +2921,70 @@ has finished converting scores 1.00 too, and that is right as well: its rock is
 certainly molten, and it is certainly under four thousand kelvin of supercritical
 water you cannot see through.
 
+### Two halves of a runaway, and only one of them has an ocean
+
+`wetRunaway` was doing duty for both halves of a thing that is two things. A
+runaway that is still boiling its sea and a runaway whose sea is already in the
+sky are the same state under the old test — `T > 420` with water present — and
+they are not the same length of time. Measured across a 0.5 to 500 EO sweep at
+1.9 S⊕, **every world's boiling phase ends with nothing liquid left, within 1 to
+135 kyr.** The half with an ocean in it is a transient; the half without is where
+the world then sits for 10⁸–10⁹ years losing its water to space.
+
+So the split is on the ocean rather than on the surface:
+
+| | |
+|---|---|
+| **Buried Ocean** | a runaway is under way and there is still liquid water under it |
+| **Steam Runaway Greenhouse** | the same runaway, with the sea already in the sky |
+| **Dry Runaway Greenhouse** | and then the water is gone |
+
+Buried Ocean no longer requires the surface to be past the critical point. That
+was one particular marker of the state rather than the state itself: an ocean is
+buried by whatever is on top of it, steam or supercritical fluid alike. What it
+requires now is that the runaway is real — past the Simpson–Nakajima limit, or a
+surface past the critical point — and that the water underneath is genuinely
+liquid, which means condensed *and* below the critical temperature, since water
+in the ocean reservoir at 700 K is not a liquid. Both terms are cheap; there is
+no column solve in a function that runs every frame.
+
+The "below the critical temperature" half of that test was written the obvious
+way and was unreachable by construction. `advanceColdPool` caps the pool one
+kelvin *under* the critical point on purpose — water hotter than that is the hot
+layer, and moving that boundary costs latent heat the pool's own budget does not
+pay — so `coldT < T_crit` never fails on the physics. It fails on the cap. The
+pool saturates against its ceiling while the column is still four fifths
+unconverted, which is the middle of the state and not the end of it, and a
+hundred-Myr cold start came out labelled **Steam Runaway Greenhouse** with 200 km
+of liquid water drawn underneath the label saying `79% not converted`. What
+decides it is the share of the column that has actually gone over, which is the
+number `advanceHotLayer` integrates and the cross-section draws, so that is what
+the test reads now. Found in a browser, pinned in Node.
+
+Widening it cannot swallow the state it sits above, because the state it sits
+above does not last. What it does instead is scale with the water, which is the
+whole point:
+
+```
+water     Buried Ocean        then Steam Runaway
+  1 EO    under a kyr         from 2 kyr
+ 10 EO    89 kyr              107 kyr
+ 60 EO    552 kyr             662 kyr
+300 EO    2.8 Myr             3.4 Myr
+500 EO    4.1 Myr             4.9 Myr
+```
+
+**And water alone does it.** No hydrogen anywhere: 60 EO at 1.6 S⊕ spends 2.3 Myr
+as a buried ocean with a 32 °C pool under 138 km of liquid; 500 EO spends 21. The
+hydrogen in the case that prompted this was what caused the *runaway* — the same
+world with the hydrogen taken out sits at 17 °C in energy balance, because a
+fully ocean-covered planet reflects half the light that falls on it — and this
+model's hydrogen greenhouse is known to be too strong by the two Hycean inner-edge
+`GAP` rows.
+
+The rename carries the discovery log with it: a state somebody found stays found,
+old id in and new id out at the door in `loadDiscovered`.
+
 ### The pool has its own temperature, and its own thermal inertia
 
 The water under the lid was taken to be at whatever the surface was when the lid
@@ -2969,6 +3033,63 @@ equilibrated super-runaway interior. On a world being heated fast the interior
 lags, the deepest water is the *coldest*, it makes ice rather than fluid, and
 what arrives is the lid from above. Both are drawn, and which one you get is a
 fact about the world's history rather than about water.
+
+### Two temperatures need something between them
+
+Giving the pool its own temperature bought a second problem immediately: the
+cross-section then drew 800 °C supercritical fluid resting directly on 29 °C
+water, one band on top of the other, with nothing in between. Both numbers are
+right and the picture is a lie, because a 770 K discontinuity across a drawn line
+is not a thing water does.
+
+What is actually there is a conductive boundary layer, and its thickness is not a
+free parameter — it is fixed by the flux that has to cross it:
+
+```
+F = k dT / d      ->      d = k dT / F
+```
+
+with `k` = 0.6 W/(m·K) for water and `F` the same `MIX_EFF_DOWN` fraction of the
+absorbed flux that `advanceColdPool` warms the pool with. Nothing new is
+assumed; the layer is the one that carries the heat the pool is already being
+given. On the Cold-Start Runaway that is 0.6 × 347 K / 0.45 W/m² = **459 m**
+across a 347 K drop. On Earth, with a 9 K lag and 4.8 W/m² going down, it is
+**about a metre** — which is the right order for a purely conductive skin, and
+why Earth shows no band at all once its pool has caught up and the lag is under
+half a degree.
+
+Four hundred metres against a 250 km column is the useful part of the answer.
+It is thin enough that holding one temperature for everything under it is still
+reasonable — the stratification is real but it lives in a sliver — and thick
+enough to draw. So the descent now reads:
+
+```
+supercritical   156.5 km   1621 -> 374 °C   no surface
+thermal bdry       459 m    374 -> 27 °C    0.45 W/m² across it
+liquid ocean     247.0 km     27 -> 311 °C  94% not converted
+```
+
+The lid band learned to end at the critical point in the same edit. It was
+printing one number, the sky temperature, for a layer whose bottom is by
+definition where water stops being supercritical, so it now descends 1621 → 374
+and hands off to the boundary at the temperature the boundary starts from.
+
+The helper is written for any stratified water, not for the lid case: an open
+ocean whose bulk lags its surface gets the same three bands, because the physics
+that puts them there does not care whether there is a surface above. It is
+skipped where it would be a fiction — no water under it, a jump under half a
+degree, or a column too thin to stratify, where the layer is capped at a
+fiftieth of the water it bounds and the water is drawn as one temperature
+instead.
+
+One more thing came out of it, and it is the reason the crash is worth writing
+down: `drawStructure` destructures `LAYER_STYLE[kind]` with no fallback, so the
+new `interface` kind — added to the physics, not to the table — was not a grey
+band, it was a `TypeError` inside the readout and a blank panel on the first
+frame that drew one. The kinds are now a list in `ocean.js`, `add` refuses
+anything not on it, and `smoketest.mjs` holds that list against the renderer's
+table in both directions: an unstyled kind is a broken page, and a styled kind
+that no longer exists is a dead entry.
 
 ### The line that is not there
 

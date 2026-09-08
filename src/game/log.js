@@ -16,9 +16,17 @@ import { t, tx } from './i18n.js';
 const KEY = key('discovered.v1');
 const BARE = 'planetclimate.discovered.v1';
 
+// A state that has been renamed is still a state somebody found. The log is a
+// set of ids in localStorage, so renaming one silently un-discovers it for
+// everybody who had it -- and the whole point of the log is that it is a record
+// of what you have seen. Old id in, new id out, at the door.
+const RENAMED = { wetRunaway: 'steamRunaway' };
+
 export function loadDiscovered() {
-  try { return new Set(JSON.parse(adopt('discovered.v1', BARE) || '[]')); }
-  catch { return new Set(); }
+  try {
+    const raw = JSON.parse(adopt('discovered.v1', BARE) || '[]');
+    return new Set(raw.map((id) => RENAMED[id] || id));
+  } catch { return new Set(); }
 }
 
 export function saveDiscovered(set) {
