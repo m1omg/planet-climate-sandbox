@@ -1,7 +1,8 @@
 import { loadShaders, toES100, bakeES100 } from './shaders.js';
 import { NBANDS } from '../physics/climate.js';
 import { clamp, smoothstep, steamOpacity } from '../physics/constants.js';
-import { atmosphereLook, cloudLook, volcanoLook, surfaceHidden } from './atmosphere.js';
+import { atmosphereLook, cloudLook, volcanoLook, surfaceHidden,
+         buriedOceanCover } from './atmosphere.js';
 import { seaLevelForLand, vegetationColor } from './terrain.js';
 
 // Raw WebGL2: one full-screen quad, the planet ray-traced analytically in the
@@ -823,7 +824,13 @@ export class PlanetView {
     gl.uniform3f(this.u.uStarColor, sc[0], sc[1], sc[2]);
     gl.uniform3f(this.u.uVegColor, vc[0], vc[1], vc[2]);
     gl.uniform1f(this.u.uSeed, state.seed);
-    const flooded = dg.flooded ?? dg.oceanFrac;
+    // With the clouds off a buried ocean is drawn as the ocean it is. `flooded`
+    // is the share of the SURFACE under sea, and a world with no surface reads
+    // zero however much water it has, so the cover comes from the pool instead.
+    // Only with the shroud off: with it on, the steam is what you are meant to
+    // be looking at, and the sky keeps its layers.
+    const flooded = Math.max(dg.flooded ?? dg.oceanFrac,
+      this.showClouds === false ? buriedOceanCover(dg) : 0);
     gl.uniform1f(this.u.uOceanFrac, flooded);
     gl.uniform1f(this.u.uSeaLevel, seaLevelForLand(1 - flooded));
     // What the world is actually supporting, not what was asked for. A cooked
@@ -858,8 +865,12 @@ export class PlanetView {
     // IS the outside of the planet, with two hundred kilometres of ocean under
     // it, and taking it away does not reveal the ground: there is no ground to
     // reveal, and what was drawn instead was bare rock the model has buried.
+    // Switching the shroud off takes the steam with it, buried world or not.
+    // It used to be kept there deliberately -- taking it away revealed bare rock
+    // the model had put an ocean over -- but the fix for that was to draw the
+    // ocean, not to refuse to open the curtain. What is under it now is water.
     const hidden = surfaceHidden(dg, steam);
-    gl.uniform1f(this.u.uSteam, this.showClouds === false ? steam * hidden : steam);
+    gl.uniform1f(this.u.uSteam, this.showClouds === false ? 0 : steam);
     gl.uniform1f(this.u.uAtmoThick, atmo.thickness);
     gl.uniform1f(this.u.uVeil, atmo.veil);
     gl.uniform1f(this.u.uHaze, atmo.haze);

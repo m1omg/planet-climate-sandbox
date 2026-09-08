@@ -3,7 +3,7 @@ import {
   OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH, M_EARTH,
   T_CRIT_H2O, CP_WATER,
 } from './constants.js';
-import { T_COLD_POOL } from './ocean.js';
+import { T_COLD_POOL, RHO_ICE_HP, coldPoolStructure, oceanStructure } from './ocean.js';
 import { iceFraction } from './radiation.js';
 import { nonThermalEscape, resurfacingProgress } from './evolution.js';
 import { stepLife } from './biosphere.js';
@@ -898,6 +898,7 @@ const BIO_DIE = 200;      // yr
 const BIO_GROW = 5000;    // yr
 
 export function stepVolatiles(w, dtYears) {
+  const dg0 = w.diag ?? {};
   advanceIceSheet(w, dtYears);
   advanceColdPool(w, dtYears);
   // How fast the liquid is disappearing, whatever is taking it: escape on a
@@ -918,6 +919,73 @@ export function stepVolatiles(w, dtYears) {
   if (span >= 1000 || span >= 4 * Math.max(dtYears, 0)) {
     if (span > 0) w.liquidRate = (w.liquidMark.v - liquidNow) / span;
     w.liquidMark = { t: w.time, v: liquidNow };
+  }
+  // Where the liquid is GOING, which is a different question from how much of
+  // it is left. Losing water to space and boiling it into the sky both shrink
+  // the ocean, and they are not the same fate: one is gone for good and the
+  // other is still on the planet and will come back down if it ever cools. So
+  // the vapour reservoir gets its own windowed rate next to the escape one.
+  //
+  // Net, not gross. This model has no hydrological cycle -- the vapour column is
+  // diagnostic, set by saturation each step -- so there is no evaporation and
+  // rainfall to difference, and the honest number is how fast the sea is
+  // actually moving into the air. On a settled world that is zero, which is
+  // correct: Earth evaporates a metre a year and gets all of it back.
+  const vapourNow = w.water.vapour ?? 0;
+  if (w.vapourMark == null) w.vapourMark = { t: w.time, v: vapourNow };
+  const vSpan = w.time - w.vapourMark.t;
+  if (vSpan >= 1000 || vSpan >= 4 * Math.max(dtYears, 0)) {
+    // The escape has to be added back. What the reservoir does is
+    // evaporation MINUS escape -- vapour is where water leaves from -- so the
+    // bare difference called a world in steady state "condensing" at exactly the
+    // rate it was losing water to space, which is the opposite of what was
+    // happening to it. Evaporation is the transfer out of the sea, and that is
+    // the difference plus whatever left the top of the atmosphere meanwhile.
+    const escEO = (w.escape?.water ?? 0) / Math.max(dg0.d?.eoColumn ?? 1, 1e-9);
+    if (vSpan > 0) w.vapourRate = (vapourNow - w.vapourMark.v) / vSpan + escEO;
+    w.vapourMark = { t: w.time, v: vapourNow };
+  }
+  // ...and the ice, which on a big water world is most of the inventory and is
+  // the thing that answers "where is all that water". Surface ice is in the
+  // reservoirs; the high-pressure ice at the bottom of a deep column is not --
+  // it is a structural partition of `water.ocean`, so it has to be read off the
+  // column. That costs a solve, which is why it is done only when the window
+  // closes: once every thousand simulated years at the most, against a column
+  // the readout solves every frame anyway.
+  const iceSpan = w.time - (w.iceMark?.t ?? w.time);
+  if (w.iceMark == null || iceSpan >= 1000 || iceSpan >= 4 * Math.max(dtYears, 0)) {
+    // Solved directly rather than through `dg.coldPool` / `dg.oceanBase`. Those
+    // are lazily CACHED on the diagnostics object, and reading them from inside
+    // the step populates the cache at a moment that is not the end of it -- so a
+    // later read in the same step gets a column solved against a `coldT` that has
+    // since moved. It drifted three water worlds in the tenth significant figure,
+    // which is invisible in a chart, survives every anchor, and is exactly what
+    // identity.mjs exists to catch. The structure functions themselves are pure,
+    // so calling them leaves the caches alone.
+    const eo = dg0.d?.eoColumn ?? 0;
+    const flooded = Math.max(dg0.flooded ?? 0, 1e-3);
+    const st = (dg0.hotTarget ?? 0) > 0.5
+      ? coldPoolStructure(dg0)
+      : (eo > 0 ? oceanStructure(
+          ((w.water.ocean ?? 0) + (w.water.seaIce ?? 0)) * eo / flooded,
+          dg0.g, w.coldT ?? dg0.Tmean, dg0.pTotMean ?? 0) : null);
+    const hp = st && st.iceDepth > 0
+      ? st.iceDepth * RHO_ICE_HP * flooded / Math.max(eo, 1e-9) : 0;
+    // The DEEP ice only. Surface ice was in here and made the number unreadable:
+    // an ice sheet relaxes toward its target on a kiloyear timescale, so a
+    // settled Earth reported seven oceans a gigayear of melting on a reservoir
+    // of two thousandths of one -- a real drift, in a unit far too long for it.
+    // The ice this is about is the high-pressure floor of a deep column, which
+    // moves on the timescale the rest of these numbers are quoted in, and how
+    // much surface ice there is is already on the line as "{0}% ice".
+    const iceNow = hp;
+    if (w.iceMark != null && iceSpan > 0) {
+      // Positive while it melts, so it reads the same way round as the others.
+      w.iceRate = (w.iceMark.v - iceNow) / iceSpan;
+      w.iceDeep = hp;
+    }
+    if (w.iceMark == null) w.iceDeep = hp;
+    w.iceMark = { t: w.time, v: iceNow };
   }
   advanceHotLayer(w, dtYears);
   // Who is living here. Reads the climate, changes nothing about it -- see

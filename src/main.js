@@ -916,7 +916,10 @@ const LAYER_STYLE = {
   envelope:      ['#6f8fc7', 'hydrogen envelope'],
   air:           ['#8fb8e0', 'atmosphere'],
   supercritical: ['#a05fc0', 'supercritical'],
-  steam:         ['#c79ad8', 'steam'],
+  // Steam is an atmosphere, and the band is only ever the sky, so it says so.
+  // "steam" alone read as a substance sitting somewhere rather than as what the
+  // planet's air is made of.
+  steam:         ['#c79ad8', 'steam atmosphere'],
   ocean:         ['#2f7fbf', 'liquid ocean'],
   seaice:        ['#cfe6f5', 'sea ice'],
   iceVI:         ['#9fc6d8', 'ice VI'],
@@ -936,7 +939,7 @@ function drawStructure(w, d, dg) {
   // larger: what a transit would see, or the five scale heights the renderer
   // already treats as the visible depth of the sky.
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
-  const layers = columnLayers(w, dg, Math.max(rTr - d.R, 5 * scaleHeight(dg)));
+  const layers = columnLayers(w, dg, Math.max(rTr - d.R, 5 * scaleHeight(dg)), scaleHeight(dg));
 
   // Cube-root compression, then a floor so a thin layer is still a band.
   const H = 210, PAD = 2;
@@ -1020,7 +1023,12 @@ function updateReadout() {
     stat(pool ? t('Fluid top') : t('Mean surface'),
       `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`,
       '', pool ? t('There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.') : '') +
-    (pool ? stat(t('Water below'), `${(pool - 273.15).toFixed(0)}<small> °C</small>`, '',
+    // "Ocean top", not "Water below": the banner two rows up now reports the
+    // AVERAGE of the pool, and this tile is the temperature at the top of it,
+    // immediately under the conductive boundary. Two different numbers about the
+    // same water, so they have to be named for which part of it they describe or
+    // they read as a contradiction.
+    (pool ? stat(t('Ocean top'), `${(pool - 273.15).toFixed(0)}<small> °C</small>`, '',
       t('The bulk of the water the hot layer has not converted yet. It is not held at the temperature it started with -- heat crosses the boundary above it and warms it -- but it crosses slowly, because an ocean heated from above is stably stratified, and a column hundreds of kilometres deep takes a long time to feel it.')) : '') +
     // On a locked world the mean is a number no part of the planet has. It sits
     // between a day side that never sets and a night side that never sees the

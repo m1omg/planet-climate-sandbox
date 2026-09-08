@@ -356,9 +356,16 @@ try {
   // the conductive boundary that carries the flux across the jump -- this was
   // pinned at index 1, which was right until that boundary existed and became a
   // failure about a band that is supposed to be there.
+  // The water starts under the lid with nothing between the two but the
+  // conductive boundary. How many bands the SKY takes is not this check's
+  // business -- it was one, then two once the cool steam above the supercritical
+  // part was drawn -- so this walks up from the sea rather than counting down
+  // from the top: boundary immediately above it, supercritical above that.
   const seaAt = kinds.indexOf(sea ? sea.name : '\u0000');
-  const rightUnder = seaAt === 1
-    || (seaAt === 2 && /thermal boundary|tepeln/i.test(kinds[1] ?? ''));
+  const rightUnder = seaAt > 0
+    && (/thermal boundary|tepeln/i.test(kinds[seaAt - 1] ?? '')
+      ? /supercrit|nadkrit/i.test(kinds[seaAt - 2] ?? '')
+      : /supercrit|nadkrit/i.test(kinds[seaAt - 1] ?? ''));
   ok(/buried|pochovan/i.test(stack.state) && !!sea && under.length >= 1
     && under.every((r) => /\d\s*k?m\b/.test(r.size)) && rightUnder,
     'A Buried Ocean draws the water it is named for, under the lid',
@@ -374,9 +381,10 @@ try {
   const look = await evaluate(`(() => {
     const v = __app.view;
     const read = () => (v.software
-      ? { bare: v.lastBareRock, steam: v.lastSteam }
+      ? { bare: v.lastBareRock, steam: v.lastSteam, sea: v.lastOceanFrac }
       : { bare: v.gl.getUniform(v.prog, v.u.uBareRock),
-          steam: v.gl.getUniform(v.prog, v.u.uSteam) });
+          steam: v.gl.getUniform(v.prog, v.u.uSteam),
+          sea: v.gl.getUniform(v.prog, v.u.uOceanFrac) });
     __app.tick(0.25);
     const on = read();
     v.showClouds = false; __app.tick(0.25);
@@ -387,9 +395,14 @@ try {
   ok(look.on.bare === 0 && look.T > 1150,
     'A buried ocean is not painted as molten rock',
     `${look.T.toFixed(0)} K, bare-rock gate ${look.on.bare}`);
-  ok(look.off.steam === 1,
-    'and hiding the clouds does not strip an envelope there is no ground under',
-    `steam ${look.on.steam} → ${look.off.steam} with the clouds off`);
+  // Switching the shroud off shows you the water it was hiding. This used to
+  // assert the opposite -- the envelope stayed, because taking it away revealed
+  // bare rock on a world carrying five hundred oceans -- but the answer to that
+  // was to draw the ocean, not to refuse to open the curtain. So: the steam goes,
+  // and what is underneath is sea rather than the ground the sea stands on.
+  ok(look.off.steam === 0 && look.off.sea > 0.5 && look.on.sea === 0,
+    'and hiding the clouds shows the ocean a buried world is named for',
+    `steam ${look.on.steam} → ${look.off.steam}, sea ${look.on.sea} → ${look.off.sea}`);
 
   // The water control after a hundred million years of a world that has been
   // evolving its own inventory. The box carries the share of the planet's mass
@@ -430,15 +443,16 @@ try {
       title: document.querySelector('#pan-speed').getAttribute('aria-label'),
     };
   })()`);
-  // Either opening, because which one the line takes is a fact about the world
-  // this check happens to be looking at: a planet with a surface reads "priemer
-  // na povrchu", and one with a lid over its water reads "obloha … voda …",
-  // since calling the top of a fluid column a mean surface temperature is the
-  // thing that phrasing exists to stop. What is being checked is that neither
-  // of them is in English.
+  // Any of the openings, because which one the line takes is a fact about the
+  // world this check happens to be looking at: a planet with water describes the
+  // descent through it ("atmosféra … oceán v priemere …"), a dry one reads
+  // "priemer na povrchu", and one whose sea has finished boiling reads
+  // "obloha … voda …". What is being checked is that none of them is in English.
   ok(slovak.lang === 'sk'
-    && !/mean surface|sky \d|water \d|equator|poles|imbalance/.test(slovak.reason)
-    && /priemer na povrchu|obloha .* voda /.test(slovak.reason),
+    && !/mean surface|sky \d|water \d|atmosphere \d|envelope \d|fluid \d/.test(slovak.reason)
+    && !/boundary|ocean averages|equator|poles|imbalance/.test(slovak.reason)
+    && /priemer na povrchu|obloha .* voda |atmosféra |obal |tekutina |oceán v priemere /
+      .test(slovak.reason),
     'The state banner’s subtitle is translated, not just its title', slovak.reason);
   ok(slovak.option === '0,5×' && /0,5×/.test(slovak.title || ''),
     'The pan-speed menu uses a Slovak decimal comma', `${slovak.option} · ${slovak.title}`);
@@ -853,7 +867,9 @@ try {
       reason: document.querySelector('.state-reason').textContent,
       option: document.querySelector('#pan-speed option').textContent };
   })()`);
-  ok(backToEn.lang === 'en' && /mean surface/.test(backToEn.reason) && backToEn.option === '0.5×',
+  ok(backToEn.lang === 'en'
+    && /mean surface|atmosphere [-\d.]+ °C|ocean averages/.test(backToEn.reason)
+    && backToEn.option === '0.5×',
     'Switching back restores the English banner and menu', backToEn.reason);
 
   const rect = await evaluate("(() => { const r = document.querySelector('#planet').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()");
