@@ -23,7 +23,8 @@ import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
-import { atmosphereLook, cloudLook, scaleHeight, surfaceHidden } from './render/atmosphere.js';
+import { atmosphereLook, cloudLook, scaleHeight, surfaceHidden,
+         buriedOceanCover } from './render/atmosphere.js';
 import { seaLevelForLand, thermalGlow, GLOW_A, GLOW_B, vegetationColor,
          SOLAR_VEGETATION, stellarVegetation } from './render/terrain.js';
 import { radiogenic, brightnessAfter, evolvedParams, approach, EARTH_AGE, dynamoLifetime,
@@ -102,6 +103,17 @@ export function run() {
   } finally {
     running = false;
   }
+}
+
+// Where the sky stops and the water starts. The sky used to be one band and a
+// `slice(1)` was enough; it is two now on a lid world -- cool steam over the
+// supercritical part -- so anything counting water has to find the first band of
+// water rather than assume it is second.
+function waterBands(L) {
+  const i = L.findIndex((l) => l.kind === 'interface' || l.kind === 'ocean'
+    || /^ice|^seaice/.test(l.kind));
+  return { sky: i < 0 ? L.filter((l) => l.kind !== 'rock') : L.slice(0, i),
+    water: (i < 0 ? [] : L.slice(i)).filter((l) => l.kind !== 'rock') };
 }
 
 function runChecks() {
@@ -770,15 +782,21 @@ function runChecks() {
       }
       const dgb = found && found.diag;
       const cp = dgb && dgb.coldPool;
-      const layers = found ? columnLayers(found, dgb, 5 * scaleHeight(dgb)) : [];
+      const layers = found ? columnLayers(found, dgb, 5 * scaleHeight(dgb), scaleHeight(dgb)) : [];
       const kinds = layers.map((l) => l.kind);
       // Under the lid, and drawn: liquid where it is liquid, supercritical where
       // the adiabat has taken it past the critical temperature. What the state
       // is named for is that this water is THERE, not that all of it is liquid.
       // The boundary layer is part of the water: it is the top of the pool, at
       // the temperature the pool's top actually has.
-      const water = layers.slice(1).filter((l) => l.kind === 'ocean'
-        || l.kind === 'supercritical' || l.kind === 'interface');
+      // From the first band of water down. This was `slice(1)` -- drop the sky,
+      // keep the rest -- which was right while the sky was one band. It is two
+      // now, a cool one over the supercritical part, and dropping only the first
+      // counted a hundred and forty kilometres of atmosphere as ocean.
+      const firstWater = kinds.findIndex((k) => k === 'interface' || k === 'ocean');
+      const water = (firstWater < 0 ? [] : layers.slice(firstWater))
+        .filter((l) => l.kind === 'ocean' || l.kind === 'supercritical'
+          || l.kind === 'interface');
       const waterM = water.reduce((a, l) => a + l.metres, 0);
       check('A buried ocean is drawn with the water it is named for',
         !!cp && cp.liquidDepth > 1e3 && waterM > 1e3
@@ -788,10 +806,53 @@ function runChecks() {
           : 'no path reached buriedOcean');
       // Lid, then the conductive boundary that carries the flux across the jump,
       // then the water. Nothing at 800 °C sits directly on water at 30.
+      const iFace = kinds.indexOf('interface');
       check('…with the hot lid above it, and a boundary layer between them',
-        kinds.indexOf('supercritical') === 0 && kinds[1] === 'interface'
-          && kinds[2] === 'ocean',
+        iFace > 0 && kinds[iFace - 1] === 'supercritical' && kinds[iFace + 1] === 'ocean',
         kinds.join(' → '));
+      // The sky gets HOTTER going down, and only part of it is supercritical.
+      // Both of those were wrong: the band read 1621 → 374 °C top to bottom, an
+      // atmosphere hottest at the top, and all of it was called supercritical
+      // though supercritical needs 220.6 bar as well as 647 K. On this world the
+      // critical pressure is a couple of scale heights up, so the sky is cool
+      // steam over a supercritical base, and the base is the hot end.
+      const lidB = layers[iFace - 1], coolB = layers[iFace - 2];
+      check('…and the sky is cooler at the top, with only its base supercritical',
+        !!lidB && lidB.T[1] > lidB.T[0] && Math.abs(lidB.T[0] - T_CRIT_H2O) < 1
+          // Named for what it is made of, not merely "one of the three sky
+          // kinds": this world's air is 99.2% water vapour and it was labelled
+          // `air`, because the composition test used Array.isArray on a
+          // Float64Array, took the scalar branch and compared an object with a
+          // number. A check that accepts any of the three could not see it.
+          && !!coolB && coolB.kind === 'steam'
+          && coolB.T[1] > coolB.T[0] && coolB.T[1] <= lidB.T[0] + 1e-6,
+        `${coolB ? coolB.kind : '?'} ${coolB ? (coolB.T[0] - 273.15).toFixed(0) : '?'} → `
+          + `${coolB ? (coolB.T[1] - 273.15).toFixed(0) : '?'} °C, then supercritical `
+          + `${lidB ? (lidB.T[0] - 273.15).toFixed(0) : '?'} → `
+          + `${lidB ? (lidB.T[1] - 273.15).toFixed(0) : '?'} °C over `
+          + `${lidB ? (lidB.metres / 1000).toFixed(0) : '?'} km`);
+    }
+
+    // The late case, where the boundary layer is thickest against the least
+    // liquid. A settled pool is mostly supercritical -- 600 m of liquid over
+    // 200 km of it -- and the conductive layer is sized by the jump it carries,
+    // which by then is 1400 K. Capped at a fiftieth of the whole COLUMN that is
+    // 1.66 km, and it swallowed the liquid whole: a Buried Ocean drawn with no
+    // ocean band in it, which is the contradiction this state was fixed for
+    // once already. The cap is a fiftieth of the liquid it sits on now.
+    {
+      const late = new Simulation({ ...PRESETS.coldStart.params });
+      late.runYears(1e8);
+      const dgL = late.world.diag;
+      const L = columnLayers(late.world, dgL, 5 * scaleHeight(dgL), scaleHeight(dgL));
+      const sea = L.find((l) => l.kind === 'ocean');
+      const skin = L.find((l) => l.kind === 'interface');
+      check('A buried ocean still has an ocean in it once the pool is nearly converted',
+        classify(late.world).id !== 'buriedOcean'
+          || (!!sea && sea.metres > 1 && !!skin && skin.metres < sea.metres),
+        `${classify(late.world).id}: ${L.map((l) => l.kind).join(' → ')}`
+          + `${sea ? `; ${sea.metres.toFixed(0)} m of liquid under a `
+            + `${skin ? skin.metres.toFixed(0) : '0'} m boundary` : '; NO OCEAN BAND'}`);
     }
 
     // ...and the opposite case, because a band that appears whatever the world
@@ -803,7 +864,7 @@ function runChecks() {
         insolation: 3, startT: 290 });
       sim.runYears(1e8);
       const dgf = sim.world.diag;
-      const kinds = columnLayers(sim.world, dgf, 5 * scaleHeight(dgf)).map((l) => l.kind);
+      const kinds = columnLayers(sim.world, dgf, 5 * scaleHeight(dgf), scaleHeight(dgf)).map((l) => l.kind);
       check('…and nothing liquid is drawn once the lid reaches the bottom',
         (dgf.hotLayer ?? 0) > 0.95 && !kinds.includes('ocean'),
         `${(100 * (dgf.hotLayer ?? 0)).toFixed(0)}% converted: ${kinds.join(' → ')}`);
@@ -820,7 +881,7 @@ function runChecks() {
         const sim = new Simulation({ ...PRESETS[id].params });
         sim.runYears(1e5);
         const dgl = sim.world.diag;
-        const layers = columnLayers(sim.world, dgl, 5 * scaleHeight(dgl));
+        const layers = columnLayers(sim.world, dgl, 5 * scaleHeight(dgl), scaleHeight(dgl));
         for (const l of layers) {
           if (!(l.metres > 0)) bad.push(`${id}:${l.kind} has no thickness`);
           if (l.kind === 'rock') continue;
@@ -854,7 +915,7 @@ function runChecks() {
         const dgc = sim.world.diag;
         if (classify(sim.world).id === 'buriedOcean') {
           after = { T: dgc.Tmean, cold: dgc.coldT, cp: dgc.coldPool,
-            layers: columnLayers(sim.world, dgc, 5 * scaleHeight(dgc)) };
+            layers: columnLayers(sim.world, dgc, 5 * scaleHeight(dgc), scaleHeight(dgc)) };
         } else {
           before = { T: dgc.Tmean, cold: dgc.coldT, liq: dgc.oceanBase.liquidDepth,
             floor: dgc.oceanBase.baseTemperature };
@@ -864,7 +925,7 @@ function runChecks() {
       // critical temperature and is drawn as the supercritical fluid it is; the
       // thing that has to be continuous across the crossing is the column, in
       // whatever phase the column happens to be in.
-      const fluid = after && after.layers.slice(1).filter((l) => l.kind === 'ocean'
+      const fluid = after && waterBands(after.layers).water.filter((l) => l.kind === 'ocean'
         || l.kind === 'supercritical');
       const fluidM = fluid ? fluid.reduce((a, l) => a + l.metres, 0) : 0;
       const sea = after && after.layers.find((l) => l.kind === 'ocean');
@@ -913,7 +974,7 @@ function runChecks() {
         sim.runYears(yr - sim.world.time);
         if (classify(sim.world).id === 'buriedOcean') { dgs = sim.world.diag; break; }
       }
-      const layers = dgs ? columnLayers(sim.world, dgs, 5 * scaleHeight(dgs)) : [];
+      const layers = dgs ? columnLayers(sim.world, dgs, 5 * scaleHeight(dgs), scaleHeight(dgs)) : [];
       const wet = layers.filter((l) => l.kind === 'ocean');
       check('No band called liquid is drawn above the critical temperature',
         !!dgs && wet.every((l) => l.T.every((T) => T <= T_CRIT_H2O + 1e-9)),
@@ -931,7 +992,7 @@ function runChecks() {
       // not gone supercritical yet is still described by `oceanBase`. Either
       // way, what is drawn has to add up to what the solver reports.
       const col = (dgs && dgs.coldPool) || (dgs && dgs.oceanBase) || {};
-      const fluid = layers.slice(1).filter((l) => l.kind === 'ocean'
+      const fluid = waterBands(layers).water.filter((l) => l.kind === 'ocean'
         || l.kind === 'supercritical' || l.kind === 'interface')
         .reduce((a, l) => a + l.metres, 0);
       const iced = layers.filter((l) => /^ice/.test(l.kind)).reduce((a, l) => a + l.metres, 0);
@@ -977,16 +1038,97 @@ function runChecks() {
       }
       const line = reasonText(sim.world, classify(sim.world));
       const dgb = sim.world.diag;
-      check('A buried ocean says how hot the water is, not just the sky',
-        /water (below )?\d+ °C/.test(line)
-          && line.includes(`${(dgb.coldT - 273.15).toFixed(0)}`),
-        line.slice(0, 110));
-      // ...and a world with an actual surface still says "mean surface".
-      const earth = new Simulation({ ...PRESETS.earth.params });
-      earth.runYears(1e5);
-      const eline = reasonText(earth.world, classify(earth.world));
-      check('…and a world with a surface still reports one',
-        /mean surface/.test(eline) && !/water \d+ °C/.test(eline), eline.slice(0, 80));
+      // Three numbers, because the column is a descent and two numbers made it
+      // look like a discontinuity: what is on top, the boundary the water starts
+      // at drawn as the span it is, and the AVERAGE of the liquid.
+      check('A buried ocean describes the descent, not its two ends',
+        /(envelope|atmosphere|fluid) [-\d.]+ °C/.test(line)
+          && /boundary [-\d.]+ (→ [-\d.]+ )?°C/.test(line)
+          && /ocean averages [-\d.]+ °C/.test(line),
+        line.slice(0, 130));
+      // The claim the third number makes is that it is an average of the
+      // descent and not the top of it -- `coldT` is the water immediately under
+      // the conductive boundary, and everything below it is warmer.
+      const poolb = dgb.coldPool ?? dgb.oceanBase;
+      check('…and the ocean number is an average, not the top of the pool',
+        poolb.meanTemperature > dgb.coldT
+          && poolb.meanTemperature <= poolb.baseTemperature + 1e-6,
+        `top ${(dgb.coldT - 273.15).toFixed(1)} < mean `
+          + `${(poolb.meanTemperature - 273.15).toFixed(1)} ≤ floor `
+          + `${(poolb.baseTemperature - 273.15).toFixed(1)} °C`);
+      // Three kelvin of spread on a world at 3618 K is not a climate zone, and
+      // the clause that reports it was gated on two kelvin flat. Measured on a
+      // world that clears the OLD bound, because the cold start's own spread is
+      // a third of a kelvin and would pass this either way -- a check that
+      // cannot fail against the code it was written for proves nothing about it.
+      // This one does fail against it: 3.13 K beats two, so the old rule printed
+      // "equator 3346 °C, poles 3343 °C".
+      const wide = new Simulation({ ...PRESETS.hycean.params, water: 500,
+        insolation: 3, startT: 290 });
+      for (let i = 0; i < 8 && classify(wide.world).id !== 'buriedOcean'; i++) wide.runYears(1e5);
+      const wline = reasonText(wide.world, classify(wide.world));
+      const dgw = wide.world.diag;
+      check('…and three kelvin on a world at three thousand is not a range',
+        dgw.Tmax - dgw.Tmin > 2 && !/equator/.test(wline),
+        `spread ${(dgw.Tmax - dgw.Tmin).toFixed(2)} K on ${dgw.Tmean.toFixed(0)} K `
+          + `= ${(100 * (dgw.Tmax - dgw.Tmin) / dgw.Tmean).toFixed(2)}%`);
+      // ...and a world with no liquid water at all still says "mean surface".
+      // `oceanStructure` solves an adiabat for any column it is handed, so
+      // gating the ocean term on the column alone put an ocean on Titan.
+      const dry = new Simulation({ ...PRESETS.venus.params });
+      dry.runYears(1e5);
+      const dline = reasonText(dry.world, classify(dry.world));
+      check('…and a world with no ocean does not report one',
+        /mean surface/.test(dline)
+          && !/ocean averages|boundary|water \d+ °C/.test(dline), dline.slice(0, 90));
+      const froz = new Simulation({ ...PRESETS.titan.params });
+      froz.runYears(1e5);
+      const fline = reasonText(froz.world, classify(froz.world));
+      check('…nor does a world whose water is ice all the way down',
+        !/ocean averages/.test(fline), fline.slice(0, 90));
+    }
+
+    // The threshold that silences the spread clause is relative, and the world it
+    // is calibrated against is Noachian Mars: 3.40 K on 278 K is 1.22%, which
+    // clears one percent by six tenths of a kelvin. It is the closest preset to
+    // the line on the keeping side, so it is the one worth pinning -- a bound of
+    // 1.5% would have taken its clause away, and the point of the clause is
+    // worlds whose poles and equator are genuinely different places.
+    {
+      const near = new Simulation({ ...PRESETS.earlyMars.params });
+      near.runYears(2e5);
+      const nline = reasonText(near.world, classify(near.world));
+      const dgn = near.world.diag;
+      check('The spread clause survives on the world it is calibrated against',
+        /equator/.test(nline),
+        `early Mars ${(dgn.Tmax - dgn.Tmin).toFixed(2)} K on ${dgn.Tmean.toFixed(0)} K `
+          + `= ${(100 * (dgn.Tmax - dgn.Tmin) / dgn.Tmean).toFixed(2)}%`);
+    }
+
+    // The mean is a depth-weighted integral of the same adiabat the column is
+    // drawn from, so it is held against a brute-force integration of that
+    // adiabat rather than against a number somebody typed. If the two ever part,
+    // the closed-form march and the profile have drifted.
+    {
+      const sim = new Simulation({ ...PRESETS.hycean.params });
+      sim.runYears(2e5);
+      const ob = sim.world.diag.oceanBase;
+      // Reconstructed from the band the cross-section draws: the top is the
+      // temperature the column was solved at, the floor is baseTemperature, and
+      // between them the adiabat is logarithmic in pressure. A 4000-step march
+      // in depth over that profile is the reference.
+      const N = 4000, top = sim.world.coldT ?? sim.world.diag.Tmean;
+      let acc = 0;
+      for (let i = 0; i < N; i++) {
+        const f = (i + 0.5) / N;
+        acc += top * Math.pow(ob.baseTemperature / top, f);
+      }
+      const rough = acc / N;
+      check('The ocean average is an integral of the column, not an endpoint',
+        ob.meanTemperature > top && ob.meanTemperature < ob.baseTemperature
+          && Math.abs(ob.meanTemperature - rough) < 0.08 * (ob.baseTemperature - top),
+        `${(ob.meanTemperature - 273.15).toFixed(1)} °C between `
+          + `${(top - 273.15).toFixed(1)} and ${(ob.baseTemperature - 273.15).toFixed(1)}`);
     }
 
     // The water control leads with the share of the planet's mass, because that
@@ -1187,10 +1329,10 @@ function runChecks() {
       for (let yr = 5.9e7; yr <= 6.05e7; yr += 5e4) {
         sim.runYears(yr - sim.world.time);
         const dgx = sim.world.diag;
-        const L = columnLayers(sim.world, dgx, 5 * scaleHeight(dgx));
-        const water = L.slice(1).filter((l) => l.kind !== 'rock');
+        const L = columnLayers(sim.world, dgx, 5 * scaleHeight(dgx), scaleHeight(dgx));
+        const { sky, water } = waterBands(L);
         seq.push({
-          lid: L[0].kind === 'supercritical',
+          lid: sky.some((l) => l.kind === 'supercritical'),
           deepSuper: water.some((l) => l.kind === 'supercritical'),
           liquid: water.filter((l) => l.kind === 'ocean').reduce((a, l) => a + l.metres, 0),
           ice: water.filter((l) => /^ice/.test(l.kind)).reduce((a, l) => a + l.metres, 0),
@@ -1234,7 +1376,7 @@ function runChecks() {
       const sim = new Simulation({ ...PRESETS.earlyVenus.params, h2Bar: 2, water: 300 });
       sim.runYears(1e7);
       const dgn = sim.world.diag;
-      const L = columnLayers(sim.world, dgn, 5 * scaleHeight(dgn));
+      const L = columnLayers(sim.world, dgn, 5 * scaleHeight(dgn), scaleHeight(dgn));
       const under = L.findIndex((l, i) => i > 0 && l.kind === 'supercritical'
         && L[i - 1].kind === 'ocean');
       check('A supercritical layer under an ocean says it is not a boundary',
@@ -1253,7 +1395,7 @@ function runChecks() {
       const sim = new Simulation({ ...PRESETS.hycean.params });
       sim.runYears(1e5);
       const dgi = sim.world.diag;
-      const kinds = columnLayers(sim.world, dgi, 5 * scaleHeight(dgi)).map((l) => l.kind);
+      const kinds = columnLayers(sim.world, dgi, 5 * scaleHeight(dgi), scaleHeight(dgi)).map((l) => l.kind);
       const ob = dgi.oceanBase;
       const crosses = ob.iceDepth > 0 && ob.basePressure > 2.216e9 && ob.pMelt < 2.216e9;
       check('An ice band that crosses the VI/VII point is not called ice VI',
@@ -1285,6 +1427,22 @@ function runChecks() {
         hidden > 0.9 && bare < 0.02 && dry.world.diag.Tmean > 1500,
         `buried ocean ${hidden.toFixed(2)}; ${(dry.world.diag.Tmean - 273.15).toFixed(0)} °C `
           + `magma world ${bare.toFixed(2)}`);
+      // ...and with the clouds off, what you see instead of the steam is the
+      // water. `flooded` is the share of the SURFACE under sea and reads 0.000
+      // on a world with no surface, however much water it has, so the cover for
+      // the renderer comes from the pool. It has to discriminate, or it would be
+      // a constant dressed as a measurement: a world that has FINISHED
+      // converting has no liquid left to show and must still be drawn as the hot
+      // rock it is.
+      const done = new Simulation({ ...PRESETS.brink.params });
+      done.runYears(2e5);
+      const cover = buriedOceanCover(buried.world.diag);
+      const noneLeft = buriedOceanCover(done.world.diag);
+      check('With the clouds off a buried ocean is drawn as ocean, a boiled one is not',
+        cover > 0.5 && (buried.world.diag.flooded ?? 0) < 0.01 && noneLeft < 0.01,
+        `buried cover ${cover.toFixed(2)} on flooded `
+          + `${(buried.world.diag.flooded ?? 0).toFixed(3)}; `
+          + `${classify(done.world).id} ${noneLeft.toFixed(2)}`);
     }
 
     // Earth's own column, because the general check above would pass on a
@@ -1295,13 +1453,20 @@ function runChecks() {
       const sim = new Simulation({ ...PRESETS.earth.params });
       sim.runYears(1e5);
       const dge = sim.world.diag;
-      const layers = columnLayers(sim.world, dge, 5 * scaleHeight(dge));
+      const layers = columnLayers(sim.world, dge, 5 * scaleHeight(dge), scaleHeight(dge));
       const air = layers[0], sea = layers.find((l) => l.kind === 'ocean');
-      check('Earth reads air → ocean → rock, and its sea floor is the warmer end',
+      // The air band's BOTTOM is the headline number, not its top. It used to be
+      // pinned the other way, which is an atmosphere with its coldest air at the
+      // ground: the sky runs from the temperature the planet radiates at down to
+      // the surface, about -18 °C to 15 °C on Earth.
+      check('Earth reads air → ocean → rock, cooler at the top of the sky and warmer at the sea floor',
         layers.map((l) => l.kind).join() === 'air,ocean,rock'
-          && Math.abs(air.T[0] - dge.Tmean) < 1e-9
+          && Math.abs(air.T[air.T.length - 1] - dge.Tmean) < 1e-9
+          && air.T[0] < air.T[1] && air.T[0] > 200
           && sea.T[1] > sea.T[0] && sea.T[1] - sea.T[0] < 5,
-        `${layers.map((l) => l.kind).join(' → ')}; sea ${(sea.T[0] - 273.15).toFixed(1)} `
+        `${layers.map((l) => l.kind).join(' → ')}; air ${(air.T[0] - 273.15).toFixed(1)} `
+          + `→ ${(air.T[air.T.length - 1] - 273.15).toFixed(1)} °C; `
+          + `sea ${(sea.T[0] - 273.15).toFixed(1)} `
           + `→ ${(sea.T[1] - 273.15).toFixed(1)} °C`);
     }
 

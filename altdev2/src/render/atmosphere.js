@@ -83,6 +83,25 @@ export function surfaceHidden(dg, steam) {
   return clamp((dg.hotTarget ?? 0) * wet, 0, 1);
 }
 
+// The sea that is under the lid, as a surface cover the renderer can draw.
+//
+// With the clouds off, taking the steam away used to reveal bare rock on a world
+// carrying five hundred oceans, because `flooded` is the share of the SURFACE
+// under sea and a buried ocean has no surface: it reads zero while the reservoir
+// holds 489 EO. Switching the shroud off should show you the water it is hiding,
+// not the ground the water is standing on.
+//
+// The pool is global -- it is one column, not a basin -- so the cover is the
+// share of the planet that has gone over, times the share of the column the hot
+// layer has NOT converted. Once conversion finishes there is no liquid left and
+// this falls to zero on its own, which is the moment the world really is a dry
+// hot rock and should be drawn as one.
+export function buriedOceanCover(dg) {
+  if (!((dg.totalWater ?? 0) > 0.005)) return 0;
+  const left = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
+  return clamp((dg.hotTarget ?? 0) * left, 0, 1);
+}
+
 // What volcanism looks like from orbit, from the melt production the physics
 // already tracks. One place, because two renderers reading the same number and
 // mapping it differently would be a difference nobody could account for.

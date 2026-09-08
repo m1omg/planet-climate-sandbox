@@ -739,9 +739,20 @@ if (created < 20) {
   const spy = (str, ...a) => { seen.add(str); return String(str).replace(/\{(\d+)\}/g, (m, i) => a[i]); };
   // A spread of worlds, so the locked, icy, escaping and frozen-out branches
   // all get walked rather than just temperate Earth's two bits.
-  for (const id of ['earth', 'mars', 'venus', 'snowball', 'trappist1b', 'titan', 'moon']) {
+  for (const id of ['earth', 'mars', 'venus', 'snowball', 'trappist1b', 'titan', 'moon',
+    'hycean', 'brink']) {
     const sim = new Simulation({ ...PRESETS[id].params });
     sim.runYears(2e5);
+    reasonText(sim.world, classify(sim.world), spy);
+  }
+  // None of those has a lid, so none of them reaches the branch that describes a
+  // descent -- the new templates would have gone untranslated with the check
+  // still green. This world is under one within a single 1e5-year step, which is
+  // a tenth of the cost of walking the cold start out to sixty megayears.
+  {
+    const sim = new Simulation({ ...PRESETS.hycean.params, water: 500,
+      insolation: 3, startT: 290 });
+    for (let i = 0; i < 8 && classify(sim.world).id !== 'buriedOcean'; i++) sim.runYears(1e5);
     reasonText(sim.world, classify(sim.world), spy);
   }
   const untranslated = [...seen].filter((k) => !SK.ui[k]);
@@ -756,10 +767,11 @@ if (created < 20) {
   i18n.setLang('en');
   const enLine = reasonText(sim.world, classify(sim.world), i18n.tp);
   const reallyTranslated = seen.size > 0 && skLine !== enLine
-    && !/mean surface|imbalance|ice$|poles/.test(skLine) && /mean surface/.test(enLine);
+    && !/atmosphere|ocean averages|imbalance|ice$|poles/.test(skLine)
+    && /atmosphere|ocean averages/.test(enLine);
   // …and the default must still produce the English, for every headless caller.
   const plain = reasonText(new Simulation({ ...PRESETS.earth.params }).world, null);
-  const defaultOk = typeof plain === 'string' && /mean surface/.test(plain);
+  const defaultOk = typeof plain === 'string' && /atmosphere [-\d.]+ °C/.test(plain);
   if (untranslated.length || !defaultOk || !reallyTranslated) {
     console.log('\x1b[31mFAIL\x1b[0m  the state banner is not fully translatable: '
       + (untranslated.length ? `no Slovak for ${untranslated.map((u) => JSON.stringify(u)).join(', ')}` : '')

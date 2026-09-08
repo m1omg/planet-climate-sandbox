@@ -1,4 +1,4 @@
-import { clamp, T_CRIT_H2O, P_CRIT_H2O } from './constants.js';
+import { clamp, T_CRIT_H2O, P_CRIT_H2O, SIGMA } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // How deep the water goes, and what it turns into on the way down.
@@ -82,6 +82,7 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   const out = {
     depth: 0, liquidDepth: 0, iceDepth: 0, superDepth: 0,
     basePressure: 0, basePhase: 'none', pMelt: meltingPressure(Tsurf),
+    meanTemperature: null,
   };
   if (!(columnKg > 0) || !(g > 0)) return out;
 
@@ -206,14 +207,23 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   // range is now known, so a fixed number of even steps resolves it.
   const depthTo = (pEnd) => {
     const N = 48;
-    let z = 0, mass = 0;
+    let z = 0, mass = 0, zT = 0;
     const dp = (pEnd - pTop) / N;
     for (let i = 0; i < N; i++) {
-      const rho = waterDensity(pTop + dp * (i + 0.5));
-      z += dp / (rho * g);
+      const pp = pTop + dp * (i + 0.5);
+      const dz = dp / (waterDensity(pp) * g);
+      z += dz;
       mass += dp / g;
+      // The same steps carry the temperature, because the average temperature of
+      // the water is a question the column can answer and the banner was asking
+      // the wrong number for. Weighted by DEPTH -- the average you would measure
+      // descending through it -- rather than by mass. The two differ by about a
+      // kelvin on a deep pool, since dm = dp/g makes a mass average a pressure
+      // average while density nearly doubles by 3.5 GPa, and a kelvin is under
+      // the precision the line prints at.
+      zT += adiabat(pp) * dz;
     }
-    return { z, mass };
+    return { z, mass, meanT: z > 0 ? zT / z : Tsurf };
   };
 
   // Where the column stops being a liquid. Above 647.096 K there is no liquid
@@ -230,6 +240,16 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   const pCrit = Tsurf >= T_CRIT_H2O ? pTop
     : pTop + K0 * Math.expm1((T_CRIT_H2O / Tsurf - 1) / K_ADIABAT);
   const superFrom = (pEnd) => (pCrit >= pEnd ? 0 : depthTo(pEnd).z - depthTo(Math.max(pCrit, pTop)).z);
+  // The average temperature of the LIQUID, which stops at the critical crossing:
+  // `coldT` is the temperature at the TOP of the pool, immediately under the
+  // conductive boundary, and the adiabat below it runs thirty kelvin warmer on a
+  // buried ocean. Averaging across the crossing would put supercritical fluid
+  // into a number called an ocean temperature, which is the same category error
+  // the "liquid ocean · 373 → 554 °C" band was fixed for.
+  const meanLiquidT = (pEnd) => {
+    const pLiq = Math.min(pEnd, pCrit);
+    return pLiq > pTop ? depthTo(pLiq).meanT : null;
+  };
 
   if (pFreeze > pTop) {
     const liq = depthTo(pFreeze);
@@ -240,6 +260,7 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
       out.depth = liq.z + out.iceDepth;
       out.basePressure = pFreeze + rest * g;
       out.baseTemperature = adiabat(pFreeze);
+      out.meanTemperature = meanLiquidT(pFreeze);
       out.basePhase = out.baseTemperature >= T_VI_VII ? 'ice VII' : 'ice VI';
       out.pMelt = pFreeze;
       // Nixon & Madhusudhan's third regime: warm enough and the bottom of the
@@ -262,6 +283,7 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   out.depth = out.liquidDepth = all.z;
   out.basePressure = pTop + pBase;
   out.baseTemperature = adiabat(pTop + pBase);
+  out.meanTemperature = meanLiquidT(pTop + pBase);
   // A floor of rock is what every world this model shipped with has. A floor
   // that is neither rock nor ice is the supercritical interior: too deep for
   // the rock to be reachable, too warm for the water ever to freeze.
@@ -353,7 +375,7 @@ export function coldPoolStructure(dg) {
 export const LAYER_KINDS = ['envelope', 'air', 'supercritical', 'steam',
   'interface', 'ocean', 'seaice', 'iceVI', 'iceVII', 'iceHP', 'rock'];
 
-export function columnLayers(w, dg, airThick) {
+export function columnLayers(w, dg, airThick, scaleH = 0) {
   const ob = dg.oceanBase || {};
   const Ts = dg.Tmean;
   const layers = [];
@@ -391,8 +413,17 @@ export function columnLayers(w, dg, airThick) {
     // too thin to be stratified at all, so the cap swallows it and the water is
     // drawn as one temperature. The metre floor is the other end: below that it
     // is a sliver nobody can see and a number nobody can read.
+    // A fiftieth of the water it SITS ON, and what it sits on is the liquid --
+    // not the whole pool. Most of a settled pool is supercritical, so a cap of
+    // 2% of the column let a 1.66 km boundary layer swallow the 600 m of liquid
+    // underneath it whole: the cross-section drew a Buried Ocean with no ocean
+    // band in it at all, which is the exact contradiction this state was fixed
+    // for once already. Caught in a browser at a hundred megayears.
+    const deepAll = Math.min(st.superDepth ?? 0, depth);
+    const liquidPart = Math.max(depth - deepAll, 0);
+    const bound = liquidPart > 0 ? liquidPart : depth;
     const skin = jump > 0.5
-      ? clamp(K_WATER * jump / flux, Math.min(1, depth), Math.max(0.02 * depth, 0)) : 0;
+      ? clamp(K_WATER * jump / flux, Math.min(1, bound), Math.max(0.02 * bound, 0)) : 0;
     if (skin > 0) add('interface', skin, [topT, bulkT], '{0} W/m² across it', [flux < 1 ? flux.toFixed(2) : flux.toFixed(1)]);
     const rest = Math.max(depth - skin, 0);
     const deep = Math.min(st.superDepth ?? 0, rest);
@@ -403,7 +434,7 @@ export function columnLayers(w, dg, airThick) {
     // between them, so the band edge is where the name changes and not where
     // anything happens. Said on the band, because a drawn line is a boundary
     // the eye believes.
-    add('supercritical', deep, [Math.max(topT, T_CRIT_H2O), baseT],
+    add('supercritical', deep, [Math.max(bulkT, T_CRIT_H2O), baseT],
       depth > deep ? 'no boundary' : note, depth > deep ? [] : args);
   };
 
@@ -425,11 +456,53 @@ export function columnLayers(w, dg, airThick) {
   // With a pool under it the lid's own base is at the critical temperature --
   // that is where it stops being supercritical -- so it reads as the descent it
   // is rather than as one number belonging to its top.
-  const overPool = lid && dg.coldPool && dg.coldPool.liquidDepth > 0;
-  add(lid ? 'supercritical' : envShare > 0.5 * pTot ? 'envelope' : 'air',
-    Math.max(airThick, 1),
-    overPool && Ts > T_CRIT_H2O + 1 ? [Ts, T_CRIT_H2O] : [Ts],
-    lid ? 'no surface' : null);
+  //
+  // The sky is not one thing, and it was drawn as one. Two errors, both of them
+  // reported from play and both of them mine.
+  //
+  // It ran the WRONG WAY. The band read `1621 → 374 °C`, top to bottom, which
+  // is an atmosphere that is hottest at the top -- written on the reasoning that
+  // the fluid stops being supercritical where it meets the water. It does not:
+  // going down you get hotter, and `Tmean` is the base of the sky, not its top.
+  // The critical crossing is UP, where the pressure falls through 220.6 bar.
+  //
+  // And ALL of it was called supercritical. Supercritical needs both: hotter
+  // than 647 K and denser than 220.6 bar. On the buried world measured here the
+  // base is 3618 K under 2388 bar, so the critical pressure is
+  // ln(2388/220.6) = 2.4 scale heights up -- about 143 km of a sky that is 14.7
+  // scale heights deep. The other twelve are ordinary steam, cooling to the
+  // temperature the planet actually radiates at, and calling them supercritical
+  // put a phase on nine tenths of an atmosphere that is not in it. The same bug
+  // labelled a 20 bar, 338 K cold start "supercritical" -- eleven times too thin
+  // and half the temperature.
+  const H = scaleH > 0 ? scaleH : airThick / 5;
+  const pCritBar = P_CRIT_H2O / 1e5;
+  const sky = Math.max(airThick, 1);
+  const superSky = lid && Ts > T_CRIT_H2O && pTot > pCritBar
+    ? Math.min(H * Math.log(pTot / pCritBar), sky) : 0;
+  // The top of the drawn sky is near the level the planet radiates from, which
+  // is the one temperature up there the model actually knows.
+  const tEff = Math.pow(Math.max(dg.emitted ?? 0, 1e-6) / SIGMA, 0.25);
+  const cool = Math.max(sky - superSky, 0);
+  // Two thousand bar of water vapour is steam, and calling it "atmosphere" on a
+  // world whose sea is in the sky says nothing about where the sea went.
+  // `Array.isArray` is false for a Float64Array, which is what the band arrays
+  // are, so this took the scalar branch, compared an object against a number,
+  // got false, and labelled a sky that is 99.2% water vapour "atmosphere".
+  const pH2Omean = dg.pH2O?.length
+    ? [...dg.pH2O].reduce((a, b) => a + b, 0) / dg.pH2O.length : (+dg.pH2O || 0);
+  const coolKind = envShare > 0.5 * pTot ? 'envelope'
+    : pH2Omean > 0.5 * pTot ? 'steam' : 'air';
+  if (superSky > 0) {
+    // Cool steam on top of the supercritical fluid, meeting it at the critical
+    // point -- which is where the crossing is, rather than at the water.
+    if (cool > 0) add(coolKind, cool, [Math.min(tEff, T_CRIT_H2O), T_CRIT_H2O],
+      'above the critical pressure');
+    add('supercritical', superSky, [T_CRIT_H2O, Ts], 'no surface');
+  } else {
+    add(lid ? 'steam' : coolKind, sky,
+      tEff < Ts - 0.5 ? [tEff, Ts] : [Ts], lid ? 'no surface' : null);
+  }
 
   if (lid) {
     const cp = dg.coldPool;
@@ -446,7 +519,13 @@ export function columnLayers(w, dg, airThick) {
       //
       // "still cold" was written when this water was assumed to be at freezing.
       // It is the share of the inventory the hot layer has not taken.
-      addWater(cp, cp.liquidDepth, Math.min(T_CRIT_H2O, Math.max(Ts, top)), top,
+      // The full jump, not a jump from the critical point. What meets the water
+      // is the BASE of the fluid column, and the base is the hottest part of it
+      // -- the critical crossing is two scale heights up in the sky. Cutting the
+      // boundary at 374 °C made the layer thinner than the temperature step
+      // across it, which is the one thing a conductive layer's thickness is
+      // supposed to be a statement about.
+      addWater(cp, cp.liquidDepth, Math.max(Ts, top), top,
         '{0}% not converted', [cold.toFixed(0)]);
       if (cp.iceDepth > 0) {
         add(iceKind(cp.pMelt, cp.basePressure), cp.iceDepth,

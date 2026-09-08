@@ -683,6 +683,11 @@ export function update(w, dt) {
     // stepVolatiles; zero on the first step of a world, before there are two
     // states to difference.
     liquidRate: w.liquidRate ?? 0,
+    // How fast the sea is going into the sky, and how fast the ice is coming
+    // back out of storage. Both windowed in stepVolatiles, both in EO/yr.
+    vapourRate: w.vapourRate ?? 0,
+    iceRate: w.iceRate ?? 0,
+    iceDeep: w.iceDeep ?? 0,
     // `absorbed` stays absorbed *sunlight*; the interior is reported separately.
     // The imbalance, though, is the whole energy budget -- Settle stops when it
     // reaches zero, so leaving the interior out of it would park a tidally

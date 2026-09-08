@@ -401,10 +401,62 @@ export function reasonText(w, st, tr = enFormat) {
   // named for the water underneath it answers neither. And even where there IS
   // a surface, a deep ocean's interior lags it: a sea at 239 °C over water at
   // 74 is two numbers, and the second one is the one the state is about.
+  //
+  // Two numbers were not enough, and one of them was the wrong number. "sky 959,
+  // water 32" prints the top of the sky and the top of the bulk and nothing in
+  // between, so a column with a long gradient in it reads as a discontinuity --
+  // and `coldT` is not the ocean's temperature at all, it is the temperature
+  // immediately under the conductive boundary. The water below warms along its
+  // adiabat, so the average runs thirteen kelvin warmer on the cold start and
+  // thirty on a settled pool.
+  //
+  // So the line describes the descent instead: what is on top, the boundary the
+  // water starts at -- as the span it actually is, because a single number for
+  // a gradient is the thing that made the old line look absurd -- and the
+  // average temperature of the liquid. Each term is its own `bit`, so the
+  // existing join handles the separators and a term that carries nothing can
+  // drop out on its own.
   const noSurface = (dg.hotTarget ?? 0) > 0.5;
   const bulk = dg.coldT;
   const split = bulk != null && dg.Tmean - bulk > 5 && (dg.totalWater ?? 0) > 0.005;
-  if (split && noSurface) {
+  // There has to be an ocean before its average temperature means anything.
+  // `oceanStructure` solves an adiabat for any column it is handed, frozen or
+  // not, so gating on `liquidDepth` alone put "ocean averages -179 °C" on Titan,
+  // whose water is ice all the way down, and an ocean on Mars, which has none.
+  // Under a lid the pool IS the liquid and there is no surface to be open.
+  const wet = (dg.totalWater ?? 0) > 0.005;
+  const col = noSurface ? dg.coldPool : ((dg.openOcean ?? 0) > 0.01 ? dg.oceanBase : null);
+  const oceanMean = wet && col && col.liquidDepth > 0 ? col.meanTemperature : null;
+  // Half a degree is the resolution the line prints at, so anything under it is
+  // one temperature written twice.
+  const c = (T) => (T - 273.15).toFixed(T - 273.15 >= 100 || T < 173 ? 0 : 1);
+  if (oceanMean != null) {
+    // Under a lid the water starts where the fluid stops being supercritical;
+    // with a surface it starts at the surface. The same expression the
+    // cross-section uses for the bottom of its top band, so the picture and the
+    // line cannot disagree about where the water begins.
+    const bTop = noSurface
+      ? Math.min(T_CRIT, Math.max(dg.Tmean, bulk ?? dg.Tmean)) : dg.Tmean;
+    const bBot = bulk ?? bTop;
+    // Named for what the top of the column actually is, and named the way the
+    // cross-section names it, so the line and the picture cannot disagree: an
+    // envelope where the hydrogen and helium are most of the air, the fluid
+    // itself once the top is past the critical point and there is no longer a
+    // boundary between air and water, and an atmosphere everywhere else.
+    bits.push((dg.pH2 ?? 0) + (dg.pHe ?? 0) > 0.5 * (dg.pTotMean ?? 1)
+      ? tr('envelope {0} °C', c(dg.Tmean))
+      : dg.Tmean > T_CRIT ? tr('fluid {0} °C', c(dg.Tmean))
+      : tr('atmosphere {0} °C', c(dg.Tmean)));
+    // Dropped entirely when it is neither a span nor distinct from what is above
+    // it: on a world with no lid and no lag there is no boundary to report, and
+    // printing the surface temperature a second time under another name is not
+    // a third fact about the planet.
+    if (bTop - bBot > 0.5) bits.push(tr('boundary {0} → {1} °C', c(bTop), c(bBot)));
+    else if (Math.abs(bTop - dg.Tmean) > 0.5) bits.push(tr('boundary {0} °C', c(bTop)));
+    bits.push(tr('ocean averages {0} °C', c(oceanMean)));
+  } else if (split && noSurface) {
+    // No liquid left to average -- a runaway that has finished converting keeps
+    // the two-number form, because the pool remnant is the only water there is.
     bits.push(tr('sky {0} °C, water {1} °C', (dg.Tmean - 273.15).toFixed(0),
       (bulk - 273.15).toFixed(0)));
   } else {
@@ -420,12 +472,27 @@ export function reasonText(w, st, tr = enFormat) {
   if (dg.lam > 0.5 && st && st.Tsub != null) {
     bits.push(tr('day {0} °C, night {1} °C',
       (st.Tsub - 273.15).toFixed(0), (st.Tanti - 273.15).toFixed(0)));
-  } else if (dg.Tmax != null && dg.Tmin != null && dg.Tmax - dg.Tmin > 2) {
+  } else if (dg.Tmax != null && dg.Tmin != null
+      && dg.Tmax - dg.Tmin > Math.max(2, 0.01 * dg.Tmean)) {
     // The same argument one step down: on a rotating world the mean is a number
     // the equator and the poles are both a long way from, and forty kelvin of
     // spread is the difference between an ice cap and no ice cap. Tmax and Tmin
     // are the equator and the poles here -- the insolation profile is monotonic
     // in latitude on anything that is not tidally locked.
+    //
+    // Two kelvin was the whole test, and two kelvin means nothing on a world at
+    // 1232 K: "equator 960 °C, poles 957 °C" is three kelvin of spread reported
+    // as though it were a climate zone. So the bound is relative as well as
+    // absolute, and one percent is not arbitrary -- it is the largest round
+    // fraction that changes no other preset. Measured across every unlocked
+    // preset, the spread as a share of the mean runs: buried oceans 0.02-0.34%,
+    // then a gap, then Noachian Mars at 1.22% (3.40 K on 278 K, which keeps its
+    // clause by 0.6 K), superEarth 5.2%, snowball 9.1%, Earth 11.9%, Mars 17.1%.
+    // Anything from 0.4% to 1.2% works; 1% is the round number at the top of
+    // that window, and 1.5% would have silenced Noachian Mars. The absolute
+    // floor stays because on a cold world one percent is under the printed
+    // precision -- Titan's is 0.94 K, and two identical integers are not a
+    // range.
     bits.push(tr('equator {0} °C, poles {1} °C',
       (dg.Tmax - 273.15).toFixed(0), (dg.Tmin - 273.15).toFixed(0)));
   }
@@ -441,6 +508,33 @@ export function reasonText(w, st, tr = enFormat) {
   if (esc.fStrat > 1e-4 && dg.totalWater > 0) {
     const perGyr = (w.escape.water * 1e9) / dg.d.eoColumn;
     if (perGyr > 1e-3) bits.push(tr('losing {0} oceans/Gyr', perGyr.toFixed(2)));
+  }
+  // Where the sea is going, next to how much of it is going for good. Losing
+  // water to space and boiling it into the sky both shrink an ocean and they
+  // are not the same fate: escaped water is gone, evaporated water is still on
+  // the planet. Both directions are worth saying -- a world past its peak is
+  // raining its atmosphere back down, which is the interesting half of a
+  // recovery -- and neither is worth saying on a settled world, where this is
+  // the difference between two nearly equal numbers.
+  const evapGyr = (dg.vapourRate ?? 0) * 1e9;
+  if ((dg.totalWater ?? 0) > 0.005 && Math.abs(evapGyr) > 0.01) {
+    bits.push(evapGyr > 0
+      ? tr('evaporating {0} oceans/Gyr', evapGyr.toFixed(2))
+      : tr('condensing {0} oceans/Gyr', (-evapGyr).toFixed(2)));
+  }
+  // And the ice at the bottom of a deep column, which on a big water world is
+  // most of the inventory and is the answer to "where is all that water". Only
+  // while it is actually going: a settled floor drifts by a percent or two of
+  // itself per gigayear in both directions, and that is not melting.
+  const meltGyr = (dg.iceRate ?? 0) * 1e9;
+  if ((dg.iceDeep ?? 0) > 0.01 && meltGyr > 0.01 * dg.iceDeep) {
+    // Per megayear once it is fast, because a rate quoted per gigayear that is
+    // fifteen times the whole reservoir is a number nothing can happen at: this
+    // floor melts in sixty-five megayears, so megayears is the unit the world is
+    // actually living in. Same number, said in a length of time it fits into.
+    bits.push(meltGyr > 100
+      ? tr('deep ice melting {0} oceans/Myr', (meltGyr / 1000).toFixed(2))
+      : tr('deep ice melting {0} oceans/Gyr', meltGyr.toFixed(1)));
   }
   if (w.co2Frozen > 1e-3) {
     // Where it froze matters, and on a locked world the answer is not "here".

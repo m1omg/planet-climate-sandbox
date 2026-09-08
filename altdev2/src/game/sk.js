@@ -199,12 +199,25 @@ export const SK = {
     // Skladá ho reasonText(); prekladač doň ide ako parameter, aby fyzikálny
     // modul nemusel poznať jazyky.
     'sky {0} °C, water {1} °C': 'obloha {0} °C, voda {1} °C',
+    // Zostup stĺpcom: čo je navrchu, kde sa začína voda a aká je v priemere.
+    'envelope {0} °C': 'obal {0} °C',
+    'atmosphere {0} °C': 'atmosféra {0} °C',
+    'fluid {0} °C': 'tekutina {0} °C',
+    'boundary {0} → {1} °C': 'rozhranie {0} → {1} °C',
+    'boundary {0} °C': 'rozhranie {0} °C',
+    'ocean averages {0} °C': 'oceán v priemere {0} °C',
+    'evaporating {0} oceans/Gyr': 'vyparuje sa {0} oceánov/Gyr',
+    'condensing {0} oceans/Gyr': 'kondenzuje {0} oceánov/Gyr',
+    'deep ice melting {0} oceans/Gyr': 'hlbinný ľad sa topí {0} oceánov/Gyr',
+    'deep ice melting {0} oceans/Myr': 'hlbinný ľad sa topí {0} oceánov/Myr',
+    'above the critical pressure': 'nad kritickým tlakom',
     'water below {0} °C': 'voda pod ním {0} °C',
     'Fluid top': 'Vrch tekutiny',
     'Liquid water': 'Tekutá voda',
     'How fast the liquid water is going — boiled, converted under a hot layer, or lost to space. Negative while the sea is disappearing, positive while it is coming back.':
       'Ako rýchlo ubúda tekutá voda — vyvarená, premenená pod horúcou vrstvou alebo stratená do vesmíru. Záporné, kým more mizne, kladné, kým sa vracia.',
     'Water below': 'Voda pod ňou',
+    'Ocean top': 'Vrch oceánu',
     'There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.':
       'Pri tejto teplote niet povrchu: vzduch a voda pod ním sú jedna tekutina. Toto je jej vrch.',
     'The bulk of the water the hot layer has not converted yet. It is not held at the temperature it started with -- heat crosses the boundary above it and warms it -- but it crosses slowly, because an ocean heated from above is stably stratified, and a column hundreds of kilometres deep takes a long time to feel it.':
@@ -330,6 +343,7 @@ export const SK = {
     'atmosphere': 'atmosféra',
     'hydrogen envelope': 'vodíková obálka',
     'steam': 'para',
+    'steam atmosphere': 'parná atmosféra',
     'liquid ocean': 'tekutý oceán',
     'high-pressure ice': 'vysokotlakový ľad',
     'thermal boundary': 'tepelné rozhranie',

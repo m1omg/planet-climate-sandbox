@@ -3162,6 +3162,191 @@ a line with a thickness, a temperature and a pressure on it starts eating its ow
 label on a narrow panel. What is left fits at 1280px in both languages, and every
 band carries the whole line as a tooltip for when it does not.
 
+### Two ends of a descent are not a description of it
+
+Reported from play, on a world reading `sky 959 °C, water 32 °C`: the numbers
+looked wrong. They were not wrong, they were two endpoints of a column with a
+long gradient in it, printed with nothing in between — and one of them was not
+the number its label claimed. `coldT` is the temperature of the water
+*immediately under the conductive boundary*. Everything below it is warmer,
+because the pool sits on its own adiabat, and the average runs well above the
+top: on the cold start the pool reads 74 °C at the top, 135 °C at the floor, and
+**101 °C averaged over the liquid**. The banner had been printing the coldest
+water on the planet and calling it the water.
+
+So the line describes the descent instead — what is on top, where the water
+starts, and how warm the water actually is:
+
+```
+fluid 3345 °C · boundary 374 → 49 °C · ocean averages 66 °C
+```
+
+Three choices in that, each one made the way it is for a reason:
+
+- **The boundary is a span, not a number.** A single figure for a gradient is
+  what made the old line look absurd in the first place. Where there is nothing
+  to span — no lid, no lag — it collapses to one number, and where that number
+  is just the sky temperature again it drops out entirely, because the same
+  temperature under a second name is not a second fact.
+- **The average is over the liquid only, and weighted by depth.** It stops where
+  the adiabat crosses 374 °C: averaging across that would put supercritical
+  fluid into a number called an ocean temperature, which is the category error
+  the `liquid ocean · 373 → 554 °C` band was fixed for. Depth-weighted rather
+  than mass-weighted is the average you would measure descending through it; the
+  two differ by about a kelvin, which is under the precision the line prints at.
+- **The top is named for what it is**, and named the way the cross-section names
+  it: an envelope where hydrogen and helium are most of the air, the fluid itself
+  once the top is past the critical point, an atmosphere otherwise. The line and
+  the picture cannot disagree about what you are looking at.
+
+The term only appears where there is an ocean to average. `oceanStructure` will
+solve an adiabat for any column it is handed, frozen or not, so gating on the
+column alone put `ocean averages -179 °C` on Titan, whose water is ice all the
+way down, and an ocean on Mars, which has none. It wants liquid water in the
+reservoir and either an open sea or a pool under a lid.
+
+The readout tile that used to read **Water below** is now **Ocean top**. Same
+number, and it had to be renamed the moment the banner started reporting the
+average: two figures about the same water, twenty-five kelvin apart, sitting two
+rows from each other, read as a contradiction unless each says which part of the
+water it describes.
+
+### Three kelvin is not a climate zone
+
+The same line carried `equator 960 °C, poles 957 °C`. The clause fires when the
+pole-to-equator spread beats two kelvin, which is a fair bound on a world with
+ice caps and a meaningless one on a world at 1232 K.
+
+It is now relative as well as absolute, and one percent is not a number picked
+for looking round — it is the largest fraction that changes no other preset.
+Measured across every unlocked preset, spread as a share of the mean:
+
+```
+buried oceans        0.02 – 0.34 %      silenced
+Noachian Mars        1.22 %  (3.40 K on 278 K)   kept, by 0.6 K
+superEarth           5.16 %             kept
+snowball             9.05 %             kept
+Earth               11.86 %             kept
+Mars                17.08 %             kept
+```
+
+Anything from 0.4% to 1.2% would do; 1.5% would have taken the clause away from
+Noachian Mars, which is exactly the kind of world it exists for. Noachian Mars is
+the closest preset to the line on the keeping side, so it is the one the
+self-test pins. The absolute two-kelvin floor stays, because on a cold world one
+percent is under the printed precision — Titan's is 0.94 K, and two identical
+integers are not a range.
+
+### The sky was upside down, and nine tenths of it was the wrong phase
+
+Reported from play, as a question: is a 128 km supercritical layer enough for
+those temperatures, and would there not be cooler, non-supercritical atmosphere
+above it? The first half was right and the second half found a bug.
+
+**The thickness is about right.** On the buried world measured here the base of
+the fluid is 3618 K under 2388 bar with g = 28 m/s², which is a scale height of
+60 km. The critical pressure, 220.6 bar, is `ln(2388/220.6) = 2.4` scale heights
+up — about 143 km. So a supercritical layer of that order is what the numbers
+give.
+
+**The atmosphere above it was not there.** The whole sky was drawn as one band
+called `supercritical`, and supercritical needs both conditions: hotter than
+647 K *and* denser than 220.6 bar. That sky is 14.7 scale heights deep. Only the
+bottom 2.4 of them are supercritical; the other twelve are ordinary steam,
+cooling to the temperature the planet actually radiates at. The same bug labelled
+a 20 bar, 338 K cold start `supercritical` — eleven times too thin and half the
+temperature.
+
+**And it ran the wrong way.** The band read `1621 → 374 °C` top to bottom: an
+atmosphere that is hottest at the top. That was written here on the reasoning
+that the fluid stops being supercritical where it meets the water. It does not.
+Going down you get hotter, `Tmean` is the *base* of the sky rather than its top,
+and the critical crossing is upward, where the pressure falls through 220.6 bar.
+
+```
+steam           157.5 km    70 → 374 °C   · above the critical pressure
+supercritical   143.3 km   374 → 3345 °C  · no surface
+thermal bdry      130 m   3345 → 49 °C    · 15.7 W/m² across it
+liquid ocean     56.5 km    49 → 81 °C    · 79% not converted
+```
+
+The band is called a **steam atmosphere**, not "steam". It is only ever the sky,
+and the bare noun read as a substance sitting somewhere rather than as what the
+planet's air is made of — which it is, at 99.2% water vapour and two thousand
+bar of it.
+
+The boundary layer carries the whole inversion now, not a jump from the critical
+point. What meets the water is the base of the fluid column, and the base is the
+hottest part of it — cutting the boundary at 374 °C made the layer thinner than
+the temperature step across it, which is the one thing a conductive layer's
+thickness is supposed to be a statement about.
+
+Every sky gets the treatment, not just the buried ones: Earth's air band now
+reads `-17 → 21 °C`, from the temperature the planet radiates at down to the
+surface, instead of one number belonging to the bottom.
+
+### Switching the clouds off shows you the water
+
+With the shroud off, a buried ocean kept its steam. That was deliberate and it
+was the wrong fix: taking the steam away revealed *bare rock* on a world carrying
+five hundred oceans, so the envelope was pinned in place instead. The answer was
+to draw the ocean.
+
+`flooded` is the share of the **surface** under sea, and a world with no surface
+reads zero however much water it has — 0.000 against a reservoir of 489 EO. So
+the cover now comes from the pool: the share of the planet that has gone over,
+times the share of the column the hot layer has not converted. Once conversion
+finishes it falls to zero on its own, which is the moment the world really is a
+dry hot rock and should be drawn as one. Both renderers, the same rule, or the
+button would mean different things on different machines.
+
+The clouds-on view is untouched: that is where the sky and its layers are the
+thing you are looking at.
+
+### Where the sea is going, not just how much is left
+
+Losing water to space and boiling it into the sky both shrink an ocean, and they
+are not the same fate: escaped water is gone, evaporated water is still on the
+planet and comes back down if it ever cools. So the line carries both.
+
+Net, not gross. This model has no hydrological cycle — the vapour column is
+diagnostic, set by saturation each step — so there is no evaporation and rainfall
+to difference, and the honest number is how fast the sea is actually moving into
+the air. A settled Earth reads zero, which is right: it evaporates a metre a year
+and gets all of it back.
+
+The escape has to be added back in. Vapour is where water leaves the planet
+from, so the bare change in the reservoir called a world in steady state
+"condensing" at exactly the rate it was losing water to space — the opposite of
+what was happening to it. Evaporation is the transfer out of the sea: the change
+in the reservoir *plus* whatever left the top of the atmosphere meanwhile.
+
+And the ice, which on a big water world is most of the inventory and is the
+answer to "where is all that water". The high-pressure floor of a deep column is
+not in the reservoirs — it is a structural partition of `water.ocean` — so it is
+read off the column, and only when the window closes: once every thousand
+simulated years at the most, against a column the readout solves every frame
+anyway. The Hycean preset melts 421.6 → 403.4 EO of it over five megayears and
+then holds, so it is reported while it is going and not after.
+
+And it had to be solved directly rather than through `dg.coldPool` /
+`dg.oceanBase`. Those are lazily **cached** on the diagnostics object, so reading
+them from inside the step populates the cache at a moment that is not the end of
+it, and a later read in the same step gets a column solved against a `coldT` that
+has since moved. `identity.mjs` caught it: three water worlds drifted in the
+tenth significant figure — invisible in a chart, through every anchor in
+`calibrate.mjs` untouched, and precisely the failure that probe exists for. The
+structure functions themselves are pure, so calling them leaves the caches alone
+and all thirty presets go back to byte-identical.
+
+Two units, because one did not fit. A rate quoted per gigayear that is fifteen
+times the whole reservoir is a rate nothing can happen at: that floor melts in
+sixty-five megayears, so it reads `6.50 oceans/Myr`. And surface ice is left out
+of it — an ice sheet relaxes on a kiloyear timescale, so a settled Earth reported
+seven oceans a gigayear of melting on a reservoir of two thousandths of one. A
+real drift, in a unit far too long for it. How much surface ice there is is
+already on the line as `{0}% ice`.
+
 ### Worlds and Saves fold into menus
 
 Ported from `/dev/`, where the same measurement was made: the two lists cost
