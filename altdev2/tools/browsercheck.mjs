@@ -90,7 +90,15 @@ chrome.stdio[4].on('data', (chunk) => {
   }
 });
 
-function call(method, params = {}, sessionId = undefined, timeout = 20_000) {
+// Two minutes, not twenty seconds. The twenty was a guess and it was wrong: on a
+// machine without a GPU -- this repo's own CI container, xvfb and software GL --
+// the two evaluates that call `loadPreset` take 26 and 34 seconds, because each
+// one rebakes a cube map on the CPU. The run died at check 27 of 51 and the
+// failure was read as an environment ceiling for long enough to ship a check
+// nobody had ever seen pass. It is a hang-catcher, so it only has to be shorter
+// than giving up: two minutes still catches a wedged browser, and clears the
+// slowest real call by 3.5x.
+function call(method, params = {}, sessionId = undefined, timeout = 120_000) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -856,17 +864,37 @@ try {
   const skShot = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
   writeFileSync(slovakScreenshot, Buffer.from(skShot.data, 'base64'));
 
+  // Open a climate card BEFORE switching back, because that panel is written on
+  // click and nowhere else -- which is how a Slovak blurb came to be sitting
+  // under an English heading on an English page. Reported from play, and no
+  // headless test could ever have seen it: the DOM stub does not click.
   const backToEn = await evaluate(`(async () => {
+    const card = document.querySelector('#statelog .state-card.found')
+      || document.querySelector('#statelog .state-card');
+    if (card) { card.click(); await new Promise((r) => setTimeout(r, 40)); }
     const btn = document.querySelector('#btn-lang');
     for (let i = 0; i < 4 && document.documentElement.lang !== 'en'; i++) {
       btn.click();
       await new Promise((r) => setTimeout(r, 60));
     }
     __app.tick(0);
+    // Every option in the rate menu, since the "custom" one is built once at
+    // boot and used to keep whatever language it was born in.
+    const rate = [...document.querySelectorAll('#rate-menu option')]
+      .map((o) => o.textContent).join(' | ');
     return { lang: document.documentElement.lang,
       reason: document.querySelector('.state-reason').textContent,
+      detail: (document.querySelector('#state-detail') || {}).textContent || '',
+      rate,
       option: document.querySelector('#pan-speed option').textContent };
   })()`);
+  // Slovak has letters English does not, so "is any Slovak left on an English
+  // page" is one regex rather than a list of strings to keep up to date.
+  const SLOVAK = /[áäčďéíĺľňóôŕšťúýžÁČĎÉÍĽŇÓŠŤÚÝŽ]/;
+  ok(!SLOVAK.test(backToEn.detail) && !SLOVAK.test(backToEn.rate)
+    && !SLOVAK.test(backToEn.reason),
+    'Switching back to English leaves no Slovak behind, panels and menus included',
+    `detail "${backToEn.detail.slice(0, 40)}" · rate "${backToEn.rate.slice(0, 40)}"`);
   ok(backToEn.lang === 'en'
     && /mean surface|atmosphere [-\d.]+ °C|ocean averages/.test(backToEn.reason)
     && backToEn.option === '0.5×',

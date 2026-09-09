@@ -505,9 +505,24 @@ export function reasonText(w, st, tr = enFormat) {
     bits.push(tr('{0} W/m² imbalance',
       `${dg.imbalance > 0 ? '+' : ''}${dg.imbalance.toFixed(1)}`));
   }
+  // One number and the unit it fits in. A rate quoted per gigayear that is sixty
+  // thousand times the planet's whole ocean is a rate nothing can happen at:
+  // "evaporating 61431.36 oceans/Gyr" is 61 oceans per megayear, which is a fact
+  // you can hold in your head. Reported from play, and the deep-ice line already
+  // had this fix -- the other three did not.
+  const perTime = (perYear) => {
+    const a = Math.abs(perYear);
+    if (a * 1e9 < 100) return [(perYear * 1e9).toFixed(2), 'Gyr'];
+    if (a * 1e6 < 100) return [(perYear * 1e6).toFixed(2), 'Myr'];
+    if (a * 1e3 < 100) return [(perYear * 1e3).toFixed(2), 'kyr'];
+    return [perYear.toFixed(2), 'yr'];
+  };
   if (esc.fStrat > 1e-4 && dg.totalWater > 0) {
-    const perGyr = (w.escape.water * 1e9) / dg.d.eoColumn;
-    if (perGyr > 1e-3) bits.push(tr('losing {0} oceans/Gyr', perGyr.toFixed(2)));
+    const perYear = w.escape.water / dg.d.eoColumn;
+    if (perYear * 1e9 > 1e-3) {
+      const [n, u] = perTime(perYear);
+      bits.push(tr('losing {0} oceans/{1}', n, u));
+    }
   }
   // Where the sea is going, next to how much of it is going for good. Losing
   // water to space and boiling it into the sky both shrink an ocean and they
@@ -516,11 +531,16 @@ export function reasonText(w, st, tr = enFormat) {
   // raining its atmosphere back down, which is the interesting half of a
   // recovery -- and neither is worth saying on a settled world, where this is
   // the difference between two nearly equal numbers.
-  const evapGyr = (dg.vapourRate ?? 0) * 1e9;
-  if ((dg.totalWater ?? 0) > 0.005 && Math.abs(evapGyr) > 0.01) {
-    bits.push(evapGyr > 0
-      ? tr('evaporating {0} oceans/Gyr', evapGyr.toFixed(2))
-      : tr('condensing {0} oceans/Gyr', (-evapGyr).toFixed(2)));
+  // Worth saying only when the sea is actually going somewhere. The bound scales
+  // with the inventory: a hundredth of an ocean a gigayear is news on Earth and
+  // noise on a world carrying five hundred, and a fixed threshold put a line on
+  // the banner for both.
+  const evap = dg.vapourRate ?? 0;
+  const evapFloor = Math.max(1e-11, 5e-12 * (dg.totalWater ?? 0));
+  if ((dg.totalWater ?? 0) > 0.005 && Math.abs(evap) > evapFloor) {
+    const [n, u] = perTime(Math.abs(evap));
+    bits.push(evap > 0 ? tr('evaporating {0} oceans/{1}', n, u)
+      : tr('condensing {0} oceans/{1}', n, u));
   }
   // And the ice at the bottom of a deep column, which on a big water world is
   // most of the inventory and is the answer to "where is all that water". Only
@@ -532,9 +552,8 @@ export function reasonText(w, st, tr = enFormat) {
     // fifteen times the whole reservoir is a number nothing can happen at: this
     // floor melts in sixty-five megayears, so megayears is the unit the world is
     // actually living in. Same number, said in a length of time it fits into.
-    bits.push(meltGyr > 100
-      ? tr('deep ice melting {0} oceans/Myr', (meltGyr / 1000).toFixed(2))
-      : tr('deep ice melting {0} oceans/Gyr', meltGyr.toFixed(1)));
+    const [n, u] = perTime(dg.iceRate ?? 0);
+    bits.push(tr('deep ice melting {0} oceans/{1}', n, u));
   }
   if (w.co2Frozen > 1e-3) {
     // Where it froze matters, and on a locked world the answer is not "here".

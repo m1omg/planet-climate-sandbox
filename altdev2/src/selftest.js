@@ -1088,6 +1088,29 @@ function runChecks() {
         !/ocean averages/.test(fline), fline.slice(0, 90));
     }
 
+    // The deep-ice rate costs a column solve, and it was paying it on every step
+    // of every world -- 25 microseconds, 28% of the whole step cost, on planets
+    // that cannot hold a gram of high-pressure ice. Reported from play as the
+    // sim going slow once a planet starts warming, which is exactly when the
+    // step collapses and per-step cost starts to decide the frame rate.
+    //
+    // The gate is the pressure at the floor of the column, which is its mass
+    // times gravity and needs no solve to evaluate. This pins the gate rather
+    // than a timing: Earth must report nothing, and a world deep enough for
+    // ice VI must still report its floor, or the cheap test has eaten the
+    // feature it was meant to protect.
+    {
+      const dry = new Simulation({ ...PRESETS.earth.params });
+      dry.runYears(2e5);
+      const deep = new Simulation({ ...PRESETS.earth.params, water: 200 });
+      deep.runYears(2e5);
+      const a = dry.world.diag, b = deep.world.diag;
+      check('The deep-ice rate is not paid for on a world that cannot have any',
+        (a.iceDeep ?? 0) === 0 && (a.iceRate ?? 0) === 0 && (b.iceDeep ?? 0) > 1,
+        `Earth ${(a.iceDeep ?? 0).toFixed(1)} EO of deep ice; the same world with `
+          + `200 oceans ${(b.iceDeep ?? 0).toFixed(1)} EO`);
+    }
+
     // The threshold that silences the spread clause is relative, and the world it
     // is calibrated against is Noachian Mars: 3.40 K on 278 K is 1.22%, which
     // clears one percent by six tenths of a kelvin. It is the closest preset to
