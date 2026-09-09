@@ -3392,27 +3392,158 @@ supercritical fluid but never liquid. And the dictionary was carrying both
 *nadkritická* and *superkritická* for the same word in different entries; it is
 *superkritick-* throughout now.
 
-### Would the sky glow, seen from the water?
+### Would the sky glow, seen from the water? — asked, answered, and corrected
 
-Asked from play, and worth writing down because the answer is yes and the number
-is absurd. The base of the supercritical layer is at 3618 K on the buried world.
-Wien puts its peak at 801 nm and it radiates σT⁴ = **9.72 MW/m², seven thousand
-times the solar constant** — hotter than an incandescent filament, a brilliant
-yellow-white dome rather than a dull red one. What an observer in the water would
-see depends on depth, because water is a steep colour filter: the near-infrared
-carrying most of that energy is gone within centimetres, red within a metre or
-two, and only the blue-green tail reaches tens of metres. Searing white at the
-interface, deep blue-green a few tens of metres down, black by a hundred.
+Asked from play. The first answer here was **wrong**, and the correction came
+from the same reader: *would that radiation not be massively attenuated by the
+giant mass above and below it?* It would. What was written was that the base of
+the supercritical layer radiates σT⁴ = 9.72 MW/m² — seven thousand suns — and
+that this is 620000 times the flux the conductive boundary is sized by, which
+put a question mark over the whole band. That comparison is not physical.
 
-It also puts a question against the conductive boundary layer, and the honest
-thing is to record it rather than let the picture imply an answer it has not
-earned. The band is sized δ = k·ΔT/F with F the mixed flux, 15.7 W/m². The
-radiative flux across the same interface is 620000 times that, and taking
-radiation as the carrier gives 0.20 mm rather than 126 m. The conversion
-timescale is not in doubt — the net energy converting water is set by the
-planet's radiative imbalance, which is what `advanceHotLayer` integrates, and
-most of that σT⁴ is balanced by back-radiation. What is in doubt is the drawn
-thickness and the flux printed on the band. Left as it is, and flagged.
+σT⁴ is what a surface radiates into **transparent space**. There is no
+transparent space here. Two thousand bar of supercritical water is about as
+optically thick as a medium gets, and in an optically thick medium radiation does
+not stream, it **diffuses** — F ≈ 16σT³/(3κρ)·dT/dz, which is σT⁴ divided by
+roughly the optical depth. The layer is 143 km deep at a few hundred kg/m³, so
+the photon mean free path is centimetres and τ runs to millions:
+
+```
+kappa 0.001 m²/kg   mean free path 5.0 m    tau 2.9e4    F_rad ~ 340 W/m²
+kappa 0.01          mean free path 50 cm    tau 2.9e5    F_rad ~ 34 W/m²
+kappa 0.1           mean free path 5.0 cm   tau 2.9e6    F_rad ~ 3.4 W/m²
+```
+
+against the 15.7 W/m² the model actually carries. The Rosseland form agrees:
+25 W/m² at κ = 0.01, 2.5 W/m² at κ = 0.1. So the radiative flux is the **same
+order as the mixed flux**, not six orders above it. The conductive band is not
+undermined by radiation; it sits in the same range, and the earlier paragraph
+claiming otherwise was comparing a free-streaming emission to a transport flux.
+
+The same optical depth answers the original question, and reverses that answer
+too. You cannot see the 3618 K base from the water, because you cannot see more
+than one optical depth — centimetres. Looking up from the top of the pool you see
+the fluid immediately above you, at essentially the boundary temperature, not the
+base. It glows, but at the temperature of the interface rather than of the lid:
+a dull heat, not the searing white dome written here first. Water's own colour
+filtering is real and still applies, but it is second-order behind this.
+
+### Slow once a planet starts warming, and it was self-inflicted
+
+Reported from play, and the phrasing was the whole clue: *slow once the planet
+starts warming*, on an ordinary moist greenhouse rather than anything exotic.
+
+`maxStep` shrinks as a climate moves, because the solver will not let the
+temperature jump more than 2.5 K in a step. Walked up through warming, the step
+collapses from 463 kyr at 1 S⊕ to **3.5 kyr at 1.30 S⊕** — the last stop before
+the runaway — which at 13 Myr/s is 63 steps a frame instead of one. That is by
+design and is not going to change: accuracy first. What it means is that the
+*cost of a step* decides the frame rate exactly when a planet is doing something
+interesting, and something had just been added to every step.
+
+The deep-ice rate solves a whole water column. Its window condition was copied
+from the liquid-water rate directly above it, where the work is reading two
+reservoir numbers and `iceSpan >= 4 * dt` costs nothing. Here it bought a
+bisection and several integrations, on **100% of steps**, on every world in the
+model — including ones that cannot hold a gram of high-pressure ice.
+
+Measured on a warming Earth-like world: **113.3 µs/step with it, 88.7 µs
+without** — 25 µs, 28% of the entire step. Ruling it out turns out to be free:
+high-pressure ice needs the floor of the column past the ice VI onset, and the
+pressure at the floor of a hydrostatic column is its mass times gravity, which
+needs no solve at all. Earth's ocean is 0.03 GPa and can never qualify; the gate
+opens at 0.5 GPa, and the first ice actually appears between 50 and 80 Earth
+oceans. Back to **89.9 µs/step** with zero solves on the world in the report,
+and the Hycean still tracks its 421.6 EO of floor.
+
+The lesson is narrower than "profile things": a window condition that is free
+when it guards an assignment is not free when it guards a solve, and this one was
+copy-pasted across that line.
+
+### A small disc inside a balloon
+
+The stylised atmosphere — the deliberately exaggerated one, a diagram rather than
+a photograph — was capped at 0.42 of the planet's radius, and everything thick
+sat pinned against it: Venus, both runaways, both buried oceans, all at 0.420.
+Drawn, that is a planet nearly three times its own width in shell, which is not a
+diagram of anything.
+
+The cap is 0.26 now. The curve below it is untouched, so Earth is exactly where
+it was at 0.100 and only the already-saturated worlds move — and they move
+together, which preserves the one thing an exaggerated diagram is for, comparing
+them by eye. The realistic mode was never involved: it draws these same worlds at
+0.007 to 0.031.
+
+### Slovak that reads like Slovak
+
+Three faults, all reported at once, all fair.
+
+**It leaked into English.** Two nodes were built once at boot with `t()` already
+applied, and `applyStatic` caches the first text it sees as the English original
+— so on a Slovak boot the *Slovak* became the cached original, and switching to
+English asked the dictionary to translate 'vlastné', got nothing back, and left
+it. The rate menu's "custom" option is written in English now and translated in
+place like everything else. The climate-detail panel had the same shape of bug
+for a different reason: it is written on click and nowhere else, so a switch left
+whatever language it was opened in — a Slovak blurb under an English heading.
+`relabel` re-runs it for whatever card is open.
+
+**The numbers were English.** Slovak writes 0,03. Every hand-written entry got a
+comma because somebody typed one; nothing computed at runtime did, so every
+interpolated figure on the page carried a full stop. `tp()` localises whole
+numeric arguments now — an id, a unit or a word with a full stop in it passes
+through untouched.
+
+**The grammar was wrong.** Slovak takes the genitive *singular* after a decimal:
+0,03 *oceánu*, never *oceánov*. The original `losing` line had this right and the
+lines added beside it did not. "topí sa 426 oceánov" is not a sentence either;
+ice shrinks *by* an amount, so it is "hlbinný ľad sa topí o 0,43 oceánu za Myr".
+And the dictionary carried both *nadkritická* and *superkritická* for the same
+word in different entries — it is *superkritick-* throughout.
+
+While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
+happen at. All four rate lines pick the time unit that fits the number now, the
+way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
+
+### Half the browser check had never once been seen to pass
+
+The Slovak fixes above needed a browser assertion, because the bug they fix
+lives in a click handler and no Node test can reach it. Writing it turned up
+something worse than the bug.
+
+`browsercheck.mjs` had been dying part-way through for as long as anyone had
+looked, always at the same place: `CDP timeout: Runtime.evaluate`, after check
+27. That was written down as an environment ceiling — this container has no GPU,
+the run dies here on *any* build including an unchanged one, therefore the
+container. Every part of that is true and the conclusion does not follow. The
+run died at the same place on every build because it dies at the same *call* on
+every build, and the reason is one number in this file: a 20-second CDP timeout,
+picked without measuring anything.
+
+Measured, by logging every call over five seconds:
+
+```
+SLOW 33984 ms  Runtime.evaluate      <- loadPreset('trappist1e') then 'waterworld'
+SLOW 26084 ms  Runtime.evaluate      <- loadPreset('earth'), 400 frames, timeline
+SLOW 12686 ms  Page.captureScreenshot
+SLOW  9991 ms  Runtime.evaluate
+SLOW  8469 ms  Runtime.evaluate
+```
+
+Nothing hangs. Two evaluates rebake a cube map on the CPU under software GL and
+take 34 and 26 seconds, and a 20-second limit cuts the run in half. The timeout
+is a hang-catcher, and it only has to be shorter than giving up: at 120 s it
+still catches a wedged browser and clears the slowest real call 3.5 times over.
+
+**51 checks now, and 24 of them had never run.** They all pass, including the
+new one — switching back to English leaves no Slovak in the detail panel or the
+rate menu — which had been about to ship described as "unverified in this
+container". It was verifiable the whole time.
+
+The lesson is the uncomfortable one. "It fails the same way on an unchanged
+build, so it is the environment" is a real argument and it is not a measurement,
+and here it was used to stop looking exactly one step before the cause. Twenty
+seconds was a guess in the first place; the fix was to time the thing.
 
 ### Worlds and Saves fold into menus
 

@@ -2205,7 +2205,13 @@ function bindControls() {
 
   {
     const custom = document.createElement('option');
-    custom.value = ''; custom.textContent = t('custom'); custom.hidden = true;
+    // Written in ENGLISH and left for applyStatic to translate. Calling t() here
+    // looked equivalent and was not: this option is built once and never
+    // rebuilt, and applyStatic caches the first text it sees as the original.
+    // Boot in Slovak and 'vlastné' became the cached "English", so switching to
+    // English asked the dictionary to translate 'vlastné', got nothing, and the
+    // menu stayed Slovak on an English page for the rest of the session.
+    custom.value = ''; custom.textContent = 'custom'; custom.hidden = true;
     rateMenu.appendChild(custom);
     for (const st of RATE_STOPS) {
       const o = document.createElement('option');
@@ -2737,7 +2743,9 @@ bindProfile();
 bindWorldName();
 syncSliders();
 bindControls();
+let selectedState = null;
 function selectState(id) {
+  selectedState = id;
   $('#state-detail').innerHTML = discovered.has(id)
     ? `<strong style="color:${STATES[id].color}">${tx('states', id, 'name') || STATES[id].name}` +
       `</strong><br>${tx('states', id, 'blurb') || STATES[id].blurb}`
@@ -2801,6 +2809,10 @@ function relabel() {
       tx('scenarios', activeScenario.id, 'brief') || activeScenario.brief;
   }
   buildLogUI($('#statelog'), discovered, selectState);
+  // The detail panel is written on click and nowhere else, so a switch left it
+  // in whatever language it was opened in -- a Slovak blurb sitting under an
+  // English heading on an English page. Re-run it for whatever is open.
+  if (selectedState) selectState(selectedState);
   renderMarks();
   renderEpochs();
   syncSlots();

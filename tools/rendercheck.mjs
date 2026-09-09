@@ -65,7 +65,7 @@ export function render(opts={}) {
       let col=[0,0,0];
       const b=dot(ro,rd), c=dot(ro,ro)-1, disc=b*b-c;
       const airAmount=smoothstep(0,0.02,U.pTot);
-      const atmoThick=airAmount*clamp(0.030+0.10*Math.log(1+U.pTot)+0.16*U.steam,0,0.42);
+      const atmoThick=airAmount*clamp(0.030+0.10*Math.log(1+U.pTot)+0.16*U.steam,0,0.26);
       const airTint=mixv(mixv([0.35,0.60,1.0],[1.0,0.72,0.34],U.co2),[1.0,0.96,0.92],U.steam);
       if(disc>0){
         const t=-b-Math.sqrt(disc);

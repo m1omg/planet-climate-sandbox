@@ -206,10 +206,9 @@ export const SK = {
     'boundary {0} → {1} °C': 'rozhranie {0} → {1} °C',
     'boundary {0} °C': 'rozhranie {0} °C',
     'ocean averages {0} °C': 'oceán v priemere {0} °C',
-    'evaporating {0} oceans/Gyr': 'vyparuje sa {0} oceánov/Gyr',
-    'condensing {0} oceans/Gyr': 'kondenzuje {0} oceánov/Gyr',
-    'deep ice melting {0} oceans/Gyr': 'hlbinný ľad sa topí {0} oceánov/Gyr',
-    'deep ice melting {0} oceans/Myr': 'hlbinný ľad sa topí {0} oceánov/Myr',
+    'evaporating {0} oceans/{1}': 'vyparuje sa {0} oceánu za {1}',
+    'condensing {0} oceans/{1}': 'kondenzuje {0} oceánu za {1}',
+    'deep ice melting {0} oceans/{1}': 'hlbinný ľad sa topí o {0} oceánu za {1}',
     'above the critical pressure': 'nad kritickým tlakom',
     'water below {0} °C': 'voda pod ním {0} °C',
     // Nie „tekutiny“ — po slovensky to znie ako kvapalina, a vrch stĺpca ňou
@@ -229,7 +228,7 @@ export const SK = {
     'equator {0} °C, poles {1} °C': 'rovník {0} °C, póly {1} °C',
     '{0}% ice': '{0} % ľadu',
     '{0} W/m² imbalance': 'nerovnováha {0} W/m²',
-    'losing {0} oceans/Gyr': 'stráca {0} oceánu za mld. rokov',
+    'losing {0} oceans/{1}': 'stráca {0} oceánu za {1}',
     '{0} bar CO₂ frozen onto the night side': '{0} baru CO₂ vymrznutého na nočnej strane',
     '{0} bar CO₂ frozen out': '{0} baru CO₂ vymrznutého',
 

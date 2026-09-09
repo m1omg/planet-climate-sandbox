@@ -140,7 +140,14 @@ export function atmosphereLook(world, steam, realistic) {
 
   if (!realistic) {
     return {
-      thickness: clamp(0.030 + 0.10 * Math.log(1 + pTot) + 0.16 * steam, 0, 0.42),
+      // The ceiling was 0.42 of the radius, and everything thick pinned against
+      // it: Venus, both runaways, both buried oceans. Drawn, that is a small
+      // disc inside a balloon nearly three times its width -- reported from
+      // play, and it flatters nothing. The curve below the cap is untouched, so
+      // Earth is exactly as it was at 0.100; only the worlds that were already
+      // saturated come down, and they come down together, which keeps the one
+      // thing this diagram is for -- comparing them by eye.
+      thickness: clamp(0.030 + 0.10 * Math.log(1 + pTot) + 0.16 * steam, 0, 0.26),
       veil: 0,                       // the stylised mode always shows the ground
       haze: haze * 0.6,
     };

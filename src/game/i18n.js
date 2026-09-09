@@ -84,8 +84,22 @@ export function t(s) {
 
 // Interpolation, so a translated sentence can put its numbers where its own
 // grammar wants them rather than where English left them.
+//
+// ...and a decimal point is an English convention. Slovak writes 0,03 and the
+// page was writing 0.03 into every translated sentence it interpolated a number
+// into -- the hand-written entries got a comma because somebody typed one
+// ('0.5×' has its own dictionary line), and nothing computed at runtime did.
+// Only whole numeric arguments are touched, so an id, a unit or a word carrying
+// a full stop passes through as it is.
+const DECIMAL_COMMA = new Set(['sk']);
+function localiseNumber(a) {
+  return DECIMAL_COMMA.has(lang) && typeof a === 'string' && /^-?\d+\.\d+$/.test(a)
+    ? a.replace('.', ',') : a;
+}
+
 export function tp(s, ...args) {
-  return String(t(s)).replace(/\{(\d+)\}/g, (m, i) => (args[i] === undefined ? m : args[i]));
+  return String(t(s)).replace(/\{(\d+)\}/g,
+    (m, i) => (args[i] === undefined ? m : localiseNumber(String(args[i]))));
 }
 
 export function tx(kind, id, field) {

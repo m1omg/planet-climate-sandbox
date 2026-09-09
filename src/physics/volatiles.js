@@ -952,8 +952,30 @@ export function stepVolatiles(w, dtYears) {
   // column. That costs a solve, which is why it is done only when the window
   // closes: once every thousand simulated years at the most, against a column
   // the readout solves every frame anyway.
+  //
+  // Two guards, and the first one is the important one. This block solves a
+  // whole column, and it was firing on essentially every step: the window
+  // condition was copied from the liquid rate above, where the work is reading
+  // two reservoir numbers and `4 * dt` costs nothing. Here it bought a bisection
+  // and several integrations, 25 microseconds a step -- 28% of the entire step
+  // cost -- on every world in the model, including ones that cannot have a gram
+  // of high-pressure ice. Reported from play as the sim going slow once a planet
+  // starts warming, which is exactly when the step collapses and the per-step
+  // cost starts to matter.
+  //
+  // Ruling it out is free. High-pressure ice needs the floor of the column past
+  // the ice VI onset, and the pressure at the floor of a hydrostatic column is
+  // its mass times gravity -- no solve required to know Earth's 0.03 GPa ocean
+  // has none. The gate opens at 0.5 GPa, below the onset on the coldest world
+  // this model can build, and the first ice actually appears between 50 and 80
+  // Earth oceans.
+  const eoCol = dg0.d?.eoColumn ?? 0;
+  const wet = Math.max(dg0.flooded ?? 0, 1e-3);
+  const colKg = ((w.water.ocean ?? 0) + (w.water.seaIce ?? 0)) * eoCol / wet;
+  const canHaveDeepIce = colKg * (dg0.g ?? 9.81) > 5e8;
   const iceSpan = w.time - (w.iceMark?.t ?? w.time);
-  if (w.iceMark == null || iceSpan >= 1000 || iceSpan >= 4 * Math.max(dtYears, 0)) {
+  if (!canHaveDeepIce) { w.iceDeep = 0; w.iceRate = 0; w.iceMark = null; }
+  else if (w.iceMark == null || iceSpan >= 1000) {
     // Solved directly rather than through `dg.coldPool` / `dg.oceanBase`. Those
     // are lazily CACHED on the diagnostics object, and reading them from inside
     // the step populates the cache at a moment that is not the end of it -- so a
@@ -962,8 +984,7 @@ export function stepVolatiles(w, dtYears) {
     // which is invisible in a chart, survives every anchor, and is exactly what
     // identity.mjs exists to catch. The structure functions themselves are pure,
     // so calling them leaves the caches alone.
-    const eo = dg0.d?.eoColumn ?? 0;
-    const flooded = Math.max(dg0.flooded ?? 0, 1e-3);
+    const eo = eoCol, flooded = wet;
     const st = (dg0.hotTarget ?? 0) > 0.5
       ? coldPoolStructure(dg0)
       : (eo > 0 ? oceanStructure(
