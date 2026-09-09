@@ -218,7 +218,9 @@ export class SoftwareView {
       pTot: dg.pTotMean, co2: clamp(dg.pCO2 / Math.max(dg.pTotMean, 1e-6), 0, 1),
       // A gate, not a magnitude -- cpushade takes the brightness from the
       // local band temperature, as the GL path does. See thermalGlow().
-      nightGlow: smoothstep(650, 750, dg.Tmax),
+      // Gated on there being exposed ground, exactly as the GL path is: a buried
+      // ocean glowed red on its night side through the water standing over it.
+      nightGlow: smoothstep(650, 750, dg.Tmax) * (1 - hidden),
       time: state.time, relief: cfg.relief, clouds: this.clouds,
     });
     this.bctx.putImageData(this.image, 0, 0);

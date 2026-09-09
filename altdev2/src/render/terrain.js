@@ -58,9 +58,26 @@ export function probit(p) {
 // Sea level for a given land share, on the baked height's own scale.
 export function seaLevelForLand(landFraction) {
   const land = Math.min(Math.max(landFraction, 0), 1);
-  // Clamped just short of the ends: at exactly 0 or 1 the quantile runs off to
-  // infinity, and a world is "all sea" or "all land" long before that anyway.
-  const p = Math.min(Math.max(1 - land, 0.0015), 0.9985);
+  // The two ends are not symmetric, and the wet one was wrong.
+  //
+  // The quantile treats the height field as normal. It is not -- it is bounded,
+  // measured over five seeds and two million directions at -4.31 to +3.79 SD --
+  // so in the tail the quantile falls short of the actual peaks. Clamping at
+  // 0.9985 puts "no land at all" at +2.97 SD, which leaves everything above that
+  // dry: 139 summits out of 120000 samples, 0.12% of the surface, still islands
+  // on a world carrying five thousand oceans. Reported from play, and rightly.
+  //
+  // Submerging the highest ground needs +3.98 SD (the field max plus the
+  // shader's own -0.010 coast band), so the wet clamp goes far enough past that
+  // to be seed-proof. It costs nothing to overshoot: the sea colour saturates at
+  // h < -0.26 and everything here is already past it, so the only visible change
+  // is the last peaks going under.
+  //
+  // The dry clamp stays where it is. It has to: `elev` is measured up from sea
+  // level, so dropping it further would push a dry world's whole surface into
+  // the rock-and-snowline range. Nothing needs it anyway -- the shader already
+  // forces land to 1 when `uOceanFrac` reaches zero, which is the mirror guard.
+  const p = Math.min(Math.max(1 - land, 0.0015), 1 - 1e-7);
   return TERRAIN_MEAN + TERRAIN_SD * probit(p);
 }
 

@@ -3347,6 +3347,73 @@ seven oceans a gigayear of melting on a reservoir of two thousandths of one. A
 real drift, in a unit far too long for it. How much surface ice there is is
 already on the line as `{0}% ice`.
 
+### Three things the eye caught that the checks did not
+
+All three reported from play, all three real, and none of them was visible to a
+headless test because all three are about what the picture shows.
+
+**The night side glowed red through the ocean.** `uBareRock` was added so a
+Buried Ocean would stop being painted as lava, and the molten look was gated on
+it. The night-side thermal glow was not: it read `smoothstep(650, 750, Tmax)`
+and nothing else, so a world with two hundred kilometres of water over its rock
+still shone on the dark limb. Measured: cold-start buried ocean, Tmax 973 K,
+glow 1.00 → **0.00**; a dry magma world at 1660 K keeps its 1.00, which is the
+discrimination that makes the gate a measurement and not a switch. Both
+renderers, since the button has to mean the same thing on both.
+
+**Islands on a world with five thousand oceans.** `flooded` was right — the
+physics says 1.0000 from about seven Earth oceans upward — and the renderer drew
+land anyway. `seaLevelForLand` takes the elevation quantile of a field assumed
+normal, and clamps the tail at p = 0.9985 on the reasoning that "a world is all
+sea long before that". It is not: the field is *bounded*, measured over five
+seeds and two million directions at −4.31 to +3.79 SD, and the clamp puts "no
+land at all" at +2.97 SD. Everything above that stays dry — 139 summits in
+120000 samples, 0.12% of the surface, and on the real baked terrain **0.167%**.
+
+Submerging the highest ground needs +3.98 SD, so the wet clamp now goes past
+that with margin. It costs nothing to overshoot, because the sea colour
+saturates below `h = −0.26` and every submerged point is already past it: the
+only visible change is the last peaks going under. On the baked globe, 0.167% →
+**0.000%**, and the calibrated middle does not move — 30% land still asks for
+sea level 0.5251, exactly as before.
+
+The dry end keeps its old clamp deliberately. `elev` is measured up from sea
+level, so dropping that end further would push a dry world's whole surface into
+the rock-and-snowline range, and nothing needs it: the shader already forces
+land to 1 as `uOceanFrac` reaches zero, which is the mirror guard.
+
+**"Tekutina" is not what that layer is.** The Slovak for the supercritical top
+of the column read *tekutina* — literally "fluid", but in Slovak it lands as
+*liquid*, which is exactly the phase it is not. It is *superkritická vrstva* now,
+and the English says `supercritical` rather than `fluid` to match the band the
+cross-section draws under the same name. The readout tile went the same way:
+*Vrch tekutiny* → *Vrch stĺpca*, the top of the column, which is steam or
+supercritical fluid but never liquid. And the dictionary was carrying both
+*nadkritická* and *superkritická* for the same word in different entries; it is
+*superkritick-* throughout now.
+
+### Would the sky glow, seen from the water?
+
+Asked from play, and worth writing down because the answer is yes and the number
+is absurd. The base of the supercritical layer is at 3618 K on the buried world.
+Wien puts its peak at 801 nm and it radiates σT⁴ = **9.72 MW/m², seven thousand
+times the solar constant** — hotter than an incandescent filament, a brilliant
+yellow-white dome rather than a dull red one. What an observer in the water would
+see depends on depth, because water is a steep colour filter: the near-infrared
+carrying most of that energy is gone within centimetres, red within a metre or
+two, and only the blue-green tail reaches tens of metres. Searing white at the
+interface, deep blue-green a few tens of metres down, black by a hundred.
+
+It also puts a question against the conductive boundary layer, and the honest
+thing is to record it rather than let the picture imply an answer it has not
+earned. The band is sized δ = k·ΔT/F with F the mixed flux, 15.7 W/m². The
+radiative flux across the same interface is 620000 times that, and taking
+radiation as the carrier gives 0.20 mm rather than 126 m. The conversion
+timescale is not in doubt — the net energy converting water is set by the
+planet's radiative imbalance, which is what `advanceHotLayer` integrates, and
+most of that σT⁴ is balanced by back-radiation. What is in doubt is the drawn
+thickness and the flux printed on the band. Left as it is, and flagged.
+
 ### Worlds and Saves fold into menus
 
 Ported from `/dev/`, where the same measurement was made: the two lists cost
