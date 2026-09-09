@@ -483,6 +483,18 @@ body.software-render #planet{image-rendering:auto}
   border-radius: 999px; padding: 1px 5px; opacity: .8;
 }
 .slot-auto:empty { border: 0; padding: 0; }
+/* The autosave is not one of the five and should not look like one: set apart
+   by a rule above it and a dimmer ground, so 'the app writes here' and 'I write
+   here' are told apart before they are read. */
+.slot.slot-is-auto {
+  margin-top: 6px; background: rgba(255, 255, 255, 0.025);
+  border-style: dashed; border-color: rgba(255, 255, 255, 0.16);
+}
+.slot.slot-is-auto:hover { background: rgba(255, 255, 255, 0.075); }
+/* One click from losing what is in it. */
+.slot.warn {
+  border-color: #c4736a; box-shadow: 0 0 0 1px rgba(196, 115, 106, 0.35) inset;
+}
 
 /* The temperature chart is a control as well as a picture: drag along it to put
    the world back into its own past. */

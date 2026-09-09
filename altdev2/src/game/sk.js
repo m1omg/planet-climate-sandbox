@@ -269,6 +269,16 @@ export const SK = {
     'Saved to slot {0}': 'Uložené na pozíciu {0}',
     'Slot {0} is empty — press Save… first': 'Pozícia {0} je prázdna — najprv stlačte Uložiť…',
     'Loaded slot {0} — {1}, {2} in': 'Načítaná pozícia {0} — {1}, v čase {2}',
+    'Loaded the autosave — {0}, {1} in': 'Načítané automatické uloženie — {0}, v čase {1}',
+    // Genitív po „prepísať": prepísať ČO, teda meno sveta necháme ako je -- je
+    // to vlastné meno v úvodzovkách povahy, nie skloňované podstatné meno.
+    'Click again to overwrite {0} — {1} in': 'Kliknite znova a prepíšete {0} — v čase {1}',
+    'That one keeps itself — pick a numbered slot':
+      'Tá sa udržiava sama — vyberte číslovanú pozíciu',
+    'Nothing saved automatically yet': 'Zatiaľ nič automaticky uložené',
+    // Nápis na tlačidle, nie veta: krátko a v infinitíve, ako ostatné tlačidlá.
+    'Save…': 'Uložiť…',
+    'pick a slot': 'vyberte pozíciu',
     'Exported {0} worlds': 'Exportované svety: {0}',
     'Back to {0} — change something, then press play': 'Späť na {0} — zmeňte niečo a spustite',
     'Settled at {0}': 'Ustálené po {0}',
@@ -415,6 +425,8 @@ export const SK = {
     'empty': 'prázdna',
     'Kept up to date on its own, every 30 s and when you leave the page.':
       'Udržiava sa sama, každých 30 s a pri odchode zo stránky.',
+    'Kept up to date on its own, every 30 s and when you leave the page. Nothing you save by hand is ever written here.':
+      'Udržiava sa sama, každých 30 s a pri odchode zo stránky. Nič, čo uložíte ručne, sa sem nikdy nezapíše.',
     'Slot {0} is empty': 'Pozícia {0} je prázdna',
     '{0} — {1} elapsed, saved {2}': '{0} — uplynulo {1}, uložené {2}',
     'real surface map': 'skutočná mapa povrchu',

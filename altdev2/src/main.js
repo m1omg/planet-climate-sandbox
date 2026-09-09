@@ -1282,12 +1282,43 @@ function toast(msg, ms = 2600) {
 // below. Saving only the sliders would have given you a world that looked right
 // and had forgotten everything it had been through, which for a model whose
 // whole subject is history would be the wrong thing to keep.
-const slotKey = (i) => `${NS}.slot${i}.v1`;
+//
+// The autosave used to be slot 1, and that was a way to lose work rather than a
+// way to keep it. A slot that accepts a save by hand and then writes over it
+// thirty seconds later is not a slot; it was reported from play as the app
+// deleting manual saves, and it was doing exactly that. So the autosave has its
+// own key and its own tile now, outside the five: nothing the app writes on its
+// own can reach a slot you put something in.
+const AUTO = 'auto';                       // the autosave's tile id, not a number
+const slotKey = (i) => (i === AUTO ? `${NS}.autosave.v1` : `${NS}.slot${i}.v1`);
 let armedToSave = false;
+// Which slot is one click away from being overwritten, and when that offer
+// expires. Overwriting used to be silent and irreversible: arm Save…, change
+// your mind, click a slot to LOAD it, and the world in it was gone with no
+// prompt. Confirming costs a click only when something is actually at stake --
+// an empty slot still saves on the first click.
+let pendingOverwrite = null;
+let pendingUntil = 0;
+const OVERWRITE_MS = 6000;
+function clearPending() { pendingOverwrite = null; pendingUntil = 0; }
 
 function readSlot(i) {
   try { return JSON.parse(localStorage.getItem(slotKey(i)) || 'null'); } catch { return null; }
 }
+
+// The autosave used to BE slot 1, so a player arriving at this version has
+// their most recent world sitting there. Copied across, never moved: slot 1 is
+// a manual slot from here on and whatever is in it is theirs to keep, so the
+// world appears in both places once and the two then go their own ways.
+// Deleting it to 'tidy up' would be doing the very thing this change is for.
+function adoptOldAutosave() {
+  try {
+    if (localStorage.getItem(slotKey(AUTO)) !== null) return;
+    const old = localStorage.getItem(slotKey(1));
+    if (old !== null) localStorage.setItem(slotKey(AUTO), old);
+  } catch { /* private mode, or storage disabled */ }
+}
+adoptOldAutosave();
 
 // The three clocks. `age` counts from the world's formation and therefore
 // includes everything that happened before t=0 -- an Archean preset is already
@@ -1585,59 +1616,92 @@ function restore(s) {
 function buildSlots() {
   const host = $('#slots');
   host.innerHTML = '';
-  for (let i = 1; i <= SLOTS; i++) {
+  for (const i of tiles()) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'slot'; b.dataset.slot = String(i);
+    if (i === AUTO) b.classList.add('slot-is-auto');
     host.appendChild(b);
     b.addEventListener('click', () => {
       if (armedToSave) {
+        if (i === AUTO) {
+          toast(t('That one keeps itself — pick a numbered slot'));
+          return;
+        }
+        // Something already in it: say what would be lost and make them mean it.
+        const had = readSlot(i);
+        if (had && !(pendingOverwrite === i && Date.now() < pendingUntil)) {
+          pendingOverwrite = i; pendingUntil = Date.now() + OVERWRITE_MS;
+          syncSlots();
+          toast(tp('Click again to overwrite {0} — {1} in', had.name, fmtTime(had.time || 0)));
+          return;
+        }
         try { localStorage.setItem(slotKey(i), JSON.stringify(snapshot())); }
         catch { toast(t('Could not save — storage is full or blocked')); return; }
-        armedToSave = false;
-        if (i === AUTOSAVE_SLOT) { dirty = false; lastAutosave = Date.now(); }
+        armedToSave = false; clearPending();
         syncSlots();
         toast(tp('Saved to slot {0}', i));
         return;
       }
+      clearPending();
       const s = readSlot(i);
-      if (!s) { toast(tp('Slot {0} is empty — press Save… first', i)); return; }
+      if (!s) {
+        toast(i === AUTO ? t('Nothing saved automatically yet')
+                         : tp('Slot {0} is empty — press Save… first', i));
+        return;
+      }
       restore(s);
       // Freshly loaded and unchanged: nothing to write back yet, and the clock
       // has not moved. Marking it clean here is what stops loading slot 3 from
       // copying itself into slot 1 a moment later.
       dirty = false; lastAutosave = Date.now();
-      toast(tp('Loaded slot {0} — {1}, {2} in', i, s.name, fmtTime(s.time || 0)));
+      toast(i === AUTO
+        ? tp('Loaded the autosave — {0}, {1} in', s.name, fmtTime(s.time || 0))
+        : tp('Loaded slot {0} — {1}, {2} in', i, s.name, fmtTime(s.time || 0)));
     });
   }
   syncSlots();
 }
 
+// The five numbered slots, and the autosave's own tile after them.
+function tiles() {
+  const list = [];
+  for (let i = 1; i <= SLOTS; i++) list.push(i);
+  list.push(AUTO);
+  return list;
+}
+
 function syncSlots() {
-  for (let i = 1; i <= SLOTS; i++) {
+  if (pendingOverwrite !== null && Date.now() >= pendingUntil) clearPending();
+  for (const i of tiles()) {
     const b = $(`.slot[data-slot="${i}"]`);
     if (!b) continue;
     const s = readSlot(i);
     b.classList.toggle('empty', !s);
-    b.classList.toggle('armed', armedToSave);
-    // Slot 1 says what it is. Saving into it by hand still works and is not
-    // fought over: what you would be saving is the world that is running, which
-    // is the same world the next autosave writes.
-    // The badge span is emitted on every slot, empty where it does not apply, so
-    // all five keep the same four grid columns and the elapsed time stays in
+    // The autosave tile is never a save target, so it does not light up armed.
+    b.classList.toggle('armed', armedToSave && i !== AUTO);
+    b.classList.toggle('warn', pendingOverwrite === i);
+    // The badge span is emitted on every tile, empty where it does not apply, so
+    // all of them keep the same four grid columns and the elapsed time stays in
     // line down the row.
-    const auto = `<span class="slot-auto">${i === AUTOSAVE_SLOT ? t('auto') : ''}</span>`;
-    b.innerHTML = `<span class="slot-n">${i}</span>` + (s
+    const auto = `<span class="slot-auto">${i === AUTO ? t('auto') : ''}</span>`;
+    const n = i === AUTO ? '<span class="slot-n">↻</span>' : `<span class="slot-n">${i}</span>`;
+    b.innerHTML = n + (s
       ? `<span class="slot-name">${s.name}</span>${auto}` +
         `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
       : `<span class="slot-name">${t('empty')}</span>${auto}<span class="slot-sub">—</span>`);
-    const note = i === AUTOSAVE_SLOT
-      ? '\n' + t('Kept up to date on its own, every 30 s and when you leave the page.') : '';
+    const note = i === AUTO
+      ? '\n' + t('Kept up to date on its own, every 30 s and when you leave the page. Nothing you save by hand is ever written here.') : '';
     b.title = (s ? tp('{0} — {1} elapsed, saved {2}', s.name, fmtTime(s.time || 0),
                       new Date(s.at).toLocaleString())
-                 : tp('Slot {0} is empty', i)) + note;
+                 : (i === AUTO ? t('Nothing saved automatically yet') : tp('Slot {0} is empty', i))) + note;
   }
   const btn = $('#btn-slot-save');
-  if (btn) { btn.textContent = armedToSave ? 'pick a slot' : 'Save…'; btn.classList.toggle('busy', armedToSave); }
+  // Translated. These two were the last raw English strings written straight
+  // into the DOM, so an armed button said 'pick a slot' on a Slovak page.
+  if (btn) {
+    btn.textContent = armedToSave ? t('pick a slot') : t('Save…');
+    btn.classList.toggle('busy', armedToSave);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1653,7 +1717,6 @@ function syncSlots() {
 // Thirty seconds. A snapshot is about 1.1 kB and the whole set of five is 5.4,
 // so the cost is nothing; the interval is about how much work you would rather
 // not repeat, not about the write.
-const AUTOSAVE_SLOT = 1;
 const AUTOSAVE_MS = 30000;
 let dirty = false;            // has the world moved since the last write?
 let touched = false;          // has anyone actually done anything this session?
@@ -1678,7 +1741,7 @@ function autosave(force = false) {
   if (!dirty || !touched) return false;
   const now = Date.now();
   if (!force && now - lastAutosave < AUTOSAVE_MS) return false;
-  try { localStorage.setItem(slotKey(AUTOSAVE_SLOT), JSON.stringify(snapshot())); }
+  try { localStorage.setItem(slotKey(AUTO), JSON.stringify(snapshot())); }
   catch { return false; }      // full or blocked: stay quiet, this is a background job
   lastAutosave = now; dirty = false;
   syncSlots();
@@ -1702,7 +1765,10 @@ addEventListener('pagehide', () => autosave(true));
 // browser clears site data.
 function exportSaves() {
   const worlds = [];
-  for (let i = 1; i <= SLOTS; i++) {
+  // The autosave goes in the file as well. It is usually the most recent world
+  // there is, and a backup that quietly left out the newest thing would be a
+  // poor backup.
+  for (const i of tiles()) {
     const s = readSlot(i);
     if (s) worlds.push({ slot: i, ...s });
   }
@@ -1730,7 +1796,7 @@ function importSaves(text) {
   }
   // An imported slot 1 is not the running world, so do not let the autosave
   // write over it a moment later.
-  if (writes.some((wr) => wr.slot === AUTOSAVE_SLOT)) { dirty = false; lastAutosave = Date.now(); }
+  if (writes.some((wr) => wr.slot === AUTO)) { dirty = false; lastAutosave = Date.now(); }
   syncSlots();
   toast(writes.length
     ? `Imported ${writes.length} world${writes.length === 1 ? '' : 's'}` +
@@ -2069,6 +2135,7 @@ function bindControls() {
 
   $('#btn-slot-save').addEventListener('click', () => {
     armedToSave = !armedToSave;
+    clearPending();
     syncSlots();
     if (armedToSave) toast(t('Pick a slot to save into'));
   });
