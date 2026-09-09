@@ -3379,6 +3379,16 @@ function runChecks() {
     check('The globe draws the land fraction the model asked for',
       worst < 0.04, `worst error ${(worst * 100).toFixed(1)} points, at ${(at * 100).toFixed(0)}% land ` +
       `(the old straight-line sea level was out by 15 points at 30%)`);
+    // ...and none at all means NONE. The interior is a quantile of a field taken
+    // to be normal; the field is bounded, so in the tail the quantile falls
+    // short of the real peaks and the clamp at 0.9985 left everything above
+    // +2.97 SD dry -- 0.12% of the surface still islands on a world carrying
+    // five thousand oceans. Reported from play. Both seeds, because a summit
+    // that only one of them has is still a summit.
+    const dry0 = Math.max(drawn(3, 0), drawn(91, 0));
+    check('…and a fully flooded world has no land left above the water at all',
+      dry0 < 1e-4, `${(dry0 * 100).toFixed(4)}% of the surface still dry at 0% land `
+        + `(sea level ${seaLevelForLand(0).toFixed(4)} against a field that reaches 0.699)`);
   }
 
   // ---- 3k2. the methane greenhouse has a ceiling ---------------------------

@@ -445,7 +445,7 @@ export function reasonText(w, st, tr = enFormat) {
     // boundary between air and water, and an atmosphere everywhere else.
     bits.push((dg.pH2 ?? 0) + (dg.pHe ?? 0) > 0.5 * (dg.pTotMean ?? 1)
       ? tr('envelope {0} °C', c(dg.Tmean))
-      : dg.Tmean > T_CRIT ? tr('fluid {0} °C', c(dg.Tmean))
+      : dg.Tmean > T_CRIT ? tr('supercritical {0} °C', c(dg.Tmean))
       : tr('atmosphere {0} °C', c(dg.Tmean)));
     // Dropped entirely when it is neither a span nor distinct from what is above
     // it: on a world with no lid and no lag there is no boundary to report, and

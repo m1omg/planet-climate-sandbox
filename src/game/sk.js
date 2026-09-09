@@ -202,7 +202,7 @@ export const SK = {
     // Zostup stĺpcom: čo je navrchu, kde sa začína voda a aká je v priemere.
     'envelope {0} °C': 'obal {0} °C',
     'atmosphere {0} °C': 'atmosféra {0} °C',
-    'fluid {0} °C': 'tekutina {0} °C',
+    'supercritical {0} °C': 'superkritická vrstva {0} °C',
     'boundary {0} → {1} °C': 'rozhranie {0} → {1} °C',
     'boundary {0} °C': 'rozhranie {0} °C',
     'ocean averages {0} °C': 'oceán v priemere {0} °C',
@@ -212,7 +212,9 @@ export const SK = {
     'deep ice melting {0} oceans/Myr': 'hlbinný ľad sa topí {0} oceánov/Myr',
     'above the critical pressure': 'nad kritickým tlakom',
     'water below {0} °C': 'voda pod ním {0} °C',
-    'Fluid top': 'Vrch tekutiny',
+    // Nie „tekutiny“ — po slovensky to znie ako kvapalina, a vrch stĺpca ňou
+    // nie je: je to para alebo superkritická vrstva.
+    'Fluid top': 'Vrch stĺpca',
     'Liquid water': 'Tekutá voda',
     'How fast the liquid water is going — boiled, converted under a hot layer, or lost to space. Negative while the sea is disappearing, positive while it is coming back.':
       'Ako rýchlo ubúda tekutá voda — vyvarená, premenená pod horúcou vrstvou alebo stratená do vesmíru. Záporné, kým more mizne, kladné, kým sa vracia.',
@@ -247,7 +249,7 @@ export const SK = {
     'sea ice': 'morský ľad',
     'land ice': 'pevninský ľad',
     'vapour': 'para',
-    'supercritical': 'nadkritická',
+    'supercritical': 'superkritická',
     'lost': 'stratená',
 
     // ---- desatinná čiarka v ponuke rýchlosti otáčania ----------------------
@@ -565,9 +567,9 @@ export const SK = {
     lowSunHycean: { name: 'Hyceánsky svet so slabým svetlom',
       blurb: 'Hyceánsky svet prakticky bez hviezdneho svetla, ktorý drží kvapalný oceán z vlastného vnútorného tepla pod hlbokou vodíkovou obálkou. Obálka musí byť hrubá: pri týchto teplotách robí všetku prácu skleníkový efekt a voda je kvapalná vďaka tlaku nad ňou, nie vďaka niečomu, čo robí hviezda. Verzia stavu pre voľne letiace planéty a veľmi vzdialené obežné dráhy.' },
     buriedOcean: { name: 'Pochovaný oceán',
-      blurb: 'Nekontrolovateľný skleníkový efekt s oceánom pod ním. Rovnováha neexistuje pri žiadnej teplote a more sa dvíha do neba — lenže vody je tu viac, než koľko nebo pojme, takže zvyšok zostáva tekutý, pochovaný pod parou či nadkritickou tekutinou a chladnejší než povrch, pretože teplo sa k nemu musí premiešať cez stabilný vztlakový gradient (Pierrehumbert a Furth 2023). Vrstva postupuje k stredu geologicky pomaly namiesto naraz: pár stoviek oceánov znamená desiatky miliónov rokov. Ten oceán tam naozaj je, dlho po tom, čo povrch prestal byť povrchom.' },
-    supercriticalEnvelope: { name: 'Nadkritická obálka',
-      blurb: 'Za kritickým bodom niet povrchu. Kvapalina a para sú jedna tekutina, atmosférická adiabata plynulo prechádza do nadkritickej vodnej adiabaty a pokračuje do vnútra planéty — nikde nie je rozhranie, ktoré by sa dalo nazvať oceánom (Pierrehumbert a Furth 2023). Ktorú planétu dostanete, závisí od cesty: svet, ktorý bol vždy horúci, sa ustáli takto, kým ten, ktorý najprv vychladol a zohrial sa až potom, strávi dlhý čas ako horúca vrstva ležiaca na studenej vode, než sa ním stane.' },
+      blurb: 'Nekontrolovateľný skleníkový efekt s oceánom pod ním. Rovnováha neexistuje pri žiadnej teplote a more sa dvíha do neba — lenže vody je tu viac, než koľko nebo pojme, takže zvyšok zostáva tekutý, pochovaný pod parou či superkritickou tekutinou a chladnejší než povrch, pretože teplo sa k nemu musí premiešať cez stabilný vztlakový gradient (Pierrehumbert a Furth 2023). Vrstva postupuje k stredu geologicky pomaly namiesto naraz: pár stoviek oceánov znamená desiatky miliónov rokov. Ten oceán tam naozaj je, dlho po tom, čo povrch prestal byť povrchom.' },
+    supercriticalEnvelope: { name: 'Superkritická obálka',
+      blurb: 'Za kritickým bodom niet povrchu. Kvapalina a para sú jedna tekutina, atmosférická adiabata plynulo prechádza do superkritickej vodnej adiabaty a pokračuje do vnútra planéty — nikde nie je rozhranie, ktoré by sa dalo nazvať oceánom (Pierrehumbert a Furth 2023). Ktorú planétu dostanete, závisí od cesty: svet, ktorý bol vždy horúci, sa ustáli takto, kým ten, ktorý najprv vychladol a zohrial sa až potom, strávi dlhý čas ako horúca vrstva ležiaca na studenej vode, než sa ním stane.' },
   },
 
   // ---- scenáre -------------------------------------------------------------

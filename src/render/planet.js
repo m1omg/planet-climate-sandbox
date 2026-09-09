@@ -812,7 +812,12 @@ export class PlanetView {
     // using it lit up ground at 692 K that emits nothing. Below 700 K nothing
     // anywhere can glow, and the curve is already 1e-6 there, so the gate's
     // edge is invisible.
-    const glow = smoothstep(650, 750, dg.Tmax);
+    // ...and it has to be ground you can SEE. This was temperature alone, so a
+    // buried ocean glowed red on its night side straight through two hundred
+    // kilometres of water: the same mistake `uBareRock` was added for, in the
+    // one place that never got the gate. Rock under an ocean does not shine.
+    // Applied where `hidden` is known, a few lines down.
+    const glowRaw = smoothstep(650, 750, dg.Tmax);
     const sc = PlanetView.starColor(p.starTemp);
     const vc = vegetationColor(p.starTemp);
     const atmo = atmosphereLook(world, steam, this.realistic);
@@ -886,7 +891,7 @@ export class PlanetView {
     gl.uniform1f(this.u.uLocked, lam);
     // A gate, not a magnitude: the shader takes the brightness from the local
     // band temperature. See thermalGlow() in terrain.js.
-    gl.uniform1f(this.u.uNightGlow, glow);
+    gl.uniform1f(this.u.uNightGlow, glowRaw * (1 - hidden));
     // Volcanism, from the melt production the physics tracks. Suppressed on a
     // molten world: a magma ocean is already drawn as molten everywhere, and
     // painting vents onto it would be claiming a distinction that is not there.
