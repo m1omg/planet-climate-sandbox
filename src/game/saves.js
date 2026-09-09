@@ -59,8 +59,12 @@ export function planImport(worlds, isEmpty, slots = SLOTS) {
   };
   for (const raw of worlds) {
     if (!raw || typeof raw !== 'object' || !raw.params) { skipped++; continue; }
-    const want = Number(raw.slot);
-    const i = (Number.isInteger(want) && want >= 1 && want <= slots) ? want : free();
+    // 'auto' is the autosave's own tile rather than a number, and a file that
+    // names it puts the world back where it came from. Everything else is a
+    // numbered slot, or the first free one when the file says nothing usable.
+    const want = raw.slot === 'auto' ? 'auto' : Number(raw.slot);
+    const i = want === 'auto' ? 'auto'
+      : (Number.isInteger(want) && want >= 1 && want <= slots) ? want : free();
     if (!i || taken.has(i)) { skipped++; continue; }
     const { slot, ...world } = raw;
     writes.push({ slot: i, world });

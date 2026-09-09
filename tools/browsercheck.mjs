@@ -449,6 +449,11 @@ try {
       state: document.querySelector('.state-name')?.textContent || '',
       option: document.querySelector('#pan-speed option').textContent,
       title: document.querySelector('#pan-speed').getAttribute('aria-label'),
+      // The Save button rewrites its own text on every syncSlots, in both of
+      // its states, and the armed one was raw English until this check existed.
+      save: (() => { const b = document.querySelector('#btn-slot-save');
+        const idle = b.textContent; b.click();
+        const armed = b.textContent; b.click(); return { idle, armed }; })(),
     };
   })()`);
   // Any of the openings, because which one the line takes is a fact about the
@@ -464,6 +469,9 @@ try {
     'The state banner’s subtitle is translated, not just its title', slovak.reason);
   ok(slovak.option === '0,5×' && /0,5×/.test(slovak.title || ''),
     'The pan-speed menu uses a Slovak decimal comma', `${slovak.option} · ${slovak.title}`);
+  ok(slovak.save.idle === 'Uložiť…' && slovak.save.armed === 'vyberte pozíciu',
+    'The Save button is Slovak in both of its states',
+    `"${slovak.save.idle}" / "${slovak.save.armed}"`);
   // A label the panel cannot show is a label that names nothing. Slovak is
   // routinely longer than the English it replaces, so measure the tiles in the
   // language that stresses them rather than in the one they were designed for.
@@ -882,7 +890,12 @@ try {
     // boot and used to keep whatever language it was born in.
     const rate = [...document.querySelectorAll('#rate-menu option')]
       .map((o) => o.textContent).join(' | ');
-    return { lang: document.documentElement.lang,
+    // The Save button writes its own text on every syncSlots, so check BOTH of
+    // its labels -- the armed one was the last raw English string on the page.
+    const save = document.querySelector('#btn-slot-save');
+    const saveIdle = save.textContent;
+    save.click(); const saveArmed = save.textContent; save.click();
+    return { lang: document.documentElement.lang, saveIdle, saveArmed,
       reason: document.querySelector('.state-reason').textContent,
       detail: (document.querySelector('#state-detail') || {}).textContent || '',
       rate,
@@ -895,6 +908,9 @@ try {
     && !SLOVAK.test(backToEn.reason),
     'Switching back to English leaves no Slovak behind, panels and menus included',
     `detail "${backToEn.detail.slice(0, 40)}" · rate "${backToEn.rate.slice(0, 40)}"`);
+  ok(backToEn.saveIdle === 'Save…' && backToEn.saveArmed === 'pick a slot',
+    'Both labels of the Save button come back to English',
+    `"${backToEn.saveIdle}" / "${backToEn.saveArmed}"`);
   ok(backToEn.lang === 'en'
     && /mean surface|atmosphere [-\d.]+ °C|ocean averages/.test(backToEn.reason)
     && backToEn.option === '0.5×',
@@ -1003,6 +1019,75 @@ try {
   })()`);
   const shot = await call('Page.captureScreenshot', { format: 'png', fromSurface: true }, sessionId);
   writeFileSync(screenshot, Buffer.from(shot.data, 'base64'));
+  // --- save slots: nothing the app writes on its own may eat a manual save ---
+  //
+  // Both of these were reported from play as "this version deletes my saves",
+  // and both did. The autosave was slot 1, so a world saved there by hand was
+  // gone within thirty seconds; and arming Save… then clicking a full slot to
+  // LOAD it overwrote it silently. Neither is reachable from a Node test: one
+  // needs the real 30 s/pagehide autosave path, the other needs two clicks.
+  const slots = await evaluate(`(async () => {
+    const { NS } = await import('./src/game/storage.js');
+    const nameIn = (i) => { const v = localStorage.getItem(
+      i === 'auto' ? NS + '.autosave.v1' : NS + '.slot' + i + '.v1');
+      return v === null ? null : JSON.parse(v).name; };
+    const load = async (id) => { __app.loadPreset(id);
+      for (let i = 0; i < 100 && __app.view.body !== id; i++) await new Promise(r => setTimeout(r, 25));
+      await new Promise(r => setTimeout(r, 60)); };
+    const click = (sel) => document.querySelector(sel).click();
+
+    // 1. A hand-made save, then play, then leave the page.
+    await load('mars');
+    click('#btn-slot-save'); click('.slot[data-slot="2"]');
+    await new Promise(r => setTimeout(r, 40));
+    const handMade = nameIn(2);
+    await load('venus');
+    if (__app.sim.paused) click('#btn-play');
+    __app.sim.rate = 1e7;
+    for (let i = 0; i < 300; i++) __app.sim.advance(1/60);
+    __app.tick(0);
+    dispatchEvent(new Event('pagehide'));
+    await new Promise(r => setTimeout(r, 60));
+    const afterAutosave = nameIn(2), autoTile = nameIn('auto');
+
+    // 2. Armed, then a click on a full slot -- the load-by-mistake case.
+    await load('trappist1e');
+    click('#btn-slot-save'); click('.slot[data-slot="3"]');
+    await new Promise(r => setTimeout(r, 40));
+    const inThree = nameIn(3);
+    await load('earth');
+    click('#btn-slot-save');                       // armed
+    click('.slot[data-slot="3"]');                 // meant to load it
+    await new Promise(r => setTimeout(r, 40));
+    const afterOneClick = nameIn(3);
+    click('.slot[data-slot="3"]');                 // and now they mean it
+    await new Promise(r => setTimeout(r, 40));
+    const afterTwoClicks = nameIn(3);
+
+    // 3. An empty slot still saves on the first click -- the guard must not
+    //    turn every save into two clicks.
+    click('#btn-slot-save'); click('.slot[data-slot="5"]');
+    await new Promise(r => setTimeout(r, 40));
+    const emptyOneClick = nameIn(5);
+    return { handMade, afterAutosave, autoTile, inThree, afterOneClick,
+             afterTwoClicks, emptyOneClick,
+             tiles: [...document.querySelectorAll('.slot')].length };
+  })()`);
+  ok(slots.handMade === 'Mars' && slots.afterAutosave === 'Mars',
+    'The autosave cannot reach a slot you saved into by hand',
+    `saved "${slots.handMade}", after a run and a pagehide it is "${slots.afterAutosave}"`);
+  ok(slots.autoTile === 'Venus',
+    '...because it writes to its own tile instead', `the ↻ tile holds "${slots.autoTile}"`);
+  ok(slots.tiles === 6, 'Five numbered slots and the autosave beside them',
+    `${slots.tiles} tiles`);
+  ok(slots.inThree === 'TRAPPIST-1e' && slots.afterOneClick === 'TRAPPIST-1e',
+    'One click on a full slot does not overwrite it',
+    `"${slots.inThree}" still "${slots.afterOneClick}" after the first click`);
+  ok(slots.afterTwoClicks === 'Earth', '...and a second click does',
+    `"${slots.afterOneClick}" → "${slots.afterTwoClicks}"`);
+  ok(slots.emptyOneClick === 'Earth', 'An empty slot still saves on one click',
+    `slot 5 = "${slots.emptyOneClick}"`);
+
   ok(browserErrors.length === 0, 'No browser exceptions or error-level console messages');
   console.log(`Screenshot: ${screenshot}`);
   console.log(`Drowned screenshot: ${drownedScreenshot}`);

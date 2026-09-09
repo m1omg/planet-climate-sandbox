@@ -3505,6 +3505,47 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### The autosave was eating the saves
+
+Reported from play, in four words: this version deletes manual saves. It did,
+and by two separate routes, both of them things a player does on an ordinary
+afternoon. Neither was a bug in the sense of a wrong line — both were designs
+that read fine and lose work.
+
+**The autosave was slot 1.** A slot you can save into by hand, and which the
+app overwrites on its own every thirty seconds and on every `pagehide`. The
+comment sitting above it said the conflict was considered and dismissed —
+"saving into it by hand still works and is not fought over, what you would be
+saving is the world that is running, which is the same world the next autosave
+writes". That is true only if you never load anything afterwards, which is not a
+condition anybody plays under. Driven in a browser: save Mars into slot 1, load
+Venus, run it, close the tab. Slot 1 holds Venus.
+
+The autosave has its own key and its own tile now, below the five and drawn
+differently — dashed, dimmer, marked ↻. Nothing the app writes on its own can
+reach a numbered slot any more, which is the property that was missing and the
+only one worth stating. Whatever was in the old slot 1 is **copied** into the
+new key on first load, never moved: it is a manual slot from here on and what is
+in it belongs to whoever put it there.
+
+**Overwriting was silent.** `armedToSave` is a sticky toggle with no cancel and
+no timeout. Press Save…, change your mind, click a slot to *load* the world in
+it, and the world is gone — replaced by whatever is running, no prompt, no
+undo. Saved TRAPPIST-1e, clicked to load it, got Earth. A full slot now says
+what it would cost you (`Click again to overwrite Mars — 2.1 Gyr in`) and takes
+a second click within six seconds; an empty slot still saves on the first click,
+because a guard that makes every save two clicks is a worse tool.
+
+Both are browser checks now, and neither could ever have been a Node one: the
+first needs the real thirty-second/`pagehide` autosave path, the second needs
+two clicks in sequence. Written failing first — 3 of 3 red against the old code,
+6 of 6 green after.
+
+While in there: `Save…` and `pick a slot` were written straight into the DOM in
+English, with no `t()`. They were the last two raw strings on the page, so an
+armed button said "pick a slot" on a Slovak one. Both labels are checked in both
+languages now.
+
 ### Half the browser check had never once been seen to pass
 
 The Slovak fixes above needed a browser assertion, because the bug they fix
