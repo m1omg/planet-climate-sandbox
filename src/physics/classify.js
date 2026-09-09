@@ -17,6 +17,7 @@ export const STATES = {
   twilight:   { name: 'Twilight World',          color: '#b98ad6', blurb: 'The eye is scorching, the night side is glacial, and between them a temperate ring of liquid water follows the terminator all the way round the planet. It works only because there is too little water to move the heat: a wetter world would carry enough latent heat away from the substellar point to even the temperatures out, and would then cross the runaway limit as a whole planet instead of leaving a habitable band behind (Lobo et al. 2023).' },
   trapped:    { name: 'Nightside-Trapped Desert', color: '#9aa7c9', blurb: 'On a locked world the night side is a permanent cold trap. Every drop of water has migrated there as glacier ice, leaving a bone-dry sunlit desert that cannot recover it.' },
   waterbelt:  { name: 'Waterbelt / Slushball', color: '#8fd8d0', blurb: 'Ice reaches deep into the tropics but a narrow band of open equatorial ocean survives. A genuine stable state, and a far softer landing than a hard snowball.' },
+  subglacial: { name: 'Ice-Covered Ocean',    color: '#6fa8c4', blurb: 'Frozen shut at the top and liquid underneath. The interior heat has to escape through the ice, and the only way out is a temperature gradient running from the surface up to the melting point at the base — which is what sets how thick the shell is: d = 651·ln(T_base/T_surface)/F (Ojakangas & Stevenson 1989). Everything below that stays liquid. Europa carries roughly 13 km of ice over 100 km of ocean on tidal heat alone, and a snowball Earth keeps about a kilometre of ice over a live ocean on radiogenic heat. The surface is dead; the sea is not. Note that ice Ih melts COLDER under pressure, so the warmest place in the shell is the bottom of it.' },
   snowball:   { name: 'Hard Snowball',        color: '#cfe8f5', blurb: 'Runaway ice–albedo feedback has frozen the planet pole to pole. Weathering stops, so volcanic CO2 accumulates unopposed for 5–50 Myr until 0.1–0.3 bar finally breaks the ice.' },
   marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'The air itself has frozen onto the ground. Below the CO2 frost point the atmosphere condenses onto the winter pole faster than volcanoes can resupply it, and the pressure falls until what is left is in equilibrium with the caps. It is escapable: enough outgassing thickens the air, warms the poles above the frost point and puts the atmosphere back where it belongs.' },
   nightfrost: { name: 'Partial Nightside Freeze-Out', color: '#8c6fa8', blurb: 'The atmosphere is snowing out onto the dark side. A tidally locked world has a hemisphere that never sees its star, and if that face falls below the CO2 frost point the air condenses there permanently — no season ever brings it back, which is exactly what separates this from a Mars. The pressure falls until what is left balances against the night-side deposit, and the day side is still warm, wet and habitable while it happens: this is a planet with a working ocean under its sun and its atmosphere quietly draining away behind it. That sea is part of the state rather than a likely accompaniment to it — when the last of it goes the freeze-out is complete, and the world is a Nightside Freeze-Out. What stops it is heat transport. Thick enough air carries enough warmth to the night side to hold it above the frost point, so the collapse is self-limiting on a massive atmosphere and a trap for a thin one (Joshi et al. 1997; Wordsworth 2015; Turbet et al. 2018 for the TRAPPIST-1 planets).' },
@@ -316,6 +317,14 @@ export function classify(w) {
   else if (lam > 0.5 && liquidShare < 0.05 && water > 0.02
            && dg.flooded < 0.04 && Tsub > 255) id = 'trapped';
   else if (pTot < 0.05 && T < 265 && water < 0.35) id = 'thincold';
+  // Frozen at the top is not the same as frozen through. Before calling a world
+  // a snowball, ask whether the interior heat leaves it an ocean under the ice
+  // -- which on anything carrying real water it usually does, and which is the
+  // difference between a dead planet and Europa. `subglacial` is null when the
+  // shell would be thicker than the water is deep, so a world that really is
+  // frozen to the floor still reads as one.
+  else if (ice > 0.93 && water >= 0.1 && dg.subglacial && dg.subglacial.ocean)
+    id = 'subglacial';
   else if (ice > 0.93) id = water < 0.1 ? 'frozen' : 'snowball';
   else if (ice > 0.55) id = 'waterbelt';
   // A land planet has little water on its surface. Basin geometry can keep a
@@ -387,6 +396,12 @@ function enFormat(s, ...args) {
 }
 
 export function reasonText(w, st, tr = enFormat) {
+  // Declared up here rather than beside the clause that uses it: a const is in
+  // the temporal dead zone until its own line runs, so a helper defined halfway
+  // down the function is a ReferenceError for every clause above it -- which is
+  // a crash, not a warning, and this file has shipped one before.
+  const fmtKm = (km) => (km >= 100 ? km.toFixed(0)
+    : km >= 10 ? km.toFixed(1) : km.toFixed(2));
   const dg = w.diag, esc = w.escape ?? {};
   const bits = [];
   // What the number is a temperature OF. Past the critical point there is no
@@ -500,6 +515,19 @@ export function reasonText(w, st, tr = enFormat) {
   // is below freezing. Modern Mars is 100% of the second and 1.9% of the first,
   // and the subtitle claiming "100% ice" for a planet whose caps are a percent
   // of its surface was the same overstatement the renderer was making.
+  // The ocean under the ice, where there is one. This is the whole point of the
+  // state: a reader looking at "100% ice" needs to be told that most of the
+  // water is liquid and where the boundary is, or the banner is describing a
+  // dead planet that is not the one in front of them. Both numbers, because the
+  // shell thickness is the measurement and the sea below it is the consequence.
+  const sub = dg.subglacial;
+  if (sub && sub.ocean) {
+    bits.push(tr('{0} km of ice over {1} km of ocean',
+      fmtKm(sub.shellDepth / 1000), fmtKm((sub.liquidDepth ?? 0) / 1000)));
+    bits.push(tr('melting at {0} °C under the shell', (sub.baseT - 273.15).toFixed(1)));
+  } else if (sub && sub.frozenSolid) {
+    bits.push(tr('frozen to the floor'));
+  }
   if (dg.iceArea > 0.01) bits.push(tr('{0}% ice', (dg.iceArea * 100).toFixed(0)));
   if (Math.abs(dg.imbalance) > 0.5) {
     bits.push(tr('{0} W/m² imbalance',

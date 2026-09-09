@@ -70,6 +70,110 @@ export function meltingPressure(T) {
   return P_VI_VII * Math.pow(T / T_VI_VII, 3.24);
 }
 
+// --- the cold end: ice Ih, and the ocean that can live under it ------------
+//
+// The melting curve above is the HIGH-pressure end -- where an ocean deep
+// enough freezes from below. This is the other one, and the model had nothing
+// for it: ice Ih, the ordinary ice a cold world is covered in, whose melting
+// point FALLS with pressure instead of rising. That is what makes a subglacial
+// ocean possible at all, and it is why Europa has one.
+//
+// IAPWS-95's ice Ih melting equation (Wagner, Saul & Pruss 1994), used as
+// published. Valid from the triple point down to the ice Ih-III triple point at
+// 209.9 MPa and 251.165 K, which is where ice Ih stops being the stable phase
+// and the curve turns around.
+const T_TRIPLE = 273.16, P_TRIPLE = 611.657;          // K, Pa
+const P_IH_III = 209.9e6, T_IH_III = 251.165;         // ice Ih-III triple point
+const IH_A = [0.119539337e7, 0.808183159e5, 0.333826860e4];
+const IH_B = [0.300000e1, 0.257500e2, 0.103750e3];
+export function meltingPressureIh(T) {
+  const th = T / T_TRIPLE;
+  let pi = 1;
+  for (let i = 0; i < 3; i++) pi += IH_A[i] * (1 - Math.pow(th, IH_B[i]));
+  return pi * P_TRIPLE;
+}
+
+// ...and the inverse, which is the one the shell actually needs: given the
+// pressure at the base of an ice sheet, how warm is the water under it.
+//
+// Bisection rather than a fitted inverse. The forward curve is monotonic over
+// this range and twenty halvings put it inside a millikelvin, which costs
+// nothing next to the column solve it sits inside -- and a fit would be one
+// more thing that could quietly disagree with the curve above it.
+export function meltingTemperatureIh(pPa) {
+  if (!(pPa > P_TRIPLE)) return T_TRIPLE;
+  if (pPa >= P_IH_III) return T_IH_III;               // ice III below here, not Ih
+  let lo = T_IH_III, hi = T_TRIPLE;
+  for (let i = 0; i < 24; i++) {
+    const mid = 0.5 * (lo + hi);
+    if (meltingPressureIh(mid) > pPa) lo = mid; else hi = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+
+export const RHO_ICE_IH = 917;          // kg/m^3
+
+// Thermal conductivity of ice Ih is not a constant: k = 651/T W/(m·K) over the
+// whole range a shell spans (Klinger 1980; Petrenko & Whitworth 1999). Across a
+// shell from 100 K to 270 K that is a factor of 2.7, so treating it as constant
+// is not a rounding error -- it is the difference between Europa's shell and
+// twice Europa's shell. Integrated, ∫k dT = 651·ln(Tb/Ts), which is why the
+// thickness below is a logarithm rather than a ratio.
+const K_ICE_INT = 651;                  // W/m, the constant in k = K/T
+
+// How thick an ice shell has to be to carry the interior heat, and whether any
+// ocean is left underneath it.
+//
+// A conductive lid in steady state: whatever heat the interior makes has to
+// cross the ice, and the only way across is a temperature gradient from the
+// surface up to the melting point at the base. Solve F·d = ∫k dT and the
+// thickness falls out -- Ojakangas & Stevenson 1989, the standard result:
+//
+//     d = 651·ln(T_base / T_surface) / F
+//
+// Europa: F ≈ 0.05 W/m² of mostly tidal heat, 100 K surface, base near 270 K,
+// gives 13 km against an observed 10-30. A snowball Earth on radiogenic heat
+// alone -- 0.087 W/m², 220 K surface -- gives 1.6 km, against the ~1 km the
+// snowball literature settles on. Neither number is fitted; both are what the
+// equation says.
+//
+// The base temperature and the base pressure are coupled -- deeper ice means
+// more pressure means a COLDER melting point means a thinner shell -- so this
+// iterates. It converges in two or three passes because the pressure feedback
+// is weak: 1 km of ice is 9 MPa, which moves the melting point by a kelvin.
+//
+// `columnKg` is the whole water inventory over the area it covers. If the shell
+// would be thicker than the water is deep, there is no ocean: the world is
+// frozen to the floor, which is the honest answer for a small cold body.
+export function iceShell(columnKg, g, Tsurf, Fint, pSurfPa = 0) {
+  const out = { shellDepth: 0, oceanKg: 0, baseT: T_TRIPLE, basePressure: pSurfPa,
+                frozenSolid: false, ocean: false };
+  if (!(columnKg > 0) || !(g > 0) || !(Fint > 0)) return out;
+  // Warm enough to melt at the surface: this is an ordinary ocean, not a shell.
+  if (Tsurf >= meltingTemperatureIh(Math.max(pSurfPa, P_TRIPLE))) return out;
+  const totalDepthIfIce = columnKg / RHO_ICE_IH;
+  let d = 0, Tb = meltingTemperatureIh(Math.max(pSurfPa, P_TRIPLE));
+  for (let i = 0; i < 6; i++) {
+    // Never let the log go the wrong way: a surface at or above the base
+    // temperature has no gradient to drive, and is handled by the branch above.
+    const dNew = K_ICE_INT * Math.log(Math.max(Tb / Math.max(Tsurf, 1), 1 + 1e-12)) / Fint;
+    d = Math.min(dNew, totalDepthIfIce);
+    const pBase = pSurfPa + RHO_ICE_IH * g * d;
+    Tb = meltingTemperatureIh(pBase);
+  }
+  out.shellDepth = d;
+  out.baseT = Tb;
+  out.basePressure = pSurfPa + RHO_ICE_IH * g * d;
+  // What is left under the shell, as liquid. The shell is ice, so the water it
+  // holds is its depth times the ice density -- the rest of the inventory is
+  // the ocean.
+  const shellKg = Math.min(d * RHO_ICE_IH, columnKg);
+  out.oceanKg = Math.max(columnKg - shellKg, 0);
+  out.frozenSolid = !(out.oceanKg > 0);
+  out.ocean = !out.frozenSolid;
+  return out;
+}
+
 // The structure of the water column: how far down it is liquid, where it
 // freezes, and what is at the bottom.
 //
@@ -372,7 +476,7 @@ export function coldPoolStructure(dg) {
 // entry threw on the first frame that drew one, which is a blank page rather
 // than a wrong pixel. So the list lives here, `add` refuses anything not on it,
 // and the smoketest holds it against the renderer's table in both directions.
-export const LAYER_KINDS = ['envelope', 'air', 'supercritical', 'steam',
+export const LAYER_KINDS = ['envelope', 'air', 'supercritical', 'steam', 'iceIh',
   'interface', 'ocean', 'seaice', 'iceVI', 'iceVII', 'iceHP', 'rock'];
 
 export function columnLayers(w, dg, airThick, scaleH = 0) {
@@ -547,10 +651,40 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     } else {
       const ice = (w.water.seaIce ?? 0) + (w.water.landIce ?? 0);
       const tot = ice + (w.water.ocean ?? 0);
-      if (tot > 0 && ice / tot > 0.5) add('seaice', liquid || 1000, [Ts], 'frozen over');
-      else addWater(ob, liquid, Math.min(Ts, T_CRIT_H2O), bulk);
+      const sub = dg.subglacial;
+      if (sub && sub.ocean) {
+        // Frozen at the top, liquid underneath. The shell carries the whole
+        // temperature drop from the surface to the melting point at its base --
+        // that IS what sets its thickness -- so it is drawn as a descent rather
+        // than a slab, and the water below starts at the base temperature the
+        // shell hands it rather than at the surface.
+        add('iceIh', sub.shellDepth, [Ts, sub.baseT],
+          '{0} km of shell over liquid', [(sub.shellDepth / 1000).toFixed(1)]);
+        // Solve the water under the shell as its own column: it starts at the
+        // pressure the ice above it applies, and if it is deep enough it has an
+        // ice VI floor of its own -- which is Ganymede, and is a real structure
+        // rather than a flourish.
+        // Solved once in the diagnostics, read here: the banner quotes the same
+        // object, so the two cannot drift apart.
+        const under = sub.under
+          ?? oceanStructure(sub.oceanKg, dg.g, sub.baseT, sub.basePressure / 1e5);
+        addWater(under, under.liquidDepth, sub.baseT, sub.baseT,
+          'liquid under {0} km of ice', [(sub.shellDepth / 1000).toFixed(1)]);
+        if (under.iceDepth > 0) {
+          add(iceKind(under.pMelt, under.basePressure ?? 0), under.iceDepth,
+            [under.baseTemperature ?? sub.baseT], '{0} GPa at the floor',
+            [((under.basePressure ?? 0) / 1e9).toFixed(1)]);
+        }
+      } else if (tot > 0 && ice / tot > 0.5) {
+        add('seaice', liquid || 1000, [Ts], 'frozen through');
+      } else addWater(ob, liquid, Math.min(Ts, T_CRIT_H2O), bulk);
     }
-    if (ob.iceDepth > 0) {
+    // The subglacial branch above solves its own column under the shell and
+    // draws that column's floor. `ob` is the same water solved as if it had a
+    // surface, so letting this run as well would stack a second, contradictory
+    // floor under the first.
+    const drewOwnFloor = !!(dg.subglacial && dg.subglacial.ocean) && !(hot > 0.005 && liquid > 0);
+    if (ob.iceDepth > 0 && !drewOwnFloor) {
       add(iceKind(ob.pMelt, ob.basePressure ?? 0), ob.iceDepth,
         [ob.baseTemperature ?? Ts], '{0} GPa at the floor',
         [((ob.basePressure ?? 0) / 1e9).toFixed(1)]);

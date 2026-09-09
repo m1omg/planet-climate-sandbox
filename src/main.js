@@ -922,6 +922,7 @@ const LAYER_STYLE = {
   steam:         ['#c79ad8', 'steam atmosphere'],
   ocean:         ['#2f7fbf', 'liquid ocean'],
   seaice:        ['#cfe6f5', 'sea ice'],
+  iceIh:         ['#dcecf7', 'ice shell'],
   iceVI:         ['#9fc6d8', 'ice VI'],
   iceVII:        ['#7fa8bd', 'ice VII'],
   iceHP:         ['#8bb7cb', 'high-pressure ice'],

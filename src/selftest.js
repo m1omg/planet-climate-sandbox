@@ -18,7 +18,7 @@ import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { oceanStructure, meltingPressure, waterDensity,
-         columnLayers, T_COLD_POOL } from './physics/ocean.js';
+         columnLayers, T_COLD_POOL, meltingTemperatureIh, iceShell } from './physics/ocean.js';
 import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
@@ -1339,6 +1339,76 @@ function runChecks() {
     // super-runaway interior of Pierrehumbert (2023), and it is checked against
     // the solver directly further down.
     //
+    // Nothing liquid is below its own melting point.
+    //
+    // Reported from play as a buried ocean starting from an iceball sitting
+    // below freezing, and it was worse than that: eight presets held "liquid"
+    // water under 0 C, Mars at -62 and Titan at -198. `coldT` chased the
+    // SURFACE temperature, and on a frozen world the surface is the top of a
+    // lid rather than the top of the water.
+    //
+    // The test is against the LOCAL melting point, not against 0 C, because
+    // under an ice shell those are different numbers and the difference is the
+    // physics: ice Ih melts colder under pressure, so -2 C under a couple of
+    // hundred bar of ice is liquid water and not a bug. A flat freezing-point
+    // test would fail the correct answer.
+    {
+      const bad = [];
+      for (const [id, P] of Object.entries(PRESETS)) {
+        const sim = new Simulation({ ...P.params });
+        for (const yr of [1e4, 1e6, 1e8, 1e9]) {
+          sim.runYears(yr - sim.world.time);
+          const w = sim.world, dg = w.diag;
+          const pool = 1 - Math.min(Math.max(dg.hotLayer ?? 0, 0), 1);
+          if (!(pool > 0.01) || !((dg.totalWater ?? 0) > 0.01)) continue;
+          if (w.coldT == null) continue;
+          const sub = dg.subglacial;
+          const floor = sub ? sub.baseT
+            : meltingTemperatureIh(Math.max(dg.pSurfPa ?? 0, 0));
+          if (w.coldT < floor - 0.05) bad.push(`${id} ${(w.coldT - 273.15).toFixed(1)}C`
+            + ` under a floor of ${(floor - 273.15).toFixed(1)}C`);
+        }
+      }
+      check('No world holds liquid water below its own melting point',
+        bad.length === 0,
+        bad.length ? bad.slice(0, 4).join('; ')
+          : `${Object.keys(PRESETS).length} presets at four epochs each`);
+    }
+
+    // The step size must not be the physics.
+    //
+    // This check exists because a change shipped past every other one in the
+    // suite. The CO2 step bound was relaxed on the argument that a gas which
+    // cannot move the OLR cannot need bounding -- measured, defensible, and
+    // wrong: the Cold-Start Runaway's CO2 is a millionth of a bar when it is
+    // inert and forty-two bar when it arrives, and it is the accumulation while
+    // it is still nothing that decides the whole trajectory. Relaxed, the world
+    // ran away at 5 Myr instead of 60. Nothing else caught it -- all 31 anchors
+    // stayed in range, every selftest passed -- because every one of them was
+    // measured on the same wrong trajectory.
+    //
+    // So: run the same world at the step the solver picks and at a step forced
+    // far below it, and require the same answer. That is the only question a
+    // step bound is for.
+    {
+      const runawayAt = (cap) => {
+        const sim = new Simulation({ ...PRESETS.coldStart.params });
+        for (let yr = 5e6; yr <= 8e7; yr += 5e6) {
+          sim.runYears(yr - sim.world.time, cap);
+          if (sim.world.diag.Tmean > 600) return yr;
+        }
+        return Infinity;
+      };
+      const loose = runawayAt(2e6);            // whatever maxStep allows
+      const tight = runawayAt(2e4);            // an order under it
+      const agree = isFinite(loose) && isFinite(tight)
+        && Math.abs(loose - tight) <= 0.25 * Math.max(loose, tight);
+      check('A runaway arrives at the same time however finely it is stepped',
+        agree,
+        `600 K at ${(loose / 1e6).toFixed(0)} Myr on the solver's own step, `
+          + `${(tight / 1e6).toFixed(0)} Myr forced twenty times finer`);
+    }
+
     // On a world being heated fast, the interior lags: the deepest water is the
     // COLDEST, it makes high-pressure ice rather than supercritical fluid, and
     // what arrives is the lid, from the top. Both are drawn; this pins the

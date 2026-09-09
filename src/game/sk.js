@@ -210,6 +210,14 @@ export const SK = {
     'condensing {0} oceans/{1}': 'kondenzuje {0} oceánu za {1}',
     'deep ice melting {0} oceans/{1}': 'hlbinný ľad sa topí o {0} oceánu za {1}',
     'above the critical pressure': 'nad kritickým tlakom',
+    'ice shell': 'ľadová škrupina',
+    // Genitív po číslovke s desatinnou čiarkou: „1,20 km ľadu", nie „ľad".
+    '{0} km of ice over {1} km of ocean': '{0} km ľadu nad {1} km oceánu',
+    'melting at {0} °C under the shell': 'pod škrupinou sa topí pri {0} °C',
+    'frozen to the floor': 'premrznuté až na dno',
+    '{0} km of shell over liquid': '{0} km škrupiny nad tekutou vodou',
+    'liquid under {0} km of ice': 'tekutá voda pod {0} km ľadu',
+    'frozen through': 'premrznuté až na dno',
     'water below {0} °C': 'voda pod ním {0} °C',
     // Nie „tekutiny“ — po slovensky to znie ako kvapalina, a vrch stĺpca ňou
     // nie je: je to para alebo superkritická vrstva.
@@ -555,6 +563,8 @@ export const SK = {
       blurb: 'Na svete s viazanou rotáciou je nočná strana trvalou chladnou pascou. Všetka voda sa tam presunula ako ľadovcový ľad a na osvetlenej strane zostala vyprahnutá púšť, ktorá ju už nezíska späť.' },
     waterbelt: { name: 'Vodný pás',
       blurb: 'Ľad siaha hlboko do trópov, ale úzky pruh otvoreného rovníkového oceánu prežíva. Skutočne stabilný stav a oveľa mäkšie pristátie než úplná snehová guľa.' },
+    subglacial: { name: 'Oceán pod ľadom',
+      blurb: 'Navrchu zamrznutý, pod povrchom tekutý. Vnútorné teplo musí uniknúť cez ľad a jediná cesta von je teplotný spád od povrchu po bod topenia na spodku — a práve ten určuje hrúbku škrupiny: d = 651·ln(T_spodok/T_povrch)/F (Ojakangas a Stevenson 1989). Všetko pod ňou zostáva tekuté. Európa nesie asi 13 km ľadu nad 100 km oceánu len vďaka slapovému teplu a snehová guľa na Zemi si nad živým oceánom drží asi kilometer ľadu. Povrch je mŕtvy, more nie. Ľad Ih sa navyše pod tlakom topí pri NIŽŠEJ teplote, takže najteplejšie miesto škrupiny je jej dno.' },
     snowball: { name: 'Snehová guľa',
       blurb: 'Ľadovo-albedová spätná väzba zamrazila planétu od pólu k pólu. Zvetrávanie sa zastavilo, takže vulkanické CO₂ sa 5–50 miliónov rokov hromadí bez protiváhy, kým 0,1–0,3 baru ľad konečne neprelomí.' },
     marslike: { name: 'Kolaps atmosféry ako na Marse',

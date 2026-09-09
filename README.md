@@ -3505,6 +3505,131 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### Liquid water at minus 198 degrees
+
+Reported from play: a buried ocean that starts from an iceball can sit below
+freezing. It could, and worse than reported -- eight presets held "liquid" water
+under 0 C, Mars at -62 and Titan at -198.
+
+`coldT` is the temperature of the water the hot layer eats into, and it was
+written to chase the surface temperature with nothing underneath it. On a warm
+world that is right and the bug never shows. On a frozen one the surface is
+nowhere near the water: it is the top of a lid, a hundred kelvin colder than
+anything that could still be liquid, and the pool followed it down.
+
+The floor is the melting point at the pressure the water is actually under, and
+getting it required the half of the phase diagram this model did not have.
+
+### Ice Ih, and the oceans under it
+
+The melting curve here ran from 0.63 GPa upward -- ice VI and ice VII, the ices
+that freeze an ocean from BELOW. The cold end was missing entirely, and it is
+the more interesting one, because ice Ih is the ice whose melting point goes
+DOWN under pressure. That single fact is why subglacial oceans exist: press on
+ice Ih and it melts, so the base of a shell is the warmest part of it, and a
+world can be sealed at the top and liquid underneath.
+
+Added as IAPWS-95's ice Ih melting equation (Wagner, Saul & Pruss 1994), used as
+published, with the inverse by bisection -- twenty-four halvings, a millikelvin,
+and no fitted curve that could quietly disagree with the published one.
+
+The shell thickness is the standard conductive result. Ice conductivity is not a
+constant -- k = 651/T W/(m·K), a factor of 2.7 across a real shell -- so the
+integral gives a logarithm rather than a ratio (Ojakangas & Stevenson 1989):
+
+```
+d = 651 · ln(T_base / T_surface) / F
+```
+
+Nothing in it is fitted, and it lands where the measurements are:
+
+```
+Europa-like     12.7 km of shell over 47.6 km of ocean   observed 10-30 km
+hard snowball    1.20 km of shell over 1.63 km of ocean  literature ~1 km
+Mars             frozen to the floor                     correct
+```
+
+Mars is the one worth dwelling on. Its two percent of an ocean is fifty-five
+metres of water spread over the globe; the shell its heat flux demands is five
+and a half kilometres. There is no ocean, and the model says so. It only says so
+after a second attempt: the first divided the inventory by `flooded`, the LIQUID
+fraction, which goes to nothing exactly when this question starts mattering --
+so Mars got a column deep enough for an eight-kilometre shell with a sea under
+it. Frozen water lies where it froze, so the divisor is the greater of the
+liquid fraction and the iced one.
+
+The other correction was the eyeball. It has open ocean on its dayside and a
+global mean below freezing, and the first version gave it a lid. A sea with a
+hole in it is not subglacial -- it still has a surface and still exchanges
+through it -- so the shell only appears once the lid has actually closed.
+
+What falls out unasked is the Ganymede structure: a deep enough cold world gets
+shell, then ocean, then an ice VI floor, because both ends of the melting curve
+are now in the model and the column solver was already able to find the far one.
+The Europa-like case above has 10.7 km of ice VI under its 47.6 km of water.
+
+There is a new state for it -- Ice-Covered Ocean -- a banner line carrying the
+shell thickness, the ocean depth and the melting point at the base, and a layer
+in the cross-section. A world that is genuinely frozen through still reads as
+one; the difference is now measured rather than assumed.
+
+### The buried ocean is slow because it has to be, and I got this wrong first
+
+Reported from play, again, after the previous round of perf work: the buried
+ocean is still slow. It is, and this time the cause is not waste.
+
+Measured first. The Cold-Start Runaway advances 32 times fewer simulated years
+per second of CPU than Earth, and it is entirely the step SIZE -- 2.2e4 against
+7.7e5 -- while a step there is actually slightly cheaper to take. Tracing every
+bound in `maxStep` on the same world state, one of them does all of it: the CO2
+reservoir bound cuts the step from 2.8e6 to 2.3e4, a factor of 122.
+
+And that looked like waste, because that world's CO2 is 17 microbar under twenty
+bar of hydrogen -- one part per million of its atmosphere. Measured directly: a
+full bounded step there moves the outgoing radiation by 0.015 W/m2, against 1.2
+on Earth. Across all the presets the old rule was permitting anywhere from 0.00
+to 461 W/m2 of CO2 greenhouse change per step, five orders of magnitude, so it
+was plainly not one accuracy criterion.
+
+So I replaced it with one: bound the step on the OLR the CO2 move actually
+causes. Earth kept its accuracy, the inert worlds were freed, the Cold-Start ran
+eight times faster, all 31 anchors stayed in range and every self-test passed.
+
+Then the convergence test was written, and it said no.
+
+```
+stepCap 2e+6   runaway at  5 Myr      <- what the relaxed solver picks
+stepCap 2e+5   runaway at  4 Myr
+stepCap 2e+4   runaway at 60 Myr
+stepCap 5e+3   runaway at 75 Myr
+```
+
+Fifteen times early, and the coarse answer is the wrong one. Raising the floor
+in the original rule tenfold instead -- a smaller, blunter version of the same
+idea -- fails the same way at 32 Myr against 60.
+
+The error in the argument is worth writing down because it is not obvious. A
+bound on what CO2 is worth RIGHT NOW cannot see what it is worth later, and this
+reservoir is a slow integrator: on that world it starts at a millionth of a bar
+and ends at forty-two bar, and it is the accumulation while it is still
+radiatively nothing that decides the entire trajectory. By the time the gas
+matters, the error in how it got there is already made.
+
+Reverted, with the reasoning left in the code so the next person to measure that
+0.015 W/m2 does not have to rediscover why it is not the number that matters.
+The honest answer to "the buried ocean is slow" is that the slowness is
+accuracy, not waste, and it cannot be bought back without buying a wrong answer
+with it.
+
+The part of the suite that would have caught this did not exist, so it does now:
+one self-test runs the same world at the step the solver picks and at a step
+twenty times finer and requires the same answer. It fails on the relaxed
+version, and on the raised-floor version, and passes on what shipped. Note also
+what it reports on the code as it stands -- 60 Myr against 65 at a fifth of the
+step -- which is inside its tolerance and not zero. That world is close to the
+edge of what its bound resolves, and that is a real finding rather than a clean
+bill of health.
+
 ### The autosave was eating the saves
 
 Reported from play, in four words: this version deletes manual saves. It did,

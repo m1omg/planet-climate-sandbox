@@ -3,7 +3,8 @@ import {
   OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH, M_EARTH,
   T_CRIT_H2O, CP_WATER,
 } from './constants.js';
-import { T_COLD_POOL, RHO_ICE_HP, coldPoolStructure, oceanStructure } from './ocean.js';
+import { T_COLD_POOL, RHO_ICE_HP, coldPoolStructure, oceanStructure,
+         meltingTemperatureIh } from './ocean.js';
 import { iceFraction } from './radiation.js';
 import { nonThermalEscape, resurfacingProgress } from './evolution.js';
 import { stepLife } from './biosphere.js';
@@ -677,6 +678,27 @@ export const MIX_EFF_DOWN = 0.02;
 // falls out of the inventory rather than being chosen: one Earth ocean is 76
 // years per kelvin and tracks its surface, three hundred oceans is 23 000 and
 // cannot keep up with a runaway at all.
+// The coldest water can be and still be water.
+//
+// Reported from play: a buried ocean that starts from an iceball sat at -62 C,
+// and Titan's at -198. Liquid water at -198 C is not a state of matter, it is a
+// missing floor -- `coldT` was chasing the SURFACE temperature with nothing
+// stopping it, and on a frozen world the surface is nowhere near the water.
+//
+// The floor is the melting point at the pressure the water is actually under,
+// which is the whole reason a subglacial ocean exists: ice Ih melts COLDER as
+// you press on it, so the base of a shell is the warmest part of it. Under a
+// kilometre of ice that is about 272 K; under Europa's thirteen, 272.0; and it
+// bottoms out at 251.165 K where ice Ih gives way to ice III. Nothing in this
+// model can hold liquid water below that.
+//
+// Where there is no shell -- an ordinary sea with its own surface -- the floor
+// is the ordinary freezing point, and `coldT` was already above it.
+function coldFloor(dg) {
+  const sub = dg.subglacial;
+  return sub ? sub.baseT : meltingTemperatureIh(Math.max(dg.pSurfPa ?? 0, 0));
+}
+
 function advanceColdPool(w, dtYears) {
   const dg = w.diag;
   const Ts = dg.Tmean;
@@ -685,14 +707,14 @@ function advanceColdPool(w, dtYears) {
   // variable with its own heat capacity, and the surface is something it is
   // trying to catch up with rather than something it equals.
   if (w.coldT == null || !isFinite(w.coldT)) {
-    w.coldT = Math.min(Ts, T_CRIT_H2O - 1);
+    w.coldT = clamp(Ts, coldFloor(dg), T_CRIT_H2O - 1);
     return;
   }
   // How much water is still down there, and what warming it by a kelvin costs.
   // Zero when the conversion has finished: there is no pool left to heat.
   const cold = 1 - clamp(dg.hotLayer ?? 0, 0, 1);
   const cap = Math.max((dg.totalWater ?? 0) * (dg.d?.eoColumn ?? 0) * cold * CP_WATER, 0);
-  if (!(cap > 0)) { w.coldT = Math.min(Ts, T_CRIT_H2O - 1); return; }
+  if (!(cap > 0)) { w.coldT = clamp(Ts, coldFloor(dg), T_CRIT_H2O - 1); return; }
 
   // The same asymmetry as the conversion boundary, and for the same reason: an
   // ocean heated from ABOVE is stably stratified, so only the mixed fraction of
@@ -706,8 +728,14 @@ function advanceColdPool(w, dtYears) {
   // Never past the surface it is chasing, and never past the critical point --
   // water that hot is not a pool, it is the hot layer, and moving that boundary
   // is advanceHotLayer's job and costs the latent heat as well.
-  const target = Math.min(Ts, T_CRIT_H2O - 1);
+  //
+  // ...and never below the melting point, for the same reason: the surface it
+  // is chasing can be a hundred kelvin colder than anything liquid, and what
+  // happens between the two is that the water freezes into the shell rather
+  // than following it down.
+  const target = clamp(Ts, coldFloor(dg), T_CRIT_H2O - 1);
   w.coldT = down ? Math.min(target, w.coldT + step) : Math.max(target, w.coldT - step);
+  w.coldT = Math.max(w.coldT, coldFloor(dg));
 }
 
 

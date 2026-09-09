@@ -5,7 +5,7 @@ import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction
          runawayLimit,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
-import { oceanStructure, coldPoolStructure, T_COLD_POOL } from './ocean.js';
+import { oceanStructure, coldPoolStructure, T_COLD_POOL, iceShell } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
 
 import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN } from './volatiles.js';
@@ -627,6 +627,9 @@ export function update(w, dt) {
   let oceanBaseCache = null;
   let coldPoolCache = null;
   let runawayCache = null;
+  // `undefined` rather than null as the empty marker: null is a real answer
+  // here (this world has no subglacial ocean) and caching it has to stick.
+  let subCache;
   w.diag = {
     get oceanBase() {
       return oceanBaseCache ?? (oceanBaseCache = oceanStructure(
@@ -662,6 +665,55 @@ export function update(w, dt) {
       if (!((this.hotTarget ?? 0) > 0.5)
           && this.oceanBase.basePhase !== 'supercritical') return null;
       return coldPoolCache ?? (coldPoolCache = coldPoolStructure(this));
+    },
+    // The ocean a frozen world can still have under its ice.
+    //
+    // A surface below freezing does not mean the water is gone -- it means the
+    // top of it is a lid. The interior heat has to cross that lid, and crossing
+    // it needs a temperature gradient from the surface up to the melting point,
+    // which sets how thick the lid is. Everything below that is liquid. This is
+    // Europa, Enceladus and Ganymede, and it is snowball Earth too: the model
+    // had all of them frozen to the floor.
+    //
+    // Lazy for the same reason as the columns above -- it is a handful of
+    // melting-curve inversions, nothing in the temperature solve reads it, and
+    // the readout looks once a frame. Null where the question does not arise:
+    // no water, or a surface warm enough to have a sea on top.
+    get subglacial() {
+      if (subCache !== undefined) return subCache;
+      // Spread over the area the water actually occupies, and on a frozen
+      // world that is not `flooded`. `flooded` is the LIQUID fraction, which
+      // goes to nothing exactly when this question starts mattering -- dividing
+      // by it gave Mars's two percent of an ocean a column deep enough for an
+      // eight-kilometre shell and a sea underneath, which is not Mars. Frozen
+      // water lies where it froze, so the honest divisor is the greater of the
+      // liquid fraction and the iced one; on a hard snowball that is the whole
+      // globe, and Mars's water becomes the fifty-five metres it really is and
+      // freezes to the floor.
+      const spread = Math.max(this.flooded, iceMean, 1e-3);
+      const col = (w.water.ocean + w.water.seaIce) * d.eoColumn / spread;
+      if (!(col > 0) || !hasWater) return (subCache = null);
+      // An ocean with a hole in it is not a subglacial ocean. Where any open
+      // water remains -- an eyeball's substellar sea, a waterbelt's tropical
+      // band -- the sea still has a surface, exchanges with the air through it,
+      // and is an ordinary partly-frozen ocean however cold the global mean has
+      // got. The shell picture only becomes true once the lid closes.
+      if ((this.openOcean ?? 0) > 0.01) return (subCache = null);
+      const sh = iceShell(col, this.g, Tmean, this.Fint, this.pSurfPa);
+      // shellDepth 0 means the surface is above the melting point: an ordinary
+      // ocean, and `oceanBase` is already the right answer about it.
+      if (!(sh.shellDepth > 0)) return (subCache = null);
+      // Solve the water UNDER the shell once, here, so the banner and the
+      // cross-section cannot disagree about it. They did: the banner divided
+      // the sub-shell inventory by the density of water and called all of it
+      // ocean, while the column solved it properly and found ten kilometres of
+      // ice VI at the bottom -- so a Ganymede read as "70 km of ocean" on one
+      // line and 48 km of ocean over a floor on the next.
+      sh.under = sh.ocean
+        ? oceanStructure(sh.oceanKg, this.g, sh.baseT, sh.basePressure / 1e5)
+        : null;
+      sh.liquidDepth = sh.under ? sh.under.liquidDepth : 0;
+      return (subCache = sh);
     },
     g, d, pN2, pCO2, pCH4, pO2, pH2, pHe, pH2O, pTot: pTotArr, pTotMean, Fint,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
@@ -918,6 +970,32 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // The CO2 reservoir is integrated semi-implicitly, so it needs only a loose
   // bound -- and that bound is measured against a floor, because a planet whose
   // CO2 has been weathered away to nothing must not drag the clock down with it.
+  //
+  // This bound was replaced once, and the replacement was WRONG. The reasoning
+  // was that a step only needs bounding while CO2 can actually move the
+  // climate, so it should relax where the gas is radiatively inert -- measured
+  // on the Cold-Start Runaway, 17 microbar of CO2 under twenty bar of hydrogen
+  // moves the OLR by 0.015 W/m2 over a whole step, against 1.2 on Earth, and
+  // that world was paying twelve times Earth's step count for it. Relaxing it
+  // there bought 8x.
+  //
+  // Then the convergence test said no. Same world, same code, stepped four
+  // ways: the runaway arrives at 5 Myr on the relaxed steps and at 60-75 Myr
+  // when the step is forced below 20 kyr. Fifteen times early, and the coarse
+  // answer is the wrong one.
+  //
+  // The error in the argument is that this reservoir is a slow INTEGRATOR, and
+  // what it integrates to is not what it is worth now. CO2 on that world is
+  // inert at a millionth of a bar and ends up at forty-two bar, and it is the
+  // accumulation itself -- while it is still radiatively nothing -- that has to
+  // be integrated accurately, because the whole future depends on where it
+  // gets to. A bound on the present radiative effect cannot see that coming.
+  //
+  // So: unchanged, deliberately, and the reason recorded so the next person to
+  // measure that 0.015 W/m2 does not have to rediscover why it is not the
+  // number that matters. (The same test also shows this world is not converged
+  // at 20 kyr either -- 6e7 against 7.5e7 at 5 kyr -- so if anything the bound
+  // is loose. That is a separate finding and is in the README.)
   if (w.weathering) {
     const net = Math.abs(w.weathering.V - w.weathering.W) / Math.max(w.weathering.kappa, 1);
     const floor = 0.02 * CO2_EARTH_COL;
