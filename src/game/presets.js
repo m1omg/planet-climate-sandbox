@@ -382,6 +382,34 @@ export const PRESETS = {
     xuvFraction: 3.4e-6 * 12.1,
     // The Noachian runs 4.1-3.7 Gya, so Mars is about half a billion years old.
     startAge: 0.6 } },
+  // Hesperian Mars, and the ocean that froze.
+  //
+  // The era after the Noachian above, 3.7-3.0 Gya; this is the middle of it.
+  // The Sun was at 1.17 Gyr and 77% of today's output (Gough 1981), so Mars sat
+  // at 0.332 S+ against the 0.431 it gets now. The dynamo was already gone, the
+  // thick Noachian CO2 mostly with it -- Hesperian estimates run from about a
+  // tenth of a bar to one, and 0.3 is the middle of that.
+  //
+  // The water is the point. Oceanus Borealis, in the northern lowlands: global
+  // equivalent layer estimates span roughly 100 to 550 m, and 0.031 EO is the
+  // 300 m middle. It goes north because the real Mars map puts it there -- the
+  // crustal dichotomy is in the hypsometry this build loads, and bodycheck
+  // already pins that 90% of a Martian ocean lands north of the equator.
+  //
+  // What the model does with it is the honest part, and it is not a warm sea.
+  // At this heat flux and this surface temperature the conductive ice lid is
+  // thicker than the water is deep, so the ocean freezes through rather than
+  // roofing over -- which is what the field concluded independently: Kreslavsky
+  // & Head 2002 read the Vastitas Borealis Formation as the sublimation residue
+  // of exactly this, a frozen ocean rather than a surviving one.
+  hesperianMars: { name: 'Hesperian Mars', icon: '🧊', params: { ...EARTH, ...SOLAR_HISTORY,
+    mass: 0.107, insolation: 0.332, rotationHours: 24.6, obliquity: 25,
+    o2Bar: 0, biosphere: 0, magneticField: 0,
+    n2Bar: 0.02, co2Bar: 0.3, water: 0.031, landFraction: 0.72,
+    landAlbedo: 0.25, outgassing: 0.16, internalHeat: 0.045, startT: 240,
+    // The Sun at 1.17 Gyr, between the Noachian's twelvefold XUV and today's.
+    xuvFraction: 3.4e-6 * 5.5,
+    startAge: 1.17 } },
   snowball:{ name: 'Snowball', icon: '❄️', params: { ...EARTH, co2Bar: 1e-5, startT: 230 } },
   dune:    { name: 'Dune World', icon: '🏜️', params: { ...EARTH, water: 0.03, landFraction: 0.98, insolation: 1.25, landAlbedo: 0.30, startT: 300 } },
   eyeball: { name: 'Locked Eyeball', icon: '👁️', params: { ...EARTH, mass: 1.3, insolation: 0.9, tidallyLocked: true, rotationHours: 264, landFraction: 0.25, xuvFraction: 5e-4, startT: 270 } },

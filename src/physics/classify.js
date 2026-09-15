@@ -323,8 +323,16 @@ export function classify(w) {
   // difference between a dead planet and Europa. `subglacial` is null when the
   // shell would be thicker than the water is deep, so a world that really is
   // frozen to the floor still reads as one.
-  else if (ice > 0.93 && water >= 0.1 && dg.subglacial && dg.subglacial.ocean)
-    id = 'subglacial';
+  // `dg.subglacial.ocean` is the whole test, and it used to carry a `water >=
+  // 0.1` beside it -- copied from the snowball line below, where it separates a
+  // frozen desert from a frozen ocean. Here it is both redundant and wrong: the
+  // shell solve has already answered whether liquid survives, and it answers it
+  // for the water this world actually has. The threshold only managed to
+  // exclude the real case -- Hesperian Mars carries a few hundredths of an Earth
+  // ocean in its northern basin, which is an ice-covered ocean by every test
+  // that matters and was being called a frozen desert by a number it never had
+  // to pass.
+  else if (ice > 0.93 && dg.subglacial && dg.subglacial.ocean) id = 'subglacial';
   else if (ice > 0.93) id = water < 0.1 ? 'frozen' : 'snowball';
   else if (ice > 0.55) id = 'waterbelt';
   // A land planet has little water on its surface. Basin geometry can keep a

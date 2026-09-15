@@ -650,6 +650,8 @@ export const SK = {
     earlyVenus: 'Mladá Venuša',
     dryVenus: 'Vždy suchá Venuša',
     earlyMars: 'Noachický Mars',
+    // Hesperián je slovenský názov epochy; „Hesperiánsky Mars" znie neprirodzene.
+    hesperianMars: 'Mars v hesperiáne',
     snowball: 'Snehová guľa',
     dune: 'Púštny svet',
     eyeball: 'Viazaný svet-oko',
