@@ -396,17 +396,26 @@ export const PRESETS = {
   // crustal dichotomy is in the hypsometry this build loads, and bodycheck
   // already pins that 90% of a Martian ocean lands north of the equator.
   //
-  // What the model does with it is the honest part, and it is not a warm sea.
-  // At this heat flux and this surface temperature the conductive ice lid is
-  // thicker than the water is deep, so the ocean freezes through rather than
-  // roofing over -- which is what the field concluded independently: Kreslavsky
-  // & Head 2002 read the Vastitas Borealis Formation as the sublimation residue
-  // of exactly this, a frozen ocean rather than a surviving one.
+  // It roofs over rather than freezing through, and the two numbers that decide
+  // which are both taken from the middle of their ranges rather than chosen for
+  // the answer. Mars's surface heat flux in the Hesperian comes out around
+  // 45-65 mW/m^2 in thermal-evolution models (Hauck & Phillips 2002; Plesa et
+  // al. 2016), so 60 is central; 0.045 EO is a 435 m global equivalent layer,
+  // inside the 100-550 m the ocean estimates span. Together they give about
+  // three kilometres of ice over half a kilometre of water.
+  //
+  // It is a close-run thing, and that is the physics rather than a fudge: drop
+  // the flux to 45 mW/m^2 or the water to 300 m and the lid reaches the floor.
+  // Which is why the Vastitas Borealis Formation is usually read as a frozen
+  // ocean's sublimation residue (Kreslavsky & Head 2002) -- late enough, and it
+  // does freeze through. The model is conservative here in one more way: a real
+  // Martian ocean would have been briny, and salt depresses the melting point,
+  // so anything dissolved in this one only makes the sea beneath more likely.
   hesperianMars: { name: 'Hesperian Mars', icon: '🧊', params: { ...EARTH, ...SOLAR_HISTORY,
     mass: 0.107, insolation: 0.332, rotationHours: 24.6, obliquity: 25,
     o2Bar: 0, biosphere: 0, magneticField: 0,
-    n2Bar: 0.02, co2Bar: 0.3, water: 0.031, landFraction: 0.72,
-    landAlbedo: 0.25, outgassing: 0.16, internalHeat: 0.045, startT: 240,
+    n2Bar: 0.02, co2Bar: 0.3, water: 0.045, landFraction: 0.72,
+    landAlbedo: 0.25, outgassing: 0.16, internalHeat: 0.06, startT: 240,
     // The Sun at 1.17 Gyr, between the Noachian's twelvefold XUV and today's.
     xuvFraction: 3.4e-6 * 5.5,
     startAge: 1.17 } },
