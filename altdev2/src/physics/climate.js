@@ -681,17 +681,21 @@ export function update(w, dt) {
     // no water, or a surface warm enough to have a sea on top.
     get subglacial() {
       if (subCache !== undefined) return subCache;
-      // Spread over the area the water actually occupies, and on a frozen
-      // world that is not `flooded`. `flooded` is the LIQUID fraction, which
-      // goes to nothing exactly when this question starts mattering -- dividing
-      // by it gave Mars's two percent of an ocean a column deep enough for an
-      // eight-kilometre shell and a sea underneath, which is not Mars. Frozen
-      // water lies where it froze, so the honest divisor is the greater of the
-      // liquid fraction and the iced one; on a hard snowball that is the whole
-      // globe, and Mars's water becomes the fifty-five metres it really is and
-      // freezes to the floor.
-      const spread = Math.max(this.flooded, iceMean, 1e-3);
-      const col = (w.water.ocean + w.water.seaIce) * d.eoColumn / spread;
+      // The same column `oceanBase` uses, and that is the point: this is the
+      // same water, and two answers about it can only disagree.
+      //
+      // It briefly had its own divisor -- max(flooded, iceMean), on the
+      // reasoning that frozen water spreads out over the globe rather than
+      // staying in a basin. That is wrong, and Hesperian Mars showed it in one
+      // screen: the cross-section drew 2.42 km of ice in the northern basin
+      // while this said 0.31 km spread over the whole planet. Same water,
+      // eightfold disagreement, and the shell was being solved against a column
+      // the rest of the model does not believe in. Ice does not flow out of a
+      // basin to cover the highlands; `flooded` is where the water is, frozen
+      // or not, and `floodedFraction` already bounds it by how deep a basin can
+      // be (MAX_BASIN_DEPTH), so it cannot run away.
+      const col = (w.water.ocean + w.water.seaIce) * d.eoColumn
+        / Math.max(this.flooded, 1e-3);
       if (!(col > 0) || !hasWater) return (subCache = null);
       // An ocean with a hole in it is not a subglacial ocean. Where any open
       // water remains -- an eyeball's substellar sea, a waterbelt's tropical

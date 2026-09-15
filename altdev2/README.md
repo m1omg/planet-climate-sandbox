@@ -3505,6 +3505,65 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### Two answers about the same water
+
+Reported from play with a screenshot: Hesperian Mars was drawing 2.42 km of sea
+ice, frozen to the floor, and there should have been liquid under it.
+
+There should have been, and the model already half knew. The cross-section drew
+2.42 km because it solves the column the way the rest of the model does -- the
+water over the area `flooded` says it occupies, which on that world is the 11.7%
+of the surface the northern lowlands take up. The shell model solved a different
+column: 0.31 km, the same water spread over the whole planet. One world, one
+inventory, two answers about it that differed eightfold, and the shell was being
+sized against the one nothing else believed.
+
+The bad divisor was `max(flooded, iceMean)`, and it was added on purpose, in
+response to a real failure: dividing by `flooded` alone had given Mars a column
+deep enough for an eight-kilometre shell with a sea under it. The reasoning was
+that frozen water spreads out over the globe. It does not -- ice does not flow
+out of a basin to cover the highlands -- and the fix for the Mars case was in
+the wrong place. `floodedFraction` already bounds the column by how deep a basin
+can be, and present-day Mars is separated from a subglacial world by its air
+rather than its water: the thin-atmosphere branch in `classify` fires before the
+ice branch, so Mars reads as a Thin Cold Desert whatever is at the bottom of
+Hellas.
+
+So: the same column as `oceanBase`, which is the rule the rest of this file
+already follows. Titan picks up the subsurface ocean the real one has (7.6 km of
+shell over 4.4 km of water) and Hesperian Mars gets its sea back.
+
+### Hesperian Mars
+
+The era after the Noachian, 3.7-3.0 Gya, taken at its middle. The Sun was
+1.17 Gyr old and putting out 77% of today's light (Gough 1981), so Mars sat at
+0.332 S+ against the 0.431 it gets now; the dynamo was long gone and most of the
+Noachian CO2 with it.
+
+Oceanus Borealis goes in the northern lowlands, and it goes there by itself --
+the crustal dichotomy is in the hypsometry this build loads, and bodycheck
+already pins that 90% of a Martian ocean lands north of the equator.
+
+The two numbers that decide whether it roofs over or freezes through are both
+taken from the middle of their published ranges rather than picked for the
+answer: 60 mW/m^2 of surface heat flux, against the 45-65 that thermal-evolution
+models give for the Hesperian (Hauck & Phillips 2002; Plesa et al. 2016), and
+0.045 EO, a 435 m global equivalent layer inside the 100-550 m the ocean
+estimates span. Together: about three kilometres of ice over half a kilometre of
+water, at -0.7 C under the shell.
+
+It is close-run, and that is the physics rather than a fudge -- drop the flux to
+45 mW/m^2 or the water to 300 m and the lid reaches the floor. Which is the
+interesting part, because run this preset forward and it does exactly that: the
+surface cools, the shell thickens, and by a hundred megayears the ocean has
+frozen through. That is the Vastitas Borealis Formation as Kreslavsky & Head
+2002 read it, a frozen ocean's sublimation residue rather than a surviving sea,
+arrived at by running rather than by being written in.
+
+The model is conservative here in one more way. A real Martian ocean would have
+been briny, and salt depresses the melting point, so anything dissolved in this
+one only makes the sea beneath more likely. There is no salinity in this model.
+
 ### Liquid water at minus 198 degrees
 
 Reported from play: a buried ocean that starts from an iceball can sit below
