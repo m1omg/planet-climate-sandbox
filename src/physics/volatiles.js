@@ -319,7 +319,7 @@ export function partitionWater(w, dtYears = 0) {
 
   // How much of the surface is cold enough to freeze.
   let frozenShare = 0;
-  for (let i = 0; i < NBANDS; i++) frozenShare += iceFraction(w.T[i]) / NBANDS;
+  for (let i = 0; i < NBANDS; i++) frozenShare += iceFraction(w.T[i], w.diag?.freezeShift ?? 0) / NBANDS;
 
   // Building an ice sheet on land needs a working water cycle to carry the
   // water there. Once the sea is sealed under ice, evaporation collapses and
@@ -696,7 +696,9 @@ export const MIX_EFF_DOWN = 0.02;
 // is the ordinary freezing point, and `coldT` was already above it.
 function coldFloor(dg) {
   const sub = dg.subglacial;
-  return sub ? sub.baseT : meltingTemperatureIh(Math.max(dg.pSurfPa ?? 0, 0));
+  // `sub.baseT` already carries the salinity shift, having been solved with it.
+  return sub ? sub.baseT
+    : meltingTemperatureIh(Math.max(dg.pSurfPa ?? 0, 0)) + (dg.freezeShift ?? 0);
 }
 
 function advanceColdPool(w, dtYears) {

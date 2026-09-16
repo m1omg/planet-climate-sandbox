@@ -70,6 +70,63 @@ export function meltingPressure(T) {
   return P_VI_VII * Math.pow(T / T_VI_VII, 3.24);
 }
 
+// --- salt ------------------------------------------------------------------
+//
+// How much colder salt water has to get before it freezes.
+//
+// Two ranges, because one formula does not cover both. Up to about 40 g/kg the
+// measured seawater relation applies (UNESCO 1983), and it is a polynomial
+// rather than a straight line because seawater is not a dilute solution:
+//
+//     dT = 0.0575 S - 1.710523e-3 S^1.5 + 2.154996e-4 S^2
+//
+// which gives 1.922 K at Earth's 35 g/kg -- the -1.92 C everyone quotes. Past
+// that the relation is extrapolation, so it is continued by a curve that
+// matches UNESCO's value AND its slope at 40 and passes through the one other
+// measured point that matters: the NaCl eutectic, 21.1 K of depression at
+// 233 g/kg, beyond which no more salt will dissolve and the whole thing freezes
+// as a block. Depression is capped there.
+//
+// Real brines go further than NaCl -- magnesium perchlorate on Mars sits near
+// 206 K, sixty-seven kelvin down -- and this curve does not reach them. It is
+// a sodium-chloride ocean, which is the one Earth has and the one a rocky
+// planet's weathering makes most of.
+const S_EUTECTIC = 233, DT_EUTECTIC = 21.1;      // g/kg, K -- NaCl
+const S_UNESCO_MAX = 40;
+function unescoDepression(S) {
+  return 0.0575 * S - 1.710523e-3 * Math.pow(S, 1.5) + 2.154996e-4 * S * S;
+}
+// Value and slope of the measured curve where it runs out, so the extension
+// leaves no kink at the join.
+const DT_40 = unescoDepression(S_UNESCO_MAX);
+const SLOPE_40 = 0.0575 - 1.5 * 1.710523e-3 * Math.sqrt(S_UNESCO_MAX)
+  + 2 * 2.154996e-4 * S_UNESCO_MAX;
+const CURVE_40 = (DT_EUTECTIC - DT_40 - SLOPE_40 * (S_EUTECTIC - S_UNESCO_MAX))
+  / ((S_EUTECTIC - S_UNESCO_MAX) ** 2);
+export function freezingDepression(salinity) {
+  const S = Math.max(salinity ?? 0, 0);
+  if (S <= 0) return 0;
+  if (S <= S_UNESCO_MAX) return unescoDepression(S);
+  if (S >= S_EUTECTIC) return DT_EUTECTIC;
+  const x = S - S_UNESCO_MAX;
+  return DT_40 + SLOPE_40 * x + CURVE_40 * x * x;
+}
+
+// Earth's own ocean, and the reason this is a SHIFT rather than a depression.
+//
+// Every freezing point in this model is already calibrated to Earth seawater --
+// `iceFraction` puts its warm knot at 276 K because "sea water freezes at about
+// -2 C", and the melting curves are pure-water curves used where Earth's ocean
+// sits. So the quantity the model needs is not how far below PURE water a given
+// salinity freezes, it is how far from EARTH'S it freezes: fresh water freezes
+// 1.92 K warmer than this model's baseline, a brine colder. At 35 g/kg the
+// shift is exactly zero and nothing anywhere moves, which is what makes this
+// addable without recalibrating the whole model.
+export const SALINITY_EARTH = 35;                // g/kg
+export function freezeShift(salinity) {
+  return freezingDepression(SALINITY_EARTH) - freezingDepression(salinity);
+}
+
 // --- the cold end: ice Ih, and the ocean that can live under it ------------
 //
 // The melting curve above is the HIGH-pressure end -- where an ocean deep
@@ -145,21 +202,25 @@ const K_ICE_INT = 651;                  // W/m, the constant in k = K/T
 // `columnKg` is the whole water inventory over the area it covers. If the shell
 // would be thicker than the water is deep, there is no ocean: the world is
 // frozen to the floor, which is the honest answer for a small cold body.
-export function iceShell(columnKg, g, Tsurf, Fint, pSurfPa = 0) {
-  const out = { shellDepth: 0, oceanKg: 0, baseT: T_TRIPLE, basePressure: pSurfPa,
+// `shift` is the salinity offset: negative for a brine, which lowers the base
+// melting point, shortens the temperature drop the shell has to carry, and so
+// THINS it -- leaving more of the column liquid. That is the whole reason a
+// salty ocean survives under ice where a fresh one freezes through.
+export function iceShell(columnKg, g, Tsurf, Fint, pSurfPa = 0, shift = 0) {
+  const out = { shellDepth: 0, oceanKg: 0, baseT: T_TRIPLE + shift, basePressure: pSurfPa,
                 frozenSolid: false, ocean: false };
   if (!(columnKg > 0) || !(g > 0) || !(Fint > 0)) return out;
   // Warm enough to melt at the surface: this is an ordinary ocean, not a shell.
-  if (Tsurf >= meltingTemperatureIh(Math.max(pSurfPa, P_TRIPLE))) return out;
+  if (Tsurf >= meltingTemperatureIh(Math.max(pSurfPa, P_TRIPLE)) + shift) return out;
   const totalDepthIfIce = columnKg / RHO_ICE_IH;
-  let d = 0, Tb = meltingTemperatureIh(Math.max(pSurfPa, P_TRIPLE));
+  let d = 0, Tb = meltingTemperatureIh(Math.max(pSurfPa, P_TRIPLE)) + shift;
   for (let i = 0; i < 6; i++) {
     // Never let the log go the wrong way: a surface at or above the base
     // temperature has no gradient to drive, and is handled by the branch above.
     const dNew = K_ICE_INT * Math.log(Math.max(Tb / Math.max(Tsurf, 1), 1 + 1e-12)) / Fint;
     d = Math.min(dNew, totalDepthIfIce);
     const pBase = pSurfPa + RHO_ICE_IH * g * d;
-    Tb = meltingTemperatureIh(pBase);
+    Tb = meltingTemperatureIh(pBase) + shift;
   }
   out.shellDepth = d;
   out.baseT = Tb;

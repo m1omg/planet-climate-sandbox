@@ -3505,6 +3505,125 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### A runaway greenhouse with nothing to run away with
+
+Reported from play, as a shared link: a bone-dry lava world -- no water at all,
+18.8 S+, eighty watts of interior heat, tidally locked -- reading as a Steam
+Runaway Greenhouse, which older saves still call a *wet* runaway.
+
+The whole of it is one line:
+
+```js
+else if (T > 420) id = 'steamRunaway';
+```
+
+Temperature alone. Nothing asks whether there is any water to make steam out of,
+and the `baked` branch three lines below -- `water < 0.015` -> Baked Desert,
+written for exactly this world -- never gets the chance. The window is 420 to
+470 K, because above 470 the dry-runaway test catches it and that one does carry
+a water term. `internalHeat: 80` is what parks the world in the window, and it
+does it from an unexpected direction: it barely moves the 780 K day side and
+adds eighty kelvin to the NIGHT side, 128 K to 207, dragging the global mean
+across the line. On a tidally locked world that mean is a number found nowhere
+on the planet, which the classifier already admits for the collapse branch.
+
+`dg.hasWater` on that line is the fix, and the world now reads Baked Desert for
+its whole dry life and Magma Ocean once it melts.
+
+The obvious companion fix is wrong, and Venus is why. `dryRunaway` looks like
+the same error from the other side -- a runaway greenhouse is a world that LOST
+an ocean, and this one never had a drop -- so gating it on `waterInitial > 0`
+looks right. It turned Venus into a Baked Desert. Venus ships with `water: 0`,
+because what that preset represents is the end state, a planet whose ocean went
+four billion years ago; `waterInitial` is the inventory the RUN began with, not
+the one the planet was born with, and nothing here distinguishes those two.
+Reverted, with the reason recorded next to it.
+
+### Salt
+
+There was none. The README said so outright two sections down, in the Hesperian
+entry, as an apology for a sea that froze when a briny one might not have.
+
+The physics is one curve: how much colder salt water has to get before it
+freezes. Up to about 40 g/kg the measured seawater relation applies (UNESCO
+1983) and gives 1.922 K of depression at Earth's 35 -- the -1.92 C everyone
+quotes. Past that it is extrapolation, so the curve is continued by one that
+matches UNESCO's value *and its slope* at 40 and passes through the other
+measured point that matters, the NaCl eutectic at 21.1 K and 233 g/kg, where no
+more salt will dissolve. Both anchors are hit exactly.
+
+What made this addable at all is that the model is **already calibrated to
+seawater**. `iceFraction` puts its warm knot at 276 K because "sea water freezes
+at about -2 C" -- Earth's 35 g/kg has been baked into that constant all along.
+So the quantity threaded through the model is not the depression but the SHIFT,
+`Tf(S) - Tf(35)`: zero at Earth, positive for fresh water, negative for brine.
+`identity.mjs` proves the point better than any argument -- against a
+`git archive HEAD` baseline, **zero removals and zero changed values**, and the
+only 62 added lines are the two new fields themselves, `salinity = 35` and
+`freezeShift = 0`.
+
+It reaches everywhere water freezes: the sea-ice curve, the melting floor the
+cold pool cannot go below, and the base of a subglacial shell. That last is the
+one worth having. A brine lowers the base melting point, which shortens the
+temperature drop the shell has to carry, which THINS it -- so Hesperian Mars at
+saturation carries 2.18 km of ice over 1.20 km of water where the same world
+fresh carries 3.04 over 0.41. Three times the sea, for salt.
+
+It is a sodium-chloride ocean. Real brines go further -- magnesium perchlorate
+on Mars sits near 206 K, sixty-seven kelvin down -- and this curve does not
+reach them.
+
+### How long Earth has, and what actually ends it
+
+Three papers, handed over together, and the useful thing is that the model was
+missing the mechanism all three of them turn on.
+
+`biosphere.js` scored habitability on temperature and liquid water. That makes
+heat the only thing that can kill a biosphere, and on Earth's own track heat is
+not what does it. As the Sun brightens, the carbonate-silicate thermostat
+answers the only way it can -- by drawing CO2 down -- and photosynthesis stops
+when there is not enough left to fix. Every estimate since Lovelock & Whitfield
+1982 kills the complex biosphere by CO2 starvation rather than by overheating.
+
+The model could not see it. Measured before touching anything: `futureEarth`
+settles at **59 ppmv of CO2 and reports a fully healthy eukaryote biosphere**,
+at a level where Graham et al. have C3 plants at or below their compensation
+point of 30 to 100 ppmv.
+
+So: one softened band on the eukaryote term, comfortable at 100 ppmv and gone at
+10. One number stands in for two plant types, because this model has one
+eukaryote population rather than C3 and C4 -- Graham et al. derive 2.9 ppmv for
+C4, the older studies use 10. Prokaryotes are exempt on purpose: that exemption
+is the gap between the two papers, complex life gone in 0.9-1.8 Gyr while
+microbial life persists in refuges to something like 2.8.
+
+Unfitted, Earth on its own brightening track now loses its complex biosphere at
+**1.4 Gyr** -- inside Graham et al.'s 0.9-1.8 -- with the prokaryotes outlasting
+it, and Earth today does not move at all. `futureEarth` drops from a healthy 1.00
+to 0.59: a biosphere visibly going, rather than one that is fine and then
+suddenly is not.
+
+Four new rows in calibrate. Two pass: Gough's fit against Schroder & Smith's
+computed solar track, 1.29 against their 1.26 L☉ at 7.13 Gyr and 1.91 against
+their 1.84 at the end of the main sequence -- which is worth knowing, because
+Gough is a fit to the early track and had no business being right that far out.
+Two are gaps, and the second is the interesting one: **this model loses the ocean
+at 2.06 Gyr where O'Malley-James et al. put the runaway at 2.8**. Roughly 0.8 Gyr
+early, from a latitude-resolved energy balance much like this one but with a
+different runaway criterion. Nothing has been tuned to close it.
+
+That is also why the new preset is called **Earth's Last Ocean** and sits at
+1.20 S+ rather than at the +2.8 Gyr that was asked for: it is placed at this
+model's own last habitable step instead of at a date it cannot reach. What it
+is: an ice-free hothouse at 33 C with six parts per million of CO2, complex life
+down to 8%, and the prokaryotes still there. The swansong biosphere, which is
+the subject of the paper.
+
+The red-giant end -- RGB tip at 12.17 Gyr, 2730 L☉, the Sun reaching 1.2 AU and
+Earth engulfed 7.59 Gyr from now, survivable only from 1.15 AU out -- is out of
+scope. There is no post-main-sequence track in this model and inventing one is a
+much larger change than any of this.
+
 ### Two answers about the same water
 
 Reported from play with a screenshot: Hesperian Mars was drawing 2.42 km of sea

@@ -49,6 +49,11 @@ export const EARTH = {
   // kelvin, which is why putting it in moved the calibration slightly.
   internalHeat: 0.092,
   landAlbedo: 0.25,
+  // Earth's ocean, in grams of salt per kilogram of water. The default is the
+  // real one and is also the model's zero: every freezing point in here was
+  // already calibrated to seawater, so 35 changes nothing and the control says
+  // how far from Earth's sea this one is.
+  salinity: 35,
   startT: 288.3,
   // How the world ages, both off by default: most of what this model gets used
   // for is "what would this world do", not "what did it do".
@@ -569,6 +574,24 @@ export const PRESETS = {
   // 1.09 is the Gough value at 5.567 Gyr and is the point of the preset.
   futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, realisticGeology: true,
     startAge: 5.567, insolation: 1.09, startT: 292 } },
+
+  // Earth at the end of its habitable life: the swansong biosphere.
+  //
+  // Asked for as "+2.8 Gyr, just before the runaway", after O'Malley-James et
+  // al. 2013, who put the onset of the runaway there. This model puts it
+  // earlier -- it loses the ocean between 1.20 and 1.24 S+, which on Gough's
+  // curve is 1.9 to 2.2 Gyr from now -- so the preset sits at the model's own
+  // last habitable step rather than at a date it cannot reach. The difference
+  // is recorded as a gap in calibrate.mjs rather than tuned away.
+  //
+  // What it is: 1.20 S+, solar age 6.47 Gyr, an ice-free hothouse at 33 C with
+  // SIX parts per million of CO2 left. The carbonate-silicate thermostat has
+  // answered a brightening Sun the only way it can, by drawing carbon down, and
+  // it has drawn it below what a plant can fix. Complex life is essentially
+  // gone; the prokaryotes are still here. That is the biosphere both of those
+  // papers are about -- unicellular, and the last thing standing.
+  lastOcean: { name: 'Earth’s Last Ocean', icon: '🌅', params: { ...EARTH,
+    realisticGeology: true, startAge: 6.47, insolation: 1.20, startT: 300 } },
 
   // ---- two hot oceans and one that does not stay one ----------------------
   //

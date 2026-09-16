@@ -99,6 +99,37 @@ const HEAT_MARGIN = 20;        // K past the ceiling for the full rate
 // living there was more fragile.
 const REFUGIA = 0.04;
 
+// The other way a biosphere ends, and on Earth it is the one that gets there
+// first.
+//
+// This model scored habitability on temperature and liquid water alone, which
+// makes heat the only thing that can kill a biosphere. The literature does not
+// agree: as the Sun brightens, the carbonate-silicate thermostat answers by
+// drawing CO2 DOWN, and photosynthesis stops when there is not enough of it
+// left to fix. Every lifespan estimate of the complex biosphere since Lovelock
+// & Whitfield 1982 has CO2 starvation, not overheating, as the kill mechanism
+// on Earth's own track (Caldeira & Kasting 1992; Franck et al. 1999-2006;
+// Rushby et al. 2018; Ozaki & Reinhard 2021; Graham et al.).
+//
+// The threshold is the CO2 compensation point -- the partial pressure below
+// which a leaf respires away more carbon than it fixes. Older studies use
+// 10 ppmv; C3 plants really sit between 30 and 100 ppmv depending on species
+// and temperature, and C4 plants, which concentrate CO2 internally, get down to
+// about 3. This model has one eukaryote population rather than two plant
+// types, so one softened band stands in for both, and it is set by the C3
+// range because C3 is most of the productivity: comfortable at 100 ppmv, gone
+// at 10. Earth's 377 ppmv is clear of it and does not move; Earth at +1 Gyr,
+// which this model settles at 59 ppmv, lands halfway down it -- a biosphere
+// visibly going rather than one that is fine and then suddenly is not.
+//
+// Prokaryotes are deliberately exempt. Chemolithotrophs do not photosynthesise
+// and the papers say so with numbers -- the complex biosphere is gone within
+// 0.9 to 1.8 Gyr, while microbial life persists in refuges for something like
+// 2.8 (O'Malley-James et al. 2013). Making CO2 kill both would erase exactly
+// the gap between them that those two papers exist to describe.
+const CO2_STARVE = 10e-6;      // bar, nothing fixes carbon below this
+const CO2_AMPLE = 100e-6;      // bar, no limitation above it
+
 // Below this a population is gone rather than rare, and has to be originated
 // again rather than recovering. Without it a world that sterilised itself kept
 // an infinitesimal seed and sprang back the moment it was habitable, which is
@@ -144,9 +175,11 @@ export function habitableShare(w) {
   const iced = (w.water.seaIce + w.water.landIce)
              / Math.max(w.water.ocean + w.water.seaIce + w.water.landIce, 1e-12);
   const subIce = REFUGIA * smoothstep(0.15, 0.6, iced);
+  // ...and the carbon to build with. Eukaryotes only: see CO2_STARVE.
+  const carbon = smoothstep(CO2_STARVE, CO2_AMPLE, w.diag.pCO2 ?? 0);
   return { pro: clamp(Math.max(water * pro, subIce), 0, 1),
-           euk: clamp(water * air * euk, 0, 1),
-           hotPro, hotEuk };
+           euk: clamp(water * air * euk * carbon, 0, 1),
+           hotPro, hotEuk, carbon };
 }
 
 // One step of the two populations towards what the planet can currently hold.

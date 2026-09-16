@@ -57,7 +57,7 @@ export function classify(w) {
   for (let i = 0; i < 4; i++) { Tanti += w.T[i] / 4; Tsub += w.T[NBANDS - 1 - i] / 4; }
   // Warm enough under the star for liquid water -- which is a question about
   // temperature, and says nothing about whether there is any water there.
-  const warmSub = 1 - iceFraction(Tsub);
+  const warmSub = 1 - iceFraction(Tsub, dg.freezeShift ?? 0);
   // Where the planet's water actually is. On a locked world the night side is a
   // permanent cold trap, so water migrates there as glacier ice and never comes
   // back: the inventory is intact, but none of it is liquid and none of it is
@@ -254,6 +254,15 @@ export function classify(w) {
   // five hundred. The floor at the other end is why Venus still qualifies: a
   // world that began with almost nothing needs to have lost almost all of that,
   // not six percent of a sea it never had.
+  //
+  // It is tempting to add `initialWater > 0` here, so that a world built
+  // without a drop of water is not called a runaway -- a runaway greenhouse is
+  // a world that LOST an ocean. It does not work, and Venus is why: Venus ships
+  // with `water: 0`, because what this preset represents is the end state, a
+  // planet whose ocean went four billion years ago. `waterInitial` is the
+  // inventory the RUN started with, not the one the planet was born with, and
+  // nothing in this model distinguishes those two. Tried, and it turned Venus
+  // into a Baked Desert.
   else if (T > 470 && water < 0.06 * clamp(initialWater, 0.05, 1)) id = 'dryRunaway';
   // The Hycean group. It goes here, after dryRunaway and before the runaway
   // states, because `T > 420` would otherwise swallow every one of them: a 400 K ocean
@@ -269,7 +278,16 @@ export function classify(w) {
   // still has an ocean in it: a runaway whose sea is already in the sky. The
   // name says which half this is, because "wet" was doing duty for both and the
   // two are seven orders of magnitude apart in how long they last.
-  else if (T > 420) id = 'steamRunaway';
+  //
+  // `hasWater` is the whole of the fix here, and it was missing: this test was
+  // temperature alone. A bone-dry lava world at 450 K -- no ocean, no vapour, no
+  // ice, nothing -- was called a steam runaway for the first ten thousand years
+  // of its life, because 450 is more than 420 and nothing asked whether there
+  // was any water to make steam out of. The `baked` branch three lines down
+  // says the right thing about that world and never got the chance. A world
+  // with a TRACE of water at 450 K is still a steam runaway, which is the
+  // documented intent -- all of its water really is in the sky.
+  else if (T > 420 && dg.hasWater) id = 'steamRunaway';
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
   else if (water < 0.015) id = T > 290 ? 'baked' : 'frozen';
@@ -305,7 +323,7 @@ export function classify(w) {
   else if (lam > 0.5 && warmSub > 0.25 && ice > 0.25 && liquidShare > 0.05) {
     // eyeball family: how far the open water reaches around the globe
     let openBands = 0;
-    for (let i = 0; i < NBANDS; i++) if (iceFraction(w.T[i]) < 0.5) openBands++;
+    for (let i = 0; i < NBANDS; i++) if (iceFraction(w.T[i], dg.freezeShift ?? 0) < 0.5) openBands++;
     id = openBands / NBANDS > 0.55 ? 'lobster' : 'eyeball';
   }
   // The water is all still here; it is simply all on the far side, as ice, and

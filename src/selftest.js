@@ -1339,6 +1339,47 @@ function runChecks() {
     // super-runaway interior of Pierrehumbert (2023), and it is checked against
     // the solver directly further down.
     //
+    // A world with no water is not in a runaway greenhouse.
+    //
+    // Reported from play, with a shared link: a bone-dry lava world -- no water
+    // at all, 18.8 S+, 80 W/m2 of interior heat, tidally locked -- read as a
+    // Steam (formerly Wet) Runaway Greenhouse for the first ten thousand years
+    // of its life. `steamRunaway` was tested on temperature alone, `T > 420`,
+    // with no water term anywhere in it, and the `baked` branch three lines
+    // below that exists for exactly this world was shadowed by it.
+    //
+    // `dryRunaway` is deliberately NOT included below. It looks like the same
+    // error from the other side -- a runaway is a world that lost an ocean, and
+    // this one never had a drop -- but Venus ships with `water: 0` for exactly
+    // that reason, so the test cannot tell them apart. See classify.js.
+    //
+    // Scanned along the trajectory rather than at equilibrium, because that is
+    // where it was seen: this world is only in the misclassifying window
+    // between about 420 and 470 K, which it passes through on its way up.
+    {
+      const WET = new Set(['steamRunaway', 'moist', 'buriedOcean', 'hycean',
+        'lowSunHycean', 'waterworld', 'subglacial', 'snowball', 'waterbelt']);
+      const sim = new Simulation({ ...PRESETS.earth.params,
+        mass: 1.66, landFraction: 1, water: 0, insolation: 18.8, starTemp: 3270,
+        xuvFraction: 0.0002, rotationHours: 39.1, tidallyLocked: true, obliquity: 0,
+        n2Bar: 0.01, o2Bar: 0, biosphere: 0, co2Bar: 0.1, ch4Bar: 0,
+        internalHeat: 80, landAlbedo: 0.12, startT: 600, realisticGeology: true,
+        xuvDecay: true, brightening: 0 });
+      const bad = [];
+      for (const yr of [0, 1e3, 1e4, 1e5, 1e6, 1e7]) {
+        sim.runYears(yr - sim.world.time);
+        const w = sim.world, id = classify(w).id;
+        if ((w.diag.totalWater ?? 0) > 1e-5) continue;
+        if (WET.has(id)) {
+          bad.push(`${id} at ${(w.diag.Tmean - 273.15).toFixed(0)} C, t=${yr.toExponential(0)}`);
+        }
+      }
+      check('A world with no water is never in a runaway greenhouse',
+        bad.length === 0,
+        bad.length ? bad.slice(0, 3).join('; ')
+          : 'six epochs of a dry lava world, none of them called wet or a ruin');
+    }
+
     // Nothing liquid is below its own melting point.
     //
     // Reported from play as a buried ocean starting from an iceball sitting
