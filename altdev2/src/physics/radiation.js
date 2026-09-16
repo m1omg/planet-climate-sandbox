@@ -505,7 +505,14 @@ export const ALB_SEABED = 0.12;
 // Fractional sea-ice cover. Sea water freezes at about -2 C; the band is an
 // annual, zonal mean over a whole latitude belt, so the transition is smeared
 // across the seasonal swing rather than snapping at one temperature.
-export function iceFraction(T) { return 1 - smoothstep(252, 276, T); }
+// `shift` moves both knots together and defaults to zero, so every caller that
+// does not know about salinity is unchanged. A shift is safe here in a way a
+// width change would not be: climate.js takes a finite difference of this
+// function across +-0.5 K for the latent heat of fusion, which a translation
+// leaves alone and a rescaling would not.
+export function iceFraction(T, shift = 0) {
+  return 1 - smoothstep(252 + shift, 276 + shift, T);
+}
 
 // Ice *sheets* are a different thing and need a colder threshold. Snow has to
 // survive the summer for a sheet to grow, which in the annual mean means
@@ -533,11 +540,11 @@ export function landIceFraction(T) { return 1 - smoothstep(243, 265, T); }
 // leaves its continents frosted but unglaciated (Snowball Earth; the Antarctic
 // Dry Valleys). Such continents are markedly darker than an ice sheet, which is
 // why a snowball with bare land is easier to escape than one buried in ice.
-export function surfaceAlbedo(T, floodedFrac, landAlbedo, hasWater, glaciated = 0, waterCap = 1) {
+export function surfaceAlbedo(T, floodedFrac, landAlbedo, hasWater, glaciated = 0, waterCap = 1, shift = 0) {
   const flooded = clamp(floodedFrac, 0, 1);
   const land = 1 - flooded;
   if (!hasWater) return ALB_OCEAN * flooded + landAlbedo * land;
-  const fi = iceFraction(T);
+  const fi = iceFraction(T, shift);
   const sea = ALB_OCEAN * (1 - fi) + ALB_ICE * fi;
   // `glaciated` is now the share of land actually under an ice sheet, worked out
   // with its own temperature threshold and its own multi-millennial response
@@ -588,7 +595,8 @@ function rayleighOf(pDry) {
 // and calibrate.mjs hold two results side by side to difference them, which a
 // shared scratch object would silently break.
 export function planetaryAlbedoInto(T, o, out) {
-  const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated, o.waterCap);
+  const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated,
+    o.waterCap, o.freezeShift ?? 0);
   const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * (o.cloudBoost ?? 1), 0, 0.9);
   // How bright that cloud is, which depends on how long it has been standing in
   // one place. `slowness` is already the blend of solar-day length and full

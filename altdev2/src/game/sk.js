@@ -384,6 +384,9 @@ export const SK = {
     'Hydrogen envelope': 'Vodíková obálka',
     'Hydrogen and helium kept from the disc the planet formed in, not outgassed from its rock. It has no absorption bands — it warms by colliding, which never saturates, so it keeps getting stronger as you add it. Forty bar of it holds an ocean liquid ten times further from the star than Earth is.':
       'Vodík a hélium zachytené z disku, v ktorom planéta vznikla, nie odplynené z jej horniny. Nemá absorpčné pásy — hreje zrážkami, ktoré sa nikdy nenasýtia, takže s pribúdajúcim množstvom je stále silnejší. Štyridsať barov udrží oceán tekutý desaťkrát ďalej od hviezdy, než je Zem.',
+    'Ocean salinity': 'Slanosť oceánu',
+    'Salt lowers the freezing point: Earth\u2019s 35 g/kg by 1.9 \u00b0C, a saturated brine by 21. Colder ice means a thinner lid over a buried ocean.':
+      'So\u013e zni\u017euje bod mrazu: pozemsk\u00fdch 35 g/kg o 1,9 \u00b0C, nasy\u0165en\u00fd sol\u00e1nok o 21. Chladnej\u0161\u00ed \u013ead znamen\u00e1 tenk\u0161\u00ed pr\u00edkrov nad pochovan\u00fdm oce\u00e1nom.',
     'Ground brightness': 'Jas povrchu',
     'Dark basalt 0.10 · rock 0.25 · bright sand 0.40': 'Tmavý bazalt 0,10 · hornina 0,25 · svetlý piesok 0,40',
     'Photosynthetic biosphere': 'Fotosyntetická biosféra',
@@ -652,6 +655,7 @@ export const SK = {
     earlyMars: 'Noachický Mars',
     // Hesperián je slovenský názov epochy; „Hesperiánsky Mars" znie neprirodzene.
     hesperianMars: 'Mars v hesperiáne',
+    lastOcean: 'Posledný oceán Zeme',
     snowball: 'Snehová guľa',
     dune: 'Púštny svet',
     eyeball: 'Viazaný svet-oko',

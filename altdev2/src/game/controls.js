@@ -240,6 +240,14 @@ export const SLIDERS = [
     fmt: fmtBar, units: PRESSURE_UNITS, unitFor: (v) => (v >= 1e-3 ? 'bar' : 'µbar'),
     note: 'Hydrogen and helium kept from the disc the planet formed in, not outgassed from its rock. It has no absorption bands — it warms by colliding, which never saturates, so it keeps getting stronger as you add it. Forty bar of it holds an ocean liquid ten times further from the star than Earth is.' },
 
+  { g: 'surface', key: 'salinity', label: 'Ocean salinity', min: 0, max: 350,
+    zero: true,
+    fmt: (v) => (v >= 100 ? `${v.toFixed(0)} g/kg` : `${v.toFixed(1)} g/kg`),
+    units: { 'g/kg': 1, 'psu': 1, 'ppt': 1, '%': 10, 'wt%': 10 },
+    stops: [{ v: 0, n: 'fresh' }, { v: 35, n: 'Earth' },
+            { v: 233, n: 'NaCl eutectic' }],
+    note: 'Salt lowers the freezing point: Earth\u2019s 35 g/kg by 1.9 \u00b0C, '
+      + 'a saturated brine by 21. Colder ice means a thinner lid over a buried ocean.' },
   { g: 'surface', key: 'landAlbedo', label: 'Ground brightness', min: 0.05, max: 0.6,
     fmt: (v) => v.toFixed(2), note: 'Dark basalt 0.10 · rock 0.25 · bright sand 0.40' },
   { g: 'surface', key: 'biosphere', label: 'Photosynthetic biosphere', min: 0, max: 4, zero: true,

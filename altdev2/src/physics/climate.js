@@ -5,7 +5,8 @@ import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction
          runawayLimit,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
-import { oceanStructure, coldPoolStructure, T_COLD_POOL, iceShell } from './ocean.js';
+import { oceanStructure, coldPoolStructure, T_COLD_POOL, iceShell,
+         freezeShift, SALINITY_EARTH } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
 
 import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN } from './volatiles.js';
@@ -104,7 +105,7 @@ function scratch(w) {
     // The options object handed to planetaryAlbedo, and the result it writes
     // into. Both are consumed inside the loop that fills them.
     b.aOpt = { oceanFrac: 0, landAlbedo: 0, hasWater: false, waterCap: 0,
-               glaciated: 0, pH2O: 0, pTot: 0, slowness: 0, subStellar: 0,
+               glaciated: 0, freezeShift: 0, pH2O: 0, pTot: 0, slowness: 0, subStellar: 0,
                cloudWhite: 1 };
     b.aOut = { albedo: 0, cloud: 0 };
   }
@@ -309,7 +310,16 @@ export function update(w, dt) {
 
   // Frozen share of the flooded area, and what is left open to the sky.
   let frozenShare = 0;
-  for (let i = 0; i < NBANDS; i++) frozenShare += iceFraction(w.T[i]) / NBANDS;
+  // How far this ocean's freezing point sits from Earth's, in kelvin. Zero at
+  // 35 g/kg, so a world that never touches the control is untouched by this.
+  // Applied wherever water freezes: the sea-ice curve, the melting floor the
+  // cold pool cannot go below, and the base of a subglacial shell.
+  //
+  // Declared up here rather than beside `waterCap` where it is conceptually at
+  // home, because the first use is this loop and a const is unreachable until
+  // its own line has run -- which is a crash, not a warning.
+  const fShift = freezeShift(w.params.salinity ?? SALINITY_EARTH);
+  for (let i = 0; i < NBANDS; i++) frozenShare += iceFraction(w.T[i], fShift) / NBANDS;
   const seaIceFrac = clamp(flooded * frozenShare, 0, flooded);
   const openOcean = clamp(flooded - seaIceFrac, 0, 1);
 
@@ -534,7 +544,7 @@ export function update(w, dt) {
     const subStellar = lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;
     const ao = B.aOpt;
     ao.oceanFrac = flooded; ao.landAlbedo = effLandAlbedo; ao.hasWater = hasWater;
-    ao.waterCap = waterCap; ao.glaciated = glaciatedShare;
+    ao.waterCap = waterCap; ao.glaciated = glaciatedShare; ao.freezeShift = fShift;
     ao.pH2O = pH2O[i]; ao.pTot = pTot; ao.slowness = slowness;
     ao.subStellar = subStellar; ao.cloudWhite = cloudWhite;
     const a = planetaryAlbedoInto(w.T[i], ao, B.aOut);
@@ -551,8 +561,8 @@ export function update(w, dt) {
     // `iceArea` is how much of it is actually *covered* in ice, which is what
     // the albedo sees -- and on a snowball those differ, because continents
     // with no water cycle stay bare frozen rock rather than growing a sheet.
-    iceMean += (hasWater ? iceFraction(w.T[i]) : 0) / NBANDS;
-    iceArea += (hasWater ? flooded * iceFraction(w.T[i]) + (1 - flooded) * glaciatedShare : 0) / NBANDS;
+    iceMean += (hasWater ? iceFraction(w.T[i], fShift) : 0) / NBANDS;
+    iceArea += (hasWater ? flooded * iceFraction(w.T[i], fShift) + (1 - flooded) * glaciatedShare : 0) / NBANDS;
     absorbed += S[i] * (1 - alb[i]) * swTrans / NBANDS;
     emitted += out[i] / NBANDS;
     pTotMean += pTot / NBANDS;
@@ -569,7 +579,7 @@ export function update(w, dt) {
 
   for (let i = 0; i < NBANDS; i++) {
     const deep = MIXED_LAYER + Math.max(0, oceanDepth - MIXED_LAYER) * smoothstep(315, 350, w.T[i]);
-    const cOcean = deep * RHO_WATER * CP_WATER * (1 - 0.9 * (hasWater ? iceFraction(w.T[i]) : 0));
+    const cOcean = deep * RHO_WATER * CP_WATER * (1 - 0.9 * (hasWater ? iceFraction(w.T[i], fShift) : 0));
     const cAtm = pTotArr[i] * 1e5 / g * 1000;
     let cLat = 0;
     if (hasWater && scale > 0.999) {
@@ -585,11 +595,11 @@ export function update(w, dt) {
     // which is what the modelling literature finds (Hyde et al. 2000).
     const iceCol = (w.water.seaIce + w.water.landIce) * d.eoColumn;   // kg/m^2
     const cFus = hasWater
-      ? L_FUS * iceCol * Math.max(0, iceFraction(w.T[i] - 0.5) - iceFraction(w.T[i] + 0.5))
+      ? L_FUS * iceCol * Math.max(0, iceFraction(w.T[i] - 0.5, fShift) - iceFraction(w.T[i] + 0.5, fShift))
       : 0;
     // Sea ice decouples the water below from the air above, so a frozen ocean
     // behaves far more like land than like a mixed layer.
-    const seal = hasWater ? iceFraction(w.T[i]) : 0;
+    const seal = hasWater ? iceFraction(w.T[i], fShift) : 0;
     const cSea = cOcean * (1 - 0.92 * seal) + C_LAND * 0.92 * seal;
     C[i] = clamp(flooded * cSea + (1 - flooded) * C_LAND + cAtm + cLat + cFus, 1e5, 1e14);
   }
@@ -703,7 +713,7 @@ export function update(w, dt) {
       // and is an ordinary partly-frozen ocean however cold the global mean has
       // got. The shell picture only becomes true once the lid closes.
       if ((this.openOcean ?? 0) > 0.01) return (subCache = null);
-      const sh = iceShell(col, this.g, Tmean, this.Fint, this.pSurfPa);
+      const sh = iceShell(col, this.g, Tmean, this.Fint, this.pSurfPa, fShift);
       // shellDepth 0 means the surface is above the melting point: an ordinary
       // ocean, and `oceanBase` is already the right answer about it.
       if (!(sh.shellDepth > 0)) return (subCache = null);
@@ -719,6 +729,7 @@ export function update(w, dt) {
       sh.liquidDepth = sh.under ? sh.under.liquidDepth : 0;
       return (subCache = sh);
     },
+    freezeShift: fShift,
     g, d, pN2, pCO2, pCH4, pO2, pH2, pHe, pH2O, pTot: pTotArr, pTotMean, Fint,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
     flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
@@ -1146,6 +1157,7 @@ export function radiativeDamping(w) {
       ao.oceanFrac = dg.flooded; ao.landAlbedo = dg.effLandAlbedo;
       ao.hasWater = dg.hasWater; ao.waterCap = dg.waterCap;
       ao.glaciated = dg.glaciatedShare * iceFraction(t);
+      ao.freezeShift = dg.freezeShift ?? 0;
       ao.pH2O = pwx; ao.pTot = ptx; ao.slowness = dg.slowness;
       ao.cloudWhite = dg.cloudWhite;
       ao.subStellar = dg.lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;

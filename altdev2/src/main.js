@@ -1971,7 +1971,7 @@ function bindProfile() {
     profileHover = i;
     const w = sim.world, dg = w.diag;
     const T = w.T[i];
-    const frozen = dg.hasWater ? iceFraction(T) : 0;
+    const frozen = dg.hasWater ? iceFraction(T, dg.freezeShift ?? 0) : 0;
     const sun = dg.S ? dg.S[i] : 0;
     tip.innerHTML =
       `<b>${(T - 273.15).toFixed(1)} °C</b> · ${bandLabel(w, i)}` +

@@ -485,6 +485,79 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     '2023 give the mechanism and no rate.');
 }
 
+// ---- the far future: how long Earth has, and what ends it -----------------
+//
+// Three papers, and the useful thing about them together is that they disagree
+// about which clock runs out first. The Sun's own track is not in doubt; what
+// the biosphere does under it is.
+{
+  const gough = (age) => 1 / (1 + 0.4 * (1 - age / 4.57));
+  const run = (params, years) => {
+    const sim = new Simulation(params);
+    const w = sim.world;
+    for (let i = 0; i < 400000 && w.time < years; i++) sim.stepOnce(Math.min(maxStep(w), 1e4));
+    return w;
+  };
+  // Schroder & Smith 2008 compute the solar track with a tested evolution code.
+  // Their table is a direct check on the Gough fit this model brightens with.
+  anchor('Solar luminosity at 7.13 Gyr', gough(7.13), 1.20, 1.32, 'L☉',
+    'Schroder & Smith 2008 (MNRAS 386 155), Table 1: the hottest main sequence, ' +
+    '1.26 L☉ at an age of 7.13 Gyr.');
+  anchor('Solar luminosity at 10.0 Gyr', gough(10.0), 1.70, 1.95, 'L☉',
+    'Schroder & Smith 2008, Table 1: the end of the main sequence, 1.84 L☉ at ' +
+    '10.0 Gyr. Gough (1981) is a fit to the early track and is not guaranteed ' +
+    'to hold this far out; this row is what says whether it does.');
+
+  // How long the complex biosphere has. Every study since Lovelock & Whitfield
+  // 1982 kills it by CO2 starvation rather than by heat: a brightening Sun
+  // drives the carbonate-silicate thermostat to draw carbon down, and it goes
+  // below what a plant can fix while the planet is still comfortable.
+  const lifeSim = new Simulation({ ...PRESETS.earth.params, brightening: 1 });
+  let euxGone = Infinity, proGone = Infinity;
+  for (let gyr = 0.1; gyr <= 3.0 + 1e-9; gyr += 0.1) {
+    lifeSim.runYears(gyr * 1e9 - lifeSim.world.time);
+    const L = lifeSim.world.life ?? {};
+    if (euxGone === Infinity && (L.euk ?? 0) < 0.05) euxGone = gyr;
+    if (proGone === Infinity && (L.pro ?? 0) < 0.05) proGone = gyr;
+  }
+  anchor('Complex biosphere remaining', euxGone, 0.9, 1.8, 'Gyr',
+    'Graham et al., Substantial extension of the lifetime of the terrestrial ' +
+    'biosphere: 1.3 Gyr on Caldeira & Kasting 1992 weathering and 1.8 on ' +
+    'Kerrick & Toon 2017, against the 0.9 of the classic result. The kill ' +
+    'mechanism is the CO2 compensation point, not overheating.');
+
+  // ...and how long anything at all has. O'Malley-James et al. 2013 follow the
+  // microbial biosphere into its refuges -- high latitudes, mountains, cold-trap
+  // ice caves -- and find it survives well past the point where the surface
+  // stops being habitable on average.
+  deviation('Microbial biosphere remaining', Math.min(proGone, 3.0), 2.5, 3.0, 'Gyr',
+    "O'Malley-James et al. 2013 (Swansong Biospheres): unicellular life persists " +
+    'up to 2.8 Gyr from present in high-latitude refuges. This model has one ' +
+    'refugium term (4% of the surface, under ice) and no cave or altitude ' +
+    'mechanism at all, so it can agree with the number without agreeing with ' +
+    'the reasoning. Capped at 3.0 because the scan stops there.');
+
+  // The runaway itself, and this one is honestly early.
+  const lastOK = (() => {
+    let last = 0;
+    for (const ins of [1.10, 1.14, 1.18, 1.20, 1.22, 1.24, 1.28, 1.32]) {
+      const age = 4.57 * (1 - (1 / ins - 1) / 0.4);
+      const w = run({ ...PRESETS.earth.params, realisticGeology: true,
+        startAge: age, insolation: ins, startT: 300 }, 5e6);
+      if ((w.diag.totalWater ?? 0) > 0.5 && w.diag.Tmean < 400) last = age - 4.57;
+    }
+    return last;
+  })();
+  deviation('Ocean lost at', lastOK, 2.5, 3.0, 'Gyr',
+    "O'Malley-James et al. 2013 put the onset of the runaway greenhouse at " +
+    'about 2.8 Gyr from now. This model loses the ocean between 1.20 and 1.24 ' +
+    'S⊕, which on Gough is 1.9 to 2.2 Gyr -- roughly 0.8 Gyr early. Their ' +
+    'model is a latitude-resolved energy balance like this one but with a ' +
+    'different runaway criterion, and nothing here has been tuned to close it. ' +
+    "The 'Earth's Last Ocean' preset sits at this model's own threshold rather " +
+    'than at theirs.');
+}
+
 // ---- report ---------------------------------------------------------------
 let bad = 0;
 console.log('');
