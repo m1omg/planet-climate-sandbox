@@ -573,7 +573,11 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
       'whole span with no peak at all. This is the whole of the remaining ' +
       'disagreement once CO2 is held the way they held it -- and their own 2014 ' +
       'paper does not show the transition either, so it is contested rather ' +
-      'than settled.');
+      'than settled. It was built and reverted: thinning the cloud deck and ' +
+      'closing the dry subsiding branch on their own criterion reaches 342.7 K ' +
+      'at +21% and no further, because a stable root up there needs d(OLR)/dT ' +
+      'to beat the albedo feedback and it is 0.26 against 0.58. Past that the ' +
+      'two roots annihilate and the ocean goes. The README has the numbers.');
   }
 
   // How long the complex biosphere has. Every study since Lovelock & Whitfield
