@@ -4151,26 +4151,53 @@ drive a real Chrome and measure where the first slider actually lands.
 
 Stated plainly, because a model that hides these is less useful:
 
-* **Earth's far future is fifty kelvin too cool against a 3D GCM, and the disagreements do not
-  all run one way.** Wolf & Toon (2015) run Earth forward under the brightening Sun in CAM4 and get
-  a stable climate at +21% insolation with a **362.8 K** surface, about 1.99 Gyr from now. This
-  model reaches 1.21 S⊕ at the same date — the two luminosity fits agree to four digits — and
-  arrives at **305 K**.
+* **Earth's far future is twelve kelvin too cool against a 3D GCM — and the first version of this
+  entry said fifty, which was the wrong comparison.** It is worth keeping the correction visible,
+  because the mistake is an easy one and it was reported from play rather than caught here.
+
+  Wolf & Toon (2015) get a **362.8 K** surface at +21% insolation, and this model reaches 1.21 S⊕
+  at 305 K, so the row was written as a 58 K gap. But their grid does not rise smoothly. Below
+  +10% S₀ Earth warms nearly linearly at about 1 K/(W m⁻²) and stays under 310 K; then between
+  +11.25% and +12.5% the surface **jumps 312.2 → 331.9 K on 3.0 W/m² of extra forcing**, a climate
+  sensitivity of ~6.5 K/(W m⁻²). Their 362.8 K is their hottest simulated atmosphere, far up the
+  steep side of that transition and already losing water quickly.
+
+  Measured where both models are on the gentle branch, the disagreement is a quarter of the size:
+
+  | S₀ | Wolf & Toon | this model |
+  |---|---|---|
+  | +10% | under 310 K | 296.4 K |
+  | +11.25% | 312.2 K | 297.4 K |
+  | +15.5% | 312.9 K *(W&T 2014)* | 301.1 K |
+  | +21% | 362.8 K | 305.1 K |
+
+  So the `GAP` row is at **+15.5% against 312.9 K**. Their own two papers disagree across the
+  transition — 312.9 K at +15.5% in 2014 against 331.9 K at +12.5% in 2015, different model
+  configurations — which is its own reason not to anchor on the steep part.
+
+  **What the 58 K was really reporting** is that this model has no hot branch at all, and that
+  belongs in the Hycean row above rather than here. Its greenhouse goes 34.2 → 35.9 K across the
+  whole span, the Simpson–Nakajima margin falls 31 → 8 W/m², and then equilibrium stops existing:
+  it walks 288 → 313 K and runs away, with no plateau in between. A semi-grey scheme at fixed
+  relative humidity has a monotonic, steeply rising OLR(T) and nowhere to put the vertical
+  structure that flattens it near the moist greenhouse. A stable 362.8 K at 298 W/m² absorbed
+  needs the air to radiate **30% of σT⁴**; this model radiates 61% and is still climbing at about
+  1.8 W/m² per kelvin, so that root does not exist on its curve.
 
   The comparison worth making alongside it is O'Malley-James et al. (2013), whose 1D energy balance
   is the closest thing in the literature to what this model actually is. Their Figure 5 has Earth at
   roughly **490 K by 2.8 Gyr**, where this model has 318 K, and a runaway at 2.8 Gyr against this
   model's 3.22. Leconte et al. (2013) is the reason to expect a 1D column to run hot: dry subsiding
   air under the Hadley circulation lifts the runaway threshold to about 375 W/m², and one column
-  cannot represent it.
+  cannot represent it. So the modern 3D work says O'Malley-James is too hot, and this model is
+  cooler than **both**; being on the right side of one disagreement is not the same as being right.
 
-  So the modern 3D work says O'Malley-James is too hot, and this model is cooler than **both**.
-  Being on the right side of one disagreement is not the same as being right. There is a further
-  one: Wolf & Toon expect Earth to lose its ocean to hydrogen escape in a little over 2 Gyr, before
-  any thermal runaway, where this model still holds 0.9973 EO at +2.8 Gyr and then converts the
-  remainder in under two kiloyears. Reported as a `GAP` row every run, and not tuned away: closing
-  fifty kelvin means moving the humidity or the cloud response, and both are pinned on present-day
-  Earth by anchors above.
+  There is a further disagreement about the ending itself. Wolf & Toon expect rapid water loss from
+  that +21% atmosphere, and the oceans gone "before the solar constant has appreciably increased
+  further" — Earth as a desert planet, with no thermal runaway needed. This model still holds
+  0.9973 EO at +2.8 Gyr and then converts the remainder in under two kiloyears. Not tuned away:
+  closing twelve kelvin means moving the humidity or the cloud response, and both are pinned on
+  present-day Earth by anchors above.
 
 * **The Hycean habitable zone's inner edge is far too close to the star.** Innes, Tsai &
   Pierrehumbert (2023) put it at 1.6 AU for a 1 bar H₂/He envelope around a G star and 3.85 AU for
