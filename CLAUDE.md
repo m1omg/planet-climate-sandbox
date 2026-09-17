@@ -67,6 +67,21 @@ never fail — they exist so that two compensating errors cannot cancel silently
   passed all anchors and still froze the Archean in 10 kyr; it was reverted and
   the reason written down. That is the expected outcome, not a failure.
 
+- **Reverting the implementation is not abandoning the problem.** The bullet above
+  is about a *change*, not about a *task*. A failed attempt is a measurement, and a
+  measurement is where the next attempt starts — so keep going: find the term that
+  is actually binding, change that instead, and try again. Reworking the model is
+  allowed. Rewriting a constant that turns out to be wrong is allowed. Handing back
+  a well-written account of why it cannot be done is not a deliverable, and asking
+  which of two paths to take when both are available and one can simply be tried is
+  worse — it spends real money to buy nothing.
+
+  Come back with a question only when the answer cannot be measured: when it is a
+  matter of taste, or of which literature to believe, or when the work would touch
+  something outside the repo. Everything else is answerable by running it. If every
+  avenue is genuinely exhausted, say so once, with the list of what was tried and
+  the number each attempt gave — and only after the list is long.
+
 ## Constraints that do not change
 
 - Must run on a MacBook Air 2017. Optimise, but never at the cost of simulation
