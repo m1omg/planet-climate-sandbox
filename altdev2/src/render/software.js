@@ -203,6 +203,11 @@ export class SoftwareView {
       oceanFrac: this.lastOceanFrac = flooded,
       seaLevel: seaLevelForLand(1 - flooded),
       waterCap: dg.waterCap, glaciated: dg.glaciatedShare ?? 1,
+      // What the planet is actually supporting. The GL path has taken this
+      // since the day vegetation stopped being warmth-and-water alone; this one
+      // never got it, so the two renderers disagreed about whether a dead world
+      // is green. Reported from play on a runaway Earth with the clouds off.
+      bio: dg.bio ?? p.biosphere ?? 0,
       // Same view-only switch as the GL path: the clouds still cool the
       // planet, they are simply not drawn. Both renderers have to agree, or
       // the button would mean two different things depending on the machine.

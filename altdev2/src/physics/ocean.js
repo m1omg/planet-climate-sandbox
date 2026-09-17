@@ -159,13 +159,49 @@ export function meltingPressureIh(T) {
 // more thing that could quietly disagree with the curve above it.
 export function meltingTemperatureIh(pPa) {
   if (!(pPa > P_TRIPLE)) return T_TRIPLE;
-  if (pPa >= P_IH_III) return T_IH_III;               // ice III below here, not Ih
+  // Flat past the ice Ih-III triple point, and that is correct for a function
+  // named for ice Ih: above 209.9 MPa ice Ih does not exist, and there is no
+  // "ice Ih melting point" to report. `meltingTemperature` below is the one
+  // that spans the whole diagram.
+  if (pPa >= P_IH_III) return T_IH_III;
   let lo = T_IH_III, hi = T_TRIPLE;
   for (let i = 0; i < 24; i++) {
     const mid = 0.5 * (lo + hi);
     if (meltingPressureIh(mid) > pPa) lo = mid; else hi = mid;
   }
   return 0.5 * (lo + hi);
+}
+
+// The whole melting curve, both halves joined.
+//
+// The two branches in this file did not meet. `meltingTemperatureIh` bottoms
+// out at 251.165 K at 209.9 MPa, and `meltingPressure` picks ice VI up at
+// 0.632 GPa and 273.31 K -- so between those pressures neither function had an
+// answer, and anything that asked the Ih one got its floor value for a region
+// where the real melting point is climbing back up through the ice III and V
+// fields. This closes it: Ih below, the VI/VII curve inverted above, and a
+// logarithmic interpolation across the III/V gap between the two measured
+// endpoints. No third constant, and it joins exactly at both ends.
+//
+// NOT used by `coldFloor` or `iceShell`, deliberately. Wiring it in there was
+// tried and reverted: it lifts the cold pool's floor on any world whose surface
+// pressure is past the Ih field, which moved four deep-ates columns off their
+// calibration -- a 9-to-11 GPa column lost the ice VII floor it is supposed to
+// have entirely. Those callers want the near-surface melting point of ordinary
+// ice, which is what the Ih function is. This is here for the places that want
+// the phase diagram itself, and for the self-test that pins it.
+export function meltingTemperature(pPa) {
+  if (pPa < P_IH_III) return meltingTemperatureIh(pPa);
+  if (pPa >= P_VI_0) {
+    let lo = T_VI_0, hi = 1200;
+    for (let i = 0; i < 32; i++) {
+      const mid = 0.5 * (lo + hi);
+      if (meltingPressure(mid) > pPa) hi = mid; else lo = mid;
+    }
+    return 0.5 * (lo + hi);
+  }
+  const f = Math.log(pPa / P_IH_III) / Math.log(P_VI_0 / P_IH_III);
+  return T_IH_III + (T_VI_0 - T_IH_III) * f;
 }
 
 export const RHO_ICE_IH = 917;          // kg/m^3
@@ -209,7 +245,11 @@ const K_ICE_INT = 651;                  // W/m, the constant in k = K/T
 export function iceShell(columnKg, g, Tsurf, Fint, pSurfPa = 0, shift = 0) {
   const out = { shellDepth: 0, oceanKg: 0, baseT: T_TRIPLE + shift, basePressure: pSurfPa,
                 frozenSolid: false, ocean: false };
-  if (!(columnKg > 0) || !(g > 0) || !(Fint > 0)) return out;
+  // Every degenerate input is refused rather than propagated. `Tsurf` was the
+  // one left out, and a NaN there came back as a NaN shell depth and a NaN
+  // ocean mass, which is worse than any wrong number because it spreads.
+  if (!(columnKg > 0) || !(g > 0) || !(Fint > 0) || !Number.isFinite(Tsurf)
+      || !Number.isFinite(pSurfPa) || !Number.isFinite(shift)) return out;
   // Warm enough to melt at the surface: this is an ordinary ocean, not a shell.
   if (Tsurf >= meltingTemperatureIh(Math.max(pSurfPa, P_TRIPLE)) + shift) return out;
   const totalDepthIfIce = columnKg / RHO_ICE_IH;

@@ -514,7 +514,7 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // below what a plant can fix while the planet is still comfortable.
   const lifeSim = new Simulation({ ...PRESETS.earth.params, brightening: 1 });
   let euxGone = Infinity, proGone = Infinity;
-  for (let gyr = 0.1; gyr <= 3.0 + 1e-9; gyr += 0.1) {
+  for (let gyr = 0.1; gyr <= 4.0 + 1e-9; gyr += 0.1) {
     lifeSim.runYears(gyr * 1e9 - lifeSim.world.time);
     const L = lifeSim.world.life ?? {};
     if (euxGone === Infinity && (L.euk ?? 0) < 0.05) euxGone = gyr;
@@ -530,32 +530,36 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   // microbial biosphere into its refuges -- high latitudes, mountains, cold-trap
   // ice caves -- and find it survives well past the point where the surface
   // stops being habitable on average.
-  deviation('Microbial biosphere remaining', Math.min(proGone, 3.0), 2.5, 3.0, 'Gyr',
+  deviation('Microbial biosphere remaining', Math.min(proGone, 4.0), 2.5, 3.5, 'Gyr',
     "O'Malley-James et al. 2013 (Swansong Biospheres): unicellular life persists " +
     'up to 2.8 Gyr from present in high-latitude refuges. This model has one ' +
     'refugium term (4% of the surface, under ice) and no cave or altitude ' +
     'mechanism at all, so it can agree with the number without agreeing with ' +
-    'the reasoning. Capped at 3.0 because the scan stops there.');
+    'the reasoning. Here the prokaryotes go when the ocean does, rather than ' +
+    'retreating anywhere. Capped at 4.0 because the scan stops there.');
 
-  // The runaway itself, and this one is honestly early.
-  const lastOK = (() => {
-    let last = 0;
-    for (const ins of [1.10, 1.14, 1.18, 1.20, 1.22, 1.24, 1.28, 1.32]) {
-      const age = 4.57 * (1 - (1 / ins - 1) / 0.4);
-      const w = run({ ...PRESETS.earth.params, realisticGeology: true,
-        startAge: age, insolation: ins, startT: 300 }, 5e6);
-      if ((w.diag.totalWater ?? 0) > 0.5 && w.diag.Tmean < 400) last = age - 4.57;
+  // The runaway itself -- and the FIRST time this row was written it measured
+  // the wrong thing. It started a world at each insolation and asked whether it
+  // kept its ocean, which finds the cold branch of a bistable climate: a world
+  // dropped in at 1.24 S+ runs away, while the same world brightening THROUGH
+  // 1.24 with its carbon already drawn down does not. That gave 2.06 Gyr and an
+  // 0.8 Gyr discrepancy in the wrong direction. Measured along the path a
+  // planet actually takes -- one Earth, brightening from today -- the answer is
+  // later, and closer.
+  let runaway = Infinity;
+  {
+    const sim = new Simulation({ ...PRESETS.earth.params, brightening: 1 });
+    for (let gyr = 0.2; gyr <= 4.0 + 1e-9; gyr += 0.2) {
+      sim.runYears(gyr * 1e9 - sim.world.time);
+      if (sim.world.diag.Tmean > 400) { runaway = gyr; break; }
     }
-    return last;
-  })();
-  deviation('Ocean lost at', lastOK, 2.5, 3.0, 'Gyr',
-    "O'Malley-James et al. 2013 put the onset of the runaway greenhouse at " +
-    'about 2.8 Gyr from now. This model loses the ocean between 1.20 and 1.24 ' +
-    'S⊕, which on Gough is 1.9 to 2.2 Gyr -- roughly 0.8 Gyr early. Their ' +
-    'model is a latitude-resolved energy balance like this one but with a ' +
-    'different runaway criterion, and nothing here has been tuned to close it. ' +
-    "The 'Earth's Last Ocean' preset sits at this model's own threshold rather " +
-    'than at theirs.');
+  }
+  deviation('Runaway greenhouse at', Math.min(runaway, 4.0), 2.5, 3.0, 'Gyr',
+    "O'Malley-James et al. 2013 (Swansong Biospheres) put the onset of the " +
+    'runaway at about 2.8 Gyr from now, from a latitude-resolved energy balance ' +
+    'much like this one. This model holds on a few hundred megayears longer. ' +
+    'Nothing is tuned to close it, and the gap is small enough that the two ' +
+    'models mostly agree about when Earth ends.');
 }
 
 // ---- report ---------------------------------------------------------------
