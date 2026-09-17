@@ -495,11 +495,21 @@ export function reasonText(w, st, tr = enFormat) {
     if (bTop - bBot > 0.5) bits.push(tr('boundary {0} → {1} °C', c(bTop), c(bBot)));
     else if (Math.abs(bTop - dg.Tmean) > 0.5) bits.push(tr('boundary {0} °C', c(bTop)));
     bits.push(tr('ocean averages {0} °C', c(oceanMean)));
-  } else if (split && noSurface) {
-    // No liquid left to average -- a runaway that has finished converting keeps
-    // the two-number form, because the pool remnant is the only water there is.
+  } else if (split && noSurface && (w.water.ocean ?? 0) > 1e-6) {
+    // Under a lid with some pool left but no depth to average -- the two-number
+    // form, sky over water.
     bits.push(tr('sky {0} °C, water {1} °C', (dg.Tmean - 273.15).toFixed(0),
       (bulk - 273.15).toFixed(0)));
+  } else if (noSurface && (dg.totalWater ?? 0) > 0.005) {
+    // The conversion has FINISHED: `water.ocean` is zero and every drop is in
+    // the sky. This used to keep the two-number form anyway, on the reasoning
+    // that the pool remnant was the only water there was -- but there is no
+    // pool remnant, only `coldT`, a state variable left pinned at the critical
+    // point after the thing it described stopped existing. So the banner read
+    // "sky 673 °C, water 373 °C" on a planet with no liquid water anywhere, and
+    // was reported from play as a buried ocean the classifier was refusing to
+    // name. It was not refusing; there was nothing there.
+    bits.push(tr('sky {0} °C, no liquid left', (dg.Tmean - 273.15).toFixed(0)));
   } else {
     bits.push(tr('mean surface {0} °C', (dg.Tmean - 273.15).toFixed(1)));
     if (split) bits.push(tr('water below {0} °C', (bulk - 273.15).toFixed(0)));
