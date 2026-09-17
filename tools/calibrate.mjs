@@ -508,76 +508,72 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     '10.0 Gyr. Gough (1981) is a fit to the early track and is not guaranteed ' +
     'to hold this far out; this row is what says whether it does.');
 
-  // Where this model sits against a 3D GCM on the same star.
+  // Where this model sits against a 3D GCM on the same star -- and this row has
+  // now been wrong twice, in two different ways, so both are recorded.
   //
-  // This row was first written at +21% insolation against Wolf & Toon 2015's
-  // 362.8 K, and that was the wrong comparison -- reported as such, and correct.
-  // Their grid does not rise smoothly. Below +10% S0 Earth warms nearly
-  // linearly at about 1 K/(W m^-2) and stays under 310 K; then between +11.25%
-  // and +12.5% the surface jumps 312.2 -> 331.9 K on only 3.0 W/m^2 of extra
-  // forcing, a climate sensitivity of ~6.5 K/(W m^-2). The 362.8 K at +21% is
-  // their hottest simulated atmosphere, far up the steep side of that
-  // transition and already losing water fast.
+  // First it compared against Wolf & Toon 2015's 362.8 K at +21%, which sits far
+  // up a steep transition (312.2 -> 331.9 K on 3.0 W/m^2) that this model does
+  // not have. That measured the bifurcation rather than the climate.
   //
-  // Comparing a model with no steep side against a point on someone else's is
-  // measuring the bifurcation, not the climate: it reported a 58 K gap that
-  // says almost nothing, because on a near-vertical curve the temperature at a
-  // given flux is whatever the curve's shape makes it. Measured where both
-  // models are on the gentle branch the disagreement is 12 K, not 58:
+  // Then it compared a THERMOSTATTED run against a FIXED-CO2 one. Wolf & Toon
+  // held CO2 and CH4 constant; this model's carbonate-silicate cycle strips CO2
+  // as the world warms, and by +21% it is down to 4 ppm. That is not the same
+  // experiment, and it was worth 20 kelvin. Measured both ways, at 355 ppm and
+  // free, on the same grid:
   //
-  //     S0        Wolf & Toon        this model
-  //     +10%      under 310 K          296.4 K
-  //     +11.25%      312.2 K           297.4 K
-  //     +15.5%       312.9 K           301.1 K
-  //     +21%         362.8 K           305.1 K
+  //     S0        free      pinned 355 ppm     Wolf & Toon
+  //     +0%      288.6 K        288.5 K          288 K
+  //     +10%     296.7          304.4            under 310
+  //     +11.25%  297.8          306.5            312.2
+  //     +12.5%   298.8          308.7            331.9   (2015)
+  //     +15.5%   301.5          314.3            312.9   (2014)
+  //     +21%     307.0          327.0            362.8   (2015)
   //
-  // So the row is at +15.5%, against Wolf & Toon 2014's 312.9 K, which is a
-  // number from the same part of the curve this model actually has. The two
-  // papers disagree with each other across the transition -- 312.9 K at +15.5%
-  // in 2014 against 331.9 K at +12.5% in 2015, different model configurations --
-  // which is its own reason not to treat either as ground truth and not to
-  // anchor on the steep part.
+  // Compared on equal terms this model agrees with Wolf & Toon 2014 to 1.4 K,
+  // which is what this row now reports. It also agrees on the ending: with CO2
+  // pinned it holds 327 K at +21% and has lost the ocean by +25%, where they
+  // put rapid water loss just past +21%. And it agrees on the topology -- from
+  // start temperatures of 290 through 370 K at +21% it converges on the same
+  // 327.0 K to three figures, with an unstable root between 370 and 380 K and a
+  // runaway above. One warm branch, one unstable root, runaway beyond.
   //
-  // What the 58 K was really reporting is recorded where it belongs, as the
-  // Hycean row below: this model has no hot branch at all. Its greenhouse goes
-  // 34.2 -> 35.9 K across the whole span, the Simpson-Nakajima margin falls
-  // 31 -> 8 W/m^2, and then equilibrium simply stops existing. A semi-grey
-  // scheme at fixed relative humidity has a monotonic, steeply rising OLR(T)
-  // and nowhere to put the vertical structure that flattens it near the moist
-  // greenhouse, so there is no plateau to climb.
-  //
-  // And the disagreements do not all run one way. Against O'Malley-James et al.
-  // 2013, whose 1D energy balance is the closest thing in the literature to
-  // what this model is, the gap is the other direction: their Figure 5 has
-  // Earth at roughly 490 K by 2.8 Gyr where this model has 318 K, and Leconte
-  // et al. 2013 (Nature 504, 268) is the reason to expect a 1D column to run
-  // hot -- dry subsiding air under the Hadley cells lifts the runaway threshold
-  // to about 375 W/m^2. So the 3D work says O'Malley-James is too hot and this
-  // model is cooler than BOTH. Being on the right side of one disagreement is
-  // not the same as being right.
-  //
-  // Not tuned away, and it should not be: closing twelve kelvin means moving
-  // the humidity or the cloud response, and both are anchored on present-day
-  // Earth by rows above. This is here so it cannot be closed by accident.
+  // What it does NOT have is the abruptness, and that is the second row below.
+  // Note their own two papers straddle this model: 2014 has 312.9 K at +15.5%
+  // "well short of moist and runaway greenhouse states", which is this model;
+  // 2015 is already at 331.9 K by +12.5%. Matching 2015 would move away from
+  // 2014.
   {
-    const wt = new Simulation({ ...PRESETS.earth.params, brightening: 1,
-      emissions: 0, fossilUsed: 0 });
-    let hit = null;
-    for (let gyr = 0.05; gyr <= 2.5 + 1e-9 && hit == null; gyr += 0.05) {
-      wt.runYears(gyr * 1e9 - wt.world.time);
-      if (wt.world.params.insolation >= 1.155) hit = wt.world.diag.Tmean;
-    }
-    deviation('Surface at 1.155 S(+)', hit ?? 0, 308, 318, 'K',
+    const wt = (S) => eq({ ...PRESETS.earth.params, brightening: 0, emissions: 0,
+      fossilUsed: 0, insolation: S, co2Bar: 355e-6 }, { pin: true, years: 1e6 });
+    const at1155 = wt(1.155);
+    anchor('Surface at 1.155 S(+), fixed CO2', at1155.diag.Tmean, 305, 322, 'K',
       'Wolf & Toon 2014 (GRL 41, 167), 3D CAM4: a 15.5% increase in the solar ' +
       'constant gives a 312.9 K global mean, "well short of moist and runaway ' +
-      'greenhouse states". Measured on the same branch this model has, rather ' +
-      'than against their 2015 value of 362.8 K at +21% -- that one sits past a ' +
-      'sharp transition (312.2 -> 331.9 K over 3 W/m^2) that this model does ' +
-      'not have, so comparing to it measured the bifurcation rather than the ' +
-      'climate. The missing hot branch is reported by the Hycean row instead. ' +
-      'Note the disagreements do not all run one way: against the 1D energy ' +
-      "balance of O'Malley-James et al. 2013 this model is cooler too, and " +
-      'Leconte et al. 2013 says a 1D model should be expected to run hot.');
+      'greenhouse states". Measured the way they measured it -- CO2 pinned at ' +
+      '355 ppm rather than drawn down by the thermostat, which is worth 13 K at ' +
+      'this point and 20 K at +21%. Compared like for like the two agree to ' +
+      '1.4 K. The free-thermostat number, which this row used to report against ' +
+      'the wrong configuration, is 301 K.');
+    // ...and the thing that is genuinely missing, measured as the thing it is:
+    // not a temperature, a SENSITIVITY. Wolf & Toon 2015's transition is a
+    // spike in dT/dF, and a spike is what this model has no mechanism for.
+    const a = wt(1.1125), b = wt(1.125);
+    // `absorbed` is a scalar accumulator on diag, not a band array -- mean()
+    // above takes an array and throws on it.
+    const lam = (b.diag.Tmean - a.diag.Tmean)
+      / Math.max(b.diag.absorbed - a.diag.absorbed, 1e-9);
+    deviation('Climate sensitivity at 1.125 S(+)', lam, 4, 9, 'K/(W m\u00b2)',
+      'Wolf & Toon 2015 (JGR Atmos 120, 5775): between +11.25% and +12.5% S0 ' +
+      'their surface rises 312.2 -> 331.9 K on only 3.0 W/m^2, a climate ' +
+      'sensitivity peaking near 6.5 K/(W m^-2), which they attribute to minima ' +
+      'in cloud albedo caused by convective stabilization of warm atmospheres ' +
+      'and the dissipation of low-lying clouds. This model has no such ' +
+      'mechanism: cloudCover() saturates on vapour and carries no stability or ' +
+      'temperature term, so its sensitivity creeps from 0.58 to 0.69 across the ' +
+      'whole span with no peak at all. This is the whole of the remaining ' +
+      'disagreement once CO2 is held the way they held it -- and their own 2014 ' +
+      'paper does not show the transition either, so it is contested rather ' +
+      'than settled.');
   }
 
   // How long the complex biosphere has. Every study since Lovelock & Whitfield

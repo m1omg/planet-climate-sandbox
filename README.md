@@ -4151,53 +4151,69 @@ drive a real Chrome and measure where the first slider actually lands.
 
 Stated plainly, because a model that hides these is less useful:
 
-* **Earth's far future is twelve kelvin too cool against a 3D GCM — and the first version of this
-  entry said fifty, which was the wrong comparison.** It is worth keeping the correction visible,
-  because the mistake is an easy one and it was reported from play rather than caught here.
+* **Earth's far future agrees with a 3D GCM to 1.4 K once the two are run as the same experiment
+  — and this entry has now been wrong twice, in two different ways.** Both are kept visible,
+  because both were easy mistakes and both were caught by being asked a sharp question rather
+  than by the checks.
 
-  Wolf & Toon (2015) get a **362.8 K** surface at +21% insolation, and this model reaches 1.21 S⊕
-  at 305 K, so the row was written as a 58 K gap. But their grid does not rise smoothly. Below
-  +10% S₀ Earth warms nearly linearly at about 1 K/(W m⁻²) and stays under 310 K; then between
-  +11.25% and +12.5% the surface **jumps 312.2 → 331.9 K on 3.0 W/m² of extra forcing**, a climate
-  sensitivity of ~6.5 K/(W m⁻²). Their 362.8 K is their hottest simulated atmosphere, far up the
-  steep side of that transition and already losing water quickly.
+  **The first wrong comparison was across a bifurcation.** Wolf & Toon (2015) get **362.8 K** at
+  +21% insolation, this model reached 1.21 S⊕ at 305 K, and the row was written as a 58 K gap.
+  But their grid does not rise smoothly: below +10% S₀ Earth warms nearly linearly at about
+  1 K/(W m⁻²) and stays under 310 K, then between +11.25% and +12.5% the surface **jumps
+  312.2 → 331.9 K on 3.0 W/m²**, a sensitivity of ~6.5 K/(W m⁻²). Their 362.8 K is their hottest
+  simulated atmosphere, far up the steep side of that, already losing water fast. Comparing a
+  model with no steep side against a point on someone else's measures the bifurcation, not the
+  climate.
 
-  Measured where both models are on the gentle branch, the disagreement is a quarter of the size:
+  **The second was comparing a thermostat against a constant.** Wolf & Toon held CO₂ and CH₄
+  **fixed**. This model's carbonate–silicate cycle strips CO₂ as the world warms — by +21% it is
+  down to 4 ppm against their ~355. That is not the same experiment, and it was worth **20 kelvin**:
 
-  | S₀ | Wolf & Toon | this model |
-  |---|---|---|
-  | +10% | under 310 K | 296.4 K |
-  | +11.25% | 312.2 K | 297.4 K |
-  | +15.5% | 312.9 K *(W&T 2014)* | 301.1 K |
-  | +21% | 362.8 K | 305.1 K |
+  | S₀ | free thermostat | CO₂ pinned at 355 ppm | Wolf & Toon |
+  |---|---|---|---|
+  | +0% | 288.6 K | 288.5 K | 288 K |
+  | +10% | 296.7 K | 304.4 K | under 310 K |
+  | +11.25% | 297.8 K | 306.5 K | 312.2 K |
+  | +12.5% | 298.8 K | 308.7 K | 331.9 K *(2015)* |
+  | +15.5% | 301.5 K | **314.3 K** | **312.9 K** *(2014)* |
+  | +21% | 307.0 K | 327.0 K | 362.8 K *(2015)* |
 
-  So the `GAP` row is at **+15.5% against 312.9 K**. Their own two papers disagree across the
-  transition — 312.9 K at +15.5% in 2014 against 331.9 K at +12.5% in 2015, different model
-  configurations — which is its own reason not to anchor on the steep part.
+  Run their way, the model lands **1.4 K** from Wolf & Toon 2014. It agrees on the ending too:
+  pinned, it holds 327 K at +21% and has lost the ocean by +25%, where they put rapid water loss
+  just past +21%. And it agrees on the *topology* — started at 290, 300, … 370 K at +21% it
+  converges on the same 327.0 K to three figures, with an unstable root between 370 and 380 K and
+  a runaway above. One warm branch, one unstable root, runaway beyond, which is their shape.
 
-  **What the 58 K was really reporting** is that this model has no hot branch at all, and that
-  belongs in the Hycean row above rather than here. Its greenhouse goes 34.2 → 35.9 K across the
-  whole span, the Simpson–Nakajima margin falls 31 → 8 W/m², and then equilibrium stops existing:
-  it walks 288 → 313 K and runs away, with no plateau in between. A semi-grey scheme at fixed
-  relative humidity has a monotonic, steeply rising OLR(T) and nowhere to put the vertical
-  structure that flattens it near the moist greenhouse. A stable 362.8 K at 298 W/m² absorbed
-  needs the air to radiate **30% of σT⁴**; this model radiates 61% and is still climbing at about
-  1.8 W/m² per kelvin, so that root does not exist on its curve.
+  **What is genuinely missing is the abruptness, and nothing else.** This model's sensitivity
+  creeps 0.58 → 0.69 K/(W m⁻²) across the whole span with no peak, against their spike to 6.5.
+  `cloudCover()` saturates on vapour and carries no stability or temperature term, so there is no
+  mechanism for a cloud-albedo minimum. That is now its own `GAP` row, measured as a sensitivity
+  rather than as a temperature, because a sensitivity is the thing that is absent.
+
+  Worth saying plainly: **their own two papers straddle this model.** Wolf & Toon 2014 has 312.9 K
+  at +15.5%, "well short of moist and runaway greenhouse states" — which is this model. Wolf &
+  Toon 2015 is already at 331.9 K by +12.5%. Reproducing the 2015 transition would move the model
+  *away* from the 2014 result it currently matches.
+
+  **And a claim that stood here was simply false**, which is worth recording because of how it
+  was made. It said a stable 362.8 K root "does not exist on its curve", on the grounds that the
+  air would have to radiate 30% of σT⁴ where this model radiates 61% and is still climbing. That
+  was measured on the **saturated** curve — the one `runawayLimit()` scans — and read as the
+  model's ceiling. It is not the curve the model integrates. What `update()` actually emits is the
+  82/18 moist/dry mix, and **that curve turns over**: 334.4 W/m² at 370 K at RH 0.65, 312.3 W/m²
+  at 360 K at RH 0.85. The root exists; the unstable one at 370–380 K in the basin scan above *is*
+  that root. The same sentence also said "at fixed relative humidity", and RH is not fixed — it is
+  `0.34 + 0.44·wetSky`, and it *rises* as the ocean enters the sky, which is the opposite of the
+  convective stabilisation Wolf & Toon describe. A saturated-column diagnostic read as a ceiling,
+  twice over.
 
   The comparison worth making alongside it is O'Malley-James et al. (2013), whose 1D energy balance
   is the closest thing in the literature to what this model actually is. Their Figure 5 has Earth at
   roughly **490 K by 2.8 Gyr**, where this model has 318 K, and a runaway at 2.8 Gyr against this
   model's 3.22. Leconte et al. (2013) is the reason to expect a 1D column to run hot: dry subsiding
   air under the Hadley circulation lifts the runaway threshold to about 375 W/m², and one column
-  cannot represent it. So the modern 3D work says O'Malley-James is too hot, and this model is
-  cooler than **both**; being on the right side of one disagreement is not the same as being right.
-
-  There is a further disagreement about the ending itself. Wolf & Toon expect rapid water loss from
-  that +21% atmosphere, and the oceans gone "before the solar constant has appreciably increased
-  further" — Earth as a desert planet, with no thermal runaway needed. This model still holds
-  0.9973 EO at +2.8 Gyr and then converts the remainder in under two kiloyears. Not tuned away:
-  closing twelve kelvin means moving the humidity or the cloud response, and both are pinned on
-  present-day Earth by anchors above.
+  cannot represent it. So the modern 3D work says O'Malley-James is too hot — and with CO₂ held
+  fixed this model is no longer cooler than both, it is between them.
 
 * **The Hycean habitable zone's inner edge is far too close to the star.** Innes, Tsai &
   Pierrehumbert (2023) put it at 1.6 AU for a 1 bar H₂/He envelope around a G star and 3.85 AU for
