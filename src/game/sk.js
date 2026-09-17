@@ -228,8 +228,8 @@ export const SK = {
       'Ako rýchlo ubúda tekutá voda — vyvarená, premenená pod horúcou vrstvou alebo stratená do vesmíru. Záporné, kým more mizne, kladné, kým sa vracia.',
     'Water below': 'Voda pod ňou',
     'Ocean top': 'Vrch oceánu',
-    'There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.':
-      'Pri tejto teplote niet povrchu: vzduch a voda pod ním sú jedna tekutina. Toto je jej vrch.',
+    'At this temperature the air and the water below it are one fluid, with no boundary between them. This is the top of it; the ground is further down.':
+      'Pri tejto teplote sú vzduch a voda pod ním jedna tekutina, bez rozhrania medzi nimi. Toto je jej vrch; zem je ešte nižšie.',
     'The bulk of the water the hot layer has not converted yet. It is not held at the temperature it started with -- heat crosses the boundary above it and warms it -- but it crosses slowly, because an ocean heated from above is stably stratified, and a column hundreds of kilometres deep takes a long time to feel it.':
       'Väčšina vody, ktorú horúca vrstva ešte nepremenila. Nedrží si teplotu, s ktorou začala — teplo cez rozhranie nad ňou prechádza a ohrieva ju — no prechádza pomaly, lebo oceán ohrievaný zhora je stabilne vrstvený a stovky kilometrov hlboký stĺpec to pocíti až po dlhom čase.',
     'mean surface {0} °C': 'priemer na povrchu {0} °C',
@@ -369,7 +369,10 @@ export const SK = {
     'thermal boundary': 'tepelné rozhranie',
     '{0} W/m² across it': 'prechádza ním {0} W/m²',
     'silicate interior': 'silikátové vnútro',
-    'no surface': 'bez povrchu',
+    // „bez povrchu“ to hovorilo predtým a bolo to nesprávne: superkritická
+    // voda nemá v sebe rozhranie kvapalina–para, ale planéta pod ňou dno má.
+    'no liquid-vapour boundary': 'bez rozhrania kvapalina–para',
+    'the sea is in it': 'more je v nej',
     'no boundary': 'bez rozhrania',
     'still liquid': 'stále tekutý',
     'frozen over': 'zamrznutý',
@@ -594,7 +597,7 @@ export const SK = {
     buriedOcean: { name: 'Pochovaný oceán',
       blurb: 'Nekontrolovateľný skleníkový efekt s oceánom pod ním. Rovnováha neexistuje pri žiadnej teplote a more sa dvíha do neba — lenže vody je tu viac, než koľko nebo pojme, takže zvyšok zostáva tekutý, pochovaný pod parou či superkritickou tekutinou a chladnejší než povrch, pretože teplo sa k nemu musí premiešať cez stabilný vztlakový gradient (Pierrehumbert a Furth 2023). Vrstva postupuje k stredu geologicky pomaly namiesto naraz: pár stoviek oceánov znamená desiatky miliónov rokov. Ten oceán tam naozaj je, dlho po tom, čo povrch prestal byť povrchom.' },
     supercriticalEnvelope: { name: 'Superkritická obálka',
-      blurb: 'Za kritickým bodom niet povrchu. Kvapalina a para sú jedna tekutina, atmosférická adiabata plynulo prechádza do superkritickej vodnej adiabaty a pokračuje do vnútra planéty — nikde nie je rozhranie, ktoré by sa dalo nazvať oceánom (Pierrehumbert a Furth 2023). Ktorú planétu dostanete, závisí od cesty: svet, ktorý bol vždy horúci, sa ustáli takto, kým ten, ktorý najprv vychladol a zohrial sa až potom, strávi dlhý čas ako horúca vrstva ležiaca na studenej vode, než sa ním stane.' },
+      blurb: 'Za kritickým bodom kvapalina a para prestávajú byť odlišné veci. Atmosférická adiabata plynulo prechádza do superkritickej vodnej adiabaty a pokračuje do vnútra planéty, takže v tekutine nikde nie je rozhranie, ktoré by sa dalo nazvať hladinou oceánu (Pierrehumbert a Furth 2023). Planéta dno stále má — horúci silikát, alebo ľad VI a VII na svete s dostatkom vody na to, aby vznikli — a prierez ho kreslí; chýba hladina, nie zem. Ktorú planétu dostanete, závisí od cesty: svet, ktorý bol vždy horúci, sa ustáli takto, kým ten, ktorý najprv vychladol a zohrial sa až potom, strávi dlhý čas ako horúca vrstva ležiaca na studenej vode, než sa ním stane.' },
   },
 
   // ---- scenáre -------------------------------------------------------------

@@ -1109,6 +1109,96 @@ function runChecks() {
         `${(gone.world.water.ocean).toExponential(1)} oceans · ${gline.slice(0, 60)}`);
     }
 
+    // ...and the window on the other side of that banner is REAL, which the note
+    // beside the check above used to deny. It claimed a 1-EO Earth converts in
+    // about zero years and that no window existed here at all. Both halves were
+    // wrong, and in different ways.
+    //
+    // The first was a sampling artefact: the walk that measured it stepped
+    // 5 Myr, so it landed either side of the transition every run. Hence the
+    // two-speed march below -- a flat 1 Myr step cannot see the answer and a
+    // flat 500 yr step over 158 Myr is three hundred thousand of them. The
+    // switch is the surface passing 345 K, which is where the coarse samples
+    // stop being informative: 346.5 K one megayear, 861 K the next.
+    //
+    // The second was the classifier, and it is the check that leads here now.
+    // The invariant is the one a player can see: if the cross-section is drawing
+    // liquid water under the lid, the state must not be called one that says
+    // there is none. Reported from play with the screenshot to settle it -- a
+    // panel reading "liquid ocean 2.59 km · 97% not converted" under a banner
+    // reading Steam Runaway Greenhouse. Measured against the old code, 35 of 36
+    // sampled frames with liquid drawn were misnamed; the state lasted 1.5 kyr
+    // where the conversion takes about 35, which is this model's own number --
+    // the 45 kyr for 1 EO that calibrate reports for a 1-EO column.
+    //
+    // Deliberately loose on WHEN and tight on WHAT. The date moves by a few
+    // hundred kiloyears with the step sequence, because a different march
+    // through a stiff transition is a different trajectory; the width, the
+    // liquid and the ordering do not move.
+    {
+      const win = new Simulation({ ...PRESETS.lastOcean.params });
+      const FINE = 1000;
+      let first = null, lastSeen = null, onset = null, worst = null;
+      let drawn = 0, named = 0, yr = 0;
+      while (yr <= 2.5e8) {
+        const coarse = win.world.diag.Tmean < 345;
+        yr += coarse ? 1e6 : FINE;
+        win.runYears(yr - win.world.time, coarse ? 2e6 : FINE);
+        const dw = win.world.diag;
+        const cp = dw.coldPool;
+        // Only the frames where the picture claims liquid under a lid.
+        if (!cp || !(cp.liquidDepth > 1)) { if (first != null) break; continue; }
+        const id = classify(win.world).id;
+        drawn++;
+        if (id === 'buriedOcean') named++;
+        else if (!worst || cp.liquidDepth > worst.m) {
+          worst = { id, m: cp.liquidDepth, un: 1 - (dw.hotLayer ?? 0) };
+        }
+        if (first == null) {
+          first = yr;
+          onset = { ocean: win.world.water.ocean, sky: dw.Tmean, pool: dw.coldT,
+            km: cp.liquidDepth / 1000 };
+        }
+        lastSeen = yr;
+      }
+      check('A drawn ocean under the lid is never called a state with no ocean',
+        drawn > 0 && named === drawn,
+        worst
+          ? `${drawn - named} of ${drawn} frames misnamed — worst `
+            + `${worst.id} over ${(worst.m / 1000).toFixed(2)} km of liquid, `
+            + `${(100 * worst.un).toFixed(0)}% unconverted`
+          : `${drawn} frames, all Buried Ocean`);
+      const width = first == null ? 0 : lastSeen - first + FINE;
+      // Asserted on the POOL and not on `water.ocean`, which is the same mistake
+      // the classifier was making: by the time a cold pool exists at all the
+      // surface reservoir is most of the way into the sky, so 0.19 EO of
+      // "ocean" beside 2.68 km of liquid is the correct reading of a buried
+      // world rather than a thin one. The reservoir is printed as context and
+      // tested on nothing.
+      check('…and Earth’s last ocean is buried for as long as the lid takes to eat it',
+        first != null && width > 5e3 && width < 1.5e5
+          && onset.km > 1 && onset.pool > 350,
+        first == null ? 'never classified as a buried ocean'
+          : `${(width / 1e3).toFixed(1)} kyr at +${(first / 1e6).toFixed(2)} Myr · `
+            + `${onset.km.toFixed(2)} km of liquid at `
+            + `${(onset.pool - 273.15).toFixed(0)} °C under a `
+            + `${(onset.sky - 273.15).toFixed(0)} °C sky, surface reservoir `
+            + `${onset.ocean.toFixed(4)} EO`);
+      // ...and the sampling artefact itself, pinned, so the walk above is not
+      // free to go back to being cheap.
+      const coarse = new Simulation({ ...PRESETS.lastOcean.params });
+      let sawCoarse = false;
+      for (let y = 0; y <= 2.5e8; y += 1e6) {
+        coarse.runYears(y - coarse.world.time);
+        if (classify(coarse.world).id === 'buriedOcean') sawCoarse = true;
+        if (coarse.world.water.ocean < 1e-9 && (coarse.world.diag.hotLayer ?? 0) > 0.99) break;
+      }
+      check('…and a megayear step walks straight over it, which is how it was missed',
+        !sawCoarse && first != null,
+        `1 Myr steps: ${sawCoarse ? 'seen' : 'never seen'}; `
+          + `${FINE} yr steps: ${first != null ? 'seen' : 'never seen'}`);
+    }
+
     // The deep-ice rate costs a column solve, and it was paying it on every step
     // of every world -- 25 microseconds, 28% of the whole step cost, on planets
     // that cannot hold a gram of high-pressure ice. Reported from play as the
@@ -1252,11 +1342,18 @@ function runChecks() {
 
     // The two halves of a runaway, told apart by whether there is still an
     // ocean. "Wet" was doing duty for both, and they are not the same length of
-    // time: measured across a 0.5 to 500 EO sweep, every world's boiling phase
-    // ends with NOTHING liquid within 1 to 135 kyr, while a world whose sea is
-    // too big to boil away stays buried for megayears. So the state with the
-    // ocean in it is Buried Ocean and the one without is Steam Runaway
-    // Greenhouse, and the test is the ocean rather than the surface.
+    // time. Measured across a 0.5 to 500 EO sweep, every world's lid does reach
+    // the bottom -- the state is a stage and not a trap -- but how long that
+    // takes scales with the inventory over three orders of magnitude: 15 kyr at
+    // half an ocean, 33 at one, 2.6 Myr at sixty, 23.6 Myr at five hundred. So
+    // the state with the ocean in it is Buried Ocean and the one without is
+    // Steam Runaway Greenhouse, and the test is the liquid rather than the
+    // surface.
+    //
+    // The numbers in this comment used to read "1 to 135 kyr" for the whole
+    // sweep, and that was the classifier's truncated view rather than the
+    // model's physics: it stopped calling a world buried when the surface
+    // reservoir emptied, which is the beginning of being buried, not the end.
     {
       const rows = [];
       for (const water of [1, 60, 500]) {
@@ -1272,10 +1369,16 @@ function runChecks() {
         rows.push({ water, buried, steam, first,
           liquid: sim.world.water.ocean });
       }
-      // A 1 EO world is dry inside a thousand years and is a steam runaway for
-      // the rest of it; a 500 EO world is buried for megayears.
+      // A 1 EO world is buried for tens of kiloyears; a 500 EO world for tens of
+      // megayears. The bound here used to be `rows[0].buried < 1e4`, and that
+      // number was not a measurement of anything -- it was the classifier
+      // truncating the state at the moment the SURFACE sea emptied, which on a
+      // world being buried is the moment the state begins. With the label
+      // following the liquid, 1 EO is 25 kyr rather than under 1, and the
+      // contrast the check exists for is 700-fold rather than 50.
       check('A runaway with an ocean under it is not the same state as one without',
-        rows[0].buried < 1e4 && rows[2].buried > 1e6 && rows[2].buried > 50 * rows[0].buried,
+        rows[0].buried > 5e3 && rows[0].buried < 1e5
+          && rows[2].buried > 5e6 && rows[2].buried > 100 * rows[0].buried,
         rows.map((r) => `${r.water} EO: buried to ${(r.buried / 1e3).toFixed(0)} kyr`).join(' · '));
       // ...and every one of them ends with the ocean gone, which is what makes
       // the other name the right one for the end state.

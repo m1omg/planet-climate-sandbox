@@ -67,7 +67,10 @@ export function cloudLook(coverMean, pH2Obar) {
 // Past the critical point there is no sea surface and no sky-and-ground: the
 // water is one continuous medium from the rock to the top of the atmosphere,
 // which is the model's own position everywhere else and is what the readout
-// prints as "no surface". A renderer that ignores it paints the rock: a Buried
+// prints as "no liquid-vapour boundary". (It used to print "no surface", which
+// was reported from play as wrong and is: the ROCK is still there, and the
+// cross-section draws it. What the fluid lacks is a phase boundary, not a
+// floor.) A renderer that ignores it paints the rock: a Buried
 // Ocean came out as a lava planet with cracks glowing through, on a world whose
 // own cross-section has two hundred kilometres of liquid water and a thousand
 // of supercritical steam between that rock and the sky.

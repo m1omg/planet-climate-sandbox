@@ -3505,6 +3505,113 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### A screenshot of a state the classifier said was not there
+
+Reported from play, and the screenshot settles it on its own. The banner reads
+**Steam Runaway Greenhouse**. The panel immediately beside it reads:
+
+```
+  steam              177.4 km   -5.1 -> 374 °C   above the critical pressure
+  supercritical        7.39 km   374 -> 514 °C   no surface
+  thermal boundary       26 m    514 -> 153 °C   8.2 W/m² across it
+  liquid ocean         2.59 km   153 -> 153 °C   97% not converted
+  rock
+```
+
+Two and a half kilometres of liquid water, ninety-seven per cent of the column
+untouched, under a state whose own description says "the water is all still here,
+as a massive steam envelope with **nothing liquid under it**". The picture and
+the label were reading the same world and disagreeing about it.
+
+**The label was asking the wrong reservoir.** `stillLiquid` in `classify.js`
+tested `w.water.ocean`, and that is the *surface* sea. On a world being buried it
+empties into the vapour reservoir the moment the surface goes -- by construction,
+because there is no surface left for it to be the depth of. The water has not
+gone anywhere: it is in the cold pool, which `coldPoolStructure` solves from the
+share of the inventory `hotLayer` has not taken, and which the cross-section
+draws as that 2.59 km band. One number said the ocean was gone, the other drew
+it, and the state believed the first.
+
+Measured on Earth's Last Ocean, walking at 1 kyr through the transition:
+
+```
+                                   before      after
+  frames with liquid drawn            36         36
+  named Buried Ocean                   1         36
+  named Steam Runaway                 35          0
+  how long the state lasts         1.5 kyr    36 kyr
+```
+
+Thirty-six kiloyears is not a number chosen to make the fix look good -- it is
+this model's own conversion time, and `calibrate.mjs` has been reporting it as a
+`GAP` row the whole time (**44.96 kyr** for a 1 EO column, against a literature
+range of 20–200). The physics was right, the cross-section was right, the epoch
+panel was right; only the name was wrong.
+
+So the test is the pool: `coldPool.liquidDepth > 1 m`. That is *liquid* rather
+than merely unconverted -- a pool past its own critical point solves as
+supercritical and reports zero -- which is the distinction the old comment beside
+that line wanted and could not get out of a reservoir total. It costs a column
+solve, so it goes last and is guarded by three cheap tests: `covered` is false on
+anything not in a runaway, and the surface test short-circuits it on anything
+that still has a sea. On what is left, the readout is already solving that column
+in order to draw it.
+
+**What else moved:** one label, across every preset at seven epochs each. "Over
+the Edge" now reads Buried Ocean at 10 and 30 kyr, over 2.66 and 1.26 km of
+liquid, and becomes Steam Runaway at 100 kyr when `hotLayer` reaches 1.000 and
+the pool is genuinely gone. Nothing else in the sweep changed at all.
+
+**And it is still a stage rather than a trap**, which is the thing worth checking
+after a change that makes a state last longer. Over a 0.5 to 500 EO sweep every
+world still ends with the lid at the bottom and nothing liquid anywhere; what
+changed is how long that honestly takes:
+
+```
+  0.5 EO    15 kyr        60 EO     2.6 Myr
+    1 EO    33 kyr       300 EO    14.3 Myr
+    5 EO   188 kyr       500 EO    23.6 Myr
+```
+
+The comment those numbers replace claimed the whole sweep was over "within 1 to
+135 kyr". That was never a measurement of the model -- it was this function's own
+truncated view of it, off by three orders of magnitude at the top end, and it had
+been sitting there as evidence that the state could not run away with itself.
+Which it cannot; the evidence was just wrong.
+
+Two checks now. The one that leads is the invariant a player can see: **if the
+cross-section is drawing liquid water under the lid, the state must not be called
+one that says there is none.** The second pins the width against the conversion
+time. Both need the two-speed walk the measurement needed -- 1 Myr steps until
+the surface passes 345 K, then 1 kyr -- and a third check pins *that*, because a
+megayear march walks straight over the whole thing, which is how the previous
+entry below came to claim it did not exist.
+
+**And "no surface" was the same mistake in the row above.** Reported in the same
+breath, and correct: a planet under supercritical steam has a floor. Hot silicate
+usually, or ice VI and VII on a world carrying enough water to make them — and
+the cross-section *draws* that floor, two rows below the band that was claiming
+it did not exist. What supercritical water actually lacks is the boundary between
+liquid and vapour, which is the entire content of being past the critical point
+and says nothing about the ground.
+
+So the band reads `no liquid-vapour boundary` now:
+
+```
+  steam           204.25 km    27 -> 374 °C   above the critical pressure
+  supercritical     7.75 km   374 -> 618 °C   no liquid-vapour boundary
+  thermal boundary    40 m    618 ->  34 °C   9.2 W/m² across it
+  liquid ocean    137.21 km    34 ->  60 °C   100% not converted
+  rock           2244.96 km                   silicate interior
+```
+
+The same two words were on the steam band under a lid, where they were worse:
+that world frequently has a cold pool drawn directly beneath, with a top of its
+own. What is true there is where the sea went, so it says `the sea is in it`. The
+Supercritical Envelope state's own description and the Fluid top tooltip carried
+the claim too, and both now say what is missing is the sea surface rather than
+the planet.
+
 ### A held star, a preset that outlived its name, and water that was not there
 
 Three things reported together, and all three are the same mistake in different
@@ -3568,11 +3675,11 @@ runaway says `sky 590 °C, no liquid left`. The check runs the Last Ocean preset
 forward until `water.ocean` is zero and reads the banner; against the old code it
 says `sky 590 °C, water 373 °C`.
 
-*Genuinely* buried oceans are unaffected, and it is worth saying why the report
-did not find one: a 1-EO Earth converts its ocean to steam in about zero years
-once it goes, which the deep-ice checks already noted. There is no window on this
-planet where a runaway and a surviving ocean coexist for long enough to see. On a
-water world there is, and that is what `buriedOcean` is for.
+*Genuinely* buried oceans are unaffected -- and the sentence that stood here was
+wrong twice over, so it is worth replacing rather than deleting. It said there
+was no window on this planet where a runaway and a surviving ocean coexist for
+long enough to see. There is, it is thirty-six kiloyears wide, and the classifier
+was only naming the first 1.5 of them.
 
 
 ### Four things, and three of them were mine
@@ -4043,6 +4150,27 @@ drive a real Chrome and measure where the first slider actually lands.
 ## Known deviations from the literature
 
 Stated plainly, because a model that hides these is less useful:
+
+* **Earth's far future is fifty kelvin too cool against a 3D GCM, and the disagreements do not
+  all run one way.** Wolf & Toon (2015) run Earth forward under the brightening Sun in CAM4 and get
+  a stable climate at +21% insolation with a **362.8 K** surface, about 1.99 Gyr from now. This
+  model reaches 1.21 S⊕ at the same date — the two luminosity fits agree to four digits — and
+  arrives at **305 K**.
+
+  The comparison worth making alongside it is O'Malley-James et al. (2013), whose 1D energy balance
+  is the closest thing in the literature to what this model actually is. Their Figure 5 has Earth at
+  roughly **490 K by 2.8 Gyr**, where this model has 318 K, and a runaway at 2.8 Gyr against this
+  model's 3.22. Leconte et al. (2013) is the reason to expect a 1D column to run hot: dry subsiding
+  air under the Hadley circulation lifts the runaway threshold to about 375 W/m², and one column
+  cannot represent it.
+
+  So the modern 3D work says O'Malley-James is too hot, and this model is cooler than **both**.
+  Being on the right side of one disagreement is not the same as being right. There is a further
+  one: Wolf & Toon expect Earth to lose its ocean to hydrogen escape in a little over 2 Gyr, before
+  any thermal runaway, where this model still holds 0.9973 EO at +2.8 Gyr and then converts the
+  remainder in under two kiloyears. Reported as a `GAP` row every run, and not tuned away: closing
+  fifty kelvin means moving the humidity or the cloud response, and both are pinned on present-day
+  Earth by anchors above.
 
 * **The Hycean habitable zone's inner edge is far too close to the star.** Innes, Tsai &
   Pierrehumbert (2023) put it at 1.6 AU for a 1 bar H₂/He envelope around a G star and 3.85 AU for
