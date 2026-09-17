@@ -19,6 +19,8 @@ const S = {
   yaw: 0, pitch: 0, spin: 0, sun: [0.62, 0.28, 0.73], starColor: [1, 0.74, 0.66],
   terrain, clouds, bandT, bandIce, oceanFrac: 0.70, waterCap: 1, glaciated: 1, locked: 0,
   cloud: 0.5, steam: 0, pTot: 1.0, co2: 0.0003, nightGlow: 0, time: 0, relief: 1,
+  // A living world, so the vegetation term has something to draw.
+  bio: 1,
 };
 // Two layers now: a cached full-resolution sky, and the planet disc over it.
 const buf = new Uint8ClampedArray(W * H * 4);
@@ -96,5 +98,40 @@ check('fast enough to be usable', ms < 200, `${ms} ms`);
 const ppm = Buffer.alloc(W * H * 3);
 for (let i = 0; i < W * H; i++) { ppm[i*3] = buf[i*4]; ppm[i*3+1] = buf[i*4+1]; ppm[i*3+2] = buf[i*4+2]; }
 writeFileSync('/tmp/software.ppm', Buffer.concat([Buffer.from(`P6\n${W} ${H}\n255\n`), ppm]));
+// A dead world is not drawn as a living one, and this path had no idea.
+//
+// The GL shader gates vegetation on `uBio` -- what the planet is actually
+// supporting -- and its own comment says that was "missing entirely" until it
+// was added. It stayed missing in THIS renderer, which never received `bio` at
+// all, so a world with the biosphere at zero, or one cooked past the point
+// where photosynthesis stops, drew the same ground as a living Earth. Reported
+// from play on a runaway Earth with the clouds switched off, where nothing
+// hides the ground.
+//
+// Tested as "the picture changes", not "there is less green": the vegetation
+// palette here is olive steppe rather than a vivid green, so a hue test reads
+// almost the same as bare sand and would pass whatever the wiring did. What was
+// broken was the wiring, and a difference count is what sees it.
+{
+  const shot = (state) => {
+    const b = new Uint8ClampedArray(W * H * 4);
+    renderSky(b, W, H, state);
+    renderPlanet(b, W, H, state);
+    return b;
+  };
+  const alive = shot({ ...S, bio: 1 }), dead = shot({ ...S, bio: 0 });
+  let disc = 0, moved = 0;
+  for (let i = 0; i < alive.length; i += 4) {
+    if (alive[i + 3] < 10) continue;
+    disc++;
+    const d = Math.abs(alive[i] - dead[i]) + Math.abs(alive[i + 1] - dead[i + 1])
+            + Math.abs(alive[i + 2] - dead[i + 2]);
+    if (d > 12) moved++;
+  }
+  check('a world with nothing alive on it is not drawn as a living one',
+    disc > 0 && moved / disc > 0.04,
+    `${(100 * moved / Math.max(disc, 1)).toFixed(1)}% of the disc changes when the biosphere goes`);
+}
+
 console.log(fail ? '\nthe software fallback is broken' : '\nsoftware fallback works; wrote /tmp/software.ppm');
 process.exit(fail ? 1 : 0);

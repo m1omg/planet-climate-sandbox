@@ -18,7 +18,8 @@ import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { oceanStructure, meltingPressure, waterDensity,
-         columnLayers, T_COLD_POOL, meltingTemperatureIh, iceShell } from './physics/ocean.js';
+         columnLayers, T_COLD_POOL, meltingTemperatureIh, meltingTemperature,
+         iceShell, freezingDepression, freezeShift } from './physics/ocean.js';
 import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity } from './physics/planet.js';
@@ -1339,6 +1340,53 @@ function runChecks() {
     // super-runaway interior of Pierrehumbert (2023), and it is checked against
     // the solver directly further down.
     //
+    // The two halves of the melting curve meet.
+    //
+    // They did not. `meltingTemperatureIh` bottoms out at 251.165 K where ice
+    // Ih stops existing, and `meltingPressure` starts ice VI at 0.632 GPa and
+    // 273.31 K -- so between 0.21 and 0.63 GPa nothing in the file had an
+    // answer, and anything that asked the Ih function got its floor for a
+    // region where the real melting point is climbing back up.
+    {
+      const joins = Math.abs(meltingTemperature(209.85e6) - meltingTemperatureIh(209.9e6)) < 0.01;
+      const vi = meltingPressure(273.31);
+      const backAgain = Math.abs(meltingTemperature(vi) - 273.31) < 0.05;
+      // ...and it climbs all the way across the gap rather than sitting flat.
+      let monotone = true, prev = meltingTemperature(210e6);
+      for (let p = 215e6; p <= 5e9; p *= 1.15) {
+        const T = meltingTemperature(p);
+        if (T < prev - 1e-6) monotone = false;
+        prev = T;
+      }
+      check('The two halves of the melting curve meet, and the gap climbs',
+        joins && backAgain && monotone && meltingTemperature(450e6) > 260,
+        `251.16 K at the ice Ih end, ${meltingTemperature(450e6).toFixed(1)} K across `
+          + `the gap, back to 273.31 at the ice VI onset`);
+    }
+
+    // Salt lowers the freezing point, by the amounts that are measured.
+    {
+      const earth = freezingDepression(35), eut = freezingDepression(233);
+      check('Salinity depresses the freezing point by the measured amounts',
+        Math.abs(earth - 1.922) < 0.01 && Math.abs(eut - 21.1) < 0.01
+          && freezeShift(35) === 0,
+        `${earth.toFixed(3)} K at Earth's 35 g/kg, ${eut.toFixed(1)} K at the `
+          + `NaCl eutectic, and exactly zero shift at Earth`);
+    }
+
+    // Nothing degenerate comes back as a NaN.
+    {
+      const bad = [[0, 9.81, 250, 0.09], [1e6, 0, 250, 0.09], [1e6, 9.81, NaN, 0.09],
+                   [1e6, 9.81, 250, 0], [1e6, 9.81, 250, -1], [1e6, 9.81, Infinity, 0.09]];
+      const finite = bad.every(([c, g, T, F]) => {
+        const r = iceShell(c, g, T, F);
+        return Number.isFinite(r.shellDepth) && Number.isFinite(r.oceanKg)
+          && Number.isFinite(r.baseT) && r.shellDepth >= 0 && r.oceanKg >= 0;
+      });
+      check('A degenerate ice shell returns numbers rather than NaN',
+        finite, `${bad.length} degenerate inputs, all finite`);
+    }
+
     // A world with no water is not in a runaway greenhouse.
     //
     // Reported from play, with a shared link: a bone-dry lava world -- no water

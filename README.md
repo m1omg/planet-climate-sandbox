@@ -3505,6 +3505,76 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### Four things, and three of them were mine
+
+Reported together, and the middle one is the embarrassing one.
+
+**The melting curve, joined properly.** `meltingTemperatureIh` bottoms out at
+251.165 K where ice Ih stops existing, and `meltingPressure` picks ice VI up at
+0.632 GPa and 273.31 K, so between those pressures nothing in the file had an
+answer -- and anything that asked the Ih function got its floor value for a
+region where the real melting point is climbing back up through the ice III and
+V fields. There is a `meltingTemperature` now that spans the whole diagram: Ih
+below, the VI/VII curve inverted above, a logarithmic interpolation between the
+two measured endpoints, and it joins exactly at both ends.
+
+It is deliberately NOT wired into `coldFloor` or `iceShell`, and that is the
+second attempt. The first extended the Ih function itself, which is what those
+two call, and it lifted the cold pool's floor on every world whose surface
+pressure is past the ice Ih field: four deep columns came off their calibration
+and a 9-to-11 GPa column lost the ice VII floor it is supposed to have
+altogether. Those callers want the near-surface melting point of ordinary ice,
+which is what a function named for ice Ih should give them. The full curve is
+there for the places that want the phase diagram, and for the check that pins it.
+
+**NaN.** `iceShell` refused zero water, zero gravity, zero and negative heat
+flux, and a surface already above melting -- and passed a NaN surface
+temperature straight through to a NaN shell depth and a NaN ocean mass, which is
+worse than a wrong number because it spreads. Guarded, with a check over six
+degenerate inputs.
+
+**Earth's Last Ocean never ran away, because I built it with the Sun switched
+off.** A preset whose entire point is "just before the runaway" and which can
+sit at one insolation for ever is not the last anything. That was copied from
+the +1 Gyr world above, where holding the star still IS the point, and not
+thought about again.
+
+Fixing it turned up a worse mistake underneath. The preset had been placed at
+1.20 S+ on a measurement that asked the wrong question: worlds STARTED at each
+insolation and asked whether they kept an ocean. That finds the cold branch of a
+bistable climate. A world dropped in at 1.24 S+ runs away; the same world
+brightening THROUGH 1.24, with its carbon already drawn down, does not. Measured
+along the path a planet actually takes -- one Earth, brightening from today --
+the ocean survives to **3.3 Gyr**, not 2.06. The calibrate row said the model ran
+away 0.8 Gyr early when in fact it holds on half a gigayear longer than
+O'Malley-James et al.: wrong in magnitude and in sign, from measuring the wrong
+thing.
+
+So the preset is back where it was asked for, +2.8 Gyr, and it needed a third
+correction to get there: set with today's CO2 it lands on the hot branch and
+runs away within a megayear of loading. A planet that brightened its way here
+arrives with three billion years of weathering behind it, so the numbers are
+read off that run instead -- 0.24 ppmv of CO2, no oxygen left, 45 C. It now
+loads as an ice-free hothouse with the prokaryotes alive and the complex
+biosphere gone, holds its ocean for about four hundred megayears, and then the
+Sun finishes it.
+
+**A red-hot runaway Earth was still green.** With the clouds off, where nothing
+hides the ground.
+
+The GL shader gates vegetation on `uBio` -- what the planet is actually
+supporting -- and the comment beside it says that was "missing entirely" until
+it was added. It stayed missing in the software renderer, which never received
+`bio` at all: `life` there was warmth and water and elevation, so any band
+sitting between -7 and 49 C grew forests whether or not anything was alive. Two
+renderers, one of them fixed, the twin left behind.
+
+The check that would have caught it is a difference count rather than a hue
+test, and that matters: the vegetation palette here is olive steppe, not a vivid
+green, so counting green pixels reads almost the same as bare sand and would
+have passed whatever the wiring did. What was broken was the wiring. With the
+fix, 18.2% of the disc changes when the biosphere goes; without it, 0.0%.
+
 ### A runaway greenhouse with nothing to run away with
 
 Reported from play, as a shared link: a bone-dry lava world -- no water at all,
@@ -3607,17 +3677,12 @@ Four new rows in calibrate. Two pass: Gough's fit against Schroder & Smith's
 computed solar track, 1.29 against their 1.26 L☉ at 7.13 Gyr and 1.91 against
 their 1.84 at the end of the main sequence -- which is worth knowing, because
 Gough is a fit to the early track and had no business being right that far out.
-Two are gaps, and the second is the interesting one: **this model loses the ocean
-at 2.06 Gyr where O'Malley-James et al. put the runaway at 2.8**. Roughly 0.8 Gyr
-early, from a latitude-resolved energy balance much like this one but with a
-different runaway criterion. Nothing has been tuned to close it.
+Two are gaps: the microbial biosphere, and the runaway itself at 3.4 Gyr against
+O'Malley-James et al.'s 2.8 -- this model holding on a few hundred megayears
+longer, from a latitude-resolved energy balance much like theirs. (That row was
+wrong when first written; see the section above for how.)
 
-That is also why the new preset is called **Earth's Last Ocean** and sits at
-1.20 S+ rather than at the +2.8 Gyr that was asked for: it is placed at this
-model's own last habitable step instead of at a date it cannot reach. What it
-is: an ice-free hothouse at 33 C with six parts per million of CO2, complex life
-down to 8%, and the prokaryotes still there. The swansong biosphere, which is
-the subject of the paper.
+The preset that goes with them is **Earth's Last Ocean**, at +2.8 Gyr.
 
 The red-giant end -- RGB tip at 12.17 Gyr, 2730 L☉, the Sun reaching 1.2 AU and
 Earth engulfed 7.59 Gyr from now, survivable only from 1.15 AU out -- is out of

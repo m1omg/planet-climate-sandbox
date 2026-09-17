@@ -577,21 +577,37 @@ export const PRESETS = {
 
   // Earth at the end of its habitable life: the swansong biosphere.
   //
-  // Asked for as "+2.8 Gyr, just before the runaway", after O'Malley-James et
-  // al. 2013, who put the onset of the runaway there. This model puts it
-  // earlier -- it loses the ocean between 1.20 and 1.24 S+, which on Gough's
-  // curve is 1.9 to 2.2 Gyr from now -- so the preset sits at the model's own
-  // last habitable step rather than at a date it cannot reach. The difference
-  // is recorded as a gap in calibrate.mjs rather than tuned away.
+  // +2.8 Gyr, where O'Malley-James et al. 2013 put the onset of the runaway.
+  // The Sun is 7.37 Gyr old and Gough gives 1.325 S+, which Schroder & Smith's
+  // computed track interpolates to about 1.31 -- close enough that the epoch is
+  // not in question.
   //
-  // What it is: 1.20 S+, solar age 6.47 Gyr, an ice-free hothouse at 33 C with
-  // SIX parts per million of CO2 left. The carbonate-silicate thermostat has
-  // answered a brightening Sun the only way it can, by drawing carbon down, and
-  // it has drawn it below what a plant can fix. Complex life is essentially
-  // gone; the prokaryotes are still here. That is the biosphere both of those
-  // papers are about -- unicellular, and the last thing standing.
+  // It took two goes to place this, and both mistakes are worth recording.
+  // First it shipped with the brightening OFF, copied from the +1 Gyr world
+  // above where holding the star still is the whole point; a world called "the
+  // last ocean" that can sit at one insolation for ever is not the last
+  // anything. Then it was moved to 1.20 S+ on a measurement that was taken the
+  // wrong way -- worlds STARTED at each insolation, which finds the cold branch
+  // of a bistable climate rather than the one a planet brightening through
+  // actually rides. Measured along the real path, Earth keeps its ocean to
+  // 3.3 Gyr, so 2.8 is comfortably inside its life rather than past the end of
+  // it, and the runaway arrives about half a gigayear after this preset loads.
+  //
+  // What it is: an ice-free hothouse with the CO2 drawn down near the
+  // compensation point, complex life essentially gone, and the prokaryotes
+  // still there -- the unicellular biosphere both of those papers are about.
+  // Let it run and the Sun finishes the job.
+  //
+  // The CO2 matters as much as the date, and this is the third thing that took
+  // a second go. Set at today's 280 ppmv the world lands on the HOT branch of a
+  // bistable climate and runs away within a megayear of loading -- which is not
+  // where a planet that brightened its way here arrives. A real one arrives
+  // with its carbon already drawn down by three billion years of weathering
+  // against a rising Sun, and these numbers are read straight off that run
+  // rather than guessed: 0.24 ppmv of CO2, no oxygen left to speak of, 45 C.
   lastOcean: { name: 'Earth’s Last Ocean', icon: '🌅', params: { ...EARTH,
-    realisticGeology: true, startAge: 6.47, insolation: 1.20, startT: 300 } },
+    ...SOLAR_HISTORY, startAge: 7.37, insolation: 1.325,
+    co2Bar: 2.36e-7, o2Bar: 0, ch4Bar: 1.15e-5, startT: 318 } },
 
   // ---- two hot oceans and one that does not stay one ----------------------
   //
