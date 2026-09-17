@@ -3505,6 +3505,88 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### Building Wolf & Toon's hot branch, and finding out why it cannot be built
+
+Asked for directly: implement the paper. The paper is Wolf & Toon 2015, whose
+distinguishing result is that Earth does **not** warm smoothly under a
+brightening Sun — it jumps 312.2 → 331.9 K on three watts between +11.25% and
++12.5% S₀, a climate sensitivity spiking to ~6.5 K/(W m⁻²), and then climbs a
+stable moist-greenhouse branch to **362.8 K at +21% with the ocean still on it**.
+Their stated cause is not the water vapour: *"the sharp transition ... was
+associated with minima in cloud albedo and was caused by the convective
+stabilization of warm atmospheres and subsequent dissipation of low-lying
+clouds."*
+
+It was built, measured, and reverted. The result is negative and worth more
+written down than the feature would have been.
+
+**Two levers, both following the mechanism they name.** A warm, vapour-heavy
+troposphere that stops overturning loses two things, not one: the shallow
+convection that maintains the low cloud deck, and the Hadley subsidence that
+gives 18% of the surface a dry window to radiate through. So the same criterion —
+vapour partial pressure past 0.037 bar, which Earth's 0.012 never reaches —
+drove a multiplier on cloud cover (`cloudBoost`, a hook that was already there
+and unused) and a decline in `FIN_FRACTION`. Neither touches `olr()`, so the
+Simpson–Nakajima anchor is bit-identical by construction.
+
+**What the levers do, on Earth with CO₂ pinned at 355 ppm the way they ran it:**
+
+```
+                    +0%    +10%  +11.25% +12.5%  +15.5%   +21%
+  Wolf & Toon      288.0   <310   312.2   331.9  (312.9)  362.8
+  as it ships      288.5  304.4   306.5   308.7   314.3   327.0
+  cloud 0.25       288.5  307.1   310.3   313.5   321.9   342.7
+  dry branch 0.10  288.5  304.9   307.3   309.8   316.3   332.6
+  dry branch 0.04  288.5  305.3   308.1   310.9   318.3   843.0  ← ocean gone
+  dry branch 0.00  288.5  305.7   308.7   311.8   320.0   847.8  ← ocean gone
+  both, modest     288.5  306.3   309.6   312.7   321.4   841.8  ← ocean gone
+```
+
+**The ceiling is 342.7 K and it is structural.** Every configuration that gets
+further than that loses the ocean instead. Solving the energy balance directly on
+an idealised aquaplanet at 1.21 S₀ shows why, and it is a clean saddle-node: with
+the dry branch at 0.18 there is a stable root at 336.3 K and an unstable one at
+371.3; at 0.12 they have closed to 350.3 and 352.8; below that **they annihilate
+and there is nothing left to settle on.** The fold is real — but it is a fold
+into a runaway, where Wolf & Toon's is a fold onto a higher stable branch.
+
+**Why there is no higher branch.** A stable root at 362.8 K needs the outgoing
+flux to still be rising there faster than the absorbed flux. This model's OLR
+peaks at 318 W/m² (moist only) to 334 (with the dry branch) near 370 K, and
+absorbed at 1.21 S₀ has to be within a few watts of that to sit at 363 K at all —
+so d(OLR)/dT is about **0.26 W/m²/K** while the albedo feedback d(absorbed)/dT is
+about **0.58**. The albedo always wins, and the root above the peak is unstable by
+construction. No setting of a cloud term or a dry-branch term changes that, and
+the measurement above is what checking it looks like.
+
+What *would* change it is the near-infrared steam darkening,
+`a *= 1/(1 + 1.2·pH2O/(1 + pH2O))` — the term that makes a runaway greenhouse dark
+rather than bright. Weaken it and the albedo stops falling and the branch can
+stand up. It is also the term that is doing honest work everywhere else, and
+there is no independent reason to think it is wrong. That is where this stops.
+
+**A note on what "implementing the paper" turned out to mean.** Wolf & Toon's own
+2014 paper has Earth at 312.9 K at +15.5%, "well short of moist and runaway
+greenhouse states", and this model — run their way — gives 314.3 K. It agrees with
+their earlier paper to 1.4 K and disagrees with their later one by 36 K. Every
+configuration above that moves toward 2015 moves away from 2014, and none of them
+arrives: the best, at 342.7 K, is still 20 K short and has no jump at all
+(sensitivity 0.633 against their 6.5).
+
+**One result is worth keeping and is not about Earth.** The cloud term, gated on
+vapour *partial pressure* rather than mole fraction, fires on hydrogen worlds too
+— 20 bar of envelope dilutes a mole fraction out of any Earth-calibrated
+threshold, which is the same dilution failure the convective-inhibition gate
+already documents. Gated that way it moved four rows on worlds it was not tuned
+for: the Hycean inner edge from 1.04 to **0.591 S⊕** (literature 0.391) and from
+0.229 to **0.143** (literature 0.067), the hottest settled Hycean from 323 to
+326 K, and the runaway-greenhouse date from 3.40 to **3.00 Gyr**, inside its
+target range for the first time. That is a real improvement and it is a
+*different* proposal from this one — it also moves the inner edge from 1.2606 to
+1.2291 S⊕, which costs `hotStar`, the `brink` pair, `lastOcean` and the Hycean
+presets their positions. It should be argued on Hycean grounds and recalibrated
+deliberately, not shipped under a banner it does not earn.
+
 ### A screenshot of a state the classifier said was not there
 
 Reported from play, and the screenshot settles it on its own. The banner reads
