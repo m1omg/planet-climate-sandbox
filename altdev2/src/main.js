@@ -1023,7 +1023,7 @@ function updateReadout() {
   $('#stats').innerHTML =
     stat(pool ? t('Fluid top') : t('Mean surface'),
       `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`,
-      '', pool ? t('There is no surface at this temperature: the air and the water below it are one fluid. This is the top of it.') : '') +
+      '', pool ? t('At this temperature the air and the water below it are one fluid, with no boundary between them. This is the top of it; the ground is further down.') : '') +
     // "Ocean top", not "Water below": the banner two rows up now reports the
     // AVERAGE of the pool, and this tile is the temperature at the top of it,
     // immediately under the conductive boundary. Two different numbers about the

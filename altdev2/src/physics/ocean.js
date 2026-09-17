@@ -703,10 +703,20 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // point -- which is where the crossing is, rather than at the water.
     if (cool > 0) add(coolKind, cool, [Math.min(tEff, T_CRIT_H2O), T_CRIT_H2O],
       'above the critical pressure');
-    add('supercritical', superSky, [T_CRIT_H2O, Ts], 'no surface');
+    // "no surface" is what this said, and it was reported from play as wrong,
+    // which it is. Supercritical water has no liquid-vapour boundary IN IT --
+    // that is the whole content of being past the critical point -- but the
+    // planet under it still has a floor, and the cross-section draws that floor
+    // two rows down: hot silicate, or ice VI and VII on a world with enough
+    // water to make them. Saying a world covered in supercritical steam has no
+    // surface confuses a missing phase boundary with a missing planet.
+    add('supercritical', superSky, [T_CRIT_H2O, Ts], 'no liquid-vapour boundary');
   } else {
+    // ...and the same words were on the steam band under a lid, where they were
+    // worse: on that world there is frequently a cold pool drawn directly below,
+    // with a top of its own. What is true there is where the sea went.
     add(lid ? 'steam' : coolKind, sky,
-      tEff < Ts - 0.5 ? [tEff, Ts] : [Ts], lid ? 'no surface' : null);
+      tEff < Ts - 0.5 ? [tEff, Ts] : [Ts], lid ? 'the sea is in it' : null);
   }
 
   if (lid) {

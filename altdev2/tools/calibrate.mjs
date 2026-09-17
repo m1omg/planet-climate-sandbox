@@ -508,6 +508,48 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     '10.0 Gyr. Gough (1981) is a fit to the early track and is not guaranteed ' +
     'to hold this far out; this row is what says whether it does.');
 
+  // Where this model sits against a 3D GCM on the same star, and it is the
+  // sharpest single number it misses.
+  //
+  // Wolf & Toon 2015 (JGR Atmos. 120, 5775) run Earth forward under the
+  // brightening Sun in CAM4 and find a stable climate at +21% insolation with a
+  // 362.8 K surface, which their solar track puts 1.99 Gyr from now. This model
+  // reaches 1.21 S(+) at almost exactly the same date -- the luminosity fits
+  // agree to four digits -- and arrives there more than fifty kelvin cooler.
+  //
+  // It is worth being precise about which way the disagreements run, because
+  // they do not all run the same way. Against O'Malley-James et al. 2013, whose
+  // 1D energy balance is the closest thing in the literature to what this model
+  // is, the gap is the other direction: their Figure 5 has Earth at roughly
+  // 490 K by 2.8 Gyr where this model has 318 K, and Leconte et al. 2013
+  // (Nature 504, 268) is the reason to expect a 1D model to run hot -- dry
+  // subsiding air under the Hadley cells lifts the runaway threshold to about
+  // 375 W/m^2, which one column cannot represent. So the modern 3D work says
+  // O'Malley-James is too hot, and this model is cooler than BOTH. Being on the
+  // right side of one disagreement is not the same as being right.
+  //
+  // Not tuned away, and it should not be: closing it by fifty kelvin means
+  // moving the humidity or the cloud response, and both are anchored on
+  // present-day Earth by rows above. This is here so that it cannot be closed
+  // by accident either.
+  {
+    const wt = new Simulation({ ...PRESETS.earth.params, brightening: 1,
+      emissions: 0, fossilUsed: 0 });
+    let hit = null;
+    for (let gyr = 0.05; gyr <= 2.5 + 1e-9 && hit == null; gyr += 0.05) {
+      wt.runYears(gyr * 1e9 - wt.world.time);
+      if (wt.world.params.insolation >= 1.21) hit = wt.world.diag.Tmean;
+    }
+    deviation('Surface at 1.21 S(+), brightened', hit ?? 0, 355, 370, 'K',
+      'Wolf & Toon 2015 (JGR Atmospheres 120, 5775), 3D CAM4: a stable climate ' +
+      'at +21% insolation with a 362.8 K surface, about 1.99 Gyr from now. This ' +
+      'model reaches the same insolation at the same date and is 50+ K cooler. ' +
+      'Note the disagreements do not all run one way: against the 1D energy ' +
+      "balance of O'Malley-James et al. 2013 this model is cooler too, and " +
+      'Leconte et al. 2013 says a 1D model should be expected to run hot. Being ' +
+      'on the right side of one comparison is not being right.');
+  }
+
   // How long the complex biosphere has. Every study since Lovelock & Whitfield
   // 1982 kills it by CO2 starvation rather than by heat: a brightening Sun
   // drives the carbonate-silicate thermostat to draw carbon down, and it goes

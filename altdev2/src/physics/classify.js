@@ -29,7 +29,7 @@ export const STATES = {
   hycean:     { name: 'Hycean World',          color: '#3fbfa8', blurb: 'A water-rich sub-Neptune under a hydrogen envelope, with a liquid ocean at the bottom of it \u2014 hundreds of kilometres deep, standing on high-pressure ice rather than rock. The envelope keeps the surface warm far outside a rocky planet\u2019s habitable zone: the worlds here sit at about a tenth of Earth\u2019s sunlight and are still temperate (Madhusudhan et al. 2021). What the literature also claims, and this model does not produce, is the hot end of the band \u2014 a stable ocean at 400 to 550 K. Here the hottest Hycean whose energy budget actually closes is 335 K and anything warmer runs away instead, because the stabiliser that holds the hot branch up is vertical structure a semi-grey scheme has nowhere to put. So this is the temperate Hycean, said plainly \u2014 and the reading of any real planet as Hycean at all is contested.' },
   lowSunHycean: { name: 'Low Sunlight Hycean',     color: '#4a7fb5', blurb: 'A Hycean world with effectively no starlight, holding a liquid ocean on its own internal heat under a deep hydrogen envelope. It needs the envelope to be thick: at these temperatures the greenhouse is doing all the work, and the ocean is liquid because of the pressure over it rather than because of anything the star does. The free-floating and far-orbit version of the state.' },
   buriedOcean: { name: 'Buried Ocean',        color: '#7a5fa8', blurb: 'A runaway with an ocean still under it. There is no equilibrium at any temperature and the sea is going into the sky \u2014 but there is more water here than the sky can take, so what is left is liquid, buried under steam or supercritical fluid, and cooler than the surface because heat has to be mixed down against a stable buoyancy gradient to reach it (Pierrehumbert & Furth 2023). The lid advances toward the centre over geological time instead of arriving all at once: a few hundred oceans buys tens of millions of years of it. There really is an ocean down there, long after the surface stopped being one.' },
-  supercriticalEnvelope: { name: 'Supercritical Envelope', color: '#a05fc0', blurb: 'Past the critical point there is no surface. The liquid and the vapour are one fluid, the atmospheric adiabat runs seamlessly into the supercritical water adiabat and down into the interior, and there is no boundary anywhere to call an ocean (Pierrehumbert & Furth 2023). Which planet you get depends on the path: a world that was always hot equilibrates like this, while one that cooled first and was heated later spends a long time as a hot layer sitting on cold water before it becomes this.' },
+  supercriticalEnvelope: { name: 'Supercritical Envelope', color: '#a05fc0', blurb: 'Past the critical point the liquid and the vapour stop being different things. The atmospheric adiabat runs seamlessly into the supercritical water adiabat and down into the interior, so there is no boundary anywhere in the fluid to call an ocean surface (Pierrehumbert & Furth 2023). The planet still has a floor \u2014 hot silicate, or ice VI and VII on a world carrying enough water to make them \u2014 and the cross-section draws it; what is missing is the sea surface, not the ground. Which planet you get depends on the path: a world that was always hot equilibrates like this, while one that cooled first and was heated later spends a long time as a hot layer sitting on cold water before it becomes this.' },
   airless:    { name: 'Airless Rock',         color: '#8a8a8a', blurb: 'Beyond the cosmic shoreline: stellar XUV has stripped the atmosphere faster than the planet’s gravity could hold it. No climate to speak of.' },
 };
 
@@ -110,8 +110,16 @@ export function classify(w) {
   // marker of that rather than the state itself -- an ocean is buried by
   // whatever is on top of it, steam or supercritical fluid alike, and the world
   // that makes this state worth having is the one whose sea is simply too big to
-  // boil away. It cannot swallow a state that lasts: measured, every wet runaway
-  // in a 0.5 to 500 EO sweep has NOTHING liquid left within 1 to 135 kyr.
+  // boil away. It cannot swallow a state that lasts: measured over a 0.5 to
+  // 500 EO sweep, every one of these worlds ends with `hotLayer` at 1.000 and
+  // nothing liquid anywhere -- the lid always reaches the bottom, so this is a
+  // stage and not a trap. How long it takes scales with the inventory: 15 kyr
+  // at half an ocean, 33 at one, 2.6 Myr at sixty, 23.6 at five hundred.
+  //
+  // That line used to say the sweep was over "within 1 to 135 kyr", which was
+  // this function's own truncated view rather than a measurement of the model:
+  // it stopped calling a world buried the moment the SURFACE reservoir emptied.
+  // See the liquid test below for what that cost.
   //
   // Liquid, not merely condensed. Water in the ocean reservoir at a temperature
   // past the critical point is not a liquid, and `coldT` is the temperature that
@@ -151,9 +159,36 @@ export function classify(w) {
   // What actually decides it is how much of the column has gone over, which is
   // the number `advanceHotLayer` integrates and the cross-section draws.
   const unconverted = 1 - clamp(dg.hotLayer ?? 0, 0, 1);
-  const stillLiquid = water > 0.005 && w.water.ocean > 0.02 * water
-    && unconverted > 0.02;
-  const buriedOcean = covered && stillLiquid;
+  // ...and it has to be the liquid the PICTURE is drawing, which is the second
+  // half of the same mistake and took a screenshot to find.
+  //
+  // `w.water.ocean` is the SURFACE sea. On a world being buried it empties into
+  // the vapour reservoir the moment the surface goes, by construction -- there
+  // is no surface for it to be the depth of any more. The water is not gone, it
+  // has moved into the cold pool, which `coldPoolStructure` solves from the
+  // share of the inventory `hotLayer` has NOT taken and the cross-section draws
+  // as "97% not converted". So the state fell through to Steam Runaway
+  // Greenhouse while the panel beside it drew 2.59 km of liquid ocean, and the
+  // conversion it was calling finished had 97% of the column left to eat.
+  //
+  // Measured on Earth's Last Ocean: of 36 sampled frames with liquid drawn
+  // under the lid, ONE was named Buried Ocean and 35 were named Steam Runaway.
+  // The state lasted 1.5 kyr where the conversion takes about 35 -- which is
+  // this model's own number, the 45 kyr for 1 EO that calibrate reports.
+  //
+  // So ask the pool. `coldPool.liquidDepth` is liquid rather than merely
+  // unconverted -- a pool past its own critical point solves as supercritical
+  // and reports zero -- which is the distinction the comment above wanted and
+  // could not get from a reservoir total. It costs a column solve, so it is
+  // last: `covered` is false on everything that is not in a runaway, the
+  // surface test short-circuits it on everything that still has a sea, and on
+  // what is left the readout is already solving that column to draw it.
+  const poolLiquid = () => {
+    const cp = dg.coldPool;
+    return cp ? (cp.liquidDepth ?? 0) > 1 : false;
+  };
+  const buriedOcean = covered && water > 0.005 && unconverted > 0.02
+    && (w.water.ocean > 0.02 * water || poolLiquid());
 
   // Which Hycean state, or none. Returns null when the world has an envelope
   // but nothing under it worth naming, and the chain then carries on to the
