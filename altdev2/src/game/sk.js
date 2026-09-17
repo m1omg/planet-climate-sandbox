@@ -199,6 +199,7 @@ export const SK = {
     // Skladá ho reasonText(); prekladač doň ide ako parameter, aby fyzikálny
     // modul nemusel poznať jazyky.
     'sky {0} °C, water {1} °C': 'obloha {0} °C, voda {1} °C',
+    'sky {0} °C, no liquid left': 'obloha {0} °C, nezostala žiadna kvapalina',
     // Zostup stĺpcom: čo je navrchu, kde sa začína voda a aká je v priemere.
     'envelope {0} °C': 'obal {0} °C',
     'atmosphere {0} °C': 'atmosféra {0} °C',

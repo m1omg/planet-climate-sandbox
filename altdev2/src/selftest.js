@@ -1089,6 +1089,26 @@ function runChecks() {
         !/ocean averages/.test(fline), fline.slice(0, 90));
     }
 
+    // A runaway that has FINISHED converting used to keep the two-number form,
+    // "sky 590 °C, water 373 °C", on a planet with no liquid water anywhere.
+    // `water.ocean` is exactly zero by then; the 373 was `coldT`, a state
+    // variable left pinned at the critical point after the thing it described
+    // stopped existing. Reported from play as a buried ocean the classifier was
+    // refusing to name -- it was not refusing, there was nothing there.
+    {
+      const gone = new Simulation({ ...PRESETS.lastOcean.params });
+      for (let yr = 0; yr <= 3e8; yr += 5e6) {
+        gone.runYears(yr - gone.world.time);
+        if (classify(gone.world).id === 'steamRunaway'
+          && gone.world.water.ocean < 1e-6) break;
+      }
+      const gline = reasonText(gone.world, classify(gone.world));
+      check('A finished runaway does not name water it no longer has',
+        gone.world.water.ocean < 1e-6 && !/water [-\d]+ °C/.test(gline)
+          && /no liquid left/.test(gline),
+        `${(gone.world.water.ocean).toExponential(1)} oceans · ${gline.slice(0, 60)}`);
+    }
+
     // The deep-ice rate costs a column solve, and it was paying it on every step
     // of every world -- 25 microseconds, 28% of the whole step cost, on planets
     // that cannot hold a gram of high-pressure ice. Reported from play as the
@@ -4333,6 +4353,44 @@ function runChecks() {
       photosynthesis(starved) === 0 && starved.water.ocean > 0.001,
       `${(starved.diag.pCO2 * 1e6).toFixed(2)} ppm CO\u2082 with ` +
       `${starved.water.ocean.toFixed(3)} EO of liquid water still there`);
+  }
+
+  // ---- 3n2. the two far-future presets are placed, not quoted ---------------
+  // Both of these shipped wrong once, in the same way: a date taken off a paper
+  // rather than off this model's own trajectory, and a star that was not moving.
+  {
+    // "Earth +1 Gyr" held its Sun still, and a frozen star is not a scenario --
+    // the world sat at 23.0 C and 59 ppmv for ever. What the preset is for is
+    // the mechanism both papers describe, and the mechanism needs a clock: CO2
+    // drawn down against a rising Sun until complex life goes under the
+    // compensation point while the prokaryotes carry on regardless.
+    const fe = new Simulation({ ...PRESETS.futureEarth.params });
+    const S0 = fe.world.params.insolation;
+    fe.runYears(1e9);
+    const S1 = fe.world.params.insolation;
+    const L = fe.world.life ?? {};
+    check('Earth +1 Gyr is a gigayear, not a snapshot with a clock on it',
+      S1 - S0 > 0.08 && (L.euk ?? 1) < 0.05 && (L.pro ?? 0) > 0.9,
+      `${S0.toFixed(3)} → ${S1.toFixed(3)} S⊕, `
+        + `${(fe.world.diag.pCO2 * 1e6).toFixed(1)} ppm CO₂, `
+        + `euk ${(L.euk ?? 0).toFixed(3)} · pro ${(L.pro ?? 0).toFixed(3)}`);
+
+    // "Earth's Last Ocean" was at +2.8 Gyr, off O'Malley-James et al.'s date for
+    // the onset of the runaway -- but this model's Earth, brightened through
+    // from today, keeps its ocean to about +3.22 Gyr, so the preset outlived its
+    // own name by four hundred and fifty megayears. Reported from play as still
+    // being habitable for hundreds of millions of years. It is the last ocean or
+    // it is not; 158 Myr is close enough to watch.
+    const lo = new Simulation({ ...PRESETS.lastOcean.params });
+    let lost = Infinity;
+    for (let yr = 0; yr <= 4e8; yr += 5e6) {
+      lo.runYears(yr - lo.world.time);
+      if (lo.world.water.ocean < 1e-6) { lost = yr; break; }
+    }
+    check('…and Earth’s Last Ocean is the last one, within a couple of hundred Myr',
+      lost > 2e7 && lost < 2.5e8,
+      lost === Infinity ? 'still wet after 400 Myr'
+        : `ocean gone at +${(lost / 1e6).toFixed(0)} Myr`);
   }
 
   // ---- 3o3. the Great Oxidation is a scenario you can lose --------------------

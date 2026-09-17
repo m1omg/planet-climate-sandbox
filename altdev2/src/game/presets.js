@@ -570,44 +570,73 @@ export const PRESETS = {
   superEarth: { name: 'Super-Earth', icon: '🪐', params: { ...EARTH, mass: 3.5, water: 2, n2Bar: 3, co2Bar: 1e-3, insolation: 0.9, outgassing: 1.0, startT: 290 } },
   // Earth's own interior, a billion years further down its curve -- so this one
   // needs `startAge` as well as the switch, or it would run the decay from today
-  // rather than from where this world already is. Brightening stays off: the
-  // 1.09 is the Gough value at 5.567 Gyr and is the point of the preset.
-  futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, realisticGeology: true,
+  // rather than from where this world already is.
+  //
+  // The brightening used to be OFF here, on the reasoning that 1.09 is the Gough
+  // value at 5.567 Gyr and *is* the preset. That was wrong twice over. The 1.09
+  // is where the world STARTS, and `brightnessAfter` is relative to `startAge`,
+  // so switching the star on does not move the opening state by a thousandth --
+  // it only decides whether the next billion years happen. And a frozen star was
+  // not a scenario at all: the world sat at 23.0 C and 59 ppmv for ever, which
+  // is a snapshot with a clock attached rather than Earth's last billion years.
+  //
+  // With the star running, the preset does what its name says. CO2 goes 58 ->
+  // 18 -> 5 ppmv over the gigayear as the weathering thermostat strips it
+  // against a rising Sun, and the eukaryote share goes 0.55 -> 0.02 -> 0.00
+  // while prokaryotes hold at 1.00 the whole way. That split is Graham et al.
+  // and O'Malley-James et al. in one run: complex life ends on carbon, not on
+  // heat, and the microbial biosphere outlasts it by gigayears.
+  futureEarth: { name: 'Earth +1 Gyr', icon: '☀️', params: { ...EARTH, ...SOLAR_HISTORY,
     startAge: 5.567, insolation: 1.09, startT: 292 } },
 
   // Earth at the end of its habitable life: the swansong biosphere.
   //
-  // +2.8 Gyr, where O'Malley-James et al. 2013 put the onset of the runaway.
-  // The Sun is 7.37 Gyr old and Gough gives 1.325 S+, which Schroder & Smith's
-  // computed track interpolates to about 1.31 -- close enough that the epoch is
-  // not in question.
+  // +3.1 Gyr, and the date is measured rather than quoted. O'Malley-James et al.
+  // 2013 put the onset of the runaway "after approximately 2.8 Gyr", and this
+  // preset sat there for a while -- but this model's own Earth, brightened
+  // through from today, keeps its ocean to about +3.22 Gyr, so 2.8 left the
+  // world habitable for four hundred and fifty megayears after loading. A
+  // scenario called "the last ocean" that outlives its own name by half a
+  // gigayear is not the scenario. At 3.1 the ocean has 160 Myr left, which is
+  // close enough to watch and long enough to be a place rather than an event.
   //
-  // It took two goes to place this, and both mistakes are worth recording.
-  // First it shipped with the brightening OFF, copied from the +1 Gyr world
-  // above where holding the star still is the whole point; a world called "the
-  // last ocean" that can sit at one insolation for ever is not the last
-  // anything. Then it was moved to 1.20 S+ on a measurement that was taken the
-  // wrong way -- worlds STARTED at each insolation, which finds the cold branch
-  // of a bistable climate rather than the one a planet brightening through
-  // actually rides. Measured along the real path, Earth keeps its ocean to
-  // 3.3 Gyr, so 2.8 is comfortably inside its life rather than past the end of
-  // it, and the runaway arrives about half a gigayear after this preset loads.
+  // The Sun is 7.667 Gyr old and Gough gives 1.3727 S+. Schroder & Smith's
+  // computed track brackets that age with 1.26 L(sun) at 7.13 Gyr and 1.84 at
+  // 10.0, which interpolates to 1.37 -- the two curves are within a percent of
+  // each other this far out, so the epoch is not in question even though the
+  // fits are. Those two endpoints are calibrate rows in their own right.
   //
-  // What it is: an ice-free hothouse with the CO2 drawn down near the
-  // compensation point, complex life essentially gone, and the prokaryotes
-  // still there -- the unicellular biosphere both of those papers are about.
-  // Let it run and the Sun finishes the job.
+  // Three earlier goes are worth recording, because each was a different way of
+  // being wrong about the same planet. First it shipped with the brightening
+  // OFF, copied from the +1 Gyr world above -- a world that can sit at one
+  // insolation for ever is not the last anything, and that preset has since had
+  // its star switched on too. Then it was moved to 1.20 S+ on a measurement
+  // taken the wrong way: worlds STARTED at each insolation, which finds the cold
+  // branch of a bistable climate rather than the one a planet brightening
+  // through actually rides. Then 1.325, off the paper's date rather than this
+  // model's trajectory.
   //
-  // The CO2 matters as much as the date, and this is the third thing that took
-  // a second go. Set at today's 280 ppmv the world lands on the HOT branch of a
-  // bistable climate and runs away within a megayear of loading -- which is not
-  // where a planet that brightened its way here arrives. A real one arrives
-  // with its carbon already drawn down by three billion years of weathering
-  // against a rising Sun, and these numbers are read straight off that run
-  // rather than guessed: 0.24 ppmv of CO2, no oxygen left to speak of, 45 C.
+  // What it is: a moist greenhouse at 58 C, ice-free, with the CO2 drawn down
+  // to a tenth of a ppmv -- far below the compensation point, so complex life is
+  // already gone and the prokaryotes are the whole biosphere. That is the
+  // unicellular endgame both of those papers are about. Let it run and the Sun
+  // finishes the job in 160 Myr.
+  //
+  // The CO2 matters as much as the date. Set at today's 280 ppmv the world lands
+  // on the HOT branch of a bistable climate and runs away within a megayear of
+  // loading -- not where a planet that brightened its way here arrives. A real
+  // one arrives with its carbon drawn down by three billion years of weathering
+  // against a rising Sun, and every number below is read straight off that run
+  // at +3.10 Gyr rather than guessed -- except the CO2, which the run puts at
+  // 0.043 ppmv and the slider cannot go below 0.1. It is set at the floor, which
+  // is still three orders of magnitude under the compensation point and drifts
+  // down to it over the first few tens of megayears. The check that caught that
+  // is the one holding every preset to a value its own control can reach: a
+  // preset the interface cannot represent is a preset you cannot get back to
+  // after touching anything.
   lastOcean: { name: 'Earth’s Last Ocean', icon: '🌅', params: { ...EARTH,
-    ...SOLAR_HISTORY, startAge: 7.37, insolation: 1.325,
-    co2Bar: 2.36e-7, o2Bar: 0, ch4Bar: 1.15e-5, startT: 318 } },
+    ...SOLAR_HISTORY, startAge: 7.667, insolation: 1.3727,
+    co2Bar: 1e-7, o2Bar: 0, ch4Bar: 9.42e-6, startT: 331 } },
 
   // ---- two hot oceans and one that does not stay one ----------------------
   //

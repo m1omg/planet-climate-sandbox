@@ -3505,6 +3505,76 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
+### A held star, a preset that outlived its name, and water that was not there
+
+Three things reported together, and all three are the same mistake in different
+clothes: a number written down once and never measured again.
+
+**"Earth +1 Gyr" held its Sun still.** The comment beside it said the brightening
+was off because 1.09 is the Gough value at 5.567 Gyr and that *is* the preset.
+That does not survive being asked out loud. `brightnessAfter` is relative to
+`startAge`, so switching the star on does not move the opening state by a
+thousandth -- the 1.09 is where the world starts either way. All the switch
+decides is whether the next billion years happen. With it off they did not: the
+world sat at 23.0 C and 59 ppmv for ever, which is a snapshot with a clock
+attached rather than Earth's last billion years.
+
+Switched on, the preset finally does what its name says, and what it does is the
+thing the two papers are about:
+
+```
+            CO2        eukaryotes   prokaryotes
+    now     58 ppmv       0.55         1.00
+  +500 Myr  18 ppmv       0.02         1.00
+  +1 Gyr     5 ppmv       0.00         1.00
+```
+
+Complex life ends on carbon, not on heat, and the microbial biosphere does not
+notice. That is Graham et al. and O'Malley-James et al. in one run, and before
+this the preset could not show it because nothing in it moved.
+
+**"Earth's Last Ocean" was still habitable for four hundred and fifty
+megayears.** Reported from play, and correct. The preset was at +2.8 Gyr on
+O'Malley-James et al.'s date for the onset of the runaway -- but this model's own
+Earth, brightened through from today, keeps its ocean to about **+3.22 Gyr**
+(the earlier note here said 3.3, from a coarser scan; measured at 50 Myr the
+moist greenhouse starts at 3.10 and the ocean is gone between 3.20 and 3.25).
+Loading a world called "the last ocean" and getting half a gigayear of weather
+is not the scenario.
+
+It is at **+3.1 Gyr** now, with every number read off that trajectory rather than
+off a paper: 7.667 Gyr of solar age, 1.3727 S(+), 0.1 ppmv of CO2 (the run says
+0.043 and the slider floor is 0.1, so it starts at the floor and drifts down),
+no oxygen,
+58 C. It loads as a moist greenhouse with the ocean intact and loses it 160 Myr
+later. Schroder & Smith's computed track brackets that age -- 1.26 L(sun) at
+7.13 Gyr, 1.84 at 10.0 -- and interpolates to 1.37 against Gough's 1.3727, so the
+epoch does not depend on which fit you believe.
+
+**And the banner said "water 373 °C" on a planet with no water.** This is the
+one that was reported as a classification bug -- a buried ocean the classifier
+was refusing to name. It was not refusing. There was nothing there.
+
+A runaway that has finished converting keeps `noSurface` set and has
+`water.ocean` at exactly zero, and the branch that handles that case printed the
+two-number form anyway, on the reasoning that the pool remnant was the only water
+there was. There is no pool remnant. The second number was `coldT`, a state
+variable left pinned at the critical point after the thing it described stopped
+existing, so a world at 590 C with every drop in the sky reported a 373 C ocean
+that had evaporated megayears earlier.
+
+The two-number form is now gated on there actually being liquid, and a finished
+runaway says `sky 590 °C, no liquid left`. The check runs the Last Ocean preset
+forward until `water.ocean` is zero and reads the banner; against the old code it
+says `sky 590 °C, water 373 °C`.
+
+*Genuinely* buried oceans are unaffected, and it is worth saying why the report
+did not find one: a 1-EO Earth converts its ocean to steam in about zero years
+once it goes, which the deep-ice checks already noted. There is no window on this
+planet where a runaway and a surviving ocean coexist for long enough to see. On a
+water world there is, and that is what `buriedOcean` is for.
+
+
 ### Four things, and three of them were mine
 
 Reported together, and the middle one is the embarrassing one.
