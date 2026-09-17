@@ -508,46 +508,76 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     '10.0 Gyr. Gough (1981) is a fit to the early track and is not guaranteed ' +
     'to hold this far out; this row is what says whether it does.');
 
-  // Where this model sits against a 3D GCM on the same star, and it is the
-  // sharpest single number it misses.
+  // Where this model sits against a 3D GCM on the same star.
   //
-  // Wolf & Toon 2015 (JGR Atmos. 120, 5775) run Earth forward under the
-  // brightening Sun in CAM4 and find a stable climate at +21% insolation with a
-  // 362.8 K surface, which their solar track puts 1.99 Gyr from now. This model
-  // reaches 1.21 S(+) at almost exactly the same date -- the luminosity fits
-  // agree to four digits -- and arrives there more than fifty kelvin cooler.
+  // This row was first written at +21% insolation against Wolf & Toon 2015's
+  // 362.8 K, and that was the wrong comparison -- reported as such, and correct.
+  // Their grid does not rise smoothly. Below +10% S0 Earth warms nearly
+  // linearly at about 1 K/(W m^-2) and stays under 310 K; then between +11.25%
+  // and +12.5% the surface jumps 312.2 -> 331.9 K on only 3.0 W/m^2 of extra
+  // forcing, a climate sensitivity of ~6.5 K/(W m^-2). The 362.8 K at +21% is
+  // their hottest simulated atmosphere, far up the steep side of that
+  // transition and already losing water fast.
   //
-  // It is worth being precise about which way the disagreements run, because
-  // they do not all run the same way. Against O'Malley-James et al. 2013, whose
-  // 1D energy balance is the closest thing in the literature to what this model
-  // is, the gap is the other direction: their Figure 5 has Earth at roughly
-  // 490 K by 2.8 Gyr where this model has 318 K, and Leconte et al. 2013
-  // (Nature 504, 268) is the reason to expect a 1D model to run hot -- dry
-  // subsiding air under the Hadley cells lifts the runaway threshold to about
-  // 375 W/m^2, which one column cannot represent. So the modern 3D work says
-  // O'Malley-James is too hot, and this model is cooler than BOTH. Being on the
-  // right side of one disagreement is not the same as being right.
+  // Comparing a model with no steep side against a point on someone else's is
+  // measuring the bifurcation, not the climate: it reported a 58 K gap that
+  // says almost nothing, because on a near-vertical curve the temperature at a
+  // given flux is whatever the curve's shape makes it. Measured where both
+  // models are on the gentle branch the disagreement is 12 K, not 58:
   //
-  // Not tuned away, and it should not be: closing it by fifty kelvin means
-  // moving the humidity or the cloud response, and both are anchored on
-  // present-day Earth by rows above. This is here so that it cannot be closed
-  // by accident either.
+  //     S0        Wolf & Toon        this model
+  //     +10%      under 310 K          296.4 K
+  //     +11.25%      312.2 K           297.4 K
+  //     +15.5%       312.9 K           301.1 K
+  //     +21%         362.8 K           305.1 K
+  //
+  // So the row is at +15.5%, against Wolf & Toon 2014's 312.9 K, which is a
+  // number from the same part of the curve this model actually has. The two
+  // papers disagree with each other across the transition -- 312.9 K at +15.5%
+  // in 2014 against 331.9 K at +12.5% in 2015, different model configurations --
+  // which is its own reason not to treat either as ground truth and not to
+  // anchor on the steep part.
+  //
+  // What the 58 K was really reporting is recorded where it belongs, as the
+  // Hycean row below: this model has no hot branch at all. Its greenhouse goes
+  // 34.2 -> 35.9 K across the whole span, the Simpson-Nakajima margin falls
+  // 31 -> 8 W/m^2, and then equilibrium simply stops existing. A semi-grey
+  // scheme at fixed relative humidity has a monotonic, steeply rising OLR(T)
+  // and nowhere to put the vertical structure that flattens it near the moist
+  // greenhouse, so there is no plateau to climb.
+  //
+  // And the disagreements do not all run one way. Against O'Malley-James et al.
+  // 2013, whose 1D energy balance is the closest thing in the literature to
+  // what this model is, the gap is the other direction: their Figure 5 has
+  // Earth at roughly 490 K by 2.8 Gyr where this model has 318 K, and Leconte
+  // et al. 2013 (Nature 504, 268) is the reason to expect a 1D column to run
+  // hot -- dry subsiding air under the Hadley cells lifts the runaway threshold
+  // to about 375 W/m^2. So the 3D work says O'Malley-James is too hot and this
+  // model is cooler than BOTH. Being on the right side of one disagreement is
+  // not the same as being right.
+  //
+  // Not tuned away, and it should not be: closing twelve kelvin means moving
+  // the humidity or the cloud response, and both are anchored on present-day
+  // Earth by rows above. This is here so it cannot be closed by accident.
   {
     const wt = new Simulation({ ...PRESETS.earth.params, brightening: 1,
       emissions: 0, fossilUsed: 0 });
     let hit = null;
     for (let gyr = 0.05; gyr <= 2.5 + 1e-9 && hit == null; gyr += 0.05) {
       wt.runYears(gyr * 1e9 - wt.world.time);
-      if (wt.world.params.insolation >= 1.21) hit = wt.world.diag.Tmean;
+      if (wt.world.params.insolation >= 1.155) hit = wt.world.diag.Tmean;
     }
-    deviation('Surface at 1.21 S(+), brightened', hit ?? 0, 355, 370, 'K',
-      'Wolf & Toon 2015 (JGR Atmospheres 120, 5775), 3D CAM4: a stable climate ' +
-      'at +21% insolation with a 362.8 K surface, about 1.99 Gyr from now. This ' +
-      'model reaches the same insolation at the same date and is 50+ K cooler. ' +
+    deviation('Surface at 1.155 S(+)', hit ?? 0, 308, 318, 'K',
+      'Wolf & Toon 2014 (GRL 41, 167), 3D CAM4: a 15.5% increase in the solar ' +
+      'constant gives a 312.9 K global mean, "well short of moist and runaway ' +
+      'greenhouse states". Measured on the same branch this model has, rather ' +
+      'than against their 2015 value of 362.8 K at +21% -- that one sits past a ' +
+      'sharp transition (312.2 -> 331.9 K over 3 W/m^2) that this model does ' +
+      'not have, so comparing to it measured the bifurcation rather than the ' +
+      'climate. The missing hot branch is reported by the Hycean row instead. ' +
       'Note the disagreements do not all run one way: against the 1D energy ' +
       "balance of O'Malley-James et al. 2013 this model is cooler too, and " +
-      'Leconte et al. 2013 says a 1D model should be expected to run hot. Being ' +
-      'on the right side of one comparison is not being right.');
+      'Leconte et al. 2013 says a 1D model should be expected to run hot.');
   }
 
   // How long the complex biosphere has. Every study since Lovelock & Whitfield
