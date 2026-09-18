@@ -50,6 +50,13 @@ export const SK = {
     'Show the planet controls': 'Zobraziť ovládanie planéty',
     'Readout and scenarios': 'Údaje a scenáre',
     'Show the readout and scenarios': 'Zobraziť údaje a scenáre',
+    // Tá istá záložka panel aj otvára aj zatvára, takže jej popis hovorí, čo
+    // urobí, nie na čo sa pozerá. Meno panela je samostatný reťazec, aby sa
+    // "Zobraziť"/"Skryť" neprekladalo dvakrát.
+    'the planet controls': 'ovládanie planéty',
+    'the readout and scenarios': 'údaje a scenáre',
+    'Show {0}': 'Zobraziť {0}',
+    'Hide {0}': 'Skryť {0}',
 
     // ---- ovládanie pohľadu a času -----------------------------------------
     'Pause the planet’s rotation': 'Zastaviť rotáciu planéty',

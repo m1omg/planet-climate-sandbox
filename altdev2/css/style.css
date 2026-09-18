@@ -25,9 +25,17 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 
+/* The two column widths are variables because three things have to agree about
+   them: the grid, the edge tab that sits at each panel's inner boundary, and
+   the collapsed state, which is the same number set to zero. They live on
+   `body` rather than on `#app` so the tabs -- which are fixed, and siblings of
+   #app rather than children -- can read them too. */
+body{--col-left:320px;--col-right:360px}
+body.hide-left{--col-left:0px}
+body.hide-right{--col-right:0px}
 #app{
   display:grid;
-  grid-template-columns:320px minmax(0,1fr) 360px;
+  grid-template-columns:var(--col-left) minmax(0,1fr) var(--col-right);
   height:100dvh;
 }
 
@@ -332,25 +340,51 @@ body.software-render #planet{image-rendering:auto}
 .about p.licence{font-size:10.5px;opacity:.78;border-top:1px solid var(--line);padding-top:8px}
 .about a{color:var(--accent)}
 
-/* Panel tabs, phone only. One at each edge, at thumb height, each opening the
-   panel it points at -- rather than one button cycling through three states,
-   which gave no clue what the next tap would do. */
+/* Panel tabs. One at each edge, at thumb height, each toggling the panel it
+   points at -- rather than one button cycling through three states, which gave
+   no clue what the next tap would do.
+   They were phone-only, and that was wrong on any window the drawer breakpoint
+   does not catch: a 1440x675 laptop viewport is neither under 1080 wide nor
+   under 600 tall, so it got the fixed three-column layout with no way to put
+   either panel away. Reported from a 1440x900 MacBook. They are shown at every
+   size now; what changes with the size is what they DO -- below the breakpoint
+   they slide a drawer over the page, above it they collapse a grid column and
+   give the width to the planet. */
 .panel-tab{
-  display:none;position:fixed;top:50%;transform:translateY(-50%);z-index:30;
+  display:flex;position:fixed;top:50%;transform:translateY(-50%);z-index:30;
   align-items:center;gap:6px;padding:14px 8px;
   background:rgba(18,24,40,.92);border:1px solid var(--line);color:var(--fg-dim);
   backdrop-filter:blur(8px);cursor:pointer;
   writing-mode:vertical-rl;font:11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
 }
-#panel-left{left:0;border-left:0;border-radius:0 10px 10px 0}
-#panel-right{right:0;border-right:0;border-radius:10px 0 0 10px;rotate:180deg}
+/* At the panel's inner edge while it is open, at the screen edge once it is
+   collapsed -- the same variable the grid column uses, so the tab cannot drift
+   away from the boundary it marks. */
+#panel-left{left:var(--col-left);border-left:0;border-radius:0 10px 10px 0}
+/* The rotation goes INSIDE `transform`, after the centring translate, rather
+   than in the separate `rotate` property. The individual transform properties
+   are applied before `transform`, so `rotate:180deg` turned the element first
+   and `translateY(-50%)` then ran in the turned frame and pushed it DOWN --
+   leaving this tab exactly its own height below the one opposite it. Visible
+   in any screenshot with both tabs in it, and it had been there since they
+   were written. */
+#panel-right{
+  right:var(--col-right);border-right:0;border-radius:10px 0 0 10px;
+  transform:translateY(-50%) rotate(180deg);
+}
+.panel-tab{transition:left .28s cubic-bezier(.4,0,.2,1),right .28s cubic-bezier(.4,0,.2,1)}
+/* A collapsed column is zero wide, and a zero-wide grid cell still paints its
+   border and still lets a long word poke out of it. */
+body.hide-left #controls,body.hide-right #readout{overflow:hidden;border-width:0}
 .panel-tab[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
 .panel-tab:active{background:rgba(30,40,64,.95)}
 #panel-scrim{display:none}
 
 /* ---------------- responsive ---------------- */
 @media (max-width:1180px){
-  #app{grid-template-columns:290px minmax(0,1fr) 310px}
+  body{--col-left:290px;--col-right:310px}
+  body.hide-left{--col-left:0px}
+  body.hide-right{--col-right:0px}
 }
 /* The drawer layout, and what puts the page into it.
    Three columns need about 1100px before the middle one stops being a slot: at
@@ -370,7 +404,14 @@ body.software-render #planet{image-rendering:auto}
   #controls{left:0}
   #readout{right:0;left:auto;transform:translateX(102%);border-left:1px solid var(--line)}
   body.show-left #controls,body.show-right #readout{transform:translateX(0)}
-  .panel-tab{display:flex}
+  /* Back to the screen edge: in drawer mode the panel is out of the grid, so
+     there is no inner boundary for the tab to sit at, and `--col-left` is about
+     a column that no longer exists. The collapse state is ignored here for the
+     same reason -- a drawer is already put away. */
+  #panel-left{left:0}
+  #panel-right{right:0}
+  body.hide-left #controls,body.hide-right #readout{overflow:visible;border-width:0 1px 0 0}
+  #readout{border-width:0 0 0 1px}
   /* A panel is open: the tab would sit on top of it, and tapping the darkened
      rest of the screen should put it away again. */
   body.show-left #panel-left,body.show-right #panel-right{opacity:0;pointer-events:none}

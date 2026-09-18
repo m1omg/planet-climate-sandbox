@@ -123,6 +123,11 @@ function fastPref() {
   try { return localStorage.getItem(FAST_KEY) === 'on'; } catch { return false; }
 }
 
+// Which panels the player has collapsed, on the column layout. Kept because
+// it is a layout preference like the renderer or the language, and having to
+// re-collapse a panel on every reload is the kind of small tax that makes a
+// control not worth using.
+const HIDE_KEY = `${NS}.hidePanels.v1`;
 const RESET_PAUSED_KEY = `${NS}.resetPaused.v1`;
 function resetPausedPref() {
   try { return localStorage.getItem(RESET_PAUSED_KEY) !== 'run'; } catch { return true; }
@@ -2527,21 +2532,82 @@ function bindControls() {
   });
 
   $('#scenario-banner .sc-close').addEventListener('click', closeScenario);
-  // One tab at each edge, each opening the panel it points at. This used to be a
-  // single button that cycled left -> right -> closed, which gave no clue what
+  // One tab at each edge, each toggling the panel it points at. This used to be
+  // a single button that cycled left -> right -> closed, which gave no clue what
   // the next tap would do and needed three taps to put a panel away.
-  const showPanel = (side) => {
-    const b = document.body;
-    const want = side && !b.classList.contains(`show-${side}`);
-    b.classList.remove('show-left', 'show-right');
-    if (want) b.classList.add(`show-${side}`);
-    $('#panel-left').setAttribute('aria-pressed', String(b.classList.contains('show-left')));
-    $('#panel-right').setAttribute('aria-pressed', String(b.classList.contains('show-right')));
+  //
+  // The same two tabs now serve both layouts, because the alternative is two
+  // pairs of controls for one idea. What differs is what a tab does:
+  //
+  //   drawer  (under 1080 wide or 600 tall)  slide the panel over the page,
+  //                                          one at a time, scrim behind it
+  //   columns (anything wider)               collapse the grid column and give
+  //                                          the width to the planet, either
+  //                                          side or both, independently
+  //
+  // They were phone-only, which left a gap nobody had looked at: a 1440x675
+  // laptop viewport trips neither breakpoint, so it got three fixed columns and
+  // no way to put either panel away. Reported from a 1440x900 MacBook, where
+  // the planet had 745px between two panels that could not be moved.
+  const drawerMode = matchMedia('(max-width:1080px), (max-height:600px)');
+  const panelOpen = (side) => (drawerMode.matches
+    ? document.body.classList.contains(`show-${side}`)
+    : !document.body.classList.contains(`hide-${side}`));
+  const syncPanels = () => {
+    for (const side of ['left', 'right']) {
+      const tab = $(`#panel-${side}`);
+      const open = panelOpen(side);
+      tab.setAttribute('aria-pressed', String(open));
+      // The label is what the button will DO, not what it is looking at: with
+      // the panel open the tab is how you put it away.
+      const name = side === 'left' ? t('the planet controls') : t('the readout and scenarios');
+      tab.setAttribute('aria-label',
+        open ? tp('Hide {0}', name) : tp('Show {0}', name));
+      tab.title = tab.getAttribute('aria-label');
+    }
   };
-  $('#panel-left').addEventListener('click', () => showPanel('left'));
-  $('#panel-right').addEventListener('click', () => showPanel('right'));
-  $('#panel-scrim').addEventListener('click', () => showPanel(null));
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') showPanel(null); });
+  const togglePanel = (side) => {
+    const b = document.body;
+    if (drawerMode.matches) {
+      // One at a time: two drawers over a phone screen leave nothing to look at.
+      const want = side && !b.classList.contains(`show-${side}`);
+      b.classList.remove('show-left', 'show-right');
+      if (want) b.classList.add(`show-${side}`);
+    } else if (side) {
+      b.classList.toggle(`hide-${side}`);
+      try { localStorage.setItem(HIDE_KEY, [...b.classList]
+        .filter((c) => c === 'hide-left' || c === 'hide-right').join(' ')); } catch { }
+    }
+    syncPanels();
+  };
+  // Crossing the breakpoint -- a window dragged wider, a phone turned sideways
+  // -- leaves the other layout's classes on the body, where they would collapse
+  // a column the moment the page went back to being wide. Each layout clears
+  // the one it is not.
+  const onLayoutChange = () => {
+    const b = document.body;
+    if (drawerMode.matches) b.classList.remove('hide-left', 'hide-right');
+    else {
+      b.classList.remove('show-left', 'show-right');
+      try {
+        for (const c of (localStorage.getItem(HIDE_KEY) || '').split(' ')) {
+          if (c === 'hide-left' || c === 'hide-right') b.classList.add(c);
+        }
+      } catch { }
+    }
+    syncPanels();
+  };
+  drawerMode.addEventListener('change', onLayoutChange);
+  onLayoutChange();
+  $('#panel-left').addEventListener('click', () => togglePanel('left'));
+  $('#panel-right').addEventListener('click', () => togglePanel('right'));
+  $('#panel-scrim').addEventListener('click', () => togglePanel(null));
+  // Escape puts a drawer away. It does not un-collapse a column: a collapsed
+  // column is a setting the player chose and kept, not a thing covering the
+  // page, and Escape is already how you close the menus and the scenario card.
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawerMode.matches) togglePanel(null);
+  });
 
   // --- the Worlds / Saves menus --------------------------------------------
   // They open over the panel instead of living in it. Only one at a time, and
