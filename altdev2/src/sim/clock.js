@@ -375,6 +375,7 @@ export class Simulation {
     // simply repeat work. Radiative transfer over eighteen bands is the
     // expensive part of a step, and this saves a third of it.
     w.dtPrev = dt;          // the step actually taken, for the size controller
+    const ringT0 = w.diag.Tmean;
     stepTemperature(w, dt);
     // Refresh the diagnostics before the reservoirs read them, so that
     // weathering, escape and the water partition see the temperature the step
@@ -411,6 +412,24 @@ export class Simulation {
         / brightnessAfter(w.params, Math.max(w.time, 0) / 1e9);
     }
     update(w, dt);
+
+    // Is the temperature ringing rather than moving? The quasi-static shortcut
+    // in maxStep reads this, and it is the only cheap signal that separates a
+    // world slaved to its slow reservoirs -- which moves the same way for many
+    // steps together -- from one being kicked back and forth across its own
+    // equilibrium by a step the shortcut made too long. Counted up fast and
+    // decayed slowly, so one alternation suppresses the shortcut and it takes
+    // eight monotone steps to earn it back; without the asymmetry the world
+    // simply re-enters the cycle on the next step. The 0.25 K floor keeps
+    // ordinary numerical noise from reading as a reversal.
+    const move = w.diag.Tmean - ringT0;
+    const prevMove = w.lastMove ?? 0;
+    const reversed = prevMove !== 0 && (move > 0) !== (prevMove > 0)
+      && Math.min(Math.abs(move), Math.abs(prevMove)) > 0.25;
+    w.ringing = reversed
+      ? Math.min((w.ringing ?? 0) + 1, 8)
+      : Math.max((w.ringing ?? 0) - 0.25, 0);
+    w.lastMove = move;
 
     if (w.time >= this._nextSample) {
       this.sample();
