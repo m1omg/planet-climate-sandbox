@@ -1088,6 +1088,101 @@ try {
   ok(slots.emptyOneClick === 'Earth', 'An empty slot still saves on one click',
     `slot 5 = "${slots.emptyOneClick}"`);
 
+  // ---- the side panels collapse on a window the drawer never caught --------
+  // Reported from a 1440x900 MacBook: the viewport under the browser chrome is
+  // about 1440x675, which is neither under 1080 wide nor under 600 tall, so the
+  // page took the fixed three-column layout and there was no way to put either
+  // panel away. The tabs were phone-only. They are shown at every size now, and
+  // what they do changes with the size, so both halves are driven here -- the
+  // geometry is the whole point and no Node test can see it.
+  {
+    const metrics = (w, h) => call('Emulation.setDeviceMetricsOverride',
+      { width: w, height: h, deviceScaleFactor: 1, mobile: false }, sessionId);
+    const box = () => evaluate(`(() => {
+      const r = (s) => { const e = document.querySelector(s); const b = e.getBoundingClientRect();
+        return { left: Math.round(b.left), width: Math.round(b.width) }; };
+      return { controls: r('#controls'), readout: r('#readout'), canvas: r('#planet'),
+        tabL: r('#panel-left'), tabR: r('#panel-right'),
+        shown: getComputedStyle(document.querySelector('#panel-left')).display,
+        midL: Math.round(document.querySelector('#panel-left').getBoundingClientRect().top
+          + document.querySelector('#panel-left').getBoundingClientRect().height / 2),
+        midR: Math.round(document.querySelector('#panel-right').getBoundingClientRect().top
+          + document.querySelector('#panel-right').getBoundingClientRect().height / 2),
+        label: document.querySelector('#panel-left').getAttribute('aria-label') };
+    })()`);
+    // Waited on rather than slept through: these panels slide on a 300 ms
+    // transition and a fixed delay caught one at 84% of the way in, which reads
+    // as a drawer that did not open.
+    const settled = (sel) => waitFor(`(() => {
+      const e = document.querySelector('${sel}');
+      const now = e.getBoundingClientRect().left;
+      const was = e.__wasAt; e.__wasAt = now;
+      return was !== undefined && Math.abs(now - was) < 0.5;
+    })()`, 5000);
+    const click = async (sel, watch) => {
+      await evaluate(`document.querySelector('${sel}').click()`);
+      await delay(120);
+      if (watch) { await evaluate(`delete document.querySelector('${watch}').__wasAt`); await settled(watch); }
+      else await delay(420);
+    };
+
+    await metrics(1440, 675);
+    await delay(420);
+    const wide = await box();
+    ok(wide.shown !== 'none' && wide.canvas.width > 600,
+      'The panel tabs are there on a laptop window the drawer never caught',
+      `1440x675: tabs ${wide.shown}, planet ${wide.canvas.width}px between the two panels`);
+    // Both centred on the same line. Measured at the CENTRE and not the top,
+    // because the two labels are different lengths and so the two tabs are
+    // different heights -- matching tops would mean they were NOT aligned.
+    // The right one used to sit a whole tab-height lower: `rotate:180deg` is
+    // applied before `transform`, so the centring translateY(-50%) ran in the
+    // turned frame and pushed it down instead of up.
+    ok(Math.abs(wide.midL - wide.midR) <= 2,
+      '...and the two of them line up',
+      `centres at ${wide.midL}px and ${wide.midR}px`);
+
+    await click('#panel-left', '#panel-left');
+    const noLeft = await box();
+    ok(noLeft.controls.width === 0 && noLeft.canvas.width > wide.canvas.width + 200,
+      'Collapsing a panel gives its column to the planet',
+      `controls ${wide.controls.width} → ${noLeft.controls.width}px, `
+      + `planet ${wide.canvas.width} → ${noLeft.canvas.width}px`);
+    ok(noLeft.tabL.left === 0 && /Show/i.test(noLeft.label),
+      '...and its tab follows the edge it marks, and says what it will do',
+      `tab ${wide.tabL.left} → ${noLeft.tabL.left}px, "${noLeft.label}"`);
+
+    await click('#panel-right', '#panel-right');
+    const neither = await box();
+    ok(neither.readout.width === 0 && neither.canvas.width >= 1400,
+      'Both can go at once, and then the planet has the window',
+      `planet ${neither.canvas.width}px of 1440`);
+
+    // Narrow again: the drawer must still be a drawer, and must not inherit a
+    // collapsed column from the layout it just left.
+    await metrics(900, 600);
+    await delay(500);
+    const narrow = await box();
+    ok(narrow.controls.left < 0 && narrow.canvas.width > 800,
+      'Narrow, it is a drawer again and nothing is collapsed into it',
+      `controls parked at ${narrow.controls.left}px, planet ${narrow.canvas.width}px`);
+    await click('#panel-left', '#controls');
+    const open = await box();
+    ok(open.controls.left === 0,
+      '...and the tab still slides it in',
+      `controls ${narrow.controls.left} → ${open.controls.left}px`);
+
+    // ...and going back out restores what was collapsed, rather than either
+    // forgetting it or leaving the drawer's own classes behind.
+    await metrics(1440, 675);
+    await delay(500);
+    const back = await box();
+    ok(back.controls.width === 0 && back.readout.width === 0,
+      'Widening again remembers which panels were put away',
+      `controls ${back.controls.width}px, readout ${back.readout.width}px`);
+    await click('#panel-left'); await click('#panel-right');
+  }
+
   ok(browserErrors.length === 0, 'No browser exceptions or error-level console messages');
   console.log(`Screenshot: ${screenshot}`);
   console.log(`Drowned screenshot: ${drownedScreenshot}`);

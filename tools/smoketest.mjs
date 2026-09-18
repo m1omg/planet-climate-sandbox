@@ -71,6 +71,18 @@ globalThis.history = { replaceState() {} };
 globalThis.requestAnimationFrame = () => 0;
 globalThis.addEventListener = () => {};
 globalThis.devicePixelRatio = 1;
+// A media query, answering no. The page asks one at start-up to tell the drawer
+// layout from the column one, and a stub without this fails main.js at import
+// with a ReferenceError -- which is the stub doing its job, so it is answered
+// here rather than guarded there: matchMedia is an ordinary browser API and the
+// app should be free to call it.
+//
+// `false` is the honest answer for a headless stub with no viewport: it means
+// the column layout, which is the one with more in it.
+globalThis.matchMedia = () => ({
+  matches: false, media: '', addEventListener() {}, removeEventListener() {},
+  addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false,
+});
 // Real shader sources off disk, so start() reaches the GPU path rather than
 // falling straight through to software and leaving that path untested.
 {
