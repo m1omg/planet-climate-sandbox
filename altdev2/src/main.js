@@ -2550,6 +2550,17 @@ function bindControls() {
   // no way to put either panel away. Reported from a 1440x900 MacBook, where
   // the planet had 745px between two panels that could not be moved.
   const drawerMode = matchMedia('(max-width:1080px), (max-height:600px)');
+  // Wide enough for three columns AND a planet worth looking at. Below it the
+  // page opens with both panels folded away, because 320 + 360 of panel out of
+  // 1440 leaves the planet 760px and the timebar too little to lay itself out
+  // in -- which is how this was reported, from a 1440x900 laptop. 1600 is the
+  // line because the common laptop widths (1440, 1512, 1536) are all under it
+  // and the desktop ones are not: a laptop opens with the planet in front, a
+  // desktop opens with everything in view.
+  //
+  // A default, not a rule. The moment either tab is used the choice is written
+  // to localStorage and this stops applying, in both directions.
+  const roomyMode = matchMedia('(min-width:1600px)');
   const panelOpen = (side) => (drawerMode.matches
     ? document.body.classList.contains(`show-${side}`)
     : !document.body.classList.contains(`hide-${side}`));
@@ -2589,15 +2600,20 @@ function bindControls() {
     if (drawerMode.matches) b.classList.remove('hide-left', 'hide-right');
     else {
       b.classList.remove('show-left', 'show-right');
-      try {
-        for (const c of (localStorage.getItem(HIDE_KEY) || '').split(' ')) {
-          if (c === 'hide-left' || c === 'hide-right') b.classList.add(c);
-        }
-      } catch { }
+      let stored = null;
+      try { stored = localStorage.getItem(HIDE_KEY); } catch { }
+      b.classList.remove('hide-left', 'hide-right');
+      // Nothing stored: fold both away unless the window is roomy enough to
+      // show all three columns without crowding the planet.
+      const want = stored == null
+        ? (roomyMode.matches ? [] : ['hide-left', 'hide-right'])
+        : stored.split(' ').filter((c) => c === 'hide-left' || c === 'hide-right');
+      for (const c of want) b.classList.add(c);
     }
     syncPanels();
   };
   drawerMode.addEventListener('change', onLayoutChange);
+  roomyMode.addEventListener('change', onLayoutChange);
   onLayoutChange();
   $('#panel-left').addEventListener('click', () => togglePanel('left'));
   $('#panel-right').addEventListener('click', () => togglePanel('right'));

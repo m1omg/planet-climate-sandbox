@@ -175,7 +175,14 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .chip-row.body-heat .chip{font-size:11px;padding:3px 8px;border-radius:7px}
 
 /* ---------------- stage ---------------- */
-#stage{position:relative;min-width:0;overflow:hidden;background:#05070d}
+/* A container, so the timebar inside it can lay itself out by how much room
+   IT has rather than by how wide the window is. Those stopped being the same
+   question when the panels became collapsible: at 1440px the stage is 760px
+   with both panels open and 1440 with both away, and a viewport media query
+   cannot tell those apart. Nothing inside is position:fixed, so the layout
+   containment this brings costs nothing. */
+#stage{position:relative;min-width:0;overflow:hidden;background:#05070d;
+  container:stage / inline-size}
 #planet{position:absolute;inset:0;width:100%;height:100%;display:block;
   cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 #planet.dragging{cursor:grabbing}
@@ -280,7 +287,12 @@ body.software-render #planet{image-rendering:auto}
 .mark-btn.has-mark{color:var(--accent-2);border-color:var(--accent-2)}
 .rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
 .rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
-.rate input{flex:1;min-width:60px}
+/* 60px was a nub. On one row at 760px of stage the slider is the only thing in
+   .rate that can give, so it gave everything: label 113 + entry 140 + stops 229
+   want 542px of a 166px box, and the slider collapsed to its minimum while the
+   rest overflowed. The floor is what a slider needs to be draggable at all; the
+   container query below is what actually makes room for it. */
+.rate input{flex:1;min-width:120px}
 .rate output{font:11.5px/1 var(--mono);color:var(--accent);min-width:78px;text-align:right;flex:none;transition:color .2s}
 .rate output.throttled{color:var(--accent-2)}
 .rate output.throttled::after{content:' ⏳'}
@@ -435,6 +447,24 @@ body.hide-left #controls,body.hide-right #readout{overflow:hidden;border-width:0
      at this width it shares the first row with four buttons and a checkbox. */
   .clock{min-width:96px;padding:0 2px}
   .clock .t-label{max-width:7ch}
+}
+/* The rate control takes its own row as soon as the timebar cannot give it one.
+   Measured: the buttons, the clock and the mark want about 500px, and .rate
+   wants 113 + 180 + 140 + 229 plus gaps -- so under about 1220px of timebar the
+   two cannot share a line. Wrapped, the slider gets 219px at 760px of stage
+   instead of 60. Keyed to the stage rather than the viewport because collapsing
+   a panel changes this and resizing the window is not the only way to get here. */
+@container stage (max-width:1250px){
+  #timebar{flex-wrap:wrap}
+  .rate{order:5;width:100%;flex-basis:100%}
+}
+/* ...and one step further in, the stops go under the slider rather than beside
+   it. A whole row of its own is still not much for .rate at 760px of stage --
+   the label, the number entry and the stops want 482 of the 728 between them,
+   leaving the slider 130px. Dropping the stops to their own line gives it 457. */
+@container stage (max-width:820px){
+  .rate{flex-wrap:wrap}
+  .rate-stops{flex-basis:100%}
 }
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
