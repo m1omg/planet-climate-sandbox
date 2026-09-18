@@ -465,18 +465,25 @@ export function reasonText(w, st, tr = enFormat) {
     : km >= 10 ? km.toFixed(1) : km.toFixed(2));
   const dg = w.diag, esc = w.escape ?? {};
   const bits = [];
-  // What the number is a temperature OF. Past the critical point there is no
-  // surface -- that is the whole content of the state -- so calling 1676 °C a
-  // mean surface temperature on a world named for the water underneath it
-  // answers a question nobody asked. The sky and the water are two numbers and
-  // the banner carries both: the pool's is `coldT`, the temperature it had when
-  // it last had a surface to be in contact with.
-  // Two questions, and which one the line answers depends on whether there is a
-  // surface. Past the critical point there is not -- that is the whole content
-  // of the state -- so calling 1676 °C a mean surface temperature on a world
-  // named for the water underneath it answers neither. And even where there IS
-  // a surface, a deep ocean's interior lags it: a sea at 239 °C over water at
-  // 74 is two numbers, and the second one is the one the state is about.
+  // What the number is a temperature OF. `Tmean` is the mean of `w.T[]`, which
+  // is the BOTTOM of the column -- the same array `iceFraction` asks whether the
+  // ground is frozen and `supercriticalShare` asks whether the ground is past
+  // the critical point. This model has no top-of-atmosphere temperature at all,
+  // so any line that names `Tmean` for the sky is naming the wrong end of a
+  // gradient that can be five hundred degrees long.
+  //
+  // It was named for the sky here twice, on the argument that past the critical
+  // point there is no surface for it to be the temperature of. That argument is
+  // retired: a world under supercritical water still has a floor, usually hot
+  // rock, and the cross-section drawn from these same numbers has always said
+  // so. On the Over the Edge preset at 580 °C it reads steam 192 km (15 → 374),
+  // supercritical 8.2 km (374 → 580), then rock -- so the sky is 15 °C and 580
+  // is the ground. The banner said "sky 580 °C" three rows above a picture
+  // saying otherwise.
+  //
+  // What is true is that a deep ocean's interior lags its surface: a sea at
+  // 239 °C over water at 74 is two numbers, and the second one is the one the
+  // state is about. That is why the line still has more than one term.
   //
   // Two numbers were not enough, and one of them was the wrong number. "sky 959,
   // water 32" prints the top of the sky and the top of the bulk and nothing in
@@ -532,8 +539,8 @@ export function reasonText(w, st, tr = enFormat) {
     bits.push(tr('ocean averages {0} °C', c(oceanMean)));
   } else if (split && noSurface && (w.water.ocean ?? 0) > 1e-6) {
     // Under a lid with some pool left but no depth to average -- the two-number
-    // form, sky over water.
-    bits.push(tr('sky {0} °C, water {1} °C', (dg.Tmean - 273.15).toFixed(0),
+    // form, ground over water.
+    bits.push(tr('surface {0} °C, water {1} °C', (dg.Tmean - 273.15).toFixed(0),
       (bulk - 273.15).toFixed(0)));
   } else if (noSurface && (dg.totalWater ?? 0) > 0.005) {
     // The conversion has FINISHED: `water.ocean` is zero and every drop is in
@@ -544,7 +551,11 @@ export function reasonText(w, st, tr = enFormat) {
     // "sky 673 °C, water 373 °C" on a planet with no liquid water anywhere, and
     // was reported from play as a buried ocean the classifier was refusing to
     // name. It was not refusing; there was nothing there.
-    bits.push(tr('sky {0} °C, no liquid left', (dg.Tmean - 273.15).toFixed(0)));
+    //
+    // "surface", not "sky", and for the reason at the top of this block: the
+    // steam is 192 km deep with 15 °C at the top of it, and this number is the
+    // ground under all of it.
+    bits.push(tr('surface {0} °C, no liquid left', (dg.Tmean - 273.15).toFixed(0)));
   } else {
     bits.push(tr('mean surface {0} °C', (dg.Tmean - 273.15).toFixed(1)));
     if (split) bits.push(tr('water below {0} °C', (bulk - 273.15).toFixed(0)));
