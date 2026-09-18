@@ -15,11 +15,51 @@
 // make every save and every rewind slightly wrong.
 import { update } from '../physics/climate.js';
 
+// The state the step-size chooser carries between steps, and the smoothed rates
+// it reads as bounds. None of this is climate -- it is the integrator's own
+// memory -- and all of it used to be dropped, on the reasoning that `update()`
+// rebuilds what it needs. It does not: these come back `undefined` and are
+// rebuilt from nothing on the first step after a restore, so `maxStep` loses
+// the bounds it had and the world resumes on a different step sequence from
+// the one it was on.
+//
+// `dtPrev` above all. It was called "a hint ... re-derived within one step",
+// and that is wrong twice over: `maxStep` guards its log-smoothing with
+// `if (prev > 0)`, so at zero the smoothing is not re-derived, it is skipped
+// entirely -- measured at 2.2x the step the same world was actually taking.
+//
+// Kept as its own object so that what is physics and what is bookkeeping stay
+// visibly apart, and so a save written before this existed simply restores
+// without it, exactly as it did before.
+const RUNTIME = ['dtPrev', 'trustOver', 'escape', 'weathering', 'o2Rate', 'o2Flux',
+  'ch4Source', 'ch4Tau', 'iceDeep', 'iceRate', 'iceMark', 'liquidRate', 'vapourRate',
+  'liquidMark', 'vapourMark', 'lifeRoom', 'landIceTarget', 'trapActive', 'emitting',
+  'insolationTarget'];
+
+// Fields that really are derived afresh every step, listed so that the
+// completeness check in selftest.js can tell "deliberately absent" from
+// "forgotten". Anything on a world that is in neither list fails that check.
+export const DERIVED = ['params', 'T', 'water', 'diag', 'history', '_buf', '_solve',
+  'fastPhysics'];
+
+function captureRuntime(w) {
+  const out = {};
+  for (const k of RUNTIME) {
+    const v = w[k];
+    // `null` is carried, `undefined` is not. On several of these the two are
+    // different states -- `iceMark` is null until the first window closes --
+    // and dropping the null restored it as undefined, which is a third state
+    // the model never writes.
+    if (v === undefined) continue;
+    out[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+  }
+  return out;
+}
+
 // Everything about a world that is not derived from the rest of it.
 //
 // Deliberately absent: `history`, which is the run rather than the world and is
-// megabytes of it; `diag`, which update() rebuilds from this; and `dtPrev`,
-// which is a hint to the step-size chooser and is re-derived within one step.
+// megabytes of it; and `diag`, which update() rebuilds from this.
 export function captureWorld(w) {
   return {
     params: { ...w.params },
@@ -51,6 +91,7 @@ export function captureWorld(w) {
     // with its star re-based to whatever brightness it had reached, and the
     // history scrubber would brighten it a second time on the way back.
     evolve0: w.evolve0 ? { ...w.evolve0 } : null,
+    runtime: captureRuntime(w),
   };
 }
 
@@ -86,6 +127,16 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.ch4 != null) w.ch4 = s.ch4;
   if (s.h2 != null) w.h2 = s.h2;
   if (s.he != null) w.he = s.he;
+  // Before update(), so that a zero-length step sees the same bounds and the
+  // same smoothed rates the world had when it was captured. A save from before
+  // this field existed has no `runtime` and restores exactly as it used to.
+  if (s.runtime) {
+    for (const k of RUNTIME) {
+      const v = s.runtime[k];
+      if (v === undefined) continue;
+      w[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+    }
+  }
   update(w, 0);
   return w;
 }

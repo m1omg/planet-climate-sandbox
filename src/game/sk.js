@@ -198,8 +198,11 @@ export const SK = {
     // ---- riadok pod názvom stavu ------------------------------------------
     // Skladá ho reasonText(); prekladač doň ide ako parameter, aby fyzikálny
     // modul nemusel poznať jazyky.
-    'sky {0} °C, water {1} °C': 'obloha {0} °C, voda {1} °C',
-    'sky {0} °C, no liquid left': 'obloha {0} °C, nezostala žiadna kvapalina',
+    // "povrch", nie "obloha": Tmean je spodok stĺpca -- zem pod parou, nie jej
+    // vrch. Pri 580 °C má para nad sebou 15 °C, takže to bol opačný koniec
+    // päťstostupňového gradientu.
+    'surface {0} °C, water {1} °C': 'povrch {0} °C, voda {1} °C',
+    'surface {0} °C, no liquid left': 'povrch {0} °C, nezostala žiadna kvapalina',
     // Zostup stĺpcom: čo je navrchu, kde sa začína voda a aká je v priemere.
     'envelope {0} °C': 'obal {0} °C',
     'atmosphere {0} °C': 'atmosféra {0} °C',

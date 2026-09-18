@@ -16,7 +16,7 @@ import { SCENARIOS } from './game/scenarios.js';
 import { SK } from './game/sk.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
-import { captureWorld, applyWorld } from './game/snapshot.js';
+import { captureWorld, applyWorld, DERIVED } from './game/snapshot.js';
 import { oceanStructure, meltingPressure, waterDensity,
          columnLayers, T_COLD_POOL, meltingTemperatureIh, meltingTemperature,
          iceShell, freezingDepression, freezeShift } from './physics/ocean.js';
@@ -1115,6 +1115,32 @@ function runChecks() {
         gone.world.water.ocean < 1e-6 && !/water [-\d]+ °C/.test(gline)
           && /no liquid left/.test(gline),
         `${(gone.world.water.ocean).toExponential(1)} oceans · ${gline.slice(0, 60)}`);
+
+      // ...and the number it does print is the GROUND, so it must not be named
+      // for the sky. `Tmean` is the mean of `w.T[]`, the bottom of the column --
+      // the same array that decides whether the ground is frozen -- and this
+      // model has no top-of-atmosphere temperature at all. The banner called it
+      // "sky 926 °C" while the cross-section three rows below it, drawn from
+      // these same numbers, read steam 192 km at 15 °C over supercritical over
+      // rock. Reported from play, and nothing here caught it because every check
+      // on this line tested which FACTS it carried and none tested what it
+      // called them.
+      //
+      // Held against the picture rather than against a word, so that renaming
+      // either one without the other fails: the printed temperature has to be
+      // the base of the deepest fluid layer, and the top of the column has to be
+      // far enough below it that calling the pair one number would be absurd.
+      const gdg = gone.world.diag;
+      const gl = columnLayers(gone.world, gdg, 5 * scaleHeight(gdg), scaleHeight(gdg));
+      const fluid = gl.filter((l) => l.kind !== 'rock' && l.T && l.T.length);
+      const base = fluid.length ? fluid[fluid.length - 1].T[fluid[fluid.length - 1].T.length - 1] : NaN;
+      const top = fluid.length ? fluid[0].T[0] : NaN;
+      const printed = Number((gline.match(/(-?\d+(?:\.\d+)?) °C/) || [])[1]);
+      check('…and it calls that temperature the ground, which is what it is',
+        !/sky/i.test(gline) && Math.abs(printed - (base - 273.15)) < 1 && base - top > 100,
+        `banner ${printed} °C · column ${(top - 273.15).toFixed(0)} °C at the top `
+        + `to ${(base - 273.15).toFixed(0)} °C at the bottom, over `
+        + `${fluid.map((l) => l.kind).join(' → ')}`);
     }
 
     // ...and the window on the other side of that banner is REAL, which the note
@@ -5211,6 +5237,53 @@ function runChecks() {
       straight.every((v, i) => v === rewound[i]),
       `${straight.length} state variables identical after 700 kyr, ` +
       `${(a.world.diag.Tmean - 273.15).toFixed(4)} \u00b0C either way`);
+
+    // ...and the stronger property the check above cannot see: that the world
+    // comes back IDENTICAL, rather than merely arriving in the same place after
+    // running far enough for a capped step to wash the difference out.
+    //
+    // The check above uses a 2 kyr cap, which on that world is below the step
+    // the controller would choose, so the cap sets the sequence and a snapshot
+    // missing the controller's own state still passes. It was missing rather a
+    // lot of it: `dtPrev`, `trustOver`, `escape`, `weathering`, `o2Rate`,
+    // `ch4Source`, `ch4Tau`, `iceDeep` and the windowed rate marks all came
+    // back `undefined` and were rebuilt from nothing on the first step. Most of
+    // those are read by `maxStep` as bounds -- dropping `ch4Source` alone moves
+    // it by 3.8x -- so a rewound world resumed on a different step sequence
+    // from the one it was on. On a reported world `maxStep` read 483 years live
+    // and 1076 after the rewind.
+    //
+    // Two halves, because either alone can pass while the other fails: every
+    // field agrees, AND the step controller asks for the same number. The field
+    // sweep is driven from the world's own keys rather than a list written
+    // here, so a field added later and forgotten in `captureWorld` fails this
+    // instead of quietly making every save and every rewind slightly wrong --
+    // which is the property snapshot.js says in its own header it wants.
+    {
+      const live = new Simulation({ ...PRESETS.earlyVenus.params });
+      live.runYears(6e8);
+      const shot = captureWorld(live.world);
+      const back = new Simulation({ ...PRESETS.earlyVenus.params });
+      applyWorld(back, shot, { ...shot.params });
+      const bad = [];
+      const walk = (x, y, path) => {
+        if (x && typeof x === 'object' && !Array.isArray(x) && !ArrayBuffer.isView(x)) {
+          for (const key of Object.keys(x)) walk(x[key], y == null ? undefined : y[key], `${path}.${key}`);
+        } else if (typeof x === 'number') {
+          if (!(typeof y === 'number' && Math.abs(x - y) <= 1e-12 * Math.max(1, Math.abs(x)))) bad.push(path);
+        } else if (x !== y && bad.length < 40) bad.push(path);
+      };
+      for (const key of Object.keys(live.world)) {
+        if (DERIVED.includes(key)) continue;
+        walk(live.world[key], back.world[key], key);
+      }
+      const stepLive = maxStep(live.world, 2.5), stepBack = maxStep(back.world, 2.5);
+      check('\u2026and it comes back identical, step controller included',
+        bad.length === 0 && Math.abs(stepLive - stepBack) <= 1e-9 * stepLive,
+        bad.length
+          ? `${bad.length} fields differ: ${bad.slice(0, 6).join(', ')}`
+          : `every field identical, and maxStep asks for ${stepLive.toFixed(0)} yr either way`);
+    }
 
     // And the point of it: the same moment, one thing changed, another fate.
     const c = new Simulation({ ...P });
