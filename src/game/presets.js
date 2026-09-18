@@ -635,8 +635,8 @@ export const PRESETS = {
   // preset the interface cannot represent is a preset you cannot get back to
   // after touching anything.
   lastOcean: { name: 'Earth’s Last Ocean', icon: '🌅', params: { ...EARTH,
-    ...SOLAR_HISTORY, startAge: 7.667, insolation: 1.3727,
-    co2Bar: 1e-7, o2Bar: 0, ch4Bar: 9.42e-6, startT: 331 } },
+    ...SOLAR_HISTORY, startAge: 7.467, insolation: 1.3405,
+    co2Bar: 1e-7, o2Bar: 0, ch4Bar: 9.41e-6, startT: 352 } },
 
   // ---- two hot oceans and one that does not stay one ----------------------
   //
@@ -649,12 +649,19 @@ export const PRESETS = {
   // inside has to keep erupting the greenhouse back or it cools.
   //
   //   heated by      starlight   volcanism   equilibrium CO2   surface
-  //   its air        1.000 S(+)   4.5x        0.091 bar        49.5 C
-  //   its star       1.256 S(+)     0x        ~0 ppm           49.0 C
+  //   its air        1.000 S(+)   4.5x        0.026 bar        57.6 C
+  //   its star       1.1901 S(+)    0x        ~0 ppm           57.8 C
   //
-  // Half a degree apart and effectively all the carbon on the first. Both
-  // measured at 100 Myr with the imbalance at -0.01 and -0.15 W/m2, so both are
+  // Two tenths of a degree apart and effectively all the carbon on the first.
+  // Both measured at 100 Myr with the imbalance under 0.01 W/m2, so both are
   // settled rather than passing through.
+  //
+  // The pair sat at 49.5 and 49.0 C until the moist-greenhouse cloud terms went
+  // in. Both worlds are global oceans with every band moist, so both cross the
+  // gate; the first warmed eight degrees and its thermostat answered by taking
+  // the CO2 from 0.091 bar down to 0.026, and the second was moved in from
+  // 1.256 S(+) to follow it. Volcanism stayed at 4.5x, because that number is
+  // set by the mantle reservoir rather than by the temperature it lands on.
   //
   // Neither has a biosphere, and that is a modelling choice rather than a claim
   // that nothing could live at 37 C: photosynthesis would put methane and oxygen
@@ -662,9 +669,9 @@ export const PRESETS = {
   hotCarbon: { name: 'Hot Ocean · CO₂', icon: '♨️', params: { ...EARTH, realisticGeology: true,
     // With no continents, seafloor weathering is the only carbon thermostat.
     // Four and a half times Earth's volcanism holds this global ocean near
-    // 50 C without exhausting the finite mantle reservoir over the test run.
-    insolation: 1.0, outgassing: 4.5, co2Bar: 0.091, biosphere: 0,
-    water: 1, landFraction: 0, emissions: 0, fossilUsed: 0, startT: 322.6 } },
+    // 58 C without exhausting the finite mantle reservoir over the test run.
+    insolation: 1.0, outgassing: 4.5, co2Bar: 0.026, biosphere: 0,
+    water: 1, landFraction: 0, emissions: 0, fossilUsed: 0, startT: 330.7 } },
 
   // The same temperature from the other direction, and the giveaway is the air:
   // essentially no CO2 at all.
@@ -674,13 +681,18 @@ export const PRESETS = {
   // on the way to a runaway -- see "The Hot Ocean" scenario, which is about
   // walking a world onto this branch rather than being handed one.
   hotStar: { name: 'Hot Ocean · Starlight', icon: '🔆', params: { ...EARTH, realisticGeology: true,
-    insolation: 1.256, outgassing: 0, co2Bar: 1e-7, biosphere: 0,
-    water: 1, landFraction: 0, emissions: 0, fossilUsed: 0, startT: 322.1 } },
+    insolation: 1.1901, outgassing: 0, co2Bar: 1e-7, biosphere: 0,
+    water: 1, landFraction: 0, emissions: 0, fossilUsed: 0, startT: 330.7 } },
 
   // And the same world with the star turned up until there is no equilibrium
-  // left. The edge is at ONE PART IN THIRTEEN HUNDRED: at 1.338 S(+) this planet
-  // holds a 47.2 C ocean for a hundred million years; at 1.339 it loses the
-  // whole ocean in 13,400 years and ends at 603 C under a steam atmosphere.
+  // left. The edge is at ONE PART IN THIRTEEN HUNDRED: at 1.304 S(+) this planet
+  // holds a 56.0 C ocean for a hundred million years; at 1.305 it loses the
+  // whole ocean in 17,750 years and ends at 576 C under a steam atmosphere.
+  //
+  // The edge sits at 1.3046 and moved here from 1.2606 when the moist-greenhouse
+  // cloud terms went in: thinning the deck lets a world stay on the warm branch
+  // three and a half percent further in before the two roots annihilate. The
+  // pair above was re-measured at the new edge rather than left where it was.
   //
   // It is worth watching rather than reading, because for its first millennium
   // it looks like the two above -- a warm sea, no ice, nothing obviously wrong.
@@ -694,7 +706,7 @@ export const PRESETS = {
   // Turn the ease switch on and slow the clock, or it is over between two frames
   // at anything above 10 kyr/s.
   brink: { name: 'Over the Edge', icon: '🌡️', params: { ...EARTH, realisticGeology: true,
-    insolation: 1.339, outgassing: 1, co2Bar: 1.2e-6, biosphere: 0,
+    insolation: 1.305, outgassing: 1, co2Bar: 1.2e-6, biosphere: 0,
     emissions: 0, fossilUsed: 0, startT: 313.5 } },
 
   // ---- worlds made of water ------------------------------------------------
@@ -767,5 +779,5 @@ export const PRESETS = {
   // will eventually be driven across; the point of watching is how long the hot
   // layer takes to eat down through water that is not helping it.
   coldStart: { name: 'Cold-Start Runaway', icon: '❄️', params: { ...HYCEAN,
-    mass: 10, water: 500, h2Bar: 20, insolation: 0.0988, startT: 300, brightening: 1 } },
+    mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
 };

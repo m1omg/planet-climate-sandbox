@@ -1,7 +1,7 @@
 import { SIGMA, clamp, smoothstep, psatH2O, EO_COLUMN, YEAR, G_EARTH, CO2_EARTH_COL,
          P_TRIPLE_H2O, T_CRIT_H2O, P_CRIT_H2O, CP_WATER,
 } from './constants.js';
-import { olr, planetaryAlbedo, planetaryAlbedoInto, iceFraction, landIceFraction, ALB_SEABED,
+import { olr, planetaryAlbedo, planetaryAlbedoInto, cloudThinning, cloudThinShare, iceFraction, landIceFraction, ALB_SEABED,
          runawayLimit,
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
@@ -106,7 +106,7 @@ function scratch(w) {
     // into. Both are consumed inside the loop that fills them.
     b.aOpt = { oceanFrac: 0, landAlbedo: 0, hasWater: false, waterCap: 0,
                glaciated: 0, freezeShift: 0, pH2O: 0, pTot: 0, slowness: 0, subStellar: 0,
-               cloudWhite: 1 };
+               cloudWhite: 1, cloudBoost: 1, cloudShare: 1 };
     b.aOut = { albedo: 0, cloud: 0 };
   }
   return b;
@@ -536,6 +536,11 @@ export function update(w, dt) {
   const alb = B.alb, out = B.out, cloud = B.cloud, pTotArr = B.pTot;
   const hasWater = totalWater > 1e-5;
   const waterCap = smoothstep(0.004, 0.12, totalWater);
+  // One pass over the bands before the albedo loop: how much of the planet has
+  // crossed into the deep-convective regime. Both cloud terms are scaled by it
+  // -- see the note on cloudThinShare. Held on diag so the Jacobian's albAt
+  // reads the same number rather than recomputing a share from one band.
+  const cloudShare = cloudThinShare(pH2O);
   let Tmean = 0, iceMean = 0, iceArea = 0, absorbed = 0, emitted = 0, pTotMean = 0;
 
   for (let i = 0; i < NBANDS; i++) {
@@ -547,6 +552,8 @@ export function update(w, dt) {
     ao.waterCap = waterCap; ao.glaciated = glaciatedShare; ao.freezeShift = fShift;
     ao.pH2O = pH2O[i]; ao.pTot = pTot; ao.slowness = slowness;
     ao.subStellar = subStellar; ao.cloudWhite = cloudWhite;
+    ao.cloudShare = cloudShare;
+    ao.cloudBoost = cloudThinning(pH2O[i], cloudShare);
     const a = planetaryAlbedoInto(w.T[i], ao, B.aOut);
     alb[i] = clamp(a.albedo + aerAlb, 0, 0.95); cloud[i] = a.cloud;
     const moistOLR = olr(w.T[i], pCO2, pH2O[i], pCH4, pTot, pH2, g, pHe);
@@ -760,7 +767,7 @@ export function update(w, dt) {
     // reaches zero, so leaving the interior out of it would park a tidally
     // heated world at a permanent false imbalance it could never settle out of.
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted,
-    hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, totalWater, superFrac,
+    hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, cloudShare, totalWater, superFrac,
     hazeTau, hazeSW, ch4SW, swTrans,
     // What the renderer draws vents and ash from. Here rather than in the
     // render layer so both renderers read one number and the tests can pin it.
@@ -1080,11 +1087,42 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // Same argument for the hot layer, on its own timescale. A step that moves the
   // boundary a long way in one go jumps over the vapour ceiling it sets, and
   // the ceiling is what the greenhouse is built on.
-  if (w.hotLayer != null && dg.hotBinds && dg.hotCapacity > 0
+  // Gated on the conversion actually MOVING, and not -- as it was -- on
+  // `hotBinds`, which asks whether the hot column is what limits the vapour
+  // ceiling. Those are different questions, and during a buried ocean the
+  // answer to the second is no, so this bound was skipped exactly where it was
+  // needed. What that cost: driven through runCredit() at 10 kyr/s the buried
+  // phase of Earth's Last Ocean lasted 0.05 Myr in 291 steps of 172 years; at
+  // 10 Myr/s it lasted 30.00 Myr in 239 steps of 125 535. The same number of
+  // STEPS either way and seven hundred times the elapsed time -- which is to
+  // say the conversion was advancing per step rather than per year, and how
+  // long a planet's ocean survived depended on the speed the player happened to
+  // be watching at. `room` in runCredit is min(maxStep, rate*0.3, 5e6), so the
+  // display rate sets the step unless the physics sets it first. Here the
+  // physics sets it first.
+  if (w.hotLayer != null && dg.hotCapacity > 0
       && Math.abs(dg.hotTarget - w.hotLayer) > 0.02) {
     const flux = MIX_EFF_DOWN * Math.max(dg.absorbed + dg.Fint, 0);
     if (flux > 0) dt = Math.min(dt, Math.max(0.05 * dg.hotCapacity / (flux * YEAR), 1.0));
   }
+
+  // The cold pool's own temperature is the one integrated state here with no
+  // step bound, and that is a recorded gap rather than an oversight -- it was
+  // tried, twice, and neither version earned its place.
+  //
+  // `advanceColdPool` warms it by flux*dt/cap with cap = inventory x (1 -
+  // hotLayer) x Cp, so as the conversion finishes that capacity goes to zero
+  // and degrees-per-step goes to infinity. Bounding the RATE (2 K a step) held
+  // every world to 119-year steps for the whole 125 Myr before Earth's Last
+  // Ocean even reaches its transition, because the pool normally sits on the
+  // surface it chases and moves nothing however fast it could. Bounding the
+  // DISTANCE (a quarter of the gap to that surface) is silent on a tracking
+  // pool and right in principle -- and still cost the self-test eight times its
+  // runtime, because on any world whose interior lags the gap stays open.
+  // Neither version moved the rate spread it was written to close: 600x either
+  // way, because what actually sets the step there is `maxStep` growing through
+  // the conversion while `rate * 0.3` holds a slow viewer back and lets a fast
+  // one run. See the README; the lever is somewhere else.
 
   // Smooth the step size. Near a tipping point -- the ice edge, above all --
   // the instantaneous tendency of a single band flickers between values from
@@ -1160,6 +1198,13 @@ export function radiativeDamping(w) {
       ao.freezeShift = dg.freezeShift ?? 0;
       ao.pH2O = pwx; ao.pTot = ptx; ao.slowness = dg.slowness;
       ao.cloudWhite = dg.cloudWhite;
+      // From the PERTURBED vapour. Both cloud terms are functions of temperature
+      // through pH2O, so leaving them unperturbed would hide the whole of the
+      // albedo minimum from the implicit solver -- and a Jacobian that disagrees
+      // with the flux is what makes the step controller chatter. `cloudDeepening`
+      // rides inside planetaryAlbedoInto on ao.pH2O and is perturbed with it.
+      ao.cloudShare = dg.cloudShare ?? 1;
+      ao.cloudBoost = cloudThinning(pwx, ao.cloudShare);
       ao.subStellar = dg.lam > 0.01 ? clamp(X[i], 0, 1) : 0.35;
       return planetaryAlbedoInto(t, ao, B.aOut).albedo;
     };

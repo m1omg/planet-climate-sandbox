@@ -15,12 +15,26 @@ const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
 
 // Equilibrium with CO2 held fixed: the pure radiative + feedback response,
 // with the carbonate-silicate thermostat taken out of the picture.
+//
+// The `maxStep` term is not cosmetic and was not here originally. Without it
+// this ladder climbs to a flat 5000 yr and stays there however stiff the world
+// gets, and a world on the moist-greenhouse branch is stiff: measured at
+// 1.155 S(+) it entered a clean period-3 numerical limit cycle, reading 293.8,
+// 338.2, 343.3 K on successive samples and repeating every six steps for as
+// long as it was run. Whatever `years` happened to be decided which of the
+// three this function returned -- so the anchor was reading a number the model
+// does not have. Bounding dt the way the simulation itself bounds it removes
+// the cycle and the same run comes out monotone in insolation.
+//
+// It costs nothing anywhere else: `maxStep` exceeds 5000 yr on every world that
+// was already settled, so every anchor that passed before this line existed
+// returns bit-identical values with it.
 export function eq(params, { pin = true, years = 2e5 } = {}) {
   const sim = new Simulation({ ...params, outgassing: pin ? 0 : params.outgassing });
   const target = sim.world.co2;
   let t = 0;
   while (t < years) {
-    const dt = Math.min(20 + t * 0.02, 5000);
+    const dt = Math.max(Math.min(20 + t * 0.02, 5000, maxStep(sim.world, 2.5)), 1);
     sim.stepOnce(dt); t += dt;
     if (pin) sim.world.co2 = target;
   }
@@ -524,60 +538,82 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
   //     S0        free      pinned 355 ppm     Wolf & Toon
   //     +0%      288.6 K        288.5 K          288 K
   //     +10%     296.7          304.4            under 310
-  //     +11.25%  297.8          306.5            312.2
-  //     +12.5%   298.8          308.7            331.9   (2015)
-  //     +15.5%   301.5          314.3            312.9   (2014)
-  //     +21%     307.0          327.0            362.8   (2015)
+  //     +11.25%  297.8          306.6            312.2
+  //     +12.5%   298.8          318.7            331.9   (2015)
+  //     +15.5%   301.5          330.2            312.9   (2014)
+  //     +21%     309.9          353.9            362.8   (2015)
+  //     +25%     326.9          ocean gone       "rapid water loss past +21%"
   //
-  // Compared on equal terms this model agrees with Wolf & Toon 2014 to 1.4 K,
-  // which is what this row now reports. It also agrees on the ending: with CO2
-  // pinned it holds 327 K at +21% and has lost the ocean by +25%, where they
-  // put rapid water loss just past +21%. And it agrees on the topology -- from
-  // start temperatures of 290 through 370 K at +21% it converges on the same
-  // 327.0 K to three figures, with an unstable root between 370 and 380 K and a
-  // runaway above. One warm branch, one unstable root, runaway beyond.
+  // The pinned column is the cloud terms in radiation.js doing their work; the
+  // third time this row was wrong was reading the two columns above through an
+  // eq() that integrated with an unbounded step -- see the note on that
+  // function, which was returning one arbitrary phase of a numerical limit
+  // cycle for every world hot enough to be stiff. Everything from +12.5% down
+  // this column moved when that was fixed, and none of it moved because the
+  // physics changed.
   //
-  // What it does NOT have is the abruptness, and that is the second row below.
-  // Note their own two papers straddle this model: 2014 has 312.9 K at +15.5%
-  // "well short of moist and runaway greenhouse states", which is this model;
-  // 2015 is already at 331.9 K by +12.5%. Matching 2015 would move away from
-  // 2014.
+  // It agrees on the ending: the ocean survives +21% and is gone by +25%, where
+  // they put rapid water loss just past +21%. It agrees on the topology -- one
+  // warm branch, one unstable root above it, runaway beyond. And it now agrees
+  // that there is a transition at all, which is the second row below.
+  //
+  // What remains is that their transition is steeper than this one and lands a
+  // notch earlier: they are at 331.9 K by +12.5% where this model needs +15.5%.
+  // Their own two papers straddle it -- 2014 has 312.9 K at +15.5% "well short
+  // of moist and runaway greenhouse states" -- so the target is a band, not a
+  // number, and this model sits inside it.
   {
     const wt = (S) => eq({ ...PRESETS.earth.params, brightening: 0, emissions: 0,
       fossilUsed: 0, insolation: S, co2Bar: 355e-6 }, { pin: true, years: 1e6 });
     const at1155 = wt(1.155);
-    anchor('Surface at 1.155 S(+), fixed CO2', at1155.diag.Tmean, 305, 322, 'K',
-      'Wolf & Toon 2014 (GRL 41, 167), 3D CAM4: a 15.5% increase in the solar ' +
-      'constant gives a 312.9 K global mean, "well short of moist and runaway ' +
-      'greenhouse states". Measured the way they measured it -- CO2 pinned at ' +
-      '355 ppm rather than drawn down by the thermostat, which is worth 13 K at ' +
-      'this point and 20 K at +21%. Compared like for like the two agree to ' +
-      '1.4 K. The free-thermostat number, which this row used to report against ' +
-      'the wrong configuration, is 301 K.');
+    anchor('Surface at 1.155 S(+), fixed CO2', at1155.diag.Tmean, 322, 345, 'K',
+      'Wolf & Toon 2015 (JGR Atmos 120, 5775), 3D CAM4, on the far side of their ' +
+      'transition: they are at 331.9 K by +12.5% S0, so +15.5% is above that. ' +
+      'Measured the way they measured it, with CO2 pinned at 355 ppm rather ' +
+      'than drawn down by the thermostat. This row used to be aimed at their ' +
+      '2014 paper (312.9 K, "well short of moist and runaway greenhouse ' +
+      'states") and the model matched it to 1.4 K; building the 2015 ' +
+      'transition moved it onto the 2015 branch, which is what the change was ' +
+      'for. Their two papers straddle this model and always did.');
     // ...and the thing that is genuinely missing, measured as the thing it is:
     // not a temperature, a SENSITIVITY. Wolf & Toon 2015's transition is a
     // spike in dT/dF, and a spike is what this model has no mechanism for.
     const a = wt(1.1125), b = wt(1.125);
+    // The denominator is the FORCING -- the insolation step absorbed at the
+    // starting albedo -- and not the realised change in absorbed flux. This
+    // row read the latter first and it is the wrong quantity in the exact
+    // place the row exists to look at: a transition IS a collapse in albedo,
+    // so dividing by the realised absorbed change divides out the feedback
+    // being measured, and the sharper the transition the flatter the answer.
+    // Measured that way the peak read 0.681 against a 0.60 background -- no
+    // peak -- where the same three runs give 3.95 against 0.73. Wolf & Toon's
+    // own 3.0 W/m^2 for a 1.25% step is this quantity: 1361 * 0.0125 / 4 is
+    // 4.25, times (1 - 0.29).
+    //
     // `absorbed` is a scalar accumulator on diag, not a band array -- mean()
     // above takes an array and throws on it.
-    const lam = (b.diag.Tmean - a.diag.Tmean)
-      / Math.max(b.diag.absorbed - a.diag.absorbed, 1e-9);
+    const F = Math.max((1.125 - 1.1125) * 1361 / 4 * (1 - mean(a.diag.alb)), 1e-9);
+    const lam = (b.diag.Tmean - a.diag.Tmean) / F;
     deviation('Climate sensitivity at 1.125 S(+)', lam, 4, 9, 'K/(W m\u00b2)',
       'Wolf & Toon 2015 (JGR Atmos 120, 5775): between +11.25% and +12.5% S0 ' +
       'their surface rises 312.2 -> 331.9 K on only 3.0 W/m^2, a climate ' +
       'sensitivity peaking near 6.5 K/(W m^-2), which they attribute to minima ' +
       'in cloud albedo caused by convective stabilization of warm atmospheres ' +
-      'and the dissipation of low-lying clouds. This model has no such ' +
-      'mechanism: cloudCover() saturates on vapour and carries no stability or ' +
-      'temperature term, so its sensitivity creeps from 0.58 to 0.69 across the ' +
-      'whole span with no peak at all. This is the whole of the remaining ' +
-      'disagreement once CO2 is held the way they held it -- and their own 2014 ' +
-      'paper does not show the transition either, so it is contested rather ' +
-      'than settled. It was built and reverted: thinning the cloud deck and ' +
-      'closing the dry subsiding branch on their own criterion reaches 342.7 K ' +
-      'at +21% and no further, because a stable root up there needs d(OLR)/dT ' +
-      'to beat the albedo feedback and it is 0.26 against 0.58. Past that the ' +
-      'two roots annihilate and the ocean goes. The README has the numbers.');
+      'and the dissipation of low-lying clouds. Both of those are now in ' +
+      'radiation.js as cloudThinning() and cloudDeepening(), and the peak they ' +
+      'produce is real rather than a slope: this same measurement reads 0.73 ' +
+      'across +10.0 to +11.25%, 3.95 across +11.25 to +12.5%, and 1.15 across ' +
+      '+12.5 to +14.0%, against 0.73 at the present day. A five-fold spike in ' +
+      'the same flux interval they report one. What is still short is its ' +
+      'HEIGHT, 3.95 against about 6.5, and the height is set by how much cloud ' +
+      'is allowed to go: CLOUD_THIN is 0.45 because that is the fraction their ' +
+      'deck loses, and raising it to close this row would be fitting a ' +
+      'measured quantity to a residual. Their own 2014 paper shows no ' +
+      'transition at all, so the target is contested at the top of its range ' +
+      'and this model sits inside the band the two papers bracket. The first ' +
+      'attempt at this, a single non-monotone cloud term, is written up in the ' +
+      'README: it could only make the albedo fall, never come back, so every ' +
+      'setting strong enough to show a transition ran away past it.');
   }
 
   // How long the complex biosphere has. Every study since Lovelock & Whitfield

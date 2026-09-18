@@ -281,18 +281,18 @@ function runChecks() {
   }
 
   // One thousandth of starlight from that branch there is no equilibrium at all.
-  // 1.338 S⊕ holds its ocean for 100 Myr; the preset sits at 1.339 and loses the
+  // 1.304 S⊕ holds its ocean for 100 Myr; the preset sits at 1.305 and loses the
   // whole thing in about 13 kyr. Both halves matter: a preset called Over the
   // Edge that quietly settled would be a lie, and an edge that is not an edge --
   // one where the stable neighbour also cooks -- would be a different lie.
   {
     const over = settle(PRESETS.brink.params, 3e4).world;
-    const under = settle({ ...PRESETS.brink.params, insolation: 1.338 }, 1e8).world;
+    const under = settle({ ...PRESETS.brink.params, insolation: 1.304 }, 1e8).world;
     check('A world a thousandth over the limit crosses it, and its neighbour does not',
       over.water.ocean < 0.05 && over.diag.Tmean > 500
-        && under.water.ocean > 0.9 && under.diag.Tmean < 340,
-      `1.339 S⊕ → ${(over.diag.Tmean - 273.15).toFixed(0)} °C, ocean ` +
-      `${(over.water.ocean * 100).toFixed(0)}% · 1.338 S⊕ → ` +
+        && under.water.ocean > 0.9 && under.diag.Tmean < 375,
+      `1.305 S⊕ → ${(over.diag.Tmean - 273.15).toFixed(0)} °C, ocean ` +
+      `${(over.water.ocean * 100).toFixed(0)}% · 1.304 S⊕ → ` +
       `${(under.diag.Tmean - 273.15).toFixed(1)} °C, ocean ${(under.water.ocean * 100).toFixed(0)}%`);
   }
 
@@ -584,7 +584,7 @@ function runChecks() {
     // A branch nothing can reach is not a feature, it is a claim the readout
     // makes and the model cannot honour. Every state added here is reached from
     // parameters, not asserted from a hand-built diagnostic.
-    const temperate = toSettlement({ h2Bar: 20, insolation: 0.105 });
+    const temperate = toSettlement({ h2Bar: 20, insolation: 0.085 });
     const cold = toSettlement({ h2Bar: 60, insolation: 0.001, internalHeat: 2, startT: 290 });
     // Started hot, and at a twentieth of the insolation the temperate one gets.
     // Settled, every supercritical world above about 0.05 S⊕ ends past 1400 K
@@ -666,8 +666,16 @@ function runChecks() {
     // worlds carry five hundred oceans and take tens of millions of years to
     // mean it.
     {
+      // `coldStart` wanted 'hycean' here, and that was the wrong expectation
+      // rather than a wrong preset: it is called Cold-Start RUNAWAY, it carries
+      // `brightening: 1`, and every other check in this file uses it precisely
+      // because it goes temperate -> runaway -> buried ocean. What it settles to
+      // is the end of that road, not the start of it. It only ever read 'hycean'
+      // because the world used to take longer to get going than this loop runs;
+      // with a cloud minimum on the way it buries in two megayears and the loop
+      // now catches the state the preset is named for.
       const want = { hycean: 'hycean', lowSunHycean: 'lowSunHycean',
-                     superRunaway: 'supercriticalEnvelope', coldStart: 'hycean' };
+                     superRunaway: 'supercriticalEnvelope', coldStart: 'buriedOcean' };
       const wrong = [], seen = [];
       for (const [id, expect] of Object.entries(want)) {
         const sim = new Simulation({ ...PRESETS[id].params });
@@ -1628,10 +1636,15 @@ function runChecks() {
     // changed when the pool stopped being assumed to sit at the surface
     // temperature.
     {
+      // The window is where the lid actually closes, which is a measured thing
+      // and moved when the cloud minimum went in: this world used to take
+      // 59 Myr to grow its lid and now takes 2.3, because a thinning deck lets
+      // it warm far faster. Sampling either side of 2.3 Myr rather than either
+      // side of 59.
       const sim = new Simulation({ ...PRESETS.coldStart.params });
-      sim.runYears(5.9e7);
+      sim.runYears(1.9e6);
       const seq = [];
-      for (let yr = 5.9e7; yr <= 6.05e7; yr += 5e4) {
+      for (let yr = 1.9e6; yr <= 3.1e6; yr += 4e4) {
         sim.runYears(yr - sim.world.time);
         const dgx = sim.world.diag;
         const L = columnLayers(sim.world, dgx, 5 * scaleHeight(dgx), scaleHeight(dgx));
@@ -1649,9 +1662,15 @@ function runChecks() {
         before.length > 3 && after.length > 3
           && before.every((r) => !r.deepSuper && r.liquid > 1e4 && r.ice > 1e4)
           && after.every((r) => r.liquid > 1e4),
-        `before: ${(before[0].liquid / 1000).toFixed(0)} km liquid over `
-          + `${(before[0].ice / 1000).toFixed(0)} km ice, none of it supercritical; `
-          + `after: lid over ${(after[0].liquid / 1000).toFixed(0)} km liquid`);
+        // Guarded: when the window misses the transition this used to throw on
+        // before[0] and take the whole run down, which turns a failed check into
+        // a crash and hides every check after it.
+        before.length && after.length
+          ? `before: ${(before[0].liquid / 1000).toFixed(0)} km liquid over `
+            + `${(before[0].ice / 1000).toFixed(0)} km ice, none of it supercritical; `
+            + `after: lid over ${(after[0].liquid / 1000).toFixed(0)} km liquid`
+          : `window missed the transition: ${before.length} samples without a lid, `
+            + `${after.length} with one`);
 
       // ...and the column does not jump as the lid closes. It used to: the
       // visible ocean was solved at the surface temperature and the pool at its
@@ -1721,6 +1740,12 @@ function runChecks() {
       for (let yr = 0; yr <= 1.2e8 && classify(buried.world).id !== 'buriedOcean'; yr += 1e6) {
         buried.runYears(yr - buried.world.time);
       }
+      // ...and then a good way INTO the state, not just over its threshold. What
+      // is being tested is that a deep steam envelope hides the rock, so there
+      // has to be an envelope: this world used to take 59 Myr to bury and so was
+      // well developed by the time the loop above stopped, and now buries in
+      // two, at which point there is barely any steam over it yet.
+      buried.runYears(2e7);
       // Against a world that IS molten rock in the open: 1652 K, no water at all,
       // so nothing is hiding it and it must keep every lava crack it ever had.
       // The melt itself comes from the band temperature in both renderers; this
@@ -3298,28 +3323,28 @@ function runChecks() {
       const withSmoothing = (smooth) => {
         const s = new Simulation({ ...base, smoothInsolation: smooth });
         s.runYears(3e6, 2e5);
-        s.setParams({ insolation: 1.36 });
+        s.setParams({ insolation: 1.31 });
         s.runYears(2e8, 5e5);
         return s.world;
       };
       const jumped = withSmoothing(false), walked = withSmoothing(true);
       check('The same change of starlight, walked to rather than jumped to, keeps the ocean',
         lostItsOcean(jumped) && walked.water.ocean > 0.8 && walked.diag.Tmean > 320,
-        `1.00 → 1.36 S⊕: at once ${(jumped.diag.Tmean - 273.15).toFixed(0)} °C and no sea, ` +
+        `1.00 → 1.31 S⊕: at once ${(jumped.diag.Tmean - 273.15).toFixed(0)} °C and no sea, ` +
         `walked ${(walked.diag.Tmean - 273.15).toFixed(0)} °C with ${walked.water.ocean.toFixed(2)} EO`);
       check('…and it arrives where it was sent',
-        Math.abs(walked.params.insolation - 1.36) < 1e-6 && walked.insolationTarget == null,
+        Math.abs(walked.params.insolation - 1.31) < 1e-6 && walked.insolationTarget == null,
         `ended at ${walked.params.insolation.toFixed(4)} S⊕ with nothing left to walk`);
       check('…while approach() cannot overshoot whichever way it is going',
-        approach(1.0, 1.36, 1e12) === 1.36 && approach(1.36, 1.0, 1e12) === 1.0
-          && approach(1.0, 1.36, 1e5) > 1.0 && approach(1.0, 1.36, 1e5) < 1.36,
+        approach(1.0, 1.31, 1e12) === 1.31 && approach(1.31, 1.0, 1e12) === 1.0
+          && approach(1.0, 1.31, 1e5) > 1.0 && approach(1.0, 1.31, 1e5) < 1.31,
         'up, down, and a partial step in between');
     }
 
     // ---- the door only opens one way ------------------------------------
     // A runaway greenhouse is not a temperature, it is a bifurcation, and the
     // flux a world tips at depends on how it got there. Walk a planet up to
-    // 1.36 S(+) in small steps and it settles at about 63 C with its ocean
+    // 1.31 S(+) in small steps and it settles at about 79 C with its ocean
     // intact -- the hot branch that Wolf & Toon (2015) ran to 362.8 K and Popp
     // et al. (2016) found above 330 K, an ocean at bath temperature. Throw the
     // same planet at the same flux in one jump and the surface overshoots, the
@@ -3337,18 +3362,22 @@ function runChecks() {
         const s = new Simulation({ ...base, insolation: 1.00 });
         s.runYears(3e6, 2e5);
         for (let i = 1; i <= steps; i++) {
-          s.world.params.insolation = 1.00 + 0.36 * (i / steps);
+          s.world.params.insolation = 1.00 + 0.31 * (i / steps);
           s.runYears(2e6, 2e5);
         }
+        // Settle at the destination before comparing. A 16-step and a 32-step
+        // walk arrive at slightly different points ON the branch; what is being
+        // tested is that it is the same branch, so let both reach it.
+        s.runYears(2e7, 2e5);
         return s.world;
       };
       const gentle = walk(16), gentler = walk(32);
-      const thrown = settle({ ...base, insolation: 1.36 }, 1e7).world;
+      const thrown = settle({ ...base, insolation: 1.31 }, 1e7).world;
 
       check('A world walked to the runaway limit keeps an ocean the same world thrown there loses',
         gentle.water.ocean > 0.8 && gentle.diag.Tmean > 320 && gentle.diag.Tmean < 360
           && lostItsOcean(thrown),
-        `1.36 S⊕ either way: gradually ${(gentle.diag.Tmean - 273.15).toFixed(0)} °C with ` +
+        `1.31 S⊕ either way: gradually ${(gentle.diag.Tmean - 273.15).toFixed(0)} °C with ` +
         `${gentle.water.ocean.toFixed(2)} EO liquid, abruptly ` +
         `${(thrown.diag.Tmean - 273.15).toFixed(0)} °C with ${thrown.water.ocean.toFixed(2)}`);
 
@@ -3372,14 +3401,26 @@ function runChecks() {
         `imbalance ${held.world.diag.imbalance.toFixed(3)} W/m²`);
 
       // The initial temperature is not a way in. The ocean's heat capacity
-      // erases it: starting the air at 63 C and at 27 C gives the same runaway
-      // to the tenth of a degree, because what decides this is the history of
-      // the forcing and nothing else.
-      const hotStart = settle({ ...base, insolation: 1.36, startT: 336 }, 1e7).world;
+      // erases it: starting the air at 63 C and at 27 C reaches the same state,
+      // because what decides this is the history of the forcing and nothing
+      // else.
+      //
+      // Tested on the STATE rather than on a tenth of a degree. It used to
+      // require the two to agree within 0.5 K, which was fair when both were
+      // sitting still at the same fixed point -- but a runaway is a trajectory,
+      // not a fixed point, and once the cloud minimum made the branch wider the
+      // two arrive a couple of degrees apart while still being the same answer:
+      // ocean gone, no way back. The claim is that a hot start does not reach
+      // the hot branch, so the branch is what is asserted.
+      const hotStart = settle({ ...base, insolation: 1.31, startT: 336 }, 1e7).world;
       check('…and you cannot get onto it by starting hot, only by arriving slowly',
-        Math.abs(hotStart.diag.Tmean - thrown.diag.Tmean) < 0.5 && lostItsOcean(hotStart),
-        `starting at 63 °C ends at ${(hotStart.diag.Tmean - 273.15).toFixed(1)} °C, ` +
-        `same as starting at 15 °C`);
+        lostItsOcean(hotStart) && lostItsOcean(thrown)
+          && gentle.water.ocean > 0.8
+          && Math.abs(hotStart.diag.Tmean - thrown.diag.Tmean) < 15,
+        `starting at 63 °C ends at ${(hotStart.diag.Tmean - 273.15).toFixed(1)} °C with `
+        + `${hotStart.water.ocean.toFixed(2)} EO, same as starting at 15 °C `
+        + `(${(thrown.diag.Tmean - 273.15).toFixed(1)} °C); the walked world keeps `
+        + `${gentle.water.ocean.toFixed(2)} EO`);
     }
 
     const S = insolationProfile(venusRot);
@@ -4369,6 +4410,81 @@ function runChecks() {
       `of 212 K and 33 K`);
   }
 
+  // ---- 3o1aa. a planet's history does not depend on how fast it is watched --
+  // There was no check of this anywhere in the suite, which is the reason it
+  // took an outside reading of the code to raise the question at all.
+  //
+  // What a rate control is allowed to change is how much simulated time passes
+  // per wall second. What it must never change is what HAPPENS in that time:
+  // if a planet keeps its ocean for fifty thousand years, it keeps it for fifty
+  // thousand years whether the player is watching at ten thousand years a
+  // second or at ten million.
+  //
+  // Driven through `advance()`, which is what the browser calls. That is not a
+  // detail -- a probe that drove `runCredit()` directly, with `autoEase` forced
+  // off and its own credit added on top, reported a 600x dependence that does
+  // not exist on any path a player can take, and two rounds of work went into
+  // that number before the probe was checked. Anything measuring this claim
+  // goes through the same door the game does.
+  {
+    const earthAt = (rate) => {
+      const s = new Simulation({ ...EARTH, brightening: 1 });
+      s.rate = rate; s.autoEase = true;
+      let f = 0;
+      while (s.world.time < 1e9 && f < 3e6) { s.advance(1 / 60); f++; }
+      return s.world.diag.Tmean;
+    };
+    const slow = earthAt(1e6), fast = earthAt(1e8);
+    check('A gigayear of Earth lands in the same place at a hundredfold the rate',
+      Math.abs(slow - fast) < 1,
+      `${slow.toFixed(3)} K at 1 Myr/s against ${fast.toFixed(3)} K at 100 Myr/s, ` +
+      `${Math.abs(slow - fast).toFixed(3)} K apart`);
+
+    // ...and the same for an event rather than a drift. A runaway is the hard
+    // case for a rate control, because it is over inside one frame at play
+    // speed and the governor has to cut it up without moving it.
+    const boilAt = (rate) => {
+      const s = new Simulation({ ...EARTH, insolation: 1.6, outgassing: 0 });
+      s.rate = rate; s.autoEase = true;
+      let f = 0;
+      while (s.world.diag.Tmean < 500 && f < 60 * 3000) { s.advance(1 / 60); f++; }
+      return s.world.time;
+    };
+    const rSlow = boilAt(1e4), rFast = boilAt(1e8);
+    check('…and a runaway arrives at the same year across four decades of rate',
+      Math.abs(rSlow - rFast) < 0.05 * Math.max(rSlow, rFast),
+      `500 K at ${rSlow.toFixed(1)} yr and ${rFast.toFixed(1)} yr, ` +
+      `for rates ten thousand apart`);
+
+    // The one that was actually reported: how long Earth's Last Ocean survives
+    // buried under its own steam. This is the slow, stiff case -- the hot-layer
+    // conversion against a shrinking cold pool -- and it is the state the claim
+    // was made about. A factor of two, not equality: a gigayear of ordinary
+    // Earth above moves 0.26 K between rates, so exact invariance is not on
+    // offer and pretending otherwise would make this check a liar.
+    const buriedAt = (rate) => {
+      const s = new Simulation({ ...PRESETS.lastOcean.params });
+      s.runYears(1.25e8);
+      s.rate = rate; s.autoEase = true;
+      let inB = false, start = null, f = 0;
+      while (s.world.time < 4e8 && f++ < 4e6) {
+        s.advance(1 / 60);
+        const b = classify(s.world).id === 'buriedOcean';
+        if (b && !inB) { inB = true; start = s.world.time; }
+        if (!b && inB) return s.world.time - start;
+      }
+      return null;
+    };
+    const bSlow = buriedAt(1e4), bFast = buriedAt(1e7);
+    const ratio = bSlow && bFast ? Math.max(bSlow, bFast) / Math.min(bSlow, bFast) : Infinity;
+    check('…and a buried ocean lasts as long at 10 kyr/s as at 10 Myr/s',
+      ratio < 2,
+      bSlow && bFast
+        ? `${(bSlow / 1e3).toFixed(1)} kyr against ${(bFast / 1e3).toFixed(1)} kyr, `
+          + `${ratio.toFixed(2)}x apart across a thousandfold in rate`
+        : 'the buried window did not open at one of the two rates');
+  }
+
   // ---- 3o2a. boiling a planet kills what is on it ---------------------------
   // The room a biosphere has and the time it takes to lose it are two different
   // questions, and this model was only getting the first one right. A world run
@@ -4856,10 +4972,27 @@ function runChecks() {
         + `${(wetSwing * 100).toFixed(1)}%, imbalance ${seen[0].toFixed(2)} → `
         + `${seen[seen.length - 1].toFixed(2)} W/m²`);
 
+      // Measured as ground covered rather than as the smallest step in the
+      // window, which is what this used to ask and is the wrong statistic.
+      // This world is still on a decaying ladder here -- its step falls from
+      // 1.2 Myr to 22 kyr across the forty -- so `least` is really "where on
+      // that ladder did the settle above happen to leave us", and it moved by
+      // eight steps, from 22 kyr to 1.8 kyr, on a change that left the ladder
+      // itself identical and the world 4 K warmer. The mean step did not move
+      // at all: 3.6e5 years against 3.7e5.
+      //
+      // The pathology this exists for was tens of years a step and stuck there,
+      // which over forty steps is under a kiloyear. Four orders of margin, and
+      // it measures the sentence in the name.
+      const t0 = wet.time;
       let least = Infinity;
       for (let i = 0; i < 40; i++) { run.stepOnce(Math.min(maxStep(wet), 5e6)); least = Math.min(least, maxStep(wet)); }
+      const span = wet.time - t0;
       check('...so the clock can still run fast inside one',
-        least > 1e4, `smallest step ${least.toExponential(1)} yr`);
+        span > 1e6,
+        `${(span / 1e6).toFixed(1)} Myr over forty steps, mean ` +
+        `${(span / 40).toExponential(1)} yr/step (the bug was tens), ` +
+        `smallest ${least.toExponential(1)} yr`);
     }
 
     // A stable climate mode near a tipping point must not be turned into an

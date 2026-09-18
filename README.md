@@ -798,17 +798,21 @@ still have their seas:
 
 | heated by | starlight | volcanism | equilibrium CO₂ | surface |
 |---|---|---|---|---|
-| **its own air** | 1.000 S⊕ | 4.5× | **0.091 bar** | 49.5 °C |
-| **its star** | 1.256 S⊕ | 0× | **~0 ppm** | 49.0 °C |
+| **its own air** | 1.000 S⊕ | 4.5× | **0.026 bar** | 57.6 °C |
+| **its star** | 1.1901 S⊕ | 0× | **~0 ppm** | 57.8 °C |
 
-Half a degree apart and effectively all the carbon dioxide on the first world. Both also set basin
+Two tenths of a degree apart and effectively all the carbon dioxide on the first world. The pair sat
+at 49.5 and 49.0 °C until the moist-greenhouse cloud terms went in: both are global oceans with every
+band moist, so both cross the gate, the first warmed eight degrees and its thermostat answered by
+taking the CO₂ from 0.091 bar to 0.026, and the second was moved in from 1.256 S⊕ to follow it. Both also set basin
 geometry to zero: these presets are global oceans, not Earth-shaped continents under a misleading
 name. That is the
 carbonate–silicate thermostat seen from both sides. Heat a planet from outside and it weathers
 faster, strips its own greenhouse away, and bakes anyway; heat one from inside and the greenhouse
 has to be erupted back continuously or the planet cools. With no continents, seafloor weathering is
-the first world's only carbon thermostat; 4.5× volcanism holds it near 50 °C without exhausting the
-finite mantle reservoir during the checked 100 Myr run.
+the first world's only carbon thermostat; 4.5× volcanism holds it near 58 °C without exhausting the
+finite mantle reservoir during the checked 100 Myr run. Volcanism stayed at 4.5× through that move,
+because that number is set by the mantle reservoir rather than by the temperature it lands on.
 
 **Over the Edge** is that second world with the star turned up until there is no equilibrium left,
 and the edge turns out to be **one part in thirteen hundred**:
@@ -3505,7 +3509,7 @@ While fixing the units: `evaporating 61431.36 oceans/Gyr` is a rate nothing can
 happen at. All four rate lines pick the time unit that fits the number now, the
 way the deep-ice line already did, so that one reads `61.43 oceans/Myr`.
 
-### Building Wolf & Toon's hot branch, and finding out why it cannot be built
+### Building Wolf & Toon's hot branch: one term could never work, two can
 
 Asked for directly: implement the paper. The paper is Wolf & Toon 2015, whose
 distinguishing result is that Earth does **not** warm smoothly under a
@@ -3517,75 +3521,190 @@ associated with minima in cloud albedo and was caused by the convective
 stabilization of warm atmospheres and subsequent dissipation of low-lying
 clouds."*
 
-It was built, measured, and reverted. The result is negative and worth more
-written down than the feature would have been.
+The first attempt was built, measured and reverted, and the negative result is
+kept below because it is what pointed at the answer. **The word that was being
+read past is *minima*.** A minimum falls *and comes back*. Every first attempt
+gave the albedo only the fall, and a fall with nothing to catch it is not a
+transition, it is a runaway — which is exactly what every setting strong enough
+to show a jump actually did.
 
-**Two levers, both following the mechanism they name.** A warm, vapour-heavy
-troposphere that stops overturning loses two things, not one: the shallow
-convection that maintains the low cloud deck, and the Hadley subsidence that
-gives 18% of the surface a dry window to radiate through. So the same criterion —
-vapour partial pressure past 0.037 bar, which Earth's 0.012 never reaches —
-drove a multiplier on cloud cover (`cloudBoost`, a hook that was already there
-and unused) and a decline in `FIN_FRACTION`. Neither touches `olr()`, so the
-Simpson–Nakajima anchor is bit-identical by construction.
+#### Two monotone terms whose product has a minimum
 
-**What the levers do, on Earth with CO₂ pinned at 355 ppm the way they ran it:**
+```js
+cloudThinning(pH2O)   // cover falls   1 → 0.55   over 0.060…0.078 bar
+cloudDeepening(pH2O)  // what is left brightens, 0 → 0.90, over 0.045…1.20 bar
+```
+
+The deck goes early and fast; the towers that remain keep thickening for as long
+as the vapour keeps rising, and it is that continuing rise that holds the hot
+branch up instead of letting it run away. Written as two monotone functions
+rather than one non-monotone one on purpose: `albAt`, inside the implicit
+solver's Jacobian, differentiates this, and a sign change inside a single term
+puts a discontinuity where the step controller reads its damping. Neither term
+enters `olr()`, so the Simpson–Nakajima anchor — which is a brute scan of that
+function — is bit-identical by construction.
+
+**Earth with CO₂ pinned at 355 ppm, the way they ran it:**
+
+```
+                    +0%    +10%  +11.25% +12.5%  +15.5%   +21%    +25%
+  Wolf & Toon      288.0   <310   312.2   331.9  (312.9)  362.8   water loss
+  before           288.5  304.4   306.5   308.7   314.3   327.0   ocean gone
+  now              288.5  304.4   306.6   316.6   330.2   353.9   ocean gone
+```
+
+and the transition is a transition rather than a slope. Measured as dT/dF, with
+F the forcing — the insolation step absorbed at the starting albedo, which is
+the quantity their own "3.0 W/m²" is:
+
+```
+  +10.0 → +11.25%   0.73 K/(W m⁻²)
+  +11.25 → +12.5%   3.27            ← Wolf & Toon: ~6.5
+  +12.5 → +14.0%    1.70
+  present day       0.73
+```
+
+A four-and-a-half-fold spike in the same flux interval they report one in, at
+half their height. The height is short and is *left* short: `CLOUD_THIN` is 0.45
+because 45% is the fraction their deck loses, and raising it to close the row
+would be fitting a measured quantity to a residual.
+
+#### The gate is on the driest band, not the wettest
+
+Gating each band on its own vapour is locally defensible and globally wrong, and
+it cost two shipped presets before the checks caught it. What Wolf & Toon report
+is a whole-atmosphere regime change. A band gate cannot tell that from a hot
+spot: the Eyeball's mean surface is 264 K with a frozen night side, and its
+substellar band alone carries 0.46 bar of vapour — so the terms fired at full
+strength and warmed it by 4.4 K. TRAPPIST-1e, at a mean of 195 K, did the same.
+
+Neither mean temperature nor mean vapour separates those from a moist greenhouse
+— the Eyeball's mean vapour of 0.044 bar sits *between* a 10% and a 14% brighter
+Earth. What separates them is that a moist greenhouse has no dry subsiding cold
+trap left **anywhere**, poles included, and an eyeball is moist in one place:
+
+```
+                  driest band   share          driest band   share
+  Earth today       0.0024 bar   0.01     Eyeball  0.0000 bar   0.00
+  Earth +10%        0.0086       0.91     TRAPPIST-1e 0.0000    0.00
+  Earth +11.25%     0.0102       1.00     Dune     0.0012       0.00
+  Earth +21%        0.0508       1.00     Mars, Venus, Titan    0.00
+```
+
+Both terms are multiplied by that share. With it in, the Eyeball settles at
+264.09 K against a baseline 264.09, and TRAPPIST-1e's step size is unchanged to
+the year. The share is a `min`, which is a kink rather than a jump — a
+perturbation to one band moves it only while that band is the driest — and the
+smoothstep either side of it is C¹. An area fraction of bands over a threshold
+was tried first and is the wrong statistic: the Eyeball's sunlit third scores
+0.34 on it, and a real moist greenhouse never scores 1, because its own poles
+stay the driest place on it.
+
+#### Where the window sits, and the preset that found the wrong place for it
+
+0.060–0.078 bar is the model's own tropical vapour peak at +11.25% and at
++12.5%, which is where their deck makes its fall. It is not the first window
+tried. 0.045–0.072 has its steepest point at 0.0585 bar, and the Waterworld's
+peak band sits at 0.0553 — within a percent of the worst possible place. The
+step controller did exactly what it is for and dropped that preset from 113,105
+years per step to 1,508, and that 75× slowdown is the *correct* response to an
+albedo derivative that had no business being there. Moving the window put the
+Waterworld back under the low edge, where a 301 K world belongs.
+
+#### What is still missing, and why the first attempt could not have worked
+
+The ceiling on the *first* version was 342.7 K and it was structural. Every
+configuration that got further lost the ocean instead. Solving the energy
+balance directly on an idealised aquaplanet at 1.21 S₀ shows why, and it is a
+clean saddle-node: with the dry branch at 0.18 there is a stable root at 336.3 K
+and an unstable one at 371.3; at 0.12 they have closed to 350.3 and 352.8; below
+that **they annihilate and there is nothing left to settle on.** A stable root at
+362.8 K needs d(OLR)/dT to still beat the albedo feedback up there, and it is
+about 0.26 W/m²/K against 0.58. With one falling term the albedo always wins.
+
+The second term is what changes that arithmetic: `cloudDeepening` keeps adding
+to the albedo after the cover has finished going, which is a *negative*
+contribution to the feedback in the range where the fold used to close. It does
+not move the Simpson–Nakajima limit — nothing here does — so the ocean still
+goes between +21% and +25%, which is where Wolf & Toon put rapid water loss.
+
+The failed first-attempt grid is kept, because two of its rows are the reason
+the second attempt aimed where it did:
 
 ```
                     +0%    +10%  +11.25% +12.5%  +15.5%   +21%
-  Wolf & Toon      288.0   <310   312.2   331.9  (312.9)  362.8
-  as it ships      288.5  304.4   306.5   308.7   314.3   327.0
   cloud 0.25       288.5  307.1   310.3   313.5   321.9   342.7
   dry branch 0.10  288.5  304.9   307.3   309.8   316.3   332.6
   dry branch 0.04  288.5  305.3   308.1   310.9   318.3   843.0  ← ocean gone
-  dry branch 0.00  288.5  305.7   308.7   311.8   320.0   847.8  ← ocean gone
   both, modest     288.5  306.3   309.6   312.7   321.4   841.8  ← ocean gone
 ```
 
-**The ceiling is 342.7 K and it is structural.** Every configuration that gets
-further than that loses the ocean instead. Solving the energy balance directly on
-an idealised aquaplanet at 1.21 S₀ shows why, and it is a clean saddle-node: with
-the dry branch at 0.18 there is a stable root at 336.3 K and an unstable one at
-371.3; at 0.12 they have closed to 350.3 and 352.8; below that **they annihilate
-and there is nothing left to settle on.** The fold is real — but it is a fold
-into a runaway, where Wolf & Toon's is a fold onto a higher stable branch.
+#### The calibration tool was returning a number the model does not have
 
-**Why there is no higher branch.** A stable root at 362.8 K needs the outgoing
-flux to still be rising there faster than the absorbed flux. This model's OLR
-peaks at 318 W/m² (moist only) to 334 (with the dry branch) near 370 K, and
-absorbed at 1.21 S₀ has to be within a few watts of that to sit at 363 K at all —
-so d(OLR)/dT is about **0.26 W/m²/K** while the albedo feedback d(absorbed)/dT is
-about **0.58**. The albedo always wins, and the root above the peak is unstable by
-construction. No setting of a cloud term or a dry-branch term changes that, and
-the measurement above is what checking it looks like.
+Found while measuring the above, and it is the more portable bug. `eq()` in
+`tools/calibrate.mjs` — the helper behind a dozen anchors — integrated with a
+step ladder that climbs to a flat 5000 years and stays there however stiff the
+world gets. A world on the moist-greenhouse branch is stiff. At 1.155 S₀ it
+entered a clean period-3 numerical limit cycle, reading 293.8, 338.2, 343.3 K on
+successive samples and repeating every six steps for as long as it was run, so
+whatever `years` happened to be decided which of the three came back. Read
+through it, the model appeared to *cool* with increasing insolation between
++14% and +15.5%, which is what made it worth chasing.
 
-What *would* change it is the near-infrared steam darkening,
-`a *= 1/(1 + 1.2·pH2O/(1 + pH2O))` — the term that makes a runaway greenhouse dark
-rather than bright. Weaken it and the albedo stops falling and the branch can
-stand up. It is also the term that is doing honest work everywhere else, and
-there is no independent reason to think it is wrong. That is where this stops.
+Bounding `dt` the way the simulation itself bounds it — `maxStep(w, 2.5)` —
+removes the cycle, and the same runs come out monotone. It costs nothing
+anywhere else: `maxStep` exceeds 5000 years on every world that was already
+settled, so every anchor that passed before the line existed returns
+bit-identical values with it. Two of the grids in the section above were
+measured through the broken version and are corrected here; that is the third
+time this comparison has been wrong, and the first time the fault was in the
+instrument rather than in the experiment.
 
-**A note on what "implementing the paper" turned out to mean.** Wolf & Toon's own
-2014 paper has Earth at 312.9 K at +15.5%, "well short of moist and runaway
-greenhouse states", and this model — run their way — gives 314.3 K. It agrees with
-their earlier paper to 1.4 K and disagrees with their later one by 36 K. Every
-configuration above that moves toward 2015 moves away from 2014, and none of them
-arrives: the best, at 342.7 K, is still 20 K short and has no jump at all
-(sensitivity 0.633 against their 6.5).
+### The step size was never the physics, and proving that took the better probe
 
-**One result is worth keeping and is not about Earth.** The cloud term, gated on
-vapour *partial pressure* rather than mole fraction, fires on hydrogen worlds too
-— 20 bar of envelope dilutes a mole fraction out of any Earth-calibrated
-threshold, which is the same dilution failure the convective-inhibition gate
-already documents. Gated that way it moved four rows on worlds it was not tuned
-for: the Hycean inner edge from 1.04 to **0.591 S⊕** (literature 0.391) and from
-0.229 to **0.143** (literature 0.067), the hottest settled Hycean from 323 to
-326 K, and the runaway-greenhouse date from 3.40 to **3.00 Gyr**, inside its
-target range for the first time. That is a real improvement and it is a
-*different* proposal from this one — it also moves the inner edge from 1.2606 to
-1.2291 S⊕, which costs `hotStar`, the `brink` pair, `lastOcean` and the Hycean
-presets their positions. It should be argued on Hycean grounds and recalibrated
-deliberately, not shipped under a banner it does not earn.
+A second model, asked for a review, reported that "the steps are not invariable
+between time rates" — that how long a planet stays in a state depends on the
+speed the player is watching at. That would be a serious correctness bug, so it
+was measured three ways.
+
+**It reproduced, at 600×.** Driving the buried phase of Earth's Last Ocean at
+rates from 10⁴ to 10⁷ yr/s gave 0.05, 0.33, 3.01 and 30.01 Myr. Two rounds of
+work went into that number before the probe itself was checked.
+
+**The probe was wrong.** It called `runCredit()` directly after adding its own
+credit — double-counting — with `autoEase` forced off, which is the one path a
+player never takes. Driven through `advance(1/60)`, the entry point the browser
+actually uses, the same measurement gives:
+
+```
+  rate yr/s     buried duration     steps    mean dt
+     10 000        47.91 kyr          939      51 yr
+    100 000        48.64              750      65
+  1 000 000        48.38              604      80
+ 10 000 000        48.03              593      81      spread 1.0×
+```
+
+and the shipped code before any of this work gives 36.55 / 37.06 / 36.69 / 36.84
+kyr — **also 1.0×**. The third measurement agrees: with `runYears` and the step
+capped by hand at 100, 1 000 and 10 000 years, the same phase lasts 47.6, 47.0
+and 50.0 kyr. The integrator was invariant, the governor was invariant, and the
+reported bug was an artefact of how it was being measured.
+
+Two real defects were found on the way there and are fixed, which is the only
+reason the trail was worth following:
+
+* **A step bound gated on the wrong question.** `climate.js` bounded the
+  hot-layer conversion but asked `dg.hotBinds` first — whether the hot column is
+  what limits the *vapour ceiling*, which during a buried ocean is `false`. The
+  bound was skipped in exactly the state it exists for. It is now gated on the
+  conversion actually moving.
+* **The `eq()` limit cycle above.**
+
+Written down because the shape recurs: a plausible bug report, a probe that
+confirms it, and the probe is the thing that is broken. The rule that came out
+of it is that a rate-invariance claim is measured through `advance()`, and
+there is now a check in `selftest.js` that does exactly that — there was none
+before, which is why nothing would have caught a real one.
 
 ### A screenshot of a state the classifier said was not there
 
@@ -4233,10 +4352,10 @@ drive a real Chrome and measure where the first slider actually lands.
 
 Stated plainly, because a model that hides these is less useful:
 
-* **Earth's far future agrees with a 3D GCM to 1.4 K once the two are run as the same experiment
-  — and this entry has now been wrong twice, in two different ways.** Both are kept visible,
-  because both were easy mistakes and both were caught by being asked a sharp question rather
-  than by the checks.
+* **Earth's far future now reproduces Wolf & Toon's transition at half its height, and this
+  entry has been wrong three times, in three different ways.** All three are kept visible,
+  because they were easy mistakes and the first two were caught by being asked a sharp question
+  rather than by the checks — while the third was in the measuring tool itself.
 
   **The first wrong comparison was across a bifurcation.** Wolf & Toon (2015) get **362.8 K** at
   +21% insolation, this model reached 1.21 S⊕ at 305 K, and the row was written as a 58 K gap.
@@ -4255,27 +4374,43 @@ Stated plainly, because a model that hides these is less useful:
   |---|---|---|---|
   | +0% | 288.6 K | 288.5 K | 288 K |
   | +10% | 296.7 K | 304.4 K | under 310 K |
-  | +11.25% | 297.8 K | 306.5 K | 312.2 K |
-  | +12.5% | 298.8 K | 308.7 K | 331.9 K *(2015)* |
-  | +15.5% | 301.5 K | **314.3 K** | **312.9 K** *(2014)* |
-  | +21% | 307.0 K | 327.0 K | 362.8 K *(2015)* |
+  | +11.25% | 297.8 K | 306.6 K | 312.2 K |
+  | +12.5% | 298.8 K | **316.6 K** | 331.9 K *(2015)* |
+  | +15.5% | 301.5 K | **330.2 K** | 312.9 K *(2014)* |
+  | +21% | 309.9 K | 353.9 K | 362.8 K *(2015)* |
+  | +25% | 326.9 K | ocean gone | rapid water loss |
 
-  Run their way, the model lands **1.4 K** from Wolf & Toon 2014. It agrees on the ending too:
-  pinned, it holds 327 K at +21% and has lost the ocean by +25%, where they put rapid water loss
-  just past +21%. And it agrees on the *topology* — started at 290, 300, … 370 K at +21% it
-  converges on the same 327.0 K to three figures, with an unstable root between 370 and 380 K and
-  a runaway above. One warm branch, one unstable root, runaway beyond, which is their shape.
+  The pinned column is the two cloud terms described above doing their work; before them it read
+  306.5 / 308.7 / 314.3 / 327.0 and had no transition in it at all. It agrees on the ending:
+  the ocean survives +21% and is gone by +25%, where they put rapid water loss just past +21%. And
+  it agrees on the *topology* — one warm branch, one unstable root above it, runaway beyond, which
+  is their shape. What is left is that their transition is steeper and lands a notch earlier: they
+  are at 331.9 K by +12.5% where this needs +15.5%.
 
-  **What is genuinely missing is the abruptness, and nothing else.** This model's sensitivity
-  creeps 0.58 → 0.69 K/(W m⁻²) across the whole span with no peak, against their spike to 6.5.
-  `cloudCover()` saturates on vapour and carries no stability or temperature term, so there is no
-  mechanism for a cloud-albedo minimum. That is now its own `GAP` row, measured as a sensitivity
-  rather than as a temperature, because a sensitivity is the thing that is absent.
+  **What was missing was the abruptness, and it is now half there.** The remaining gap is a
+  height, not an absence: measured as dT/dF with F the forcing — the insolation step absorbed at
+  the starting albedo, which is what their own "3.0 W/m²" is — the sensitivity reads 0.73 across
+  +10 → +11.25%, **3.27 across +11.25 → +12.5%**, and 1.70 across +12.5 → +14%, against 0.73 at
+  the present day. A four-and-a-half-fold spike in the flux interval they report one in, at half
+  their ~6.5. It stays its own `GAP` row, measured as a sensitivity rather than a temperature,
+  because the height is the thing still short — and it is left short deliberately: `CLOUD_THIN`
+  is 0.45 because 45% is the fraction their deck loses, and raising it to close the row would be
+  fitting a measured quantity to a residual.
+
+  **The third wrong thing was the instrument.** That sensitivity row first divided by the
+  *realised* change in absorbed flux instead of by the forcing, which is the wrong quantity in
+  precisely the place the row exists to look at: a transition *is* a collapse in albedo, so
+  dividing by the realised absorbed change divides out the feedback being measured, and the
+  sharper the transition the flatter the answer. Read that way the peak was 0.681 against a 0.60
+  background — no peak. The same three runs give 3.27 against 0.73. Separately, `eq()` in
+  `calibrate.mjs` was integrating with an unbounded step and returning one arbitrary phase of a
+  numerical limit cycle for every world hot enough to be stiff; two of the grids here were
+  measured through it. Both are fixed and written up above.
 
   Worth saying plainly: **their own two papers straddle this model.** Wolf & Toon 2014 has 312.9 K
-  at +15.5%, "well short of moist and runaway greenhouse states" — which is this model. Wolf &
-  Toon 2015 is already at 331.9 K by +12.5%. Reproducing the 2015 transition would move the model
-  *away* from the 2014 result it currently matches.
+  at +15.5%, "well short of moist and runaway greenhouse states"; Wolf & Toon 2015 is already at
+  331.9 K by +12.5%. The model now sits between them rather than on 2014, which is the trade the
+  cloud terms make and is why the anchor is a band rather than a number.
 
   **And a claim that stood here was simply false**, which is worth recording because of how it
   was made. It said a stable 362.8 K root "does not exist on its curve", on the grounds that the
