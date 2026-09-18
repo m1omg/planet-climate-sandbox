@@ -580,6 +580,135 @@ export function cloudCover(pH2O, slowness, subStellar) {
   return Math.min(0.88, x > 20 ? c0 : c0 * Math.tanh(x));
 }
 
+// The cloud-albedo MINIMUM that makes a moist greenhouse abrupt -- and stable.
+//
+// Wolf & Toon 2015 (JGR Atmos. 120, 5775) run Earth under a brightening Sun in
+// CAM4 and do not get a smooth curve: between +11.25% and +12.5% S0 the surface
+// jumps 312.2 -> 331.9 K on three watts, and from there it climbs a STABLE moist
+// greenhouse to 362.8 K at +21% with its ocean intact. Their cause: "the sharp
+// transition ... was associated with MINIMA IN CLOUD ALBEDO and was caused by the
+// CONVECTIVE STABILIZATION of warm atmospheres and subsequent DISSIPATION OF
+// LOW-LYING CLOUDS."
+//
+// The word that matters is *minima*. A minimum falls and then comes back, and the
+// two halves do different jobs. The fall is what makes the transition abrupt: the
+// planet darkens as it warms, which is a positive feedback, and past some point
+// it beats the outgoing flux and the lower branch stops existing. The RECOVERY is
+// what makes the upper branch stable -- without it the albedo keeps falling, the
+// feedback stays positive, and the world runs away instead of settling.
+//
+// A first attempt carried only the fall, as a single multiplier on cover. It
+// warmed the hot end from 327 to 342.7 K and then refused to go further: every
+// stronger setting ran away, because a stable root at 363 K needs d(OLR)/dT to
+// beat the albedo feedback and it was 0.26 W/m^2/K against 0.58. That was not a
+// tuning failure, it was the missing half of the mechanism.
+//
+// So there are two terms, and both are MONOTONE in the same variable:
+//
+//   cloudThinning   cover falls    -- the low deck dissipates
+//   cloudDeepening  cloud brightens -- what convection is left is deep and thick
+//
+// Their product dips and recovers. Writing the minimum as two monotone functions
+// rather than one non-monotone one is not presentation: `albAt` inside
+// `radiativeDamping` differentiates this, and a sign change in a single term
+// would put a discontinuity in the solver's Jacobian.
+//
+// The brightening uses ALB_CLOUD_DEEP, which is already in this file as the
+// albedo of a deep convective tower and until now was reachable only by slow
+// rotators piling a deck over their substellar point. A moist greenhouse is deep
+// convective everywhere, so the same constant is the right ceiling; CLOUD_DEEPEN
+// is how far toward it a fast rotator gets.
+//
+// Neither term enters `olr()`. `runawayLimit` brute-scans that function a kelvin
+// at a time and a gated term inside it silently redefines the Simpson-Nakajima
+// limit -- see the smoothing note above, which is the recorded failure. An albedo
+// term is invisible to it, so that anchor is bit-identical by construction.
+//
+// Gated on vapour PARTIAL PRESSURE rather than mole fraction. Earth sits at
+// 0.012 bar and a 10% brighter Earth at 0.034, both under the low edge, so every
+// world this model shipped with is untouched. Mole fraction was tried first and
+// is the wrong variable for the same reason the convective-inhibition gate
+// records: twenty bar of hydrogen dilutes any Earth-calibrated mole fraction, so
+// the gate would fire on Earth-pressure worlds and nowhere else, which is a fit
+// to Earth wearing a physics argument.
+export const CLOUD_THIN = 0.45;
+export const CLOUD_DEEPEN = 0.90;
+// The window edges are placed by where the model itself puts the tropical
+// vapour peak, not by fitting the curve. A 10% brighter Earth sits at 0.058 bar
+// and an 11.25% one at 0.064; W&T's deck starts thinning once the tropics are
+// deep-convective, which in this model is right there. 0.060 is that threshold
+// and 0.078 is the 12.5% world, by which point their cloud fraction has made
+// its whole fall. Earth today (0.025) and the waterworld (0.056) are both under
+// the low edge, so neither is touched -- and the waterworld's peak sitting at
+// 0.0558 is why the first window tried, 0.045-0.072, was wrong: its steepest
+// point was 0.0585, within a percent of that preset's peak, and the step
+// controller correctly dropped to 1508 yr to resolve an albedo derivative that
+// had no business being there.
+const THIN_LO = 0.060, THIN_HI = 0.078;
+const DEEP_LO = 0.045, DEEP_HI = 1.20;
+const SHARE_LO = 0.002, SHARE_HI = 0.010;
+
+// How much of the PLANET has crossed into the regime, as opposed to how much of
+// this one band has. Both terms are multiplied by it, and it is the difference
+// between reading Wolf & Toon's transition and reading a hot spot.
+//
+// Gating each band on its own vapour alone is local, and locally it is not even
+// wrong -- a substellar band under half a bar of steam has lost its stratus
+// whatever the rest of the planet is doing. But what Wolf & Toon report is a
+// whole-atmosphere regime change, and a band gate cannot tell one from the
+// other: the Eyeball's mean surface is 264 K with a frozen night side, and its
+// substellar band alone carries 0.46 bar of vapour, so a per-band gate fired at
+// full strength and warmed a shipped preset by 4.4 K. TRAPPIST-1e, at a mean of
+// 195 K, does the same thing.
+//
+// The separating fact is not temperature and not the global mean vapour --
+// measured, neither separates, because the Eyeball's mean vapour of 0.044 bar
+// sits between a 10% and a 14% brighter Earth. It is that a moist greenhouse
+// has no dry subsiding cold trap left ANYWHERE, poles included, while an
+// eyeball is moist in one place and bone dry in the rest. So the gate is on the
+// DRIEST band, and the numbers separate by three orders of magnitude:
+//
+//     driest band, bar        share
+//     Earth today      0.0024   0.01     Eyeball       0.0000   0.00
+//     Earth +10%       0.0086   0.91     TRAPPIST-1e   0.0000   0.00
+//     Earth +11.25%    0.0102   1.00     Dune          0.0012   0.00
+//     Earth +21%       0.0508   1.00     Mars, Venus   0.0000   0.00
+//
+// The window is those first two rows: 0.002 bar is what a present-day pole
+// holds and 0.010 is what a 10% brighter one holds. The area share of bands
+// over a threshold was tried first and is the wrong statistic -- the Eyeball's
+// sunlit third scores 0.34 on it, which is not small enough, and a real moist
+// greenhouse never scores 1 because its own poles stay the driest place on it.
+//
+// `min` is not differentiable, and `albAt` does differentiate through here. It
+// is a kink rather than a jump -- a perturbation to band i moves the share only
+// while i is the driest band -- and the smoothstep either side of it is C1. The
+// alternative, a soft minimum, buys smoothness at one band's crossover and
+// costs the separation above, which is the whole point of the term.
+export function cloudThinShare(pH2Oband) {
+  if (!pH2Oband || !pH2Oband.length) return 0;
+  let lo = Infinity;
+  for (let i = 0; i < pH2Oband.length; i++) {
+    const p = pH2Oband[i];
+    if (p < lo) lo = p;
+  }
+  return lo > 0 ? smoothstep(SHARE_LO, SHARE_HI, lo) : 0;
+}
+
+export function cloudThinning(pH2O, share = 1) {
+  if (!(pH2O > 0)) return 1;
+  return 1 - CLOUD_THIN * smoothstep(THIN_LO, THIN_HI, pH2O) * clamp(share, 0, 1);
+}
+
+// How far the surviving cloud moves from ordinary stratiform toward a deep
+// convective tower. Deliberately much wider than the thinning window: the deck
+// goes early and fast, the towers keep thickening for as long as the vapour
+// keeps rising, and it is that continuing rise that holds the hot branch up.
+export function cloudDeepening(pH2O, share = 1) {
+  if (!(pH2O > 0)) return 0;
+  return CLOUD_DEEPEN * smoothstep(DEEP_LO, DEEP_HI, pH2O) * clamp(share, 0, 1);
+}
+
 let rayP = -1, rayV = 0;
 function rayleighOf(pDry) {
   if (pDry === rayP) return rayV;
@@ -597,7 +726,19 @@ function rayleighOf(pDry) {
 export function planetaryAlbedoInto(T, o, out) {
   const surf = surfaceAlbedo(T, o.oceanFrac, o.landAlbedo, o.hasWater, o.glaciated,
     o.waterCap, o.freezeShift ?? 0);
-  const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * (o.cloudBoost ?? 1), 0, 0.9);
+  // Both moist-greenhouse cloud terms are for a RAPIDLY ROTATING world, and are
+  // faded out on a slow or locked one by the same `slowness` the deck's own
+  // brightness is gated on. Wolf & Toon ran Earth: their mechanism is a globally
+  // stabilising atmosphere losing a global low deck. A tidally locked world's
+  // cloud is a tower standing over the substellar point, held up by a
+  // circulation that is not going to stabilise, and the band under it can carry
+  // a bar of vapour while the planet's mean is 198 K -- measured on TRAPPIST-1e,
+  // where the ungated terms fired at full strength on a world that is nearly all
+  // ice. It also cost those worlds their step size, because one band with a
+  // steep albedo derivative drags the whole solver down.
+  const spin = 1 - clamp(o.slowness ?? 0, 0, 1);
+  const thin = 1 - (1 - (o.cloudBoost ?? 1)) * spin;
+  const C = clamp(cloudCover(o.pH2O, o.slowness, o.subStellar) * thin, 0, 0.9);
   // How bright that cloud is, which depends on how long it has been standing in
   // one place. `slowness` is already the blend of solar-day length and full
   // synchronisation that the rest of the model uses, so Earth at 24 h gets
@@ -612,8 +753,9 @@ export function planetaryAlbedoInto(T, o, out) {
   // a subtle loss: a sweep of thirty-six configurations across water, nitrogen
   // and insolation found the trapped state at none of them.
   const moist = clamp((o.oceanFrac ?? 0) / 0.25, 0, 1);
-  const albCloud = ALB_CLOUD + (ALB_CLOUD_DEEP - ALB_CLOUD)
-    * clamp(o.slowness ?? 0, 0, 1) * (o.cloudWhite ?? 1) * moist;
+  const deep = clamp(clamp(o.slowness ?? 0, 0, 1) * (o.cloudWhite ?? 1)
+    + cloudDeepening(o.pH2O, o.cloudShare ?? 1) * spin, 0, 1);
+  const albCloud = ALB_CLOUD + (ALB_CLOUD_DEEP - ALB_CLOUD) * deep * moist;
   const withClouds = albCloud * C + surf * (1 - C);
   // Rayleigh + haze from the *dry* gas. Exponent set so a 92 bar CO2 atmosphere
   // reaches Venus's bright scattering (~0.7) while 1 bar stays at Earth's 0.06.
