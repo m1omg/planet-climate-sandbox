@@ -939,7 +939,33 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // them stable, and judging by the worst band alone made the solver crawl
   // through exactly the epoch a player most wants to watch.
   const dampingGate = smoothstep(0.10, 0.45, meanDamping);
-  const quasi = smoothstep(6, 1, eqDistance) * dampingGate;
+  // ...and a world that is RINGING is not quasi-static either, whatever the
+  // linearisation says about it. The shortcut trusts that a step landing on the
+  // linearised equilibrium does not change the answer. That holds while the
+  // temperature is slaved to the slow reservoirs; it stops holding where the
+  // water-vapour feedback is strong, because vapour and albedo are updated
+  // explicitly AFTER the implicit temperature solve, so the equilibrium the
+  // solve aimed at has moved by the time it arrives. The step then overshoots,
+  // `eqDistance` jumps past 6, the shortcut switches off, the world relaxes
+  // back over a few small steps, the shortcut switches on again -- and the
+  // cycle repeats for as long as the world sits there.
+  //
+  // Measured on a reported world: 133,128 steps out of 408,582 moved the mean
+  // by more than the 2.5 K the controller was aiming at, and 125,112 of those
+  // -- 94% -- reversed the direction of the one before. The mean flickered
+  // 318.47 <-> 321.04 K for the better part of a gigayear. Where in that cycle
+  // the world happened to be when its slow drivers arrived decided whether it
+  // tipped, so the tipping time moved 1.379 -> 1.451 Gyr with the step size and
+  // had not converged at a hundred-year step.
+  //
+  // `ringing` is that alternation counted in stepOnce, and it is the only thing
+  // that distinguishes the two cases: a world genuinely slaved to its
+  // reservoirs moves the same way for many steps together. Turning the shortcut
+  // off wholesale also removes the ringing and costs 5.5x the steps -- 408,582
+  // to 2,238,987 on that world -- which is the affordability the shortcut was
+  // built for, so it is suppressed only while the alternation is happening.
+  const quasi = smoothstep(6, 1, eqDistance) * dampingGate
+    * smoothstep(2, 0, w.ringing ?? 0);
   // Opt-in instrumentation for transition diagnostics. Kept off the hot-path
   // solve object so ordinary runs retain its single hidden class; a caller that
   // supplies `_gradeStats = {}` gets the actual grade behind each chosen step.

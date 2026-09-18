@@ -1655,6 +1655,71 @@ function runChecks() {
           + `${(tight / 1e6).toFixed(0)} Myr forced twenty times finer`);
     }
 
+    // ...and the step must not be the physics in the other direction either:
+    // the controller must not RING.
+    //
+    // The quasi-static shortcut in maxStep multiplies the step by up to 4000x
+    // once the linearised solve says the world is within a kelvin or two of its
+    // equilibrium. That is sound while the temperature is slaved to the slow
+    // reservoirs, and it is what makes a billion-year run affordable. It stops
+    // being sound where the water-vapour feedback is strong, because vapour and
+    // albedo are updated explicitly AFTER the implicit temperature solve: the
+    // equilibrium the solve aimed at has moved by the time the step lands, so
+    // the step overshoots, `eqDistance` jumps past its gate, the shortcut
+    // switches off, the world relaxes back over a few small steps, and the
+    // shortcut switches on again.
+    //
+    // Reported from play as epochs that would not reproduce between runs of the
+    // same world, and the world here is the one reported -- a hot, slowly
+    // rotating, resurfacing Venus-analogue. It sat in that cycle for most of a
+    // gigayear, the mean flickering 318.47 to 321.04 K and back, and where in
+    // the cycle it happened to be when its slow drivers arrived is what decided
+    // whether it tipped: its dry-out moved 1.379 -> 1.451 Gyr with the step size
+    // and had not converged at a hundred-year step. No preset reproduces it, so
+    // the parameters are written out rather than borrowed.
+    //
+    // Counted as REVERSALS rather than as overshoots, because a single step past
+    // the aim is ordinary -- 2.5 K is an accuracy target, not a limit -- while a
+    // step past it that undoes the one before is the controller fighting itself.
+    // Budgeted in STEPS rather than in years so the check costs the same twenty
+    // seconds whichever way it goes; on the ringing controller that is 5.44% of
+    // 200,000 steps, and on this one 0.61%.
+    {
+      const ring = new Simulation({ mass: 0.815, landFraction: 0.1, water: 0.108,
+        insolation: 1.78743, xuvFraction: 4.29507e-6, rotationHours: 5832,
+        obliquity: 2.6, n2Bar: 1.0126, o2Bar: 0, biosphere: 0, co2Bar: 4e-4,
+        ch4Bar: 1e-6, outgassing: 3.472, internalHeat: 0.0161174, landAlbedo: 0.2,
+        startT: 288, brightening: 1, realisticGeology: true, startAge: 1.67,
+        magneticField: 0.02, resurfacingAge: 2.182, resurfacingBoost: 66,
+        resurfacingSpan: 40, resurfacingN2Bar: 2.65, xuvDecay: true,
+        hotRockOxidation: 1 });
+      const orig = ring.stepOnce.bind(ring);
+      const BUDGET = 200000;
+      let steps = 0, over = 0, reversals = 0, lastSign = 0;
+      ring.stepOnce = (dt) => {
+        const before = ring.world.diag.Tmean;
+        const out = orig(dt);
+        const moved = ring.world.diag.Tmean - before;
+        steps++;
+        if (Math.abs(moved) > 2.5) {
+          over++;
+          const sign = Math.sign(moved);
+          if (lastSign && sign !== lastSign) reversals++;
+          lastSign = sign;
+        }
+        if (steps >= BUDGET) throw { ringBudgetSpent: true };
+        return out;
+      };
+      try {
+        for (let i = 0; i < 400 && ring.world.time < 2e9; i++) ring.runYears(1e7);
+      } catch (err) { if (!err || !err.ringBudgetSpent) throw err; }
+      check('\u2026and the step controller does not fight itself',
+        reversals < 0.02 * steps,
+        `${reversals} reversals in ${steps} steps `
+          + `(${(100 * reversals / Math.max(steps, 1)).toFixed(2)}%, was 5.44%), `
+          + `reaching ${(ring.world.time / 1e9).toFixed(3)} Gyr`);
+    }
+
     // On a world being heated fast, the interior lags: the deepest water is the
     // COLDEST, it makes high-pressure ice rather than supercritical fluid, and
     // what arrives is the lid, from the top. Both are drawn; this pins the

@@ -31,7 +31,8 @@ import { update } from '../physics/climate.js';
 // Kept as its own object so that what is physics and what is bookkeeping stay
 // visibly apart, and so a save written before this existed simply restores
 // without it, exactly as it did before.
-const RUNTIME = ['dtPrev', 'trustOver', 'escape', 'weathering', 'o2Rate', 'o2Flux',
+const RUNTIME = ['dtPrev', 'trustOver', 'ringing', 'lastMove',
+  'escape', 'weathering', 'o2Rate', 'o2Flux',
   'ch4Source', 'ch4Tau', 'iceDeep', 'iceRate', 'iceMark', 'liquidRate', 'vapourRate',
   'liquidMark', 'vapourMark', 'lifeRoom', 'landIceTarget', 'trapActive', 'emitting',
   'insolationTarget'];

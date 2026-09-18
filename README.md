@@ -3660,6 +3660,96 @@ measured through the broken version and are corrected here; that is the third
 time this comparison has been wrong, and the first time the fault was in the
 instrument rather than in the experiment.
 
+### …except on one world, where it was — and the controller was fighting itself
+
+The entry below says the step size is not the physics, and that was measured
+honestly on the worlds it was measured on. Then a player reported the opposite:
+the same world, run twice, giving different epochs — a Buried Ocean lasting
+132 years in one run and 485 Myr in the other. They were right, and the world
+they sent turned out to break the claim in a way none of the presets do.
+
+**It is not the mean.** Same world, same 70 Myr of the approach, only the step
+cap varied:
+
+```
+  cap        steps    biggest single-step jump   widest swing   mean T at 1.37 Gyr
+  100 kyr   630,936          4.854 K                6.976 K         323.4136
+    1 kyr   644,070          1.054 K                2.066 K         323.4262
+    300 yr  638,897          0.751 K                1.870 K         323.4210
+    100 yr  737,940          0.197 K                1.572 K         323.4124
+```
+
+The mean temperature is identical to four decimals at every step size. Every
+reservoir agrees to five figures — water to 0.10475 at all four caps. What
+changes by twenty-five fold is the **jitter**.
+
+That planet has 0.108 EO of water in shallow seas and creeps along at 323.4 K
+with the fold where those seas evaporate sitting just above it. A run throwing
+4.85 K excursions eventually pokes itself over that edge; one wobbling by
+0.197 K does not. So the tipping time walks with the step and never converges:
+
+```
+  step cap    Dune ends
+   100 kyr    1.3823 Gyr
+     1 kyr    1.3902
+     300 yr   1.4046
+     100 yr   1.4503
+      40 yr   1.4976     ← still moving
+```
+
+Three explanations were measured and killed first, and they are worth recording
+because each was plausible. It is **not water loss** — identical at every cap.
+It is **not CO2**: the 2.1x difference in pCO2 at a fixed time is a consequence
+of the world having been dry for twice as long, not a cause. And it is **not
+the tipping itself**, which is integrated properly — the twelve steps that take
+the sea from 41% cover to nothing are three and four years long, with the mean
+climbing smoothly 490 → 520 K.
+
+**What produces the excursions.** `maxStep`'s quasi-static shortcut multiplies
+the step by up to 4000x once the linearised solve puts the world within a kelvin
+or two of equilibrium. That is sound while temperature is slaved to the slow
+reservoirs, and it is what makes a billion-year run affordable at all. It stops
+being sound where the water-vapour feedback is strong, because vapour and albedo
+are updated *explicitly, after* the implicit temperature solve: the equilibrium
+the solve aimed at has moved by the time the step lands. The step overshoots,
+`eqDistance` jumps past its gate, the shortcut switches off, the world relaxes
+back over a few small steps, and the shortcut switches on again. On the reported
+world, **133,128 of 408,582 steps** moved the mean by more than the 2.5 K the
+controller was aiming at, and **125,112 of those — 94% — reversed the one
+before**, the mean flickering 318.47 ↔ 321.04 K for most of a gigayear.
+
+**What shipped.** `stepOnce` counts that alternation and `maxStep` fades the
+shortcut out on the count — up fast on a reversal, down a quarter per monotone
+step, so one reversal suppresses it and eight clean steps earn it back. Turning
+the shortcut off wholesale removes the ringing too and costs 5.5x the steps
+(408,582 → 2,238,987 on that world); suppressing it only while the alternation
+is happening costs, across all thirty-two presets to a gigayear:
+
+```
+   before   4,488,291 steps   4026.4 s
+   after    4,493,573 steps   4048.6 s      +0.12% steps, +0.6% wall
+```
+
+One preset moves at all — `futureEarth`, 47,294 → 61,557 steps, landing on the
+same 304.0 K. Earth, Titan, Venus, the Waterworld, TRAPPIST-1b and the rest are
+identical to the step. On the reported world the reversals go from 5.44% of
+200,000 steps to 0.61%, and it gets *further* per step: 1.130 → 1.295 Gyr.
+
+**What did not.** The damper does not close the gap it was aimed at. It fires on
+the swing *back*, so the first excursion is always allowed through, and near a
+fold one excursion is all it takes: the tipping time moved 1.3791 → 1.3823 Gyr,
+three megayears out of a hundred-and-fifteen megayear spread. Triggering it on
+the overshoot itself is the obvious next move and was tried — at a 2 K threshold
+the world stops ringing entirely and glides — but that build then reports the
+Dune epoch ending instantly at every step size, which is not understood, so it
+is not in. **A world sitting within a kelvin of a fold still has a tipping time
+this model cannot quote to better than the step it was run at**, and that is a
+known deviation rather than a solved problem.
+
+The check that guards what did ship is written against the reported world
+rather than a preset, because no preset reproduces it, and is budgeted in steps
+rather than years so it costs the same twenty seconds whichever way it goes.
+
 ### The step size was never the physics, and proving that took the better probe
 
 A second model, asked for a review, reported that "the steps are not invariable
@@ -4351,6 +4441,16 @@ drive a real Chrome and measure where the first slider actually lands.
 ## Known deviations from the literature
 
 Stated plainly, because a model that hides these is less useful:
+
+* **A world sitting within a kelvin of a fold has no tipping time this model can quote.**
+  Reported from play and reproduced: a 0.108-EO Venus-analogue creeping at 323.4 K towards the
+  fold where its shallow seas evaporate tips at 1.3823 Gyr on a 100 kyr step, 1.4046 on a 300-year
+  one and 1.4976 on a forty-year one, still moving. The mean trajectory is identical to four
+  decimals at every one of those and every reservoir agrees to five figures; what differs is the
+  jitter, 4.854 K of single-step excursion at the coarse end against 0.197 K at the fine. One
+  excursion reaching up to the fold is all it takes. The ringing damper above cuts the alternation
+  ninefold and moved this by three megayears out of a hundred and fifteen, because it fires on the
+  swing back and the first excursion still gets through. The section above has the full working.
 
 * **Earth's far future now reproduces Wolf & Toon's transition at half its height, and this
   entry has been wrong three times, in three different ways.** All three are kept visible,
