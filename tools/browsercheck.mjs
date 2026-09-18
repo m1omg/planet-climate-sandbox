@@ -174,6 +174,25 @@ try {
   await waitFor("document.readyState === 'complete' && !!window.__app?.view");
   await waitFor('window.__app.view.ready || window.__app.view.software', 30_000);
 
+  // Open both side panels before anything else reads them. This window is
+  // 1280x800, which is under the width at which the page opens with the panels
+  // folded away, and most of the checks below are about what is IN a panel --
+  // where the first slider lands, what the readout says, which menu opened.
+  // Measuring those against a collapsed column measures nothing.
+  //
+  // Clicking rather than setting a class, because clicking is also what writes
+  // the choice to localStorage, and a stored choice is what stops the width
+  // default from folding them away again on the next resize. The default itself
+  // is tested further down, from a reload with the storage cleared.
+  await evaluate(`(() => {
+    for (const side of ['left', 'right']) {
+      if (document.body.classList.contains('hide-' + side)) {
+        document.querySelector('#panel-' + side).click();
+      }
+    }
+  })()`);
+  await delay(450);
+
   const renderer = await evaluate('({ api: __app.view.api, software: __app.view.software, failed: __app.view.failed, diagnose: __app.diagnose() })');
   ok(!renderer.failed, 'Chrome has a live planet renderer', `${renderer.software ? 'CPU' : renderer.api} · ${version.product}`);
 
@@ -1104,6 +1123,8 @@ try {
       return { controls: r('#controls'), readout: r('#readout'), canvas: r('#planet'),
         tabL: r('#panel-left'), tabR: r('#panel-right'),
         shown: getComputedStyle(document.querySelector('#panel-left')).display,
+        slider: r('#rate').width, stage: r('#stage').width,
+        barRows: Math.round(document.querySelector('#timebar').getBoundingClientRect().height),
         midL: Math.round(document.querySelector('#panel-left').getBoundingClientRect().top
           + document.querySelector('#panel-left').getBoundingClientRect().height / 2),
         midR: Math.round(document.querySelector('#panel-right').getBoundingClientRect().top
@@ -1127,11 +1148,44 @@ try {
     };
 
     await metrics(1440, 675);
-    await delay(420);
+    // The default, on a page that has never been opened before. Everything
+    // above this point has been clicking tabs, so the choice is stored by now
+    // and the storage has to go before the default can be seen at all.
+    await evaluate('localStorage.removeItem("planetclimate.altdev2.hidePanels.v1")');
+    await call('Page.reload', {}, sessionId);
+    await waitFor("document.readyState === 'complete' && !!window.__app?.view");
+    await waitFor('window.__app.view.ready || window.__app.view.software', 120_000);
+    await delay(300);
+    // A laptop-width window opens with both panels folded away: 320 + 360 of
+    // panel out of 1440 leaves the planet 760px and the timebar too little room
+    // to lay itself out in, which is how this was reported.
+    const firstVisit = await box();
+    ok(firstVisit.controls.width === 0 && firstVisit.readout.width === 0
+      && firstVisit.canvas.width >= 1400,
+      'A laptop-width window opens with the planet in front of the panels',
+      `1440x675 with nothing stored: planet ${firstVisit.canvas.width}px, `
+      + `slider ${firstVisit.slider}px`);
+    // A 274px slider against the 60px nub it used to be. The slider is the only
+    // thing in .rate that can give, so on one row at 760px of stage it gave
+    // everything: label 113 + entry 140 + stops 229 wanted 542px of a 166px box.
+    ok(firstVisit.slider >= 200,
+      '...and the time slider is long enough to aim with',
+      `${firstVisit.slider}px, and it was 60`);
+
+    // Now open them both and check the column behaviour from a known state.
+    await click('#panel-left', '#panel-left');
+    await click('#panel-right', '#panel-right');
     const wide = await box();
-    ok(wide.shown !== 'none' && wide.canvas.width > 600,
+    ok(wide.shown !== 'none' && wide.controls.width > 0 && wide.readout.width > 0,
       'The panel tabs are there on a laptop window the drawer never caught',
       `1440x675: tabs ${wide.shown}, planet ${wide.canvas.width}px between the two panels`);
+    // The timebar lays itself out by the room IT has, not by the window: the
+    // stage is 760px here and 1440 with both panels away, and a viewport media
+    // query cannot tell those apart.
+    ok(wide.barRows > firstVisit.barRows && wide.slider >= 200,
+      '...and the timebar gives the rate its own row rather than crushing it',
+      `stage ${wide.stage}px: bar ${firstVisit.barRows} → ${wide.barRows}px tall, `
+      + `slider ${wide.slider}px`);
     // Both centred on the same line. Measured at the CENTRE and not the top,
     // because the two labels are different lengths and so the two tabs are
     // different heights -- matching tops would mean they were NOT aligned.
@@ -1180,6 +1234,17 @@ try {
     ok(back.controls.width === 0 && back.readout.width === 0,
       'Widening again remembers which panels were put away',
       `controls ${back.controls.width}px, readout ${back.readout.width}px`);
+
+    // ...and a stored choice beats the width default, in the direction the
+    // default would not have picked: both were folded away here by hand, and a
+    // roomy window must leave them that way rather than helpfully opening them.
+    await metrics(1920, 1000);
+    await delay(500);
+    const roomy = await box();
+    ok(roomy.controls.width === 0 && roomy.readout.width === 0,
+      'A stored choice outranks the width default',
+      `1920x1000 still ${roomy.controls.width}px / ${roomy.readout.width}px`);
+    await metrics(1440, 675); await delay(400);
     await click('#panel-left'); await click('#panel-right');
   }
 
