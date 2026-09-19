@@ -24,6 +24,8 @@
 // Run:  node tools/inneredge.mjs
 import { Simulation } from '../src/sim/clock.js';
 import { EARTH } from '../src/game/presets.js';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const C = { r: '\x1b[31m', g: '\x1b[32m', y: '\x1b[33m', d: '\x1b[2m', x: '\x1b[0m' };
 
@@ -62,7 +64,24 @@ export function ramp(params, from, to, steps, dwell) {
   return s.world;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly, or imported? `import.meta.url === \`file://${process.argv[1]}\``
+// is the usual answer and it is wrong wherever the path needs escaping in a
+// URL. A directory called `Stiahnuté` is enough: import.meta.url spells it
+// `Stiahnut%C3%A9` and argv[1] does not, the comparison fails, and this file
+// exits 0 having rendered nothing -- a check that reports success without
+// running, which is worse than one that fails. Reported from a machine whose
+// downloads folder is named exactly that, and a space in the path does it too.
+//
+// Comparing resolved paths instead of URL text is immune to the encoding, and
+// realpath also settles the symlink case where argv[1] is a link into the tree.
+const runDirectly = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+})();
+
+if (runDirectly) {
   // Way et al.'s paleo-Venus: 1 bar N2, 400 ppm CO2, 310 m ocean, 40% land.
   const venusish = { ...EARTH, mass: 0.815, n2Bar: 1.0126, o2Bar: 0, co2Bar: 400e-6,
     ch4Bar: 1e-6, water: 0.108, landFraction: 0.40, landAlbedo: 0.2, biosphere: 0,

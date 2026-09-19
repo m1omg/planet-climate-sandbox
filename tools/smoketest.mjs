@@ -932,5 +932,42 @@ if (created < 20) {
   }
 }
 
+// No tool may decide whether it is the entry point by comparing its module URL
+// as TEXT against argv[1]. That comparison is the usual idiom and it is wrong
+// wherever the path needs percent-encoding: a downloads folder named
+// `Stiahnuté` appears as `Stiahnut%C3%A9` in the URL and not in argv, so the
+// two never match, the guarded block never runs, and the tool exits 0 having
+// done nothing -- a check reporting success without running, which is worse
+// than one that fails. A space in the path does it too. Reported from a machine
+// whose folder is named exactly that; rendercheck, convergence and inneredge
+// all had it, and all three compare resolved realpaths now.
+//
+// The pattern itself is not written out anywhere in this file, because a check
+// that spells the string it hunts for finds itself.
+//
+// Source-level because it cannot be caught any other way: running the tools
+// from this repo's own path is precisely the case where the bug is invisible.
+{
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const here = new URL('.', import.meta.url);
+  const guilty = [];
+  for (const name of readdirSync(here).filter((f) => f.endsWith('.mjs'))) {
+    const text = readFileSync(new URL(name, here), 'utf8');
+    // Assembled from pieces rather than written out, because a check that
+    // contains the string it looks for finds itself.
+    const needle = new RegExp(['import', 'meta', 'url'].join('\\.')
+      + '\\s*===\\s*`file://\\$\\{process\\.argv\\[1\\]\\}`');
+    if (needle.test(text)) guilty.push(name);
+  }
+  if (guilty.length) {
+    console.log(`\x1b[31mFAIL\x1b[0m  ${guilty.join(", ")} ${guilty.length === 1 ? "decides" : "decide"} they are the entry point by `
+      + 'comparing URL text to a path, which silently skips the whole tool on any '
+      + 'path that needs escaping');
+    failed++;
+  } else {
+    console.log('\x1b[32mPASS\x1b[0m  No tool skips itself on a path with an accent or a space in it');
+  }
+}
+
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);

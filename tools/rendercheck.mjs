@@ -2,6 +2,8 @@
 // the GPU draws. Exists because this machine has no WebGL2 context to render
 // into, and "looks right" is otherwise unverifiable. Writes a PPM.
 import { writeFileSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const V = (x, y, z) => [x, y, z];
 const add = (a, b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
@@ -122,7 +124,24 @@ export function render(opts={}) {
   return {W,H,px,peak};
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly, or imported? `import.meta.url === \`file://${process.argv[1]}\``
+// is the usual answer and it is wrong wherever the path needs escaping in a
+// URL. A directory called `Stiahnuté` is enough: import.meta.url spells it
+// `Stiahnut%C3%A9` and argv[1] does not, the comparison fails, and this file
+// exits 0 having rendered nothing -- a check that reports success without
+// running, which is worse than one that fails. Reported from a machine whose
+// downloads folder is named exactly that, and a space in the path does it too.
+//
+// Comparing resolved paths instead of URL text is immune to the encoding, and
+// realpath also settles the symlink case where argv[1] is a link into the tree.
+const runDirectly = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+})();
+
+if (runDirectly) {
   const r = render({});
   const buf = Buffer.alloc(r.W*r.H*3);
   r.px.forEach((c,i)=>{ buf[i*3]=clamp(c[0]*255,0,255); buf[i*3+1]=clamp(c[1]*255,0,255); buf[i*3+2]=clamp(c[2]*255,0,255); });

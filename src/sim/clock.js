@@ -431,6 +431,19 @@ export class Simulation {
       : Math.max((w.ringing ?? 0) - 0.25, 0);
     w.lastMove = move;
 
+    // Per STEP, not per frame. The epoch record used to be written from the
+    // frame loop, after `advance()` had already moved the world by as much as
+    // it liked: at play speed a frame is megayears, so a state the planet
+    // passed through inside one frame was never recorded at all. Reported as
+    // the same world giving different histories on different runs -- a buried
+    // ocean of 8 Myr either logged or swallowed depending on where the frame
+    // boundaries happened to fall, which read as one 449 Myr steam runaway in
+    // one run and 485 in another.
+    //
+    // `classify` is 0.65 microseconds and a gigayear of Earth is 2756 steps, so
+    // asking every step costs about 0.3% of a run.
+    if (this.onStep) this.onStep(w);
+
     if (w.time >= this._nextSample) {
       this.sample();
       this._nextSample = w.time + Math.max(1, w.time * 0.02);
@@ -441,7 +454,13 @@ export class Simulation {
     const w = this.world, dg = w.diag;
     w.history.push({
       t: w.time, T: dg.Tmean, Tmax: dg.Tmax, Tmin: dg.Tmin,
-      ice: dg.iceMean, pCO2: dg.pCO2, pH2O: dg.pTotMean - dg.pN2 - dg.pCO2,
+      // The water vapour, and not "everything that is not nitrogen or carbon
+      // dioxide", which is what this was: `pTotMean - pN2 - pCO2` counts the
+      // oxygen, the methane and any hydrogen envelope as water, so present-day
+      // Earth recorded 0.224 bar of vapour against an actual 0.014. The model
+      // has the number per band already and the readout uses that one.
+      ice: dg.iceMean, pCO2: dg.pCO2,
+      pH2O: dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length,
       ocean: w.water.ocean, seaIce: w.water.seaIce, landIce: w.water.landIce,
       // The airborne water, split where the critical point has been crossed.
       // One fluid physically; two very different things to look at.
@@ -449,7 +468,12 @@ export class Simulation {
       sup: w.water.vapour * (dg.superFrac || 0),
       lost: w.water.lost,
       flooded: dg.flooded, landFrac: dg.landFrac,
-      alb: dg.absorbed / Math.max(1e-6, dg.S.reduce((a, b) => a + b, 0) / dg.S.length),
+      // Reflected, which is what the name says. This stored the ABSORBED share
+      // -- Earth read 0.710 for a planet whose albedo is 0.291 -- and being one
+      // minus the right answer is the kind of wrong that looks plausible on a
+      // chart forever. Taken from the band albedos the model already computes
+      // rather than reconstructed from the flux.
+      alb: dg.alb.reduce((a, b) => a + b, 0) / dg.alb.length,
     });
     if (w.history.length > 4000) w.history.splice(0, 2000);
     if (this.onSample) this.onSample(w);

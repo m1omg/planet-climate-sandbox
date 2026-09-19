@@ -36,6 +36,14 @@ const $ = (s) => document.querySelector(s);
 // planet that looked exactly like the Earth chip and quietly behaved like a
 // pre-industrial one -- 427 ppm sitting still instead of climbing. The warming
 // is real; hiding it in the default is worse than showing it.
+// Anything that came out of a file, a URL or a person's keyboard goes through
+// this before it reaches innerHTML. The save slots put a name there, and a save
+// file is an ordinary JSON document that anybody can hand somebody else: a name
+// of `<img src=x onerror=...>` ran as soon as the slots were drawn. /dev has
+// had this since it was written; this build did not.
+const HTML_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => HTML_ESC[c]);
+
 const params = { ...PRESETS.earth.params, ...paramsFromHash() };
 const sim = new Simulation(params);
 // A do-nothing renderer until start() picks a real one. Creating a WebGL context
@@ -761,9 +769,22 @@ function closeScenario() {
 
 // ---------------------------------------------------------------------------
 // URL hash so a world can be shared
+// What a URL leaves out is what the page will supply when it reads one back, so
+// the two have to name the same object. They did not: this wrote against the
+// bare EARTH constant while `params` above is built on PRESETS.earth.params,
+// and the two differ on five keys --
+//
+//     emissions 0 / 1 · fossilUsed 0 / 0.098 · brightening 0 / 1
+//     realisticGeology false / true · xuvDecay false / true
+//
+// -- so a world that happened to sit at the EARTH value for any of them had it
+// dropped from the URL and got the preset's value back on load. Sharing a
+// pre-industrial Earth returned a planet with modern emissions running.
+const URL_BASE = PRESETS.earth.params;
+
 function writeHash() {
   const keep = {};
-  for (const k of Object.keys(EARTH)) if (params[k] !== EARTH[k]) keep[k] = params[k];
+  for (const k of Object.keys(EARTH)) if (params[k] !== URL_BASE[k]) keep[k] = params[k];
   // The starlight control holds the *destination* while a smooth change is
   // walking, which is right for the handle and wrong for the URL: the address
   // bar is meant to be the world you are looking at, and writing the target
@@ -773,7 +794,7 @@ function writeHash() {
   // with the smoothing that was supposed to prevent exactly that jump switched
   // on the whole time. What the world actually has is what gets shared.
   if ('insolation' in keep) keep.insolation = sim.world.params.insolation;
-  if (keep.insolation === EARTH.insolation) delete keep.insolation;
+  if (keep.insolation === URL_BASE.insolation) delete keep.insolation;
   const s = Object.entries(keep).map(([k, v]) => `${k}=${typeof v === 'number' ? +v.toPrecision(6) : v}`).join('&');
   // Keep the query string. It carries ?renderer= and ?quality=, and writing
   // location.pathname alone silently erased them the moment anything changed --
@@ -787,7 +808,15 @@ function paramsFromHash() {
   for (const kv of h.split('&')) {
     const [k, v] = kv.split('=');
     if (!(k in EARTH)) continue;
-    out[k] = v === 'true' ? true : v === 'false' ? false : parseFloat(v);
+    // A number that is not a number is not a value to fall back from, it is a
+    // typo or a truncated link, and taking it poisons the world outright:
+    // `#mass=nope` is parseFloat NaN, and a NaN mass gives a NaN radius and a
+    // NaN temperature with nothing to say which control did it. Dropping the
+    // key leaves the preset's value, which is the same thing that happens when
+    // the key is absent -- the behaviour the rest of this function already has.
+    if (v === 'true' || v === 'false') { out[k] = v === 'true'; continue; }
+    const n = parseFloat(v);
+    if (Number.isFinite(n)) out[k] = n;
   }
   return out;
 }
@@ -1522,7 +1551,44 @@ let marks = [];               // { t, name }, oldest first
 let epochs = [];              // { id, name, color, from, to }
 let openEpochSpan = null;     // the one row whose duration is still counting
 
+// How long a state has to hold before it is an epoch rather than a flicker.
+//
+// Written per step, the raw record is unusable: Earth alone produces 2,861
+// spans over three gigayears, 2,554 of them shorter than a ten-thousandth of
+// its age and the shortest 0.85 years -- the climate sitting on a
+// classification boundary and crossing it back and forth, which is a fact about
+// the boundary rather than about the planet's history.
+//
+// A share of the world's age rather than a fixed number of years, because a
+// thousand-year state means something different on a world a million years old
+// and on one three billion years old. Measured across the three worlds this was
+// tested on:
+//
+//     threshold   reported   earth   lastOcean
+//     none               8    2861           3
+//     1e-5               5      37           3
+//     1e-4               5      36           3
+//     1e-3               5       4           2   <- loses a real one
+//
+// 1e-4 it is: the reported world settles on the five epochs it actually has,
+// including the 8 Myr buried ocean that the frame-quantised record was
+// dropping, and lastOcean keeps all three of its own.
+const EPOCH_MIN_SHARE = 1e-4;
+
+// A state that has not yet held long enough to count, and the time it began.
+let epochCandidate = null;
+
 function noteEpoch(w, st) {
+  // Debounced: a change is only committed once the new state has held for
+  // EPOCH_MIN_SHARE of the world's age. Anything briefer leaves no trace, which
+  // is what makes two runs of the same world agree -- the record no longer
+  // depends on where a frame boundary happened to land.
+  if (!epochCandidate || epochCandidate.id !== st.id) {
+    epochCandidate = { id: st.id, from: w.time };
+    return;
+  }
+  if (w.time - epochCandidate.from < Math.max(1, w.time * EPOCH_MIN_SHARE)) return;
+
   let last = epochs[epochs.length - 1];
   // A clock that has gone backwards past the start of the open span is not this
   // run any more -- a preset was loaded, or the world was reset. Continuing the
@@ -1532,8 +1598,11 @@ function noteEpoch(w, st) {
   // thing and is handled by truncateEpochs, which reopens the span landed in.
   if (last && w.time + 1 < last.from) { epochs = []; last = undefined; }
   if (last && last.id === st.id) { last.to = null; return; }
-  if (last) last.to = w.time;
-  epochs.push({ id: st.id, name: st.name, color: st.color, from: w.time, to: null });
+  // Dated from when the state STARTED, not from when it was confirmed: the
+  // debounce is there to decide whether a span counts, not to move it.
+  if (last) last.to = epochCandidate.from;
+  epochs.push({ id: st.id, name: st.name, color: st.color,
+                from: epochCandidate.from, to: null });
   renderEpochs();
 }
 
@@ -1590,6 +1659,12 @@ function applyWorldState(s) {
 }
 
 function restore(s) {
+  // A scenario belongs to the world it was started on. Loading a save is a
+  // different world arriving, and leaving the scenario running meant its
+  // objectives, its banner and -- worse -- its `evolve` hook carried over: the
+  // Great Oxidation drives the biosphere slider on its own every step, so it
+  // went on driving it on somebody else's planet.
+  closeScenario();
   applyWorldState(s);
   marks = Array.isArray(s.marks)
     ? s.marks.filter((m) => m && isFinite(m.t)).map((m) => ({ t: +m.t,
@@ -1692,7 +1767,7 @@ function syncSlots() {
     const auto = `<span class="slot-auto">${i === AUTO ? t('auto') : ''}</span>`;
     const n = i === AUTO ? '<span class="slot-n">↻</span>' : `<span class="slot-n">${i}</span>`;
     b.innerHTML = n + (s
-      ? `<span class="slot-name">${s.name}</span>${auto}` +
+      ? `<span class="slot-name">${escHtml(s.name)}</span>${auto}` +
         `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
       : `<span class="slot-name">${t('empty')}</span>${auto}<span class="slot-sub">—</span>`);
     const note = i === AUTO
@@ -1813,6 +1888,11 @@ function importSaves(text) {
 // Capture, on the sampler the clock already runs -- so restore points land on
 // the same geometric schedule as the chart's own points, and every one of them
 // is a moment the chart actually draws.
+// Every step, so the record cannot miss a state the world was in. Debounced
+// inside noteEpoch; see the note there for why a raw per-step record is
+// unusable and what the threshold is.
+sim.onStep = (w) => { if (!suspendCapture) noteEpoch(w, classify(w)); };
+
 sim.onSample = (w) => {
   if (suspendCapture) return;
   // A reset, a preset, a scenario or a loaded slot all clear the history and
@@ -2836,15 +2916,12 @@ function tick(dtReal) {
     // guard by its exact text -- it exists because settling once ran straight
     // past a paused clock, and it caught this edit when it was folded in.
     if (!sim.paused) markDirty();
-    // The epoch record is written here, on the simulation's own loop, and NOT
-    // from the readout. The readout runs at 10 Hz, and a transition that
-    // finished between two of its ticks was simply never recorded: the world
-    // would list itself as temperate and then as a runaway with nothing in
-    // between, having in fact passed through the moist greenhouse for a fifth
-    // of a second. classify() is a chain of comparisons over numbers the
-    // diagnostics already hold, so asking it every frame costs nothing worth
-    // measuring against a step of the model.
-    noteEpoch(sim.world, classify(sim.world));
+    // The epoch record is NOT written here any more. It used to be -- once per
+    // frame, which was already better than the readout's 10 Hz -- and a frame
+    // is still megayears at play speed, so a state the planet passed through
+    // inside one was never recorded. It is written per step now, from
+    // `sim.onStep` below, which is the only place that sees every state the
+    // world was actually in.
     view.render(sim.world, renderState, dtReal);
 
     // Autosave rides the chart clock rather than a timer of its own: it is
@@ -3028,6 +3105,14 @@ window.__app = {
   // is reachable from a Node test, because both live in click handlers.
   timeline: () => ({ zoom: histZoom, pan: histPan }),
   epochs: () => epochs.map((e) => ({ ...e })),
+  // Three more for the same reason. Redrawing the slot tiles is how the browser
+  // check sees what a save file's name does to the page; the hash is what a
+  // shared link carries; and whether a scenario is running is the thing a
+  // loaded save has to have put away.
+  syncSlots,
+  saveSlot: (i) => localStorage.setItem(slotKey(i), JSON.stringify(snapshot())),
+  restoreSlot: (i) => { const w = readSlot(i); if (w) restore(w); },
+  scenarioRunning: () => !!activeScenario, scenarios: SCENARIOS,
   // Paste __app.diagnose() into the console to see what this machine offers.
   diagnose() {
     const probe = (kind) => {
