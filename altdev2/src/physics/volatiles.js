@@ -634,7 +634,7 @@ function advanceIceSheet(w, dtYears) {
 // How fast the boundary between the hot upper layer and the cold water beneath
 // it moves, and why it moves at two different speeds.
 //
-// Pierrehumbert & Furth 2023 describe a planet that cooled early and was heated
+// Pierrehumbert 2023 describes a planet that cooled early and was heated
 // later as carrying "a hot (and possibly supercritical) isothermal upper layer
 // in contact with a cold liquid or ice boundary", which "as the isothermal layer
 // radiated into the ocean or ice, would progressively advance toward the
@@ -1015,7 +1015,10 @@ export function stepVolatiles(w, dtYears) {
     // identity.mjs exists to catch. The structure functions themselves are pure,
     // so calling them leaves the caches alone.
     const eo = eoCol, flooded = wet;
-    const st = (dg0.hotTarget ?? 0) > 0.5
+    // `dg0.lidded` and not a fifth spelling of `hotTarget > 0.5`. It is a pure
+    // getter -- `openOcean` and `hotTarget`, no column solve -- so reading it
+    // here leaves the caches alone, which is the whole point of the note above.
+    const st = dg0.lidded
       ? coldPoolStructure(dg0)
       : (eo > 0 ? oceanStructure(
           ((w.water.ocean ?? 0) + (w.water.seaIce ?? 0)) * eo / flooded,
