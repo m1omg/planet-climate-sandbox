@@ -14,7 +14,7 @@ import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile,
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
 import { SCENARIOS } from './game/scenarios.js';
 import { SK } from './game/sk.js';
-import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
+import { SLOTS, NUMERIC_FIELDS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld, DERIVED } from './game/snapshot.js';
 import { oceanStructure, meltingPressure, waterDensity,
@@ -1619,6 +1619,29 @@ function runChecks() {
         bad.length === 0,
         bad.length ? bad.slice(0, 4).join('; ')
           : `${Object.keys(PRESETS).length} presets at four epochs each`);
+    }
+
+    // What the history records has to be what it is named for. Two fields were
+    // not, and both were the kind of wrong that looks plausible on a chart
+    // forever -- reported by a reviewing model rather than caught here.
+    //
+    // `pH2O` was `pTotMean - pN2 - pCO2`, which is not the water vapour, it is
+    // everything that is not nitrogen or carbon dioxide: on present-day Earth
+    // the 0.21 bar of oxygen went into it and the row read 0.224 bar of vapour
+    // against an actual 0.014. `alb` held the ABSORBED share under the name of
+    // the reflected one, 0.710 for a planet whose albedo is 0.291.
+    {
+      const rec = new Simulation({ ...EARTH });
+      rec.runYears(1e5);
+      const w = rec.world, dg = w.diag, row = w.history[w.history.length - 1];
+      const vapour = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length;
+      const albedo = dg.alb.reduce((a, b) => a + b, 0) / dg.alb.length;
+      check('The recorded history says what it is named for',
+        Math.abs(row.pH2O - vapour) < 1e-9 && Math.abs(row.alb - albedo) < 1e-9
+          && row.pH2O < 0.05 && row.alb < 0.5,
+        `pH\u2082O ${row.pH2O.toFixed(4)} bar with ${dg.pO2.toFixed(3)} bar of O\u2082 beside it `
+        + `(it read ${(dg.pTotMean - dg.pN2 - dg.pCO2).toFixed(4)}), `
+        + `albedo ${row.alb.toFixed(4)} (it read ${(1 - albedo).toFixed(4)})`);
     }
 
     // The step size must not be the physics.
@@ -5224,6 +5247,56 @@ function runChecks() {
       back && back.length === SLOTS && back[3].name === 'W4' && back[0].params.co2Bar === EARTH.co2Bar,
       `${back ? back.length : 0} worlds, names ${back ? back.map((w) => w.name).join(' ') : '—'}`);
 
+    // A save file is an ordinary JSON document that one person hands another,
+    // so everything in it is somebody else's input. Numbers that are not
+    // numbers were taken at face value and reached the physics, where NaN does
+    // not stay put: a NaN mass gives a NaN radius, a NaN gravity and a NaN
+    // temperature, and the readout then shows a planet with no numbers on it
+    // and nothing to say which field did it. Reported by a reviewing model.
+    //
+    // Dropped, not clamped and not refused: a dropped key leaves the preset's
+    // value, which is what already happens when a save omits it, so a file with
+    // one bad field loads as a world missing that field rather than failing
+    // whole or arriving broken.
+    {
+      const nasty = parseSaveFile(JSON.stringify({ worlds: [{
+        slot: 1, name: 'x',
+        params: { mass: 'nope', insolation: 1.2, water: null,
+                  realisticGeology: 'yes', brightening: 1 },
+        T: [288, 'hot', 290], water: { ocean: 1, vapour: null },
+        time: 'soon', coldT: 1e999, life: { pro: 'all' },
+      }] }))[0];
+      const clean = parseSaveFile(JSON.stringify({ worlds: [{
+        slot: 2, name: 'ok', params: { mass: 1, realisticGeology: true },
+        T: [288, 289], water: { ocean: 1, vapour: 0.01 }, time: 5e6,
+      }] }))[0];
+      const gone = ['mass', 'water', 'realisticGeology'].every((k) => !(k in nasty.params));
+      check('A save file cannot carry a number that is not a number',
+        gone && nasty.params.insolation === 1.2 && nasty.params.brightening === 1
+          && nasty.T === undefined && nasty.water.vapour === undefined
+          && nasty.time === undefined && nasty.coldT === undefined,
+        `kept ${JSON.stringify(nasty.params)}, dropped T / water.vapour / time / coldT`);
+      check('\u2026and a sound one goes through untouched',
+        clean.params.mass === 1 && clean.params.realisticGeology === true
+          && clean.T.length === 2 && clean.water.vapour === 0.01 && clean.time === 5e6,
+        `${JSON.stringify(clean.params)}, T ${JSON.stringify(clean.T)}, t=${clean.time}`);
+
+      // The list of fields that hold numbers is written out in saves.js, which
+      // makes forgetting one the failure to fear: a new numeric field would go
+      // unchecked and a bad value in it would reach the model exactly as before.
+      // So the list is held against what captureWorld actually produces, rather
+      // than against someone remembering to update it.
+      const shot = captureWorld(new Simulation({ ...EARTH }).world);
+      const numeric = Object.entries(shot)
+        .filter(([k, v]) => typeof v === 'number' && k !== 'v' && k !== 'at')
+        .map(([k]) => k);
+      const missed = numeric.filter((k) => !NUMERIC_FIELDS.includes(k));
+      check('\u2026and every numeric field a save can hold is on that list',
+        missed.length === 0,
+        missed.length ? `not covered: ${missed.join(', ')}`
+          : `${numeric.length} numeric fields, all of them checked`);
+    }
+
     // Importing is a MERGE. This is the rule that stops someone else's file
     // taking your saves with it, and it is the one worth pinning hardest.
     {
@@ -5343,6 +5416,47 @@ function runChecks() {
         walk(live.world[key], back.world[key], key);
       }
       const stepLive = maxStep(live.world, 2.5), stepBack = maxStep(back.world, 2.5);
+      // A save taken while the starlight is walking carries BOTH halves of the
+      // walk. The target alone restores the destination without the speed, so
+      // `approach` gets an undefined rate and the walk finishes in a single
+      // step: a world saved mid-drag came back already arrived.
+      {
+        const walking = new Simulation({ ...EARTH, smoothInsolation: true });
+        walking.runYears(1e5);
+        walking.setParams({ insolation: 1.4 });
+        walking.runYears(1e4);
+        const mid = walking.world.params.insolation;
+        const shot2 = captureWorld(walking.world);
+        const resumed = new Simulation({ ...EARTH, smoothInsolation: true });
+        applyWorld(resumed, shot2, { ...shot2.params });
+        resumed.runYears(1e4);
+        walking.runYears(1e4);
+        check('A save taken mid-walk resumes the walk rather than arriving',
+          resumed.world.params.insolation < 1.4
+            && Math.abs(resumed.world.params.insolation - walking.world.params.insolation) < 1e-9,
+          `starlight ${mid.toFixed(4)} \u2192 ${resumed.world.params.insolation.toFixed(4)} S\u2295, `
+          + `target 1.4 and still on the way`);
+      }
+
+      // ...and the history a restored world starts with is its own. reset()
+      // empties the history and samples BEFORE the saved state is applied, so a
+      // world loaded at ten megayears used to carry a first chart point from
+      // year zero of a planet that never existed -- the right temperature for
+      // the params, the wrong world, and a line drawn to it.
+      {
+        const ran = new Simulation({ ...EARTH });
+        ran.runYears(1e7);
+        const put = new Simulation({ ...EARTH });
+        applyWorld(put, captureWorld(ran.world), { ...ran.world.params });
+        const first = put.world.history[0];
+        check('A restored world\u2019s chart starts where the world does',
+          put.world.history.length === 1 && Math.abs(first.t - ran.world.time) < 1
+            && Math.abs(first.T - ran.world.diag.Tmean) < 1e-6,
+          `one sample at ${(first.t / 1e6).toFixed(1)} Myr and ${first.T.toFixed(2)} K, `
+          + `for a world at ${(put.world.time / 1e6).toFixed(1)} Myr and `
+          + `${put.world.diag.Tmean.toFixed(2)} K`);
+      }
+
       check('\u2026and it comes back identical, step controller included',
         bad.length === 0 && Math.abs(stepLive - stepBack) <= 1e-9 * stepLive,
         bad.length

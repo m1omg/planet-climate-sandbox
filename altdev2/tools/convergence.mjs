@@ -12,6 +12,8 @@
 import { Simulation } from '../src/sim/clock.js';
 import { maxStep } from '../src/physics/climate.js';
 import { EARTH, PRESETS } from '../src/game/presets.js';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const YEARS = Number(process.argv[2] ?? 3e7);
 const CAPS = [5e6, 1e6, 2e5, 5e4, 1e4, 2e3];
@@ -75,7 +77,24 @@ export function known(label, params, why, years = YEARS, caps = CAPS) {
   return r;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly, or imported? `import.meta.url === \`file://${process.argv[1]}\``
+// is the usual answer and it is wrong wherever the path needs escaping in a
+// URL. A directory called `Stiahnuté` is enough: import.meta.url spells it
+// `Stiahnut%C3%A9` and argv[1] does not, the comparison fails, and this file
+// exits 0 having rendered nothing -- a check that reports success without
+// running, which is worse than one that fails. Reported from a machine whose
+// downloads folder is named exactly that, and a space in the path does it too.
+//
+// Comparing resolved paths instead of URL text is immune to the encoding, and
+// realpath also settles the symlink case where argv[1] is a link into the tree.
+const runDirectly = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+})();
+
+if (runDirectly) {
   console.log(`\nStep-size convergence over ${YEARS.toExponential(0)} yr\n`);
   let bad = 0;
   for (const og of [1, 2, 2.6, 2.8, 3.5, 5, 8]) {

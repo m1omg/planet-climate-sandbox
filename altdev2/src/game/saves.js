@@ -34,10 +34,93 @@ export function parseSaveFile(text) {
     : null;
   if (!list) return null;
   const worlds = list.filter((wd) => wd && typeof wd === 'object' && wd.params
-    && typeof wd.params === 'object');
+    && typeof wd.params === 'object').map(scrubWorld);
   return worlds.length ? worlds : null;
 }
 
+// Values that are not values, taken out.
+//
+// Being liberal about the SHAPE of a save file is right -- people hand-edit
+// these. Being liberal about its arithmetic is not. A mass of `null`, of
+// `"heavy"`, or of anything else JSON will happily carry becomes NaN the moment
+// it reaches the physics, and NaN does not stay where it is put: a NaN mass
+// gives a NaN radius, a NaN gravity and a NaN temperature, and the readout then
+// shows a planet with no numbers on it and nothing to say which field did it.
+//
+// `EARTH` is the schema, because it already is one -- every control the model
+// has, with a value of the right type. A param is kept only if it matches the
+// type of the reference, so a string where a number belongs goes, and so does
+// Infinity, and so does the NaN that `JSON.parse` never produces but a
+// hand-edit of `1e999` does.
+//
+// Dropped rather than clamped, and dropped rather than refused. Dropping leaves
+// the preset's value, which is exactly what happens when a save omits the key
+// -- a shape this file already handles -- so a save with one bad field loads as
+// a world missing that one field instead of failing whole or arriving broken.
+//
+// The damage is not only in `params`: `T` is an array of band temperatures and
+// `water` a set of reservoirs, and a NaN in either is the same poison arriving
+// by a different door. Those have no schema to check against, so the rule there
+// is the weaker one that is still worth having -- a number has to be finite.
+import { EARTH } from './presets.js';
+
+function scrubParams(p) {
+  const out = {};
+  for (const [k, v] of Object.entries(p)) {
+    const ref = EARTH[k];
+    if (ref === undefined) { out[k] = v; continue; }   // not ours to judge
+    if (typeof ref === 'number') { if (Number.isFinite(v)) out[k] = v; continue; }
+    if (typeof ref === 'boolean') { if (typeof v === 'boolean') out[k] = v; continue; }
+    if (typeof v === typeof ref) out[k] = v;
+  }
+  return out;
+}
+
+// The fields of a captured world that hold numbers and nothing else. Named
+// rather than guessed, because "drop anything that is not a finite number"
+// would also eat the world's name, and "drop only NaN and Infinity" lets
+// `[288, "hot", 290]` through to become a NaN band the moment it is copied in.
+//
+// A field added to captureWorld and forgotten here is the failure worth
+// fearing, so selftest.js checks this list against what captureWorld actually
+// produces rather than trusting it to be kept up to date by hand.
+export const NUMERIC_FIELDS = ['time', 'waterInitial', 'iceSheet', 'hotLayer', 'coldT',
+  'landIceMass', 'co2Frozen', 'otherGHG', 'aerosol', 'carbonDeep', 'bio',
+  'fossil', 'industrial', 'co2', 'n2', 'o2', 'ch4', 'h2', 'he'];
+// ...and the ones that are a bag of numbers rather than one. `T` is the band
+// temperatures, and a hole in it is worse than no array at all: applyWorld
+// copies index by index, so a single bad band would leave the rest of the world
+// at the fresh planet's temperatures and look like a climate.
+const NUMERIC_BAGS = ['water', 'life', 'evolve0'];
+
+const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+
+function scrubBag(v) {
+  if (!v || typeof v !== 'object') return undefined;
+  const out = {};
+  for (const [k, x] of Object.entries(v)) if (finite(x)) out[k] = x;
+  return out;
+}
+
+function scrubWorld(wd) {
+  const out = {};
+  for (const [k, v] of Object.entries(wd)) {
+    if (k === 'params') continue;
+    if (NUMERIC_FIELDS.includes(k)) { if (finite(v)) out[k] = v; continue; }
+    if (NUMERIC_BAGS.includes(k)) {
+      const bag = scrubBag(v);
+      if (bag) out[k] = bag;
+      continue;
+    }
+    if (k === 'T') {
+      if (Array.isArray(v) && v.length && v.every(finite)) out[k] = v;
+      continue;
+    }
+    out[k] = v;
+  }
+  out.params = scrubParams(wd.params);
+  return out;
+}
 // Which world goes where.
 //
 // A merge, not a replacement, and that is the whole point of the rule: a file

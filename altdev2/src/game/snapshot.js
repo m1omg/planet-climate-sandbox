@@ -32,10 +32,14 @@ import { update } from '../physics/climate.js';
 // visibly apart, and so a save written before this existed simply restores
 // without it, exactly as it did before.
 const RUNTIME = ['dtPrev', 'trustOver', 'ringing', 'lastMove',
+  // Both halves of a starlight walk in progress. The target alone restores
+  // the destination without the speed, so `approach` is handed an undefined
+  // rate and the walk finishes in one step -- a save taken mid-drag came back
+  // already arrived.
+  'insolationTarget', 'insolationRate',
   'escape', 'weathering', 'o2Rate', 'o2Flux',
   'ch4Source', 'ch4Tau', 'iceDeep', 'iceRate', 'iceMark', 'liquidRate', 'vapourRate',
-  'liquidMark', 'vapourMark', 'lifeRoom', 'landIceTarget', 'trapActive', 'emitting',
-  'insolationTarget'];
+  'liquidMark', 'vapourMark', 'lifeRoom', 'landIceTarget', 'trapActive', 'emitting'];
 
 // Fields that really are derived afresh every step, listed so that the
 // completeness check in selftest.js can tell "deliberately absent" from
@@ -139,5 +143,13 @@ export function applyWorld(sim, s, params = s.params) {
     }
   }
   update(w, 0);
+  // The history starts here, at the world that was restored, not at the fresh
+  // one `sim.reset` made on the way in. reset() empties the history and takes a
+  // sample before any of the saved state has been applied, so a world loaded at
+  // ten megayears carried a first chart point from year zero of a planet that
+  // never existed -- right temperature for the params, wrong world, and the
+  // chart drew a line to it.
+  w.history.length = 0;
+  sim.sample();
   return w;
 }

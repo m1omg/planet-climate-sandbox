@@ -656,9 +656,25 @@ try {
   ok(xuv.dwarf.checked && xuv.dwarf.param && !xuv.sandbox.checked && !xuv.sandbox.param,
     'The spin-down switch ships on for a red dwarf and off for a sandbox world',
     `TRAPPIST-1e ${xuv.dwarf.checked} · ocean world ${xuv.sandbox.checked}`);
-  ok(xuv.after && /xuvDecay=true/.test(xuv.hash),
-    'Turning it on reaches the model and the address bar',
-    xuv.hash.slice(0, 60));
+  // Asserted as a ROUND TRIP rather than as a substring. The URL omits whatever
+  // already matches the base the loader merges onto, so whether a given key is
+  // spelled out in the address bar is an implementation detail -- and it moved
+  // when that base was corrected from the bare EARTH constant to the earth
+  // preset, which is what the loader had been using all along. What has to hold
+  // is that the world comes back, and that is what this now reads.
+  {
+    // Away first, or this is a hash change rather than a load -- see the note
+    // on the same manoeuvre further down.
+    await call('Page.navigate', { url: 'about:blank' }, sessionId);
+    await delay(120);
+    await call('Page.navigate', { url: url.split('#')[0] + xuv.hash }, sessionId);
+    await waitFor("document.readyState === 'complete' && !!window.__app?.view");
+    await waitFor('window.__app.view.ready || window.__app.view.software', 120_000);
+    const reloaded = await evaluate('!!__app.sim.world.params.xuvDecay');
+    ok(xuv.after && reloaded === true,
+      'Turning it on reaches the model, and the link brings it back',
+      `${xuv.hash.slice(0, 48)}… reloads with spin-down ${reloaded}`);
+  }
   const xuvBack = await evaluate(`(async () => {
     __app.loadPreset('waterworld');
     await new Promise((r) => setTimeout(r, 120));
@@ -1115,8 +1131,26 @@ try {
   // what they do changes with the size, so both halves are driven here -- the
   // geometry is the whole point and no Node test can see it.
   {
-    const metrics = (w, h) => call('Emulation.setDeviceMetricsOverride',
-      { width: w, height: h, deviceScaleFactor: 1, mobile: false }, sessionId);
+    const settled = (sel) => waitFor(`(() => {
+      const e = document.querySelector('${sel}');
+      const now = e.getBoundingClientRect().left;
+      const was = e.__wasAt; e.__wasAt = now;
+      return was !== undefined && Math.abs(now - was) < 0.5;
+    })()`, 8000);
+
+    // Crossing the breakpoint slides the panels, and under software rendering
+    // that .3s transition can take well over a second of wall clock -- measured
+    // at translateX(0) 400 ms after the resize and parked at -346.8px by 1600.
+    // So the resize is waited on rather than slept through, the same way the
+    // clicks below are; a fixed delay here reads a drawer mid-flight as a
+    // drawer that never moved.
+    const metrics = async (w, h, watch = '#controls') => {
+      await call('Emulation.setDeviceMetricsOverride',
+        { width: w, height: h, deviceScaleFactor: 1, mobile: false }, sessionId);
+      await delay(150);
+      await evaluate(`delete document.querySelector('${watch}').__wasAt`);
+      await settled(watch);
+    };
     const box = () => evaluate(`(() => {
       const r = (s) => { const e = document.querySelector(s); const b = e.getBoundingClientRect();
         return { left: Math.round(b.left), width: Math.round(b.width) }; };
@@ -1134,12 +1168,6 @@ try {
     // Waited on rather than slept through: these panels slide on a 300 ms
     // transition and a fixed delay caught one at 84% of the way in, which reads
     // as a drawer that did not open.
-    const settled = (sel) => waitFor(`(() => {
-      const e = document.querySelector('${sel}');
-      const now = e.getBoundingClientRect().left;
-      const was = e.__wasAt; e.__wasAt = now;
-      return was !== undefined && Math.abs(now - was) < 0.5;
-    })()`, 5000);
     const click = async (sel, watch) => {
       await evaluate(`document.querySelector('${sel}').click()`);
       await delay(120);
@@ -1215,7 +1243,6 @@ try {
     // Narrow again: the drawer must still be a drawer, and must not inherit a
     // collapsed column from the layout it just left.
     await metrics(900, 600);
-    await delay(500);
     const narrow = await box();
     ok(narrow.controls.left < 0 && narrow.canvas.width > 800,
       'Narrow, it is a drawer again and nothing is collapsed into it',
@@ -1229,7 +1256,6 @@ try {
     // ...and going back out restores what was collapsed, rather than either
     // forgetting it or leaving the drawer's own classes behind.
     await metrics(1440, 675);
-    await delay(500);
     const back = await box();
     ok(back.controls.width === 0 && back.readout.width === 0,
       'Widening again remembers which panels were put away',
@@ -1239,13 +1265,142 @@ try {
     // default would not have picked: both were folded away here by hand, and a
     // roomy window must leave them that way rather than helpfully opening them.
     await metrics(1920, 1000);
-    await delay(500);
     const roomy = await box();
     ok(roomy.controls.width === 0 && roomy.readout.width === 0,
       'A stored choice outranks the width default',
       `1920x1000 still ${roomy.controls.width}px / ${roomy.readout.width}px`);
     await metrics(1440, 675); await delay(400);
     await click('#panel-left'); await click('#panel-right');
+  }
+
+  // ---- what comes from a file, a URL or a person ---------------------------
+  // Three faults reported by a reviewing model, all three confirmed, and none
+  // of them visible outside a browser.
+  {
+    // A save file is an ordinary JSON document that one person hands another,
+    // and the slot tiles put its name into innerHTML. A name of
+    // `<img src=x onerror=...>` therefore ran as soon as the tiles were drawn.
+    // /dev has escaped these since it was written; this build did not.
+    const nastyName = '<img src=x onerror="window.__pwned=1">pwn';
+    const inject = await evaluate(`(() => {
+      window.__pwned = 0;
+      const slotKey = 'planetclimate.altdev2.slot3.v1';
+      localStorage.setItem(slotKey, JSON.stringify({
+        v: 1, at: Date.now(), name: ${JSON.stringify(nastyName)},
+        params: {}, time: 0, marks: [], epochs: [] }));
+      __app.syncSlots();
+      const tile = document.querySelector('.slot[data-slot="3"]');
+      const el = tile && tile.querySelector('.slot-name');
+      return { key: slotKey, pwned: window.__pwned || 0,
+               imgs: tile ? tile.querySelectorAll('img').length : -1,
+               text: el ? el.textContent : '' };
+    })()`);
+    ok(inject.pwned === 0 && inject.imgs === 0 && inject.text.startsWith('<img'),
+      'A save file cannot put markup into the page',
+      `the tile holds it as ${inject.text.length} characters of text, `
+      + `${inject.imgs} elements made, nothing ran`);
+
+    // What a URL leaves out is what the page supplies when it reads one back,
+    // so the two have to name the same object. They did not: writing compared
+    // against the bare EARTH constant while loading merges onto
+    // PRESETS.earth.params, and those differ on emissions, fossilUsed,
+    // brightening, realisticGeology and xuvDecay. A shared pre-industrial Earth
+    // came back with modern emissions running.
+    const keys = ['emissions', 'fossilUsed', 'brightening', 'realisticGeology', 'xuvDecay'];
+    const round = await evaluate(`(() => {
+      __app.loadPreset('preindustrial');
+      const sent = Object.fromEntries(${JSON.stringify(keys)}.map((k) => [k, __app.params[k]]));
+      return { hash: location.hash, sent };
+    })()`);
+    // Read it back the way a COLD load does, which means going somewhere else
+    // first. Navigating to the URL the page is already sitting at changes the
+    // hash and nothing else -- no reload, no re-run of the two lines that build
+    // `params` -- so the check read the live page back to itself and passed on
+    // a build with the fault deliberately restored. Third time a probe in this
+    // repo has been the broken thing rather than the code under it.
+    await call('Page.navigate', { url: 'about:blank' }, sessionId);
+    await delay(120);
+    await call('Page.navigate', { url: url.split('#')[0] + round.hash }, sessionId);
+    await waitFor("document.readyState === 'complete' && !!window.__app?.view");
+    await waitFor('window.__app.view.ready || window.__app.view.software', 120_000);
+    const got = await evaluate(
+      `JSON.stringify(Object.fromEntries(${JSON.stringify(keys)}.map((k) => [k, __app.params[k]])))`);
+    const back = JSON.parse(got);
+    const same = keys.every((k) => round.sent[k] === back[k]);
+    ok(same, 'A shared URL comes back as the world that was shared',
+      same ? `pre-industrial round-trips on all five of ${keys.join(', ')}`
+        : `sent ${JSON.stringify(round.sent)}, got ${JSON.stringify(back)}`);
+
+    // A scenario belongs to the world it was started on. Loading a save is a
+    // different world arriving, and the Great Oxidation drives the biosphere
+    // slider on its own every step -- so it went on driving it on the loaded
+    // planet, and its objectives went on being scored against it.
+    const scenario = await evaluate(`(() => {
+      __app.startScenario(__app.scenarios[0].id);
+      const during = __app.scenarioRunning();
+      // A real save of the running world, written the way the app writes one,
+      // so what comes back is a world and not a stub.
+      __app.saveSlot(3);
+      __app.restoreSlot(3);
+      return { during, after: __app.scenarioRunning() };
+    })()`);
+    ok(scenario.during === true && scenario.after === false,
+      'Loading a save puts the running scenario away with the world it belonged to',
+      `running ${scenario.during} → ${scenario.after}`);
+  }
+
+  // ---- the same world twice gives the same history -------------------------
+  // Reported with two screenshots of one world: a Steam Runaway of 485 Myr in
+  // one run and 449 in the other, and no Buried Ocean in either. The planet did
+  // the same thing both times -- its trajectory is identical at step caps from
+  // 300 years to a megayear -- but the RECORD was written once per frame, after
+  // `advance()` had already moved the world by as much as it liked. At play
+  // speed a frame is megayears, so the 8 Myr buried ocean fell inside one and
+  // was never written down; the two steam stretches either side then read as a
+  // single block, and 8 + 8 + 432 is the 449 that was reported.
+  //
+  // Written per step now and debounced, so what a run records depends on the
+  // world rather than on where a frame boundary landed.
+  {
+    const hash = '#mass=0.815&landFraction=0.1&water=0.108&insolation=1.524'
+      + '&xuvFraction=0.00001173&rotationHours=5832&obliquity=2.6&n2Bar=1.0126&o2Bar=0'
+      + '&biosphere=0&co2Bar=0.0004&ch4Bar=0.000001&internalHeat=0.031&landAlbedo=0.2'
+      + '&startT=288&brightening=1&realisticGeology=true&startAge=1.67&magneticField=0.02'
+      + '&resurfacingAge=2.182&resurfacingBoost=66&resurfacingSpan=40'
+      + '&resurfacingN2Bar=2.65&xuvDecay=true&hotRockOxidation=1';
+    const runAt = async (rate) => {
+      await call('Page.navigate', { url: 'about:blank' }, sessionId);
+      await delay(100);
+      await call('Page.navigate', { url: url.split('#')[0] + hash }, sessionId);
+      await waitFor("document.readyState === 'complete' && !!window.__app?.view");
+      await waitFor('window.__app.view.ready || window.__app.view.software', 120_000);
+      await evaluate(`(() => { const s = __app.sim; s.rate = ${rate};
+        s.autoEase = true; s.paused = false; return 1; })()`);
+      // Chunked: one evaluate that runs a whole history blocks past the CDP
+      // timeout and reads as a wedged browser. advance(), not frame(), because
+      // the record hangs off sim.onStep and rendering is the only slow part.
+      for (let i = 0; i < 4000; i++) {
+        const done = await evaluate(`(() => { const s = __app.sim;
+          for (let f = 0; f < 300 && s.world.time < 2.65e9; f++) s.advance(1 / 60);
+          return s.world.time >= 2.65e9; })()`);
+        if (done) break;
+      }
+      return JSON.parse(await evaluate(`JSON.stringify(__app.epochs().map((e) => ({
+        id: e.id, span: (e.to ?? __app.sim.world.time) - e.from })))`));
+    };
+    const slow = await runAt(1e7), fast = await runAt(1e8);
+    const seq = (r) => r.map((e) => e.id).join(' → ');
+    const sameSeq = seq(slow) === seq(fast);
+    // Durations to within a tenth: the boundary is found to within one step and
+    // the step size is what the rate control moves, so exact equality is not on
+    // offer and asking for it would make this check a liar.
+    const closeEnough = sameSeq && slow.every((e, i) =>
+      Math.abs(e.span - fast[i].span) <= 0.1 * Math.max(e.span, fast[i].span, 1));
+    ok(sameSeq && closeEnough && slow.some((e) => e.id === 'buriedOcean'),
+      'One world recorded twice at different speeds gives the same history',
+      `${seq(slow)} — buried ocean ${
+        (slow.find((e) => e.id === 'buriedOcean') || { span: 0 }).span.toExponential(1)} yr `
+      + `against ${(fast.find((e) => e.id === 'buriedOcean') || { span: 0 }).span.toExponential(1)}`);
   }
 
   ok(browserErrors.length === 0, 'No browser exceptions or error-level console messages');
