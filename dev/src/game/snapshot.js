@@ -104,5 +104,7 @@ export function applyWorld(sim, s, params = s.params) {
   // Older saves do not carry it; zero is what resetWorld leaves and what those
   // worlds were restored with before, so they behave exactly as they used to.
   if (s.dtPrev != null) w.dtPrev = s.dtPrev;
+  w.history = [];
+  sim.sample();
   return w;
 }

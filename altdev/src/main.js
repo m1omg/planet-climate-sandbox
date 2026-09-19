@@ -1,3 +1,4 @@
+import { sanitizeParams } from './game/validation.js';
 import { Simulation } from './sim/clock.js';
 import { carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
@@ -683,35 +684,23 @@ function closeScenario() {
 
 // ---------------------------------------------------------------------------
 // URL hash so a world can be shared
+const URL_BASE = PRESETS.earth.params;
 function writeHash() {
   const keep = {};
-  for (const k of Object.keys(EARTH)) if (params[k] !== EARTH[k]) keep[k] = params[k];
-  // The starlight control holds the *destination* while a smooth change is
-  // walking, which is right for the handle and wrong for the URL: the address
-  // bar is meant to be the world you are looking at, and writing the target
-  // there meant a reload arrived at the far end instantly. Someone who dragged
-  // to 100 S(+) with smoothing on, watched the star begin its walk, and then
-  // reloaded came back to a planet already at sixteen times Earth's sunlight --
-  // with the smoothing that was supposed to prevent exactly that jump switched
-  // on the whole time. What the world actually has is what gets shared.
-  if ('insolation' in keep) keep.insolation = sim.world.params.insolation;
-  if (keep.insolation === EARTH.insolation) delete keep.insolation;
-  const s = Object.entries(keep).map(([k, v]) => `${k}=${typeof v === 'number' ? +v.toPrecision(6) : v}`).join('&');
-  // Keep the query string. It carries ?renderer= and ?quality=, and writing
-  // location.pathname alone silently erased them the moment anything changed --
-  // so a forced renderer never survived to the next reload.
-  history.replaceState(null, '', `${location.pathname}${location.search}${s ? `#${s}` : ''}`);
+  for (const k of Object.keys(EARTH)) {
+    const v = k === 'insolation' ? sim.world.params.insolation : params[k];
+    if (v !== URL_BASE[k]) keep[k] = v;
+  }
+  const s = Object.entries(keep).map(([k,v]) => k + '=' + (typeof v === 'number' ? +v.toPrecision(6) : v)).join('&');
+  history.replaceState(null, '', location.pathname + location.search + (s ? '#' + s : ''));
 }
 function paramsFromHash() {
   const out = {};
-  const h = location.hash.replace(/^#/, '');
-  if (!h) return out;
-  for (const kv of h.split('&')) {
-    const [k, v] = kv.split('=');
-    if (!(k in EARTH)) continue;
-    out[k] = v === 'true' ? true : v === 'false' ? false : parseFloat(v);
+  for (const [k,v] of new URLSearchParams(location.hash.replace(/^#/, ''))) {
+    if (!Object.prototype.hasOwnProperty.call(EARTH, k) || !v.trim()) continue;
+    out[k] = v === 'true' ? true : v === 'false' ? false : Number(v);
   }
-  return out;
+  return sanitizeParams(out);
 }
 
 // ---------------------------------------------------------------------------
@@ -1072,7 +1061,7 @@ const slotKey = (i) => `${NS}.slot${i}.v1`;
 let armedToSave = false;
 
 function readSlot(i) {
-  try { return JSON.parse(localStorage.getItem(slotKey(i)) || 'null'); } catch { return null; }
+  try { return parseSaveFile(localStorage.getItem(slotKey(i)) || 'null')?.[0] ?? null; } catch { return null; }
 }
 
 // The three clocks. `age` counts from the world's formation and therefore
@@ -1320,25 +1309,17 @@ const HIST_ZOOM_MAX = 4096;
 // either way, which is exactly the part that should not be written twice.
 function applyWorldState(s) {
   suspendCapture = true;
-  // Going back along a world's own history un-happens everything after where
-  // you land, milestones included: a mark on an event that this branch has not
-  // reached yet would be a note about a future that was just dropped.
-  const when = s.world?.time ?? s.time;
-  if (isFinite(when)) {
-    const kept = marks.filter((m) => m.t <= when + 1);
-    if (kept.length !== marks.length) { marks = kept; renderMarks(); }
-    truncateEpochs(when);
-  }
   // The live params object is handed through rather than replaced: the sliders
   // read and write it, and it is what makes a change made after a rewind reach
   // the simulation at all.
-  Object.assign(params, s.params);
+  Object.assign(params, EARTH, s.params);
   renderState.seed = s.seed ?? renderState.seed;
   applyWorld(sim, s, params);
   suspendCapture = false;
 }
 
 function restore(s) {
+  closeScenario();
   applyWorldState(s);
   marks = Array.isArray(s.marks)
     ? s.marks.filter((m) => m && isFinite(m.t)).map((m) => ({ t: +m.t,
@@ -1398,6 +1379,7 @@ function buildSlots() {
   syncSlots();
 }
 
+const escHtml = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function syncSlots() {
   for (let i = 1; i <= SLOTS; i++) {
     const b = $(`.slot[data-slot="${i}"]`);
@@ -1413,7 +1395,7 @@ function syncSlots() {
     // line down the row.
     const auto = `<span class="slot-auto">${i === AUTOSAVE_SLOT ? t('auto') : ''}</span>`;
     b.innerHTML = `<span class="slot-n">${i}</span>` + (s
-      ? `<span class="slot-name">${s.name}</span>${auto}` +
+      ? `<span class="slot-name">${escHtml(s.name)}</span>${auto}` +
         `<span class="slot-sub">${fmtTime(s.time || 0)}</span>`
       : `<span class="slot-name">${t('empty')}</span>${auto}<span class="slot-sub">—</span>`);
     const note = i === AUTOSAVE_SLOT
@@ -1561,6 +1543,9 @@ function scrubTo(t, commit) {
     syncSliders();
   }
   if (!commit) { scrubMark = p.time; return; }
+  marks = marks.filter(m => m.t <= p.time);
+  renderMarks();
+  truncateEpochs(p.time);
 
   // Letting go is what actually costs the future.
   const w = sim.world;

@@ -75,7 +75,7 @@ export function known(label, params, why, years = YEARS, caps = CAPS) {
   return r;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && (await import('node:fs')).realpathSync(process.argv[1]) === (await import('node:fs')).realpathSync((await import('node:url')).fileURLToPath(import.meta.url))) {
   console.log(`\nStep-size convergence over ${YEARS.toExponential(0)} yr\n`);
   let bad = 0;
   for (const og of [1, 2, 2.6, 2.8, 3.5, 5, 8]) {

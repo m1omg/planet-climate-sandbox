@@ -4975,3 +4975,10 @@ Earth, Mars and Venus colour maps are **CC BY 4.0** (Solar System Scope, from NA
 imagery), the Earth height map is **CC BY-SA 4.0**, and Titan's Cassini mosaic and Mars's
 MOLA topography are **public domain** as NASA works. Attribution for the first four is a
 condition of using them; keep `CREDITS.md` with any copy.
+
+## Small-waterworld extension
+
+The three new small-waterworld presets implement thermal steam escape and
+expanded radiative surfaces in an opt-in reduced model. See
+[WATERWORLDS.md](WATERWORLDS.md) for the equations, controls, validation commands
+and important differences from the attached 2019 paper.

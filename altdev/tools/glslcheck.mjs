@@ -2,7 +2,21 @@
 // exactly as the runtime does (noise spliced in from the shared file), and
 // enforces a per-pixel noise budget so the cost that once made this unusable on
 // mobile cannot silently creep back.
-import { parse } from '/home/mroz/.nvm/versions/node/v20.20.2/lib/node_modules/@shaderfrog/glsl-parser/parser/parser.js';
+import { createRequire } from 'node:module';
+import { dirname as parserDirname, join as parserJoin, delimiter } from 'node:path';
+import { pathToFileURL as parserURL } from 'node:url';
+const PARSER = '@shaderfrog/glsl-parser/parser/parser.js';
+const requireParser = createRequire(import.meta.url);
+const roots = [...(process.env.NODE_PATH || '').split(delimiter).filter(Boolean),
+  parserJoin(parserDirname(parserDirname(process.execPath)), 'lib/node_modules'),
+  '/usr/local/lib/node_modules', '/usr/lib/node_modules'];
+let parse;
+const candidates = roots.map(p => parserJoin(p, PARSER));
+try { candidates.unshift(requireParser.resolve(PARSER)); } catch {}
+for (const p of candidates) {
+  try { ({parse} = await import(parserURL(p).href)); break; } catch {}
+}
+if (!parse) throw new Error('Install @shaderfrog/glsl-parser locally/globally, or set NODE_PATH to its node_modules directory.');
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { join } from 'node:path';

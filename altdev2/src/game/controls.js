@@ -174,6 +174,9 @@ export const SLIDERS = [
     // this now", with the curve re-based to carry on from there.
     extra: `
       <div class="supply">
+        <label class="supply-inf" title="Reduced Arnscheidt et al. 2019 model. Use the small-waterworld presets: 0.01–0.2 Earth masses, nearly pure steam, Sun-like spectrum. Other compositions retain the standard atmosphere model.">
+          <input type="checkbox" id="chk-small-waterworld"> small-waterworld model
+        </label>
         <label class="supply-inf" title="The star brightens by 10% every billion years, and the control follows it. The Sun's real track is 7.4%/Gyr averaged over its life.">
           <input type="checkbox" id="chk-brightening"> brightening star
         </label>

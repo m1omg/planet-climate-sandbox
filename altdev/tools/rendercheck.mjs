@@ -122,7 +122,7 @@ export function render(opts={}) {
   return {W,H,px,peak};
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && (await import('node:fs')).realpathSync(process.argv[1]) === (await import('node:fs')).realpathSync((await import('node:url')).fileURLToPath(import.meta.url))) {
   const r = render({});
   const buf = Buffer.alloc(r.W*r.H*3);
   r.px.forEach((c,i)=>{ buf[i*3]=clamp(c[0]*255,0,255); buf[i*3+1]=clamp(c[1]*255,0,255); buf[i*3+2]=clamp(c[2]*255,0,255); });

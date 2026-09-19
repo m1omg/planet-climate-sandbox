@@ -463,6 +463,13 @@ export function basinWater(w) {
 // ---------------------------------------------------------------------------
 export function escapeRates(w) {
   const p = w.params, dg = w.diag, d = dg.d;
+  if (dg.smallWaterworld) {
+    const water = dg.smallWaterworld.bulkEscape * YEAR;
+    // Whole H2O molecules leave. Do not count the XUV channel a second time,
+    // and do not manufacture the oxygen of photolytic hydrogen escape.
+    return { water, bulkWater: water, background: 0, nonThermal: 0, envelope: 0,
+      fEnv: 0, fStrat: 1, Tct: dg.Tmean, diffusion: 0, energy: 0, xSteam: 1 };
+  }
   const pTot = Math.max(1e-6, dg.pTotMean);
   let pH2Omean = 0;
   for (let i = 0; i < NBANDS; i++) pH2Omean += dg.pH2O[i];
@@ -1083,7 +1090,8 @@ export function stepVolatiles(w, dtYears) {
       // years on a 25 kyr step and 5500 on an 87 kyr one. Methane then rang
       // between 0.5 and 2.4 ppm from step to step, and the step controller rang
       // with it. Early Venus spent its whole run doing this.
-      escapeO2 = dtYears > 0 ? lostEO * d.eoColumn * (32 / 18) * 0.15 / dtYears : 0;
+      const photolyticShare = esc.water > 0 ? Math.max(0, 1 - (esc.bulkWater ?? 0) / esc.water) : 0;
+      escapeO2 = dtYears > 0 ? lostEO * d.eoColumn * (32 / 18) * 0.15 * photolyticShare / dtYears : 0;
     }
   }
   // Proportional escape approaches zero asymptotically. Below a trillionth of

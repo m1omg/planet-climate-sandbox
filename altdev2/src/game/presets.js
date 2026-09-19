@@ -7,7 +7,11 @@
 // the ocean has not finished responding to the CO2 already in the air, so a
 // modern Earth left to run warms a few tenths of a degree further with nothing
 // added. That is the committed warming.
+import { waterForShareOfMass } from '../physics/planet.js';
 export const EARTH = {
+  tidalHeat: 0,
+  life: false, // legacy preset flag; biosphere remains the active biology control
+  lowGravityWaterworld: false,
   mass: 1.0,
   landFraction: 0.30,
   water: 1.0,            // Earth oceans
@@ -34,9 +38,8 @@ export const EARTH = {
   // It is in this list rather than only in the Hycean presets because this list
   // is also the allowlist for the URL hash: a parameter missing from it is
   // silently dropped from a shared link, so a Hycean world sent to someone else
-  // would arrive as a bare rock. (`tidalHeat` is missing from it and is dropped
-  // exactly that way -- a real bug, older than this branch, left alone here
-  // because fixing it is not this change.)
+  // would arrive as a bare rock. Tidal heating is included in the schema too,
+  // so a shared world retains the non-radiogenic part of its interior heat.
   h2Bar: 0,
   heliumFrac: 0.1,   // solar, by number -- the split only matters once h2Bar does
   emissions: 0,     // see the `earth` preset; only that world has us on it
@@ -780,4 +783,16 @@ export const PRESETS = {
   // layer takes to eat down through water that is not helping it.
   coldStart: { name: 'Cold-Start Runaway', icon: '❄️', params: { ...HYCEAN,
     mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
+  smallWaterworld: { name: 'Small Waterworld (2019)', icon: '🌊', params: { ...EARTH,
+    lowGravityWaterworld: true, mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    internalHeat: 0, salinity: 0, insolation: 0.98, startT: 300 } },
+  evaporatingWaterworld: { name: 'Evaporating Small Waterworld', icon: '💨', params: { ...EARTH,
+    lowGravityWaterworld: true, mass: 0.02, water: waterForShareOfMass(0.02, 0.4), landFraction: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    internalHeat: 0, salinity: 0, insolation: 0.98, startT: 280 } },
+  icySmallWaterworld: { name: 'Icy Small Waterworld', icon: '❄️', params: { ...EARTH,
+    lowGravityWaterworld: true, mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    internalHeat: 0, salinity: 0, insolation: 0.98, startT: 230 } },
 };

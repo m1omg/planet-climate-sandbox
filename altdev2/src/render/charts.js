@@ -1,6 +1,7 @@
 import { NBANDS, X, lockFactor, insolationProfile } from '../physics/climate.js';
 import { olr, planetaryAlbedo, iceFraction } from '../physics/radiation.js';
 import { psatH2O, clamp } from '../physics/constants.js';
+import { waterworldFlux } from '../physics/waterworld.js';
 // Chart furniture is prose too: axis ends, the legend and the two empty-state
 // lines were the last English left on a Slovak page.
 import { t } from '../game/i18n.js';
@@ -351,13 +352,20 @@ export function drawPhase(canvas, world) {
   const pad = { l: 40, r: 10, t: 12, b: 22 };
   axes(ctx, w, h, pad);
   const p = world.params, dg = world.diag;
-  const T0 = 240, T1 = 420;
+  const T0 = dg.smallWaterworld ? 200 : 240, T1 = dg.smallWaterworld ? 600 : 420;
   const px = (T) => pad.l + ((T - T0) / (T1 - T0)) * (w - pad.l - pad.r);
 
   const Sglobal = dg.S.reduce((a, b) => a + b, 0) / NBANDS;
   const pts = [];
   let fmax = 0;
   for (let T = T0; T <= T1; T += 2) {
+    if (dg.smallWaterworld) {
+      const f = waterworldFlux(T, dg.g, dg.d.R, dg.smallWaterworld.availablePressure);
+      const O = f.emitted + f.cooling;
+      const A = Sglobal * dg.swTrans * (1-f.albedo) * f.shortwave + dg.Fint;
+      pts.push([T,O,A]); fmax = Math.max(fmax,O,A);
+      continue;
+    }
     const pw = Math.min(dg.RH * psatH2O(T) / 1e5, dg.totalWater * dg.d.eoColumn * dg.g / 1e5);
     const pTot = dg.pN2 + dg.pCO2 + dg.pCH4 + (dg.pH2 ?? 0) + (dg.pHe ?? 0) + pw;
     const O = olr(T, dg.pCO2, pw, dg.pCH4, pTot, dg.pH2 ?? 0, dg.g, dg.pHe ?? 0);
@@ -399,10 +407,10 @@ export function drawPhase(canvas, world) {
   }
 
   // current state
-  ctx.beginPath(); ctx.arc(px(clamp(dg.Tmean, T0, T1)), py(clamp(dg.emitted, 0, fmax)), 3.5, 0, 7);
+  ctx.beginPath(); ctx.arc(px(clamp(dg.Tmean, T0, T1)), py(clamp(dg.emitted + (dg.smallWaterworld?.cooling ?? 0), 0, fmax)), 3.5, 0, 7);
   ctx.fillStyle = '#fff'; ctx.fill();
 
-  label(ctx, t('OLR'), px(T1) - 4, py(pts[pts.length - 1][1]) - 6, 'right', '#ff9d5c', 10);
+  label(ctx, t(dg.smallWaterworld ? 'radiation + escape' : 'OLR'), px(T1) - 4, py(pts[pts.length - 1][1]) - 6, 'right', '#ff9d5c', 10);
   label(ctx, t('absorbed'), px(T0) + 6, py(pts[0][2]) - 6, 'left', '#7fd4ff', 10);
   label(ctx, `${fmax.toFixed(0)} W/m²`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, '-30°C', px(243), h - 6, 'center');

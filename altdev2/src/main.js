@@ -1,3 +1,4 @@
+import { sanitizeParams } from './game/validation.js';
 import { Simulation } from './sim/clock.js';
 import { carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
@@ -514,6 +515,7 @@ function writeControl(d, v) {
 }
 
 function syncSliders() {
+  const ww = $('#chk-small-waterworld'); if (ww) ww.checked = !!params.lowGravityWaterworld;
   for (const d of SLIDERS) {
     const e = els[d.key];
     const s = clamp(toSlider(d, params[d.key]), 0, 1000);
@@ -784,41 +786,20 @@ const URL_BASE = PRESETS.earth.params;
 
 function writeHash() {
   const keep = {};
-  for (const k of Object.keys(EARTH)) if (params[k] !== URL_BASE[k]) keep[k] = params[k];
-  // The starlight control holds the *destination* while a smooth change is
-  // walking, which is right for the handle and wrong for the URL: the address
-  // bar is meant to be the world you are looking at, and writing the target
-  // there meant a reload arrived at the far end instantly. Someone who dragged
-  // to 100 S(+) with smoothing on, watched the star begin its walk, and then
-  // reloaded came back to a planet already at sixteen times Earth's sunlight --
-  // with the smoothing that was supposed to prevent exactly that jump switched
-  // on the whole time. What the world actually has is what gets shared.
-  if ('insolation' in keep) keep.insolation = sim.world.params.insolation;
-  if (keep.insolation === URL_BASE.insolation) delete keep.insolation;
-  const s = Object.entries(keep).map(([k, v]) => `${k}=${typeof v === 'number' ? +v.toPrecision(6) : v}`).join('&');
-  // Keep the query string. It carries ?renderer= and ?quality=, and writing
-  // location.pathname alone silently erased them the moment anything changed --
-  // so a forced renderer never survived to the next reload.
-  history.replaceState(null, '', `${location.pathname}${location.search}${s ? `#${s}` : ''}`);
+  for (const k of Object.keys(EARTH)) {
+    const v = k === 'insolation' ? sim.world.params.insolation : params[k];
+    if (v !== URL_BASE[k]) keep[k] = v;
+  }
+  const s = Object.entries(keep).map(([k,v]) => k + '=' + (typeof v === 'number' ? +v.toPrecision(6) : v)).join('&');
+  history.replaceState(null, '', location.pathname + location.search + (s ? '#' + s : ''));
 }
 function paramsFromHash() {
   const out = {};
-  const h = location.hash.replace(/^#/, '');
-  if (!h) return out;
-  for (const kv of h.split('&')) {
-    const [k, v] = kv.split('=');
-    if (!(k in EARTH)) continue;
-    // A number that is not a number is not a value to fall back from, it is a
-    // typo or a truncated link, and taking it poisons the world outright:
-    // `#mass=nope` is parseFloat NaN, and a NaN mass gives a NaN radius and a
-    // NaN temperature with nothing to say which control did it. Dropping the
-    // key leaves the preset's value, which is the same thing that happens when
-    // the key is absent -- the behaviour the rest of this function already has.
-    if (v === 'true' || v === 'false') { out[k] = v === 'true'; continue; }
-    const n = parseFloat(v);
-    if (Number.isFinite(n)) out[k] = n;
+  for (const [k,v] of new URLSearchParams(location.hash.replace(/^#/, ''))) {
+    if (!Object.prototype.hasOwnProperty.call(EARTH, k) || !v.trim()) continue;
+    out[k] = v === 'true' ? true : v === 'false' ? false : Number(v);
   }
-  return out;
+  return sanitizeParams(out);
 }
 
 // ---------------------------------------------------------------------------
@@ -1055,6 +1036,16 @@ function updateReadout() {
   const pool = dg.coldPool && dg.coldPool.liquidDepth > 0 && dg.coldT != null
     ? dg.coldT : null;
   $('#stats').innerHTML =
+    (params.lowGravityWaterworld && !dg.smallWaterworld
+      ? stat(t('Radiation model'), t('Standard (waterworld mode inactive)'), '',
+        'The reduced steam model requires 0.01–0.2 Earth masses, remaining water and less than 0.001 bar of other gases.') : '') +
+    (dg.smallWaterworld ?
+      stat(t('Water lifetime'), dg.smallWaterworld.lifetime > 1e12 ? '> 1000 Gyr' : fmtTime(dg.smallWaterworld.lifetime), '',
+        'Remaining water / current thermal escape rate. Constant-condition estimate; the isothermal escape model is an upper loss bound.') +
+      stat(t('Radiative area LW / SW'), `${dg.smallWaterworld.longwave.toFixed(3)} / ${dg.smallWaterworld.shortwave.toFixed(3)}`, '',
+        'Effective emitting and absorbing areas divided by the solid surface area. Reduced approximation to Figure 2, not a line-by-line calculation.') +
+      stat(t('Escape cooling'), `${dg.smallWaterworld.cooling.toPrecision(3)} W/m²`, '',
+        dg.smallWaterworld.inDomain ? 'Energy used to vaporise and gravitationally unbind whole water molecules.' : 'Outside the paper approximation range: interpret this extrapolation cautiously.') : '') +
     stat(pool ? t('Fluid top') : t('Mean surface'),
       `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`,
       '', pool ? t('At this temperature the air and the water below it are one fluid, with no boundary between them. This is the top of it; the ground is further down.') : '') +
@@ -1152,9 +1143,11 @@ function updateReadout() {
       if (f <= 0) return mag;
       return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
+    (dg.smallWaterworld ? stat(t('Radiation model'), '2019 · reduced', '',
+      'Expanded radiation has no plane-parallel runaway ceiling. Escape can still exhaust the water.') :
     stat(t('Runaway margin'), `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
       margin < 0 ? 'bad' : margin < 15 ? 'warn' : '',
-      t('How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.')) +
+      t('How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.'))) +
     stat(t('Water left'), `${(dg.totalWater).toFixed(dg.totalWater < 1 ? 3 : 2)}<small> EO</small>`,
       w.water.lost > 0.02 ? 'warn' : '') +
     stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : t('negligible'),
@@ -1338,7 +1331,7 @@ const OVERWRITE_MS = 6000;
 function clearPending() { pendingOverwrite = null; pendingUntil = 0; }
 
 function readSlot(i) {
-  try { return JSON.parse(localStorage.getItem(slotKey(i)) || 'null'); } catch { return null; }
+  try { return parseSaveFile(localStorage.getItem(slotKey(i)) || 'null')?.[0] ?? null; } catch { return null; }
 }
 
 // The autosave used to BE slot 1, so a player arriving at this version has
@@ -1640,19 +1633,10 @@ const HIST_ZOOM_MAX = 4096;
 // either way, which is exactly the part that should not be written twice.
 function applyWorldState(s) {
   suspendCapture = true;
-  // Going back along a world's own history un-happens everything after where
-  // you land, milestones included: a mark on an event that this branch has not
-  // reached yet would be a note about a future that was just dropped.
-  const when = s.world?.time ?? s.time;
-  if (isFinite(when)) {
-    const kept = marks.filter((m) => m.t <= when + 1);
-    if (kept.length !== marks.length) { marks = kept; renderMarks(); }
-    truncateEpochs(when);
-  }
   // The live params object is handed through rather than replaced: the sliders
   // read and write it, and it is what makes a change made after a rewind reach
   // the simulation at all.
-  Object.assign(params, s.params);
+  Object.assign(params, EARTH, s.params);
   renderState.seed = s.seed ?? renderState.seed;
   applyWorld(sim, s, params);
   suspendCapture = false;
@@ -1927,6 +1911,9 @@ function scrubTo(t, commit) {
     syncSliders();
   }
   if (!commit) { scrubMark = p.time; return; }
+  marks = marks.filter(m => m.t <= p.time);
+  renderMarks();
+  truncateEpochs(p.time);
 
   // Letting go is what actually costs the future.
   const w = sim.world;
@@ -2289,6 +2276,14 @@ function bindControls() {
     toast(e.target.checked
       ? 'Starlight changes now walk to the new value instead of jumping'
       : 'Starlight changes apply at once');
+  });
+
+  $('#chk-small-waterworld').addEventListener('change', e => {
+    params.lowGravityWaterworld = e.target.checked;
+    sim.setParams({ lowGravityWaterworld: params.lowGravityWaterworld });
+    writeHash(); markTouched();
+    if (e.target.checked && !sim.world.diag.smallWaterworld)
+      toast(t('Small-waterworld model needs a low-mass, nearly pure-steam world. Try its preset.'));
   });
 
   $('#chk-xuv-decay').addEventListener('change', (e) => {

@@ -59,5 +59,7 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.o2 != null) w.o2 = s.o2;
   if (s.ch4 != null) w.ch4 = s.ch4;
   update(w, 0);
+  w.history = [];
+  sim.sample();
   return w;
 }

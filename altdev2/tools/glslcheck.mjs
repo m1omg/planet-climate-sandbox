@@ -7,36 +7,21 @@ import { inflateSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The parser is a global install rather than a dependency -- this repo has no
-// node_modules and is not about to grow one for a check that runs by hand.
-//
-// Where a global lives is a property of the machine, and this line used to name
-// one developer's nvm directory outright, so the check could not run anywhere
-// else at all: it died on an import before reaching a single shader. The fix is
-// not a longer list of machines. Node already knows where its own globals are --
-// they sit beside the interpreter, in ../lib/node_modules relative to the
-// binary -- and asking it works for a system install, an nvm one, and the
-// original developer's alike. The bare specifier is tried first so that
-// NODE_PATH or a local install still wins if either exists, and /usr/lib is
-// kept for the case where the running node is not the one the package was
-// installed under.
+import { createRequire } from 'node:module';
+import { dirname as parserDirname, join as parserJoin, delimiter } from 'node:path';
+import { pathToFileURL as parserURL } from 'node:url';
 const PARSER = '@shaderfrog/glsl-parser/parser/parser.js';
-const PARSER_CANDIDATES = [
-  PARSER,
-  join(dirname(dirname(process.execPath)), 'lib/node_modules', PARSER),
-  join('/usr/lib/node_modules', PARSER),
-];
+const requireParser = createRequire(import.meta.url);
+const roots = [...(process.env.NODE_PATH || '').split(delimiter).filter(Boolean),
+  parserJoin(parserDirname(parserDirname(process.execPath)), 'lib/node_modules'),
+  '/usr/local/lib/node_modules', '/usr/lib/node_modules'];
 let parse;
-for (const where of PARSER_CANDIDATES) {
-  try { ({ parse } = await import(where)); break; } catch { /* try the next one */ }
+const candidates = roots.map(p => parserJoin(p, PARSER));
+try { candidates.unshift(requireParser.resolve(PARSER)); } catch {}
+for (const p of candidates) {
+  try { ({parse} = await import(parserURL(p).href)); break; } catch {}
 }
-if (!parse) {
-  console.error('glslcheck: cannot find @shaderfrog/glsl-parser. Install it globally\n'
-    + '  npm i -g @shaderfrog/glsl-parser\n'
-    + 'or point NODE_PATH at wherever it already is. Looked in:\n  '
-    + PARSER_CANDIDATES.join('\n  '));
-  process.exit(1);
-}
+if (!parse) throw new Error('Install @shaderfrog/glsl-parser locally/globally, or set NODE_PATH to its node_modules directory.');
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const read = (f) => readFileSync(join(root, 'src/render/glsl', f), 'utf8');

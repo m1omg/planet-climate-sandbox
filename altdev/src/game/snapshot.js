@@ -24,6 +24,7 @@ export function captureWorld(w) {
   return {
     params: { ...w.params },
     time: w.time,
+    runtime: { insolationTarget: w.insolationTarget, insolationRate: w.insolationRate },
     T: Array.from(w.T),
     water: { ...w.water },
     waterInitial: w.waterInitial,
@@ -74,6 +75,10 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.n2 != null) w.n2 = s.n2;
   if (s.o2 != null) w.o2 = s.o2;
   if (s.ch4 != null) w.ch4 = s.ch4;
+  w.insolationTarget = s.runtime?.insolationTarget ?? null;
+  w.insolationRate = s.runtime?.insolationRate ?? null;
   update(w, 0);
+  w.history = [];
+  sim.sample();
   return w;
 }

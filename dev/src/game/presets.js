@@ -8,6 +8,7 @@
 // modern Earth left to run warms a few tenths of a degree further with nothing
 // added. That is the committed warming.
 export const EARTH = {
+  carbonSpent: 0,
   mass: 1.0,
   landFraction: 0.30,
   water: 1.0,            // Earth oceans

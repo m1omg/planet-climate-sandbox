@@ -422,7 +422,7 @@ export class Simulation {
     const w = this.world, dg = w.diag;
     w.history.push({
       t: w.time, T: dg.Tmean, Tmax: dg.Tmax, Tmin: dg.Tmin,
-      ice: dg.iceMean, pCO2: dg.pCO2, pH2O: dg.pTotMean - dg.pN2 - dg.pCO2,
+      ice: dg.iceMean, pCO2: dg.pCO2, pH2O: dg.pH2O.reduce((a,b) => a+b, 0) / dg.pH2O.length,
       ocean: w.water.ocean, seaIce: w.water.seaIce, landIce: w.water.landIce,
       // The airborne water, split where the critical point has been crossed.
       // One fluid physically; two very different things to look at.
@@ -430,7 +430,7 @@ export class Simulation {
       sup: w.water.vapour * (dg.superFrac || 0),
       lost: w.water.lost,
       flooded: dg.flooded, landFrac: dg.landFrac,
-      alb: dg.absorbed / Math.max(1e-6, dg.S.reduce((a, b) => a + b, 0) / dg.S.length),
+      alb: dg.alb.reduce((a,b) => a+b, 0) / dg.alb.length,
     });
     if (w.history.length > 4000) w.history.splice(0, 2000);
     if (this.onSample) this.onSample(w);

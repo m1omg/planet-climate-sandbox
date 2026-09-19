@@ -1,3 +1,5 @@
+import { sanitizeWorld } from './validation.js';
+export { NUMERIC_FIELDS } from './validation.js';
 // Save files: what goes in one, and where the worlds in one land.
 //
 // Kept free of the DOM and of localStorage for the same reason controls.js is,
@@ -33,8 +35,7 @@ export function parseSaveFile(text) {
     : (doc && doc.params) ? [doc]
     : null;
   if (!list) return null;
-  const worlds = list.filter((wd) => wd && typeof wd === 'object' && wd.params
-    && typeof wd.params === 'object');
+  const worlds = list.map(sanitizeWorld).filter(Boolean);
   return worlds.length ? worlds : null;
 }
 

@@ -62,7 +62,7 @@ export function ramp(params, from, to, steps, dwell) {
   return s.world;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && (await import('node:fs')).realpathSync(process.argv[1]) === (await import('node:fs')).realpathSync((await import('node:url')).fileURLToPath(import.meta.url))) {
   // Way et al.'s paleo-Venus: 1 bar N2, 400 ppm CO2, 310 m ocean, 40% land.
   const venusish = { ...EARTH, mass: 0.815, n2Bar: 1.0126, o2Bar: 0, co2Bar: 400e-6,
     ch4Bar: 1e-6, water: 0.108, landFraction: 0.40, landAlbedo: 0.2, biosphere: 0,

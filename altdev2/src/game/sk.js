@@ -11,6 +11,16 @@
 // podľa id. Chýbajúci záznam znamená angličtinu, nie prázdne miesto.
 export const SK = {
   ui: {
+    'Standard (waterworld mode inactive)': 'Štandardný (vodný režim neaktívny)',
+    'radiation + escape': 'žiarenie + únik vody',
+    '{0} °C · long-lived water reservoir · thermal steam escape · reduced 2019 model': '{0} °C · dlhodobá zásoba vody · tepelný únik pary · zjednodušený model 2019',
+    '{0} °C · rapid water loss · thermal steam escape · reduced 2019 model': '{0} °C · rýchla strata vody · tepelný únik pary · zjednodušený model 2019',
+    'Water lifetime': 'Čas do straty vody',
+    'Radiative area LW / SW': 'Vyžarujúca / pohlcujúca plocha',
+    'Escape cooling': 'Ochladzovanie únikom vody',
+    'Radiation model': 'Model žiarenia',
+    'small-waterworld model': 'model malého vodného sveta',
+    'Small-waterworld model needs a low-mass, nearly pure-steam world. Try its preset.': 'Model vyžaduje malú hmotnosť a atmosféru tvorenú takmer výlučne vodnou parou. Skúste príslušný predvolený svet.',
     // ---- hlavička a panely -------------------------------------------------
     'Planet Climate': 'Klíma planéty',
     'Sandbox': 'Pieskovisko',
@@ -554,6 +564,8 @@ export const SK = {
 
   // ---- klimatické stavy ----------------------------------------------------
   states: {
+    smallWaterworld: { name: 'Malý vodný svet', blurb: 'Vodný svet so slabou gravitáciou. Zväčšená vyžarujúca plocha pomáha udržať rovnováhu a zásoba vody pri súčasnom úniku vydrží viac než miliardu rokov. Zjednodušený model podľa Arnscheidta a kol. (2019).' },
+    evaporatingWaterworld: { name: 'Vyparujúci sa vodný svet', blurb: 'Do vesmíru unikajú celé molekuly vody. Pri súčasnom tempe by sa zásoba vyčerpala za menej než miliardu rokov, hoci na povrchu ešte môže byť kvapalná voda.' },
     magma: { name: 'Magmatický oceán',
       blurb: 'Povrch je roztavená hornina. Nad približne 1400 K sa kremičitany tavia a planéta žiari v blízkej infračervenej oblasti; atmosféru, ak nejakú má, tvorí horúca zmes horninových pár a vodnej pary.' },
     dryRunaway: { name: 'Suchý nekontrolovateľný skleníkový efekt',
@@ -656,6 +668,9 @@ export const SK = {
 
   // ---- predvolené svety ----------------------------------------------------
   presets: {
+    smallWaterworld: 'Malý vodný svet (2019)',
+    evaporatingWaterworld: 'Vyparujúci sa malý vodný svet',
+    icySmallWaterworld: 'Zamrznutý malý vodný svet',
     earth: 'Zem',
     moon: 'Mesiac',
     earlyMoon: 'Pradávny Mesiac',

@@ -1,5 +1,6 @@
 import { M_EARTH, R_EARTH, G_GRAV, EO_COLUMN, clamp } from './constants.js';
 import { MAX_BASIN_DEPTH } from './hypsometry.js';
+import { waterworldRadius } from './waterworld.js';
 
 // Rocky mass-radius relation (Seager/Zeng-like): R ~ M^0.27 for silicate worlds.
 export function radiusFromMass(massEarths) {
@@ -97,6 +98,8 @@ export function waterRadiusFactor(x) {
 // spread over -- NOT the radius a transit measures, which includes an envelope
 // that weighs almost nothing. See `transitRadius`.
 export function condensedRadius(params) {
+  if (params.lowGravityWaterworld && params.mass >= 0.01 && params.mass <= 0.2)
+    return waterworldRadius(params.mass);
   const x = waterMassFraction(params.mass, params.water ?? 0);
   return radiusFromMass(params.mass) * waterRadiusFactor(x);
 }
