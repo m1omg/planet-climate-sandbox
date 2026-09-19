@@ -4,6 +4,7 @@ import { EARTH } from './presets.js';
 // leave the sliders' display ranges. Reject malformed values rather than clamp
 // an imported world to a physically different one.
 const domains = {
+  radiusScale: [0.01, 10],
   mass: [0.0001, 100], water: [0, 1e7], insolation: [0, 1e5],
   starTemp: [100, 1e6], rotationHours: [0.001, 1e9], startT: [1, 5000],
   landFraction: [0, 1], landAlbedo: [0, 1], heliumFrac: [0, 1],

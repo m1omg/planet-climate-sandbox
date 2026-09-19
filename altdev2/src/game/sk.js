@@ -11,6 +11,25 @@
 // podľa id. Chýbajúci záznam znamená angličtinu, nie prázdne miesto.
 export const SK = {
   ui: {
+    'Vapour residence time': 'Čas zotrvania pary',
+    'no water': 'bez vody',
+    'Water phase': 'Skupenstvo vody',
+    'Dry': 'Suchý svet',
+    'Trace vapour': 'Stopové množstvo pary',
+    'Ice over liquid ocean': 'Ľad nad kvapalným oceánom',
+    'Surface ocean': 'Povrchový oceán',
+    'Ice reservoir': 'Zásoba ľadu',
+    'Water vapour': 'Vodná para',
+    'Water supply': 'Zdroj vodnej pary',
+    'None': 'Žiadny',
+    'Residual vapour': 'Zvyšková para',
+    'Ice sublimation': 'Sublimácia ľadu',
+    'Evaporation': 'Vyparovanie',
+    'Remaining inventory divided by its current loss rate; not a promise of a liquid ocean.': 'Zostávajúca zásoba vydelená súčasným únikom; neznamená to, že existuje kvapalný oceán.',
+    'Freezing the surface does not imply freezing the entire water column.': 'Zamrznutý povrch neznamená, že zamrzla celá vodná vrstva.',
+    'Cold ice can supply trace vapour by sublimation. This is not a boiling ocean or a dense steam atmosphere.': 'Studený ľad môže sublimáciou uvoľňovať malé množstvo pary. Nejde o vriaci oceán ani hustú parnú atmosféru.',
+    '{0} °C · no ocean · trace water vapour only': '{0} °C · bez oceánu · iba stopové množstvo vodnej pary',
+    '{0} °C · dry world · water reservoir exhausted': '{0} °C · suchý svet · zásoba vody sa vyčerpala',
     'Standard (waterworld mode inactive)': 'Štandardný (vodný režim neaktívny)',
     'radiation + escape': 'žiarenie + únik vody',
     '{0} °C · long-lived water reservoir · thermal steam escape · reduced 2019 model': '{0} °C · dlhodobá zásoba vody · tepelný únik pary · zjednodušený model 2019',
@@ -668,6 +687,10 @@ export const SK = {
 
   // ---- predvolené svety ----------------------------------------------------
   presets: {
+    europa: 'Európa',
+    ganymede: 'Ganymedes',
+    callisto: 'Kallisto',
+    hotSmallWaterworld: 'Horúci vodný svet · 0,049 M⊕',
     smallWaterworld: 'Malý vodný svet (2019)',
     evaporatingWaterworld: 'Vyparujúci sa malý vodný svet',
     icySmallWaterworld: 'Zamrznutý malý vodný svet',

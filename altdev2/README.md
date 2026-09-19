@@ -4978,7 +4978,10 @@ condition of using them; keep `CREDITS.md` with any copy.
 
 ## Small-waterworld extension
 
-The three new small-waterworld presets implement thermal steam escape and
-expanded radiative surfaces in an opt-in reduced model. See
+Four small-waterworld presets implement expanded radiative surfaces, with
+collisional steam escape or tenuous-gas Jeans escape as appropriate. The icy
+preset includes internal heating and a calculated subglacial ocean. Europa,
+Ganymede and Callisto provide additional illustrative icy-moon interiors,
+using measured masses/radii but assumed heat fluxes and water inventories. See
 [WATERWORLDS.md](WATERWORLDS.md) for the equations, controls, validation commands
 and important differences from the attached 2019 paper.

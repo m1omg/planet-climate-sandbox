@@ -1038,14 +1038,21 @@ function updateReadout() {
   $('#stats').innerHTML =
     (params.lowGravityWaterworld && !dg.smallWaterworld
       ? stat(t('Radiation model'), t('Standard (waterworld mode inactive)'), '',
-        'The reduced steam model requires 0.01–0.2 Earth masses, remaining water and less than 0.001 bar of other gases.') : '') +
+        'The reduced waterworld model requires 0.01–0.2 Earth masses and less than 0.001 bar of other gases; its dry limit remains continuous after water loss.') : '') +
     (dg.smallWaterworld ?
-      stat(t('Water lifetime'), dg.smallWaterworld.lifetime > 1e12 ? '> 1000 Gyr' : fmtTime(dg.smallWaterworld.lifetime), '',
-        'Remaining water / current thermal escape rate. Constant-condition estimate; the isothermal escape model is an upper loss bound.') +
+      stat(t(dg.hasWater ? 'Water lifetime' : 'Vapour residence time'), dg.totalWater <= 0 ? t('no water')
+        : dg.smallWaterworld.lifetime > 1e12 ? '> 1000 Gyr' : fmtTime(dg.smallWaterworld.lifetime), '',
+        t('Remaining inventory divided by its current loss rate; not a promise of a liquid ocean.')) +
+      stat(t('Water phase'), t(dg.totalWater <= 0 ? 'Dry'
+        : !dg.hasWater ? 'Trace vapour'
+        : dg.subglacial?.ocean ? 'Ice over liquid ocean'
+        : dg.smallWaterworld.hasSurfaceOcean ? 'Surface ocean'
+        : dg.smallWaterworld.hasIceReservoir ? 'Ice reservoir' : 'Water vapour'), '',
+        t('Freezing the surface does not imply freezing the entire water column.')) +
       stat(t('Radiative area LW / SW'), `${dg.smallWaterworld.longwave.toFixed(3)} / ${dg.smallWaterworld.shortwave.toFixed(3)}`, '',
         'Effective emitting and absorbing areas divided by the solid surface area. Reduced approximation to Figure 2, not a line-by-line calculation.') +
       stat(t('Escape cooling'), `${dg.smallWaterworld.cooling.toPrecision(3)} W/m²`, '',
-        dg.smallWaterworld.inDomain ? 'Energy used to vaporise and gravitationally unbind whole water molecules.' : 'Outside the paper approximation range: interpret this extrapolation cautiously.') : '') +
+        'Energy used to evaporate liquid or sublimate ice and gravitationally unbind water molecules. Tenuous gas uses a reduced Jeans escape estimate, not an unchecked steam wind.') : '') +
     stat(pool ? t('Fluid top') : t('Mean surface'),
       `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`,
       '', pool ? t('At this temperature the air and the water below it are one fluid, with no boundary between them. This is the top of it; the ground is further down.') : '') +
@@ -1152,8 +1159,11 @@ function updateReadout() {
       w.water.lost > 0.02 ? 'warn' : '') +
     stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : t('negligible'),
       lossGyr > 0.05 ? 'bad' : lossGyr > 1e-3 ? 'warn' : '') +
+    (dg.smallWaterworld ? stat(t('Water supply'), t(dg.totalWater <= 0 ? 'None'
+      : !dg.hasWater ? 'Residual vapour' : dg.Tmean < 273.15 ? 'Ice sublimation' : 'Evaporation'), '',
+      t('Cold ice can supply trace vapour by sublimation. This is not a boiling ocean or a dense steam atmosphere.')) :
     stat(t('Stratospheric H₂O'), `${(w.escape?.fStrat ?? 0).toExponential(1)}`,
-      (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '') +
+      (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '')) +
     // Water loss above is water leaving the PLANET, on a gigayear scale. This
     // is liquid water ceasing to be liquid, which is a different thing on a
     // different clock: a moist world loses it to space, a runaway boils it, a

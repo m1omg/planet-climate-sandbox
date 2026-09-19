@@ -1,16 +1,17 @@
 // Arnscheidt, Wordsworth & Ding (2019), arXiv:1906.10561v2.
 // Equations 1, 2 and 8-11; reduced radiation, NOT the paper's LBL calculation.
-import { R_EARTH, M_EARTH, G_GRAV, YEAR, SIGMA, psatH2O, clamp } from './constants.js';
+import { R_EARTH, M_EARTH, G_GRAV, YEAR, SIGMA, psatH2O, clamp, smoothstep } from './constants.js';
 
 export const WATER_GAS_CONSTANT = 461.5;
 export const WATER_LATENT_HEAT = 2.5e6;
+export const WATER_SUBLIMATION_HEAT = 2.834e6;
 export function waterworldRadius(mass) { return 1.258 * R_EARTH * mass ** 0.302; }
 
 // Opt in: the paper assumes water-rich planets and essentially pure steam.
 // Background-rich / H2-envelope planets must retain their existing model.
 export function waterworldActive(p, waterEO, backgroundBar = 0) {
   return p.lowGravityWaterworld === true && p.mass >= 0.01 && p.mass <= 0.2
-    && waterEO > 1e-12 && backgroundBar < 0.001;
+    && waterEO >= 0 && backgroundBar < 0.001;
 }
 
 // Surface mass flux in kg/m2/s. The exponential branch is eq. 9. Outside its
@@ -31,9 +32,32 @@ export function steamEscape(T, g, radius, pressure = psatH2O(T)) {
     }
     mach = Math.exp((lo + hi) / 2);
   }
-  const flux = rho * c * mach;
-  return { flux, lambda, sonicRadius: lambda * radius / 2,
-    cooling: (g * radius + WATER_LATENT_HEAT) * flux };
+  // Collisions must persist toward the sonic point, not just at the ground.
+  // Locate Kn=1 in an isothermal hydrostatic column if it becomes collisionless
+  // below that point. Jeans escape is evaluated there, not at the ocean.
+  // A smooth transition over sonic Kn=1..100 is a reduced kinetic closure,
+  // not a DSMC calculation or a heated-thermosphere model.
+  const knudsen = pressure > 0 ? 2.9915e-26 * g / (Math.SQRT2 * 2.7e-19 * pressure) : Infinity;
+  const sonicRatio = Math.max(1, lambda/2);
+  const logKnAt = x => Math.log(knudsen) + lambda*(1-1/x) - 2*Math.log(x);
+  const logSonicKn = logKnAt(sonicRatio);
+  let exobaseRatio = 1;
+  if (knudsen < 1 && logSonicKn > 0) {
+    let lo=1, hi=sonicRatio;
+    for(let i=0;i<60;i++) {const mid=(lo+hi)/2; if(logKnAt(mid)>0) hi=mid; else lo=mid;}
+    exobaseRatio=(lo+hi)/2;
+  }
+  const kineticShare = knudsen >= 1 ? 1 : smoothstep(0, 2, logSonicKn/Math.LN10);
+  // rho_exo * exp(-lambda_exo) = rho_surface * exp(-lambda_surface).
+  const jeans = rho * c / Math.sqrt(2*Math.PI) * (1+lambda/exobaseRatio)
+    * Math.exp(-lambda) * exobaseRatio**2;
+  const parkerFlux = rho * c * mach;
+  const flux = (1-kineticShare) * parkerFlux + kineticShare * jeans;
+  const latent = T < 273.15 ? WATER_SUBLIMATION_HEAT : WATER_LATENT_HEAT;
+  return { flux, parkerFlux, lambda, sonicRadius: lambda * radius / 2, knudsen,
+    exobaseRadius: radius * exobaseRatio,
+    regime: kineticShare >= 1 ? 'jeans' : kineticShare > 0 ? 'transition' : 'wind',
+    cooling: (g * radius + latent) * flux };
 }
 
 // Approximate readings of Figure 2 RIGHT, at 0.12 Earth masses, Sun spectrum.
@@ -69,11 +93,15 @@ export function waterworldFlux(T, g, radius, availablePressure = Infinity) {
   const escape = steamEscape(T, g, radius, pressure);
   // Ice-albedo hysteresis; liquid value matches the paper's A=0.2 experiment.
   const ice = clamp((273.15 - T) / 15, 0, 1);
-  const albedo = 0.2 + 0.4 * ice * ice * (3 - 2*ice);
+  // With no inventory there cannot be an ice-albedo feedback. Fade to dry
+  // ground continuously rather than changing climate model at a tiny cutoff.
+  const iceCover = clamp(availablePressure / (g * 10), 0, 1); // 1 cm water equivalent
+  const albedo = 0.2 + 0.4 * ice * ice * (3 - 2*ice) * iceCover;
   return { ...escape, longwave, shortwave, emitted, albedo, pressure,
-    inDomain: T >= 200 && T <= 600 && escape.lambda >= 20 };
+    inDomain: T >= 200 && T <= 600 && escape.lambda >= 20 && escape.regime === 'wind' };
 }
 
 export function waterLifetime(waterColumn, massFlux) {
+  if (!(waterColumn > 0)) return 0;
   return massFlux > 0 ? Math.max(0, waterColumn) / massFlux / YEAR : Infinity;
 }

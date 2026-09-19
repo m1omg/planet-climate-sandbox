@@ -99,9 +99,9 @@ export function waterRadiusFactor(x) {
 // that weighs almost nothing. See `transitRadius`.
 export function condensedRadius(params) {
   if (params.lowGravityWaterworld && params.mass >= 0.01 && params.mass <= 0.2)
-    return waterworldRadius(params.mass);
+    return waterworldRadius(params.mass) * (params.radiusScale ?? 1);
   const x = waterMassFraction(params.mass, params.water ?? 0);
-  return radiusFromMass(params.mass) * waterRadiusFactor(x);
+  return radiusFromMass(params.mass) * waterRadiusFactor(x) * (params.radiusScale ?? 1);
 }
 
 // What a transit would measure: the condensed planet plus the height at which

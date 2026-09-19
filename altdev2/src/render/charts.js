@@ -302,7 +302,9 @@ export function drawWater(canvas, world) {
   // Legend, with where the water actually is right now. Reading a stacked area
   // chart to the nearest percent is not possible, and the number is the thing
   // most worth knowing.
-  const now = H[H.length - 1];
+  // The legend describes NOW, not the most recent (possibly old) chart sample.
+  const now = { ...inv, vap: inv.vapour * (1-(world.diag.superFrac || 0)),
+    sup: inv.vapour * (world.diag.superFrac || 0) };
   const share = [now.ocean, now.seaIce || 0, now.landIce || 0,
                  now.vap || 0, now.sup || 0, now.lost];
   const swatch = ['#2f8fd6', '#9fd4ec', '#e6f3fb', '#e8c07a', '#c98ad0', '#ff5a3c'];

@@ -332,7 +332,13 @@ export function update(w, dt) {
   // Below the triple point there is no liquid water at any temperature: ice
   // sublimates straight to vapour and standing water boils away. Mars sits just
   // under that line, which is why it has ice and frost but no lakes.
-  const pSurfPa = (w.n2 + w.co2 + w.ch4 + w.o2) * g + vapourPa(w, g);
+  // The pure-water branch assumes phase-equilibrated vapour. Use that same
+  // pressure at initialization: an empty bookkeeping vapour reservoir must
+  // not briefly prohibit the ocean in a hot, saturated starting state.
+  const waterPressure = smallWaterworld
+    ? w.T.reduce((sum,T) => sum + Math.min(psatH2O(T),availCol*g)/NBANDS,0)
+    : vapourPa(w,g);
+  const pSurfPa = (w.n2 + w.co2 + w.ch4 + w.o2) * g + waterPressure;
   const liquidAllowed = smoothstep(0.75 * P_TRIPLE_H2O, 1.15 * P_TRIPLE_H2O, pSurfPa);
 
   // Evaporation comes from open water only. A sea sealed under ice supplies
@@ -838,6 +844,9 @@ export function update(w, dt) {
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted - coolingMean,
     escapeCooling, swScale,
     smallWaterworld: smallWaterworld ? { bulkEscape, cooling: coolingMean,
+      hasSurfaceOcean: hasWater && w.water.ocean > 1e-5 && flooded >= 0.5
+        && openOcean * liquidAllowed > 0.01 && Tmean < T_CRIT_H2O,
+      hasIceReservoir: hasWater && (w.water.seaIce + w.water.landIce) > 1e-5,
       lifetime: waterLifetime(availCol, bulkEscape), longwave: lwScaleMean,
       shortwave: swScaleMean, inDomain: paperDomain && p.starTemp >= 5200 && p.starTemp <= 6200,
       availablePressure: availCol * g } : null,
