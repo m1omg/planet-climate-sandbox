@@ -332,7 +332,7 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   // faster than the adiabat does above about four gigapascals, so a warm enough
   // ocean never freezes however deep it gets -- the adiabat stays in the liquid
   // and then the supercritical field all the way down, which is exactly
-  // Pierrehumbert & Furth's "the atmospheric adiabat connects seamlessly to the
+  // Pierrehumbert's "the atmospheric adiabat connects seamlessly to the
   // supercritical water adiabat that extends into the deep interior". That is a
   // real state, not a failure to converge, and it is reported as one.
   //
@@ -525,7 +525,7 @@ export function iceKind(pTop, pBase) {
 // report. Right for a world that has finished converting. Flatly wrong for one
 // part-way through it -- which is the whole of the Buried Ocean state, where a
 // hot isothermal lid stands on cold liquid water that has not converted yet
-// (Pierrehumbert & Furth 2023). Measured on the cold-start path: 489 Earth
+// (Pierrehumbert 2023). Measured on the cold-start path: 489 Earth
 // oceans in the reservoir, `hotLayer` 0.7% converted, and a cross-section
 // drawing a hundred kilometres of supercritical fluid resting on bare rock.
 //
@@ -650,10 +650,15 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   // there once, at a hard-coded hundred kilometres, and it was an invention on
   // top of a contradiction: the water it claimed to show was the water the
   // liquid band below was missing.
-  // "The surface has gone over": the classifier's own test rather than the
-  // ocean solver's later one, so the column the picture draws switches from the
-  // sea to the pool at the moment the state does.
-  const lid = (dg.hotTarget ?? 0) > 0.5 || ob.basePhase === 'supercritical';
+  // "The surface has gone over", asked once and in one place. This spelled out
+  // `hotTarget > 0.5 || basePhase === 'supercritical'` -- the same words as the
+  // classifier and the banner, which is a copy rather than an agreement, and
+  // they drifted: the picture drew liquid under a lid for nine megayears while
+  // the state beside it said Steam Runaway. `dg.lidded` is that test, held in
+  // one place, so the column the picture draws switches from the sea to the
+  // pool at the moment the state does -- because it is the same switch and not
+  // a second one that agrees with it today.
+  const lid = !!dg.lidded;
   const envShare = (dg.pH2 ?? 0) + (dg.pHe ?? 0);
   // No pressure on the air band: it is a tile of its own two rows above this in
   // the readout, and the line is long enough with a thickness and a temperature

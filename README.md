@@ -2400,7 +2400,7 @@ model with enough water to make it visible.
 
 What the step was missing is that the two phases do not become identical *at* the critical point,
 they become identical *near* it — approaching 647 K the liquid and vapour densities converge and the
-latent heat collapses toward zero. Pierrehumbert & Furth (2023) put it as the atmospheric adiabat
+latent heat collapses toward zero. Pierrehumbert (2023) puts it as the atmospheric adiabat
 connecting **"seamlessly to the supercritical water adiabat that extends into the deep interior of
 the planet."** A seam described as seamless should not be a step in the code.
 
@@ -2422,7 +2422,7 @@ kelvin — but it is a curve.
 ### The same star over the same planet, and two different worlds
 
 `docs/climate-states.md` says of the classifier that it has "no hysteresis and no memory". This is
-the first place the model has both, and it is not decoration: Pierrehumbert & Furth's point is that
+the first place the model has both, and it is not decoration: Pierrehumbert's point is that
 a waterworld's state depends on the path it took.
 
 > "A sub-Neptune waterworld could undergo a cold-start runaway if it cooled off sufficiently, early
@@ -2450,7 +2450,7 @@ Measured, sixty oceans under 3 S⊕ with the star held fixed, run for the same 2
 The cold start gets there — it is a delay and not a wall — but 200 kyr in it is a different planet.
 
 **The asymmetry is one number, not two invented timescales.** Going down, heat has to be mixed
-against a stable buoyancy gradient, which Pierrehumbert & Furth name as the difficulty; coming back
+against a stable buoyancy gradient, which Pierrehumbert names as the difficulty; coming back
 up there is no such gradient, because a cooling supercritical layer gets denser and sinks on its
 own. The two directions also draw on different fluxes, which is physics rather than an asymmetry
 bolted on: going down the energy arrives from the star and the interior and only the mixed fraction
@@ -2713,7 +2713,7 @@ since long before this branch caught it.
 Asked for by the same player, and the right question: what do you call a world that is
 running away but still has real liquid water under the hot layer?
 
-It is the cold-start configuration Pierrehumbert & Furth describe — *"a hot (and possibly
+It is the cold-start configuration Pierrehumbert describes — *"a hot (and possibly
 supercritical) isothermal upper layer in contact with a cold liquid or ice boundary"* — and
 the model had been **tracking it since Phase 5 without ever naming it**. `hotLayer` is how
 much of the column has actually converted as against how much the surface says should
@@ -2870,7 +2870,7 @@ Which says something about this world that no label was admitting: **the buried
 ocean is 700 metres of liquid over 263 km of supercritical fluid.** It follows
 from the paragraph above — the pool is at the critical temperature because the
 model's ocean is always at its surface temperature, so a hair of depth takes it
-over. Pierrehumbert & Furth's cold start has a *cold* liquid or ice boundary
+over. Pierrehumbert's cold start has a *cold* liquid or ice boundary
 under the lid; this model reaches the same configuration with a hot one, and the
 missing piece is the ocean's own thermal inertia rather than anything in the
 drawing. It is reported, and the classifier still names the state from the
@@ -3021,7 +3021,7 @@ The Cold-Start Runaway through its crossing, at 50 kyr a step:
 60.50 Myr   sky 925 °C   pool 88 °C    supercritical 101 km / ocean 101 km / ice VII 161 km
 ```
 
-A hot lid on cold liquid water on high-pressure ice — Pierrehumbert & Furth's
+A hot lid on cold liquid water on high-pressure ice — Pierrehumbert's
 cold start, with the cold in it.
 
 `oceanBase` is solved at the same temperature, and that is not a detail. Solved
@@ -4438,6 +4438,126 @@ never fires, so it is held at both ends: a source-level guard that the markup is
 arranged the way the handler assumes, and four checks in `browsercheck.mjs` that
 drive a real Chrome and measure where the first slider actually lands.
 
+### Steam world, buried ocean, steam world again
+
+Reported from play, with the sequence on screen: `dune` 2.122 Gyr, then Steam
+Runaway 9.3 Myr, then Buried Ocean 8.8 Myr, then Steam Runaway 431.5 Myr. A
+planet does not condense a sea and lose it twice.
+
+It did not. The water goes up once, at 2.1223 Gyr, in a single step — `ocean`
+0.107 → 0.000, `vapour` 0.000 → 0.107, `Tmean` 324 → 653 K, `pTot` 1.33 →
+30.7 bar — and from then on there is a hot lid over a cold pool that shrinks
+monotonically as the lid eats it: 317 m of liquid at 3.5% converted, 161 m at
+50%, 7.7 m at 98%, nothing at 100%. Nineteen megayears, one direction. Nothing
+physical reverses anywhere in it.
+
+The **name** reversed, because the two ends of the state were decided by two
+different numbers.
+
+Going in, `classify()` asks the cold pool whether it holds liquid, and
+`dg.coldPool` returned `null` until `hotTarget > 0.5` — so for the first half
+of a burial the evidence for the state did not exist and could not be found.
+Measured: `liquidDepth` reads 0.0 while `hotLayer` runs 0.021 → 0.4758, then
+jumps to 161.6 m at 0.5007. A pool that gets *deeper* as more of it converts is
+the shape of a reporting gate, not of physics.
+
+Coming out, a separate term, `unconverted > 0.02`, withdrew the name at
+`hotLayer` 0.9809 with 7.7 m of liquid still drawn under the lid.
+
+So the state began on a threshold in `hotTarget` and ended on a threshold in
+`hotLayer`, and in between the thing it is named for did something neither of
+them was watching.
+
+`hotTarget > 0.5` was written in **five** places — the cold-pool gate, the
+classifier's `buriedOcean`, the banner's `noSurface`, the cross-section's `lid`,
+and the deep-ice rate's choice of column — each with a comment saying it matched
+the others. Five copies of a test are not an agreement; they are five things
+that can drift, and they had. There is one now:
+
+```js
+get lidded() {
+  if ((this.totalWater ?? 0) <= 0.005) return false;
+  const hot = this.hotTarget ?? 0;
+  return hot > 0.5 || (hot > 0 && (this.openOcean ?? 0) <= 0.01);
+}
+```
+
+Two sufficient conditions for one question, because a world loses its sea by one
+of two routes and not both. The reported world takes the second: the reservoir
+empties into the sky in a single step, so there is no open water anywhere with
+only 3.5% of the surface yet past the critical point. `coldStart` takes the
+first: a world with no basins keeps its column in `water.ocean` and `flooded`
+falls as the surface goes over, so open water is still 38% when 62% of the
+surface is lid.
+
+Getting that wrong cost two attempts, and the checks caught both. Written as the
+surface *reservoir* being empty — on the reasoning that `water.ocean` drains
+into `vapour` the moment the surface goes — it is true of the reported world and
+false in general, and `identity.mjs` said so: `coldStart` at 10 Myr has
+`hotTarget` 1, `flooded` 0 and 477.8 of 500 EO still sitting in `water.ocean`,
+because a world with no basins carries its unconverted column in that reservoir
+rather than a sea. Rewritten as `openOcean` alone, it waits too long, and the
+cross-section check said so: `oceanBase` divides the reservoir by `flooded`,
+which is on its way to zero, so through the overlap the drawn column balloons to
+657 km against 258 km settled. `hotTarget > 0.5` is load-bearing there, and that
+is worth saying plainly rather than presenting the result as one clean rule — it
+is a crossover for a model that has one column to describe a surface that is
+half sea and half lid.
+
+With one definition in place, `unconverted > 0.02` could go entirely, because
+`poolLiquid()` already falls to zero on its own — the pool is the share of the
+inventory `hotLayer` has not taken, so the liquid runs out exactly when the
+conversion finishes. The state now starts when the sea goes and ends when the
+pool does: `dune` → `buriedOcean` at 2.1220 Gyr → `steamRunaway` at 2.1408 Gyr,
+one contiguous run of 18.8 Myr, left with 0.7 m of liquid under the lid.
+
+Two smaller things fell out. Venus and GJ 1132 b were being handed a cold pool
+of zero depth and zero liquid — an object that says nothing, which is worse than
+`null` because every consumer then has to know a pool can be empty; they report
+`null` now. And `lidded` is pure, reading two plain fields and no lazily cached
+column solve, so `advanceDeepIce` can read it from inside a step without
+populating `oceanBase` at a moment that is not the end of one — the
+tenth-significant-figure drift that function already goes out of its way to
+avoid.
+
+The check that would have caught it did exist — *"A drawn ocean under the lid is
+never called a state with no ocean"* — and it passed throughout, because it reads
+`dg.coldPool` and `dg.coldPool` was the thing that was wrong. A check that asks
+the model for its evidence agrees with the model by construction. The three that
+replace it call `coldPoolStructure` directly and assert the shape of the
+sequence instead: one contiguous run, starting when the last open water goes,
+ending with a metre or less still under the lid. On the old code the first of
+them fails 199 of 372 frames, the worst of them Steam Runaway over 322.2 m of
+liquid at 1.96% converted.
+
+### …and the paper it is built on has one author
+
+Found while re-reading the source of the state above, and worth its own note
+because it was wrong in fifteen places and two languages: the buried ocean comes
+from **Pierrehumbert 2023**, *The Runaway Greenhouse on Sub-Neptune Waterworlds*,
+ApJ 944, 20 ([arXiv:2212.02644](https://arxiv.org/abs/2212.02644)) — one author,
+Raymond T. Pierrehumbert. It was credited throughout as "Pierrehumbert & Furth
+2023". There is no Furth. The running head of the paper reads `2 Pierrehumbert`,
+which is the single-author form; two authors would print both names.
+
+The wrong name had reached the player-facing text in both languages — the Buried
+Ocean and Supercritical Envelope blurbs in `classify.js` and their Slovak
+counterparts in `sk.js` — as well as `volatiles.js`, `ocean.js`, `climate.js`,
+`presets.js`, `selftest.js`, `calibrate.mjs`'s GAP row and seven places in this
+file. All corrected, with the verbs agreeing again.
+
+The quotations themselves were right, and that is the part worth keeping: the
+cold-start configuration this model names Buried Ocean is that paper's own —
+*"a hot (and possibly supercritical) isothermal upper layer in contact with a
+cold liquid or ice boundary"*, which *"as the isothermal layer radiated into the
+ocean or ice, would progressively advance toward the centre"*, slowly, because
+of *"the difficulty of mixing heat downward against a stable buoyancy gradient"*.
+The `Hot-layer conversion, 1 EO` GAP row exists because the same paper says
+plainly that *"the lack of opacity data for hot high pressure water poses a
+severe challenge for quantifying the rate of advance"* — it gives the mechanism
+and declines to give a rate, so this model's rate is bounded by Osborn 1980's
+mixing efficiency rather than fitted to anything.
+
 ## Known deviations from the literature
 
 Stated plainly, because a model that hides these is less useful:
@@ -4552,7 +4672,7 @@ Stated plainly, because a model that hides these is less useful:
 * **The cold-start conversion rate rests on one unmeasured number.** How fast a hot layer eats
   downward into a cold ocean is set by the efficiency with which heat mixes across a stably
   stratified interface, and there is no measurement of it: the ocean in question has never been
-  observed, and Pierrehumbert & Furth (2023) give the mechanism without a rate. What exists is a
+  observed, and Pierrehumbert (2023) gives the mechanism without a rate. What exists is a
   bound borrowed from terrestrial oceanography — Osborn (1980) tops the stratified mixing efficiency
   out near 0.2, and a strongly stratified interface runs an order of magnitude under that — so the
   0.02 used here is the low end of a bound, not a fitted value. `tools/calibrate.mjs` reports it as

@@ -17,7 +17,7 @@ import { SK } from './game/sk.js';
 import { SLOTS, NUMERIC_FIELDS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld, DERIVED } from './game/snapshot.js';
-import { oceanStructure, meltingPressure, waterDensity,
+import { oceanStructure, meltingPressure, waterDensity, coldPoolStructure,
          columnLayers, T_COLD_POOL, meltingTemperatureIh, meltingTemperature,
          iceShell, freezingDepression, freezeShift } from './physics/ocean.js';
 import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
@@ -482,7 +482,7 @@ function runChecks() {
 
   // Cold start against hot start: the same planet, the same star, two answers.
   //
-  // Pierrehumbert & Furth 2023's point is that a sub-Neptune waterworld that
+  // Pierrehumbert 2023's point is that a sub-Neptune waterworld that
   // cooled early and was heated later cannot simply become the world it would
   // have been had it never cooled, because the heat has to be mixed downward
   // against a stable buoyancy gradient and that is slow. The classifier's own
@@ -617,7 +617,7 @@ function runChecks() {
       + `of the column, and still an envelope`);
 
     // Two settled states, one star, one planet, and the only difference is where
-    // it started. This is Pierrehumbert & Furth's cold start against their hot
+    // it started. This is Pierrehumbert's cold start against their hot
     // start, arrived at as an equilibrium rather than as a transient: both sides
     // have closed their energy budgets to a twentieth of a watt and neither is
     // going anywhere. The hot-layer machinery is what carries the memory, and
@@ -1233,6 +1233,74 @@ function runChecks() {
           + `${FINE} yr steps: ${first != null ? 'seen' : 'never seen'}`);
     }
 
+    // The same question asked where the gate cannot hide the answer. The check
+    // above reads `dg.coldPool`, and `dg.coldPool` was itself gated on
+    // `hotTarget > 0.5` -- so every frame where the gate was wrong was a frame
+    // the check skipped. It agreed with the bug by construction.
+    //
+    // Reported from play, on the world below: `dune` for 2.12 Gyr, then Steam
+    // Runaway for 9.3 Myr, then Buried Ocean for 8.8 Myr, then Steam Runaway
+    // again for 431 Myr. A planet does not re-condense a sea and then lose it
+    // twice. Measured, the water goes up once and stays up -- ocean 0.107 -> 0
+    // and vapour 0 -> 0.107 in a single step at 2.1223 Gyr -- and the pool
+    // underneath shrinks monotonically from 317 m to nothing as the lid eats
+    // it. Nothing physical reverses. The NAME reversed, twice, because the two
+    // ends of it were decided by two different numbers:
+    //
+    //   in   `dg.coldPool` returned null until `hotTarget > 0.5`, so the
+    //        evidence for the state did not exist for the first half of it
+    //   out  `unconverted > 0.02` withdrew the name at `hotLayer` 0.9809 with
+    //        7.7 m of liquid still under the lid
+    //
+    // So this runs the raw column solve itself, independently of whatever the
+    // diagnostic chooses to expose, and asserts the only thing that can make
+    // the sequence honest: the name tracks the water. Liquid under a lid is a
+    // Buried Ocean at every frame, and the name is one contiguous run rather
+    // than something that can be handed back and picked up again.
+    {
+      // The hash from the report, verbatim.
+      const burial = new Simulation({ ...PRESETS.earth.params,
+        mass: 0.815, landFraction: 0.1, water: 0.108, insolation: 1.524,
+        xuvFraction: 0.00001173, rotationHours: 5832, obliquity: 2.6,
+        n2Bar: 1.0126, o2Bar: 0, biosphere: 0, co2Bar: 0.0004, ch4Bar: 0.000001,
+        internalHeat: 0.031, landAlbedo: 0.2, startT: 288, brightening: 1,
+        realisticGeology: true, startAge: 1.67, magneticField: 0.02,
+        resurfacingAge: 2.182, resurfacingBoost: 66, resurfacingSpan: 40,
+        resurfacingN2Bar: 2.65, xuvDecay: true, hotRockOxidation: 1 });
+      burial.runYears(2.118e9, 2e6);
+      let wet = 0, held = 0, runs = 0, prev = false, badIn = null, badOut = null;
+      for (let yr = burial.world.time; yr <= 2.150e9; yr += 5e4) {
+        burial.runYears(yr - burial.world.time, 5e4);
+        const w = burial.world, dg = w.diag;
+        const total = Math.max(dg.totalWater ?? 0, 1e-12);
+        // No sea on top: the surface reservoir has emptied into the sky. Asked
+        // of the reservoir rather than of any threshold, because that is the
+        // bookkeeping the rest of the model already runs on.
+        const surface = (w.water.ocean + w.water.seaIce) > 0.02 * total;
+        const liquid = surface ? 0 : (coldPoolStructure(dg).liquidDepth ?? 0);
+        const named = classify(w).id === 'buriedOcean';
+        if (liquid > 1) {
+          wet++;
+          if (named) held++;
+          else if (!badIn || liquid > badIn.m) {
+            badIn = { m: liquid, h: dg.hotLayer ?? 0, id: classify(w).id };
+          }
+        } else if (named && !badOut) badOut = { h: dg.hotLayer ?? 0 };
+        if (named && !prev) runs++;
+        prev = named;
+      }
+      check('Liquid under a lid is a Buried Ocean at every frame of the burial',
+        wet > 0 && held === wet,
+        badIn ? `${wet - held} of ${wet} frames misnamed — worst ${badIn.id} `
+            + `over ${badIn.m.toFixed(1)} m of liquid at `
+            + `${(100 * badIn.h).toFixed(2)}% converted`
+          : `${wet} frames with a pool, all Buried Ocean`);
+      check('…and the name is never handed back and picked up again',
+        runs === 1 && !badOut,
+        badOut ? `named with no pool at ${(100 * badOut.h).toFixed(2)}% converted`
+          : `${runs} run${runs === 1 ? '' : 's'} of Buried Ocean`);
+    }
+
     // The deep-ice rate costs a column solve, and it was paying it on every step
     // of every world -- 25 microseconds, 28% of the whole step cost, on planets
     // that cannot hold a gram of high-pressure ice. Reported from play as the
@@ -1449,7 +1517,7 @@ function runChecks() {
     // the water below carries its own temperature and its own heat capacity,
     // and a big enough ocean cannot keep up with a surface running away from
     // it. That is what "retained by sheer quantity" means, and it is what makes
-    // Pierrehumbert & Furth's cold start a COLD start: their hot layer sits on
+    // Pierrehumbert's cold start a COLD start: their hot layer sits on
     // "a cold liquid or ice boundary", not on water at the critical point.
     //
     // Tracking the surface instead put the pool at 373 °C -- one kelvin under

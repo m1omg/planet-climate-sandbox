@@ -53,7 +53,7 @@ const MIXED_LAYER = 60;        // m
 // What the step is missing is that the two phases do not become identical at
 // the critical point, they become identical *near* it. Approaching 647 K the
 // liquid and vapour densities converge, the latent heat collapses toward zero,
-// and the surface stops being a surface -- Pierrehumbert & Furth 2023 put it as
+// and the surface stops being a surface -- Pierrehumbert 2023 puts it as
 // the atmospheric adiabat connecting "seamlessly to the supercritical water
 // adiabat that extends into the deep interior of the planet." A seam that is
 // described as seamless should not be a step in the code.
@@ -671,16 +671,68 @@ export function update(w, dt) {
     // the same water could only disagree with the first. Lazy for the same
     // reason as oceanBase: it costs a bisection and two integrations, nothing in
     // the physics reads it, and the readout looks once a frame.
+    // Whether the water below is a pool under a lid rather than a sea with a
+    // surface of its own. ONE definition, read by the classifier, the banner
+    // and the cross-section, because three copies of `hotTarget > 0.5` is how
+    // a planet came to be named Buried Ocean and then Steam Runaway again
+    // while the pool under it shrank monotonically to nothing. The name
+    // reversed; the water never did.
+    //
+    // There has to be water. Without this term Venus and GJ 1132 b read as
+    // lidded and got a cold pool of zero depth and zero liquid -- an object
+    // that says nothing, which is worse than null because then every consumer
+    // has to know that a pool can be empty. They report null now.
+    //
+    // Then there is no sea, by either of the two routes a world takes to
+    // losing one, and a world takes one or the other rather than both.
+    //
+    // `openOcean <= 0.01` is the route the reported world takes: the surface
+    // reservoir empties into the sky in a single step -- `ocean` 0.107 -> 0 at
+    // 2.1223 Gyr -- and from that moment there is no open water anywhere, with
+    // only 3.5% of the surface yet past the critical point. This is the term
+    // that was missing. Gated on `hotTarget > 0.5` alone, the evidence for a
+    // buried ocean did not exist for the first nine megayears of one, and the
+    // state could not be named for the water the model was carrying.
+    //
+    // `hotTarget > 0.5` is the route `coldStart` takes: a world with no basins
+    // keeps its column in `water.ocean` and `flooded` falls as the surface
+    // goes over, so open water is still 38% when 62% of the surface is lid.
+    // Most of the surface being lid is a real crossover for a model with one
+    // column -- and this term is load-bearing for a second reason, measured:
+    // `oceanBase` divides the reservoir by `flooded`, which is heading for
+    // zero, so the drawn column balloons to 657 km against 258 km settled
+    // while the two descriptions overlap. Dropping to `openOcean` alone let
+    // that through and the cross-section check caught it.
+    //
+    // Two sufficient conditions for one question, not two thresholds deciding
+    // two different things. Everything reads this one field, so the state, the
+    // banner, the cross-section and the deep-ice rate cannot disagree about
+    // whether a planet has a surface -- which is what they were doing.
+    //
+    // Pure, deliberately. It reads three plain fields and touches no lazily
+    // cached column solve, so `advanceDeepIce` can read it from inside a step
+    // without populating `oceanBase` at a moment that is not the end of one --
+    // the drift that function goes out of its way to avoid. A test that
+    // everything reads has to be free to be read from anywhere.
+    get lidded() {
+      if ((this.totalWater ?? 0) <= 0.005) return false;
+      const hot = this.hotTarget ?? 0;
+      return hot > 0.5 || (hot > 0 && (this.openOcean ?? 0) <= 0.01);
+    },
     get coldPool() {
-      // Gated on the surface having gone over, which is `hotTarget > 0.5` --
-      // the same test the classifier names Buried Ocean on, so the picture and
-      // the state change at the same moment. It used to wait for oceanBase to
-      // report "supercritical", which is later: in between, oceanBase is still
-      // solving a sea confined to the shrinking flooded fraction, and dividing
-      // the water by a flooded area on its way to zero tripled the drawn column
-      // for a hundred thousand years before it snapped back.
-      if (!((this.hotTarget ?? 0) > 0.5)
-          && this.oceanBase.basePhase !== 'supercritical') return null;
+      // Gated on `lidded` -- there is no sea on top -- and on nothing else.
+      // The gate exists because with a surface sea `oceanBase` IS that water
+      // and a second answer about it could only disagree with the first; it
+      // used to wait for oceanBase to report "supercritical", which is later,
+      // and in between oceanBase divides the water by a flooded area on its
+      // way to zero and tripled the drawn column for a hundred thousand years
+      // before it snapped back.
+      //
+      // What it must NOT do is carry a threshold of its own. It did: it waited
+      // for `hotTarget > 0.5`, so for the first half of a burial the evidence
+      // for a buried ocean did not exist and the state could not be named.
+      // See `lidded` above for what that cost.
+      if (!this.lidded) return null;
       return coldPoolCache ?? (coldPoolCache = coldPoolStructure(this));
     },
     // The ocean a frozen world can still have under its ice.

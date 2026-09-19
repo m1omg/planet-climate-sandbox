@@ -757,7 +757,7 @@ export const PRESETS = {
   //
   // These two are identical in every parameter except the temperature they are
   // built at, and they settle into different worlds and stay there. That is
-  // Pierrehumbert & Furth 2023's cold start against their hot start, and it is
+  // Pierrehumbert 2023's cold start against their hot start, and it is
   // an equilibrium rather than a transient: both close their energy budgets to
   // a hundredth of a watt and neither is going anywhere.
   //

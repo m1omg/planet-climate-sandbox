@@ -28,8 +28,8 @@ export const STATES = {
   baked:      { name: 'Baked Desert',         color: '#e08a3a', blurb: 'A hot, waterless world of bare rock. Whatever water it had is long gone, so nothing moderates the surface and the day side simply bakes.' },
   hycean:     { name: 'Hycean World',          color: '#3fbfa8', blurb: 'A water-rich sub-Neptune under a hydrogen envelope, with a liquid ocean at the bottom of it \u2014 hundreds of kilometres deep, standing on high-pressure ice rather than rock. The envelope keeps the surface warm far outside a rocky planet\u2019s habitable zone: the worlds here sit at about a tenth of Earth\u2019s sunlight and are still temperate (Madhusudhan et al. 2021). What the literature also claims, and this model does not produce, is the hot end of the band \u2014 a stable ocean at 400 to 550 K. Here the hottest Hycean whose energy budget actually closes is 335 K and anything warmer runs away instead, because the stabiliser that holds the hot branch up is vertical structure a semi-grey scheme has nowhere to put. So this is the temperate Hycean, said plainly \u2014 and the reading of any real planet as Hycean at all is contested.' },
   lowSunHycean: { name: 'Low Sunlight Hycean',     color: '#4a7fb5', blurb: 'A Hycean world with effectively no starlight, holding a liquid ocean on its own internal heat under a deep hydrogen envelope. It needs the envelope to be thick: at these temperatures the greenhouse is doing all the work, and the ocean is liquid because of the pressure over it rather than because of anything the star does. The free-floating and far-orbit version of the state.' },
-  buriedOcean: { name: 'Buried Ocean',        color: '#7a5fa8', blurb: 'A runaway with an ocean still under it. There is no equilibrium at any temperature and the sea is going into the sky \u2014 but there is more water here than the sky can take, so what is left is liquid, buried under steam or supercritical fluid, and cooler than the surface because heat has to be mixed down against a stable buoyancy gradient to reach it (Pierrehumbert & Furth 2023). The lid advances toward the centre over geological time instead of arriving all at once: a few hundred oceans buys tens of millions of years of it. There really is an ocean down there, long after the surface stopped being one.' },
-  supercriticalEnvelope: { name: 'Supercritical Envelope', color: '#a05fc0', blurb: 'Past the critical point the liquid and the vapour stop being different things. The atmospheric adiabat runs seamlessly into the supercritical water adiabat and down into the interior, so there is no boundary anywhere in the fluid to call an ocean surface (Pierrehumbert & Furth 2023). The planet still has a floor \u2014 hot silicate, or ice VI and VII on a world carrying enough water to make them \u2014 and the cross-section draws it; what is missing is the sea surface, not the ground. Which planet you get depends on the path: a world that was always hot equilibrates like this, while one that cooled first and was heated later spends a long time as a hot layer sitting on cold water before it becomes this.' },
+  buriedOcean: { name: 'Buried Ocean',        color: '#7a5fa8', blurb: 'A runaway with an ocean still under it. There is no equilibrium at any temperature and the sea is going into the sky \u2014 but there is more water here than the sky can take, so what is left is liquid, buried under steam or supercritical fluid, and cooler than the surface because heat has to be mixed down against a stable buoyancy gradient to reach it (Pierrehumbert 2023). The lid advances toward the centre over geological time instead of arriving all at once: a few hundred oceans buys tens of millions of years of it. There really is an ocean down there, long after the surface stopped being one.' },
+  supercriticalEnvelope: { name: 'Supercritical Envelope', color: '#a05fc0', blurb: 'Past the critical point the liquid and the vapour stop being different things. The atmospheric adiabat runs seamlessly into the supercritical water adiabat and down into the interior, so there is no boundary anywhere in the fluid to call an ocean surface (Pierrehumbert 2023). The planet still has a floor \u2014 hot silicate, or ice VI and VII on a world carrying enough water to make them \u2014 and the cross-section draws it; what is missing is the sea surface, not the ground. Which planet you get depends on the path: a world that was always hot equilibrates like this, while one that cooled first and was heated later spends a long time as a hot layer sitting on cold water before it becomes this.' },
   airless:    { name: 'Airless Rock',         color: '#8a8a8a', blurb: 'Beyond the cosmic shoreline: stellar XUV has stripped the atmosphere faster than the planet’s gravity could hold it. No climate to speak of.' },
 };
 
@@ -128,7 +128,7 @@ export function classify(w) {
   //
   // No envelope requirement either. A cold-started waterworld with no hydrogen
   // at all buries its ocean the same way -- 60 EO at 1.6 S(+) spends 2.3 Myr
-  // doing it, 500 EO twenty-one -- and Pierrehumbert & Furth describe the
+  // doing it, 500 EO twenty-one -- and Pierrehumbert describes the
   // mechanism for waterworlds, not for Hyceans.
   // Buried by something. A runaway that has only just started is a sea with
   // weather over it, not an ocean under a lid: the margin goes negative long
@@ -156,9 +156,10 @@ export function classify(w) {
   // of it. A hundred-Myr cold start came out labelled Steam Runaway Greenhouse
   // with 200 km of liquid water drawn underneath it.
   //
-  // What actually decides it is how much of the column has gone over, which is
-  // the number `advanceHotLayer` integrates and the cross-section draws.
-  const unconverted = 1 - clamp(dg.hotLayer ?? 0, 0, 1);
+  // What replaced it was `unconverted > 0.02` -- how much of the column has NOT
+  // gone over, from the number `advanceHotLayer` integrates -- and that is gone
+  // too, for the reason written above `buriedOcean` below. Both of them were
+  // attempts to ask "is there any left" of something that is not the water.
   // ...and it has to be the liquid the PICTURE is drawing, which is the second
   // half of the same mistake and took a screenshot to find.
   //
@@ -187,7 +188,22 @@ export function classify(w) {
     const cp = dg.coldPool;
     return cp ? (cp.liquidDepth ?? 0) > 1 : false;
   };
-  const buriedOcean = covered && water > 0.005 && unconverted > 0.02
+  //
+  // `unconverted > 0.02` was the third term here, and it is gone. It is the
+  // other half of the same fault as the gate on `coldPool`: it withdrew the
+  // name at `hotLayer` 0.9809 with 7.7 m of liquid still drawn under the lid,
+  // so a world that had been a Buried Ocean went back to being a Steam Runaway
+  // with its ocean still there. Two ends of one state decided by two different
+  // numbers is how the sequence came out as steam -> buried -> steam.
+  //
+  // Nothing is lost by dropping it. `poolLiquid()` already goes false on its
+  // own, continuously, as the lid eats the pool: `coldPoolStructure` solves the
+  // share of the inventory `hotLayer` has NOT taken, so the liquid goes to zero
+  // exactly when the conversion finishes. The other disjunct carries its own
+  // unconverted water by construction -- a surface reservoir with 2% of the
+  // inventory still in it has not converted. The state now begins and ends on
+  // one measurement, and it is the measurement the picture draws.
+  const buriedOcean = covered && water > 0.005
     && (w.water.ocean > 0.02 * water || poolLiquid());
 
   // Which Hycean state, or none. Returns null when the world has an envelope
@@ -499,7 +515,6 @@ export function reasonText(w, st, tr = enFormat) {
   // average temperature of the liquid. Each term is its own `bit`, so the
   // existing join handles the separators and a term that carries nothing can
   // drop out on its own.
-  const noSurface = (dg.hotTarget ?? 0) > 0.5;
   const bulk = dg.coldT;
   const split = bulk != null && dg.Tmean - bulk > 5 && (dg.totalWater ?? 0) > 0.005;
   // There has to be an ocean before its average temperature means anything.
@@ -508,7 +523,14 @@ export function reasonText(w, st, tr = enFormat) {
   // whose water is ice all the way down, and an ocean on Mars, which has none.
   // Under a lid the pool IS the liquid and there is no surface to be open.
   const wet = (dg.totalWater ?? 0) > 0.005;
-  const col = noSurface ? dg.coldPool : ((dg.openOcean ?? 0) > 0.01 ? dg.oceanBase : null);
+  // Whether there is a surface at all. This was `hotTarget > 0.5` spelled out
+  // here, which is the third copy of a threshold that belongs in one place.
+  const noSurface = !!dg.lidded;
+  // And which column the line is about is `coldPool`'s own existence, which is
+  // the same question again: `coldPool` is null unless the world is lidded, so
+  // asking for it IS asking whether there is a surface, and the banner cannot
+  // now disagree with the state name about a planet they both describe.
+  const col = dg.coldPool ?? ((dg.openOcean ?? 0) > 0.01 ? dg.oceanBase : null);
   const oceanMean = wet && col && col.liquidDepth > 0 ? col.meanTemperature : null;
   // Half a degree is the resolution the line prints at, so anything under it is
   // one temperature written twice.

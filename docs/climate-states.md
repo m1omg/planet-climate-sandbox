@@ -44,6 +44,7 @@ itself remains a pure function of what it is handed; the memory lives upstream o
 | `p.landFraction` | The land fraction as configured | 0–1 |
 | `envShare` | `(pH2 + pHe) / (pTot − pH2O)` — the envelope's share of the **dry** air. Against the total column instead, a supercritical waterworld's twenty bar of hydrogen is 0.07% of tens of thousands of bar of steam and the envelope reads as absent on exactly the world whose envelope is the point | 0–1 |
 | `superShare` = `dg.hotTarget` | Area-mean of `supercriticalShare(T)`, the same 647–697 K blend the vapour ceiling is built from. One definition, not two | 0–1 |
+| `dg.lidded` | There is water (`totalWater > 0.005`) and no sea, by either route a world takes to losing one: `hotTarget > 0.5` — most of the surface is past the critical point — or `hotTarget > 0` with `openOcean ≤ 0.01`, no open water left anywhere. So what is below is a pool under a lid rather than an ocean with a surface. The classifier, the banner, the cross-section and the deep-ice rate all read this one field; they used to each carry their own copy of `hotTarget > 0.5`, and the copies drifted | boolean |
 
 Note the difference between `ice` and `water`: **`ice` is a temperature statement, `water`
 is an inventory statement.** Modern Mars is `ice = 1.0` and `iceArea = 0.019`. That gap is
