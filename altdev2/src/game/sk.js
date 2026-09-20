@@ -494,6 +494,10 @@ export const SK = {
     'no atmosphere': 'bez atmosféry',
     'nitrogen and argon: the gas that neither condenses nor absorbs':
       'dusík a argón: plyn, ktorý ani nekondenzuje, ani nepohlcuje',
+    'hydrogen: light enough to escape a small warm world, so an envelope of it is a statement about the planet’s mass and its star':
+      'vodík: dostatočne ľahký na to, aby unikol z malého teplého sveta — obálka z neho teda hovorí o hmotnosti planéty a o jej hviezde',
+    'helium: the rest of a primordial envelope. Nothing on a planet makes it and nothing destroys it, so what is here was captured and has not yet escaped':
+      'hélium: zvyšok pôvodnej obálky. Na planéte ho nič nevytvára a nič nerozkladá, takže to, čo je tu, bolo zachytené a ešte neuniklo',
     'carbon dioxide': 'oxid uhličitý',
     'water vapour': 'vodná para',
     'water past its critical point: neither liquid nor gas':

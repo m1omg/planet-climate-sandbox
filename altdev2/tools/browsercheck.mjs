@@ -1404,6 +1404,61 @@ try {
   }
 
   ok(browserErrors.length === 0, 'No browser exceptions or error-level console messages');
+
+
+  // Last, deliberately: it loads a preset and leaves it loaded, and the epoch
+  // record check above reads whatever world is current. Running it earlier made
+  // that check fail with `hycean@2.0e-1→1.0e-1`, a span closing before it
+  // opened -- the rewind guard in noteEpoch is `w.time + 1 < last.from`, and a
+  // one-year slack cannot see a preset swap between two worlds that both start
+  // within a year of zero. That is a real fault and is NOT fixed here.
+
+  // The composition readout, on a world whose atmosphere is mostly the gas it
+  // was not listing. `composition()` builds its bar from six partial pressures
+  // -- N2, CO2, H2O, H2O-sc, O2, CH4 -- and normalises them against their own
+  // sum, so a gas absent from that list is absent from the total as well. On a
+  // Hycean that is 20.1 bar of air reported as 0.103 bar: the hydrogen and the
+  // helium, 99.5% of it, are not merely unlabelled, they are divided out, and
+  // the trace gases left behind are renormalised to 100%. The line reads as a
+  // statement about the atmosphere and is a statement about half a percent of
+  // it. Asked for from play, and the readout is the only place a player can
+  // see what a world is made of.
+  const air = await evaluate(`(async () => {
+    __app.loadPreset('hycean');
+    for (let i = 0; i < 120 && __app.view.body !== 'hycean'; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    __app.tick(0);
+    const dg = __app.sim.world.diag;
+    const list = document.querySelector('#stats .comp-list');
+    const names = [...(list ? list.querySelectorAll('b') : [])].map((b) => b.textContent);
+    // Every percentage the line prints, so the sum can be checked against 100.
+    const shown = (list ? list.textContent : '').match(/[0-9.]+(?=%)/g) || [];
+    return JSON.stringify({
+      names, sum: shown.reduce((a, v) => a + parseFloat(v), 0),
+      pH2: dg.pH2 ?? 0, pHe: dg.pHe ?? 0, pTot: dg.pTotMean,
+      text: (list ? list.textContent : '').slice(0, 90),
+    });
+  })()`, 120000);
+  const A = JSON.parse(air);
+  const envShare = (A.pH2 + A.pHe) / Math.max(A.pTot, 1e-12);
+  ok(A.names.includes('H₂') && A.names.includes('He'),
+    'The composition readout names every gas in the air, hydrogen included',
+    `${A.names.join(' ')} — ${(100 * envShare).toFixed(1)}% of ${A.pTot.toFixed(1)} bar `
+      + `is H₂ and He`);
+  // ...and the shares are shares OF THE ATMOSPHERE. This is the half of it that
+  // a missing label does not describe: the percentages still sum to 100, so
+  // without the envelope in the total every other gas reads far too high.
+  const h2 = await evaluate(`(() => {
+    const list = document.querySelector('#stats .comp-list');
+    const e = [...(list ? list.querySelectorAll('span') : [])]
+      .find((s) => s.querySelector('b') && s.querySelector('b').textContent === 'H₂');
+    return e ? (e.textContent.match(/([0-9.]+)%/) || [])[1] ?? '' : '';
+  })()`);
+  ok(Math.abs(parseFloat(h2) - 100 * A.pH2 / A.pTot) < 2,
+    '…and hydrogen\u2019s share is its share of the whole atmosphere',
+    `readout ${h2 || 'absent'}% against ${(100 * A.pH2 / Math.max(A.pTot, 1e-12)).toFixed(1)}% `
+      + `measured (${A.text.trim()})`);
   console.log(`Screenshot: ${screenshot}`);
   console.log(`Drowned screenshot: ${drownedScreenshot}`);
   console.log(`Slovak screenshot: ${slovakScreenshot}`);

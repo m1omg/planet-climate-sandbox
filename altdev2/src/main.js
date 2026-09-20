@@ -836,6 +836,22 @@ function fmtTime(y) {
 // world it stops being a trace gas and becomes most of the atmosphere, and a
 // composition readout that hid that would be misleading exactly where it
 // matters most.
+//
+// Hydrogen and helium are in it for the same reason, and they were not.
+// Reported from play as "it doesn't show the percentage of atmosphere at all
+// when it comes to hydrogen", which is the smaller half of what was wrong:
+// `total` is the sum of the gases listed here, so a gas missing from the list
+// is missing from the denominator as well, and what is left gets renormalised
+// to 100%. Measured on the Hycean preset: 20.10 bar of air, of which 17.999 is
+// H2 and 2.000 is He, reported as "H2O CO2 CH4" summing to 100% of 0.103 bar.
+// The line reads as a statement about the atmosphere and was a statement about
+// half a percent of it -- on the one group of worlds whose envelope is the
+// entire point of them.
+//
+// Helium goes in alongside, not because it was asked for but because leaving
+// it out would keep the denominator wrong: on these worlds it is a tenth of
+// the envelope, so listing H2 alone would still put every trace gas at ten
+// times its share. The fault is the missing total, not a missing label.
 function composition(dg) {
   const pH2O = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length;
   const parts = [
@@ -843,6 +859,11 @@ function composition(dg) {
     // much -- nitrogen, oxygen and argon together -- so it is labelled for what
     // it is rather than pretending Earth's is pure nitrogen.
     ['N₂', dg.pN2, '#7f9ccc', t('nitrogen and argon: the gas that neither condenses nor absorbs')],
+    // The primordial envelope, if there is one. Light enough that a small warm
+    // world loses it and a large cold one does not, which is most of what
+    // decides whether a planet is a rock with air on it or a sub-Neptune.
+    ['H₂', dg.pH2 ?? 0, '#cfd8e3', t('hydrogen: light enough to escape a small warm world, so an envelope of it is a statement about the planet\u2019s mass and its star')],
+    ['He', dg.pHe ?? 0, '#f2cf63', t('helium: the rest of a primordial envelope. Nothing on a planet makes it and nothing destroys it, so what is here was captured and has not yet escaped')],
     ['CO₂', dg.pCO2, '#e0894a', t('carbon dioxide')],
     ['H₂O', pH2O * (1 - (dg.superFrac || 0)), '#4fa8d8', t('water vapour')],
     ['H₂O·sc', pH2O * (dg.superFrac || 0), '#c98ad0', t('water past its critical point: neither liquid nor gas')],
