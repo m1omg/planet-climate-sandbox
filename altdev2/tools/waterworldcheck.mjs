@@ -7,8 +7,8 @@ import { derive, waterForShareOfMass } from '../src/physics/planet.js';
 import { maxStep, update, tendency, radiativeDamping } from '../src/physics/climate.js';
 import { escapeRates, stepVolatiles } from '../src/physics/volatiles.js';
 import { classify, reasonText } from '../src/physics/classify.js';
-import { YEAR, psatH2O } from '../src/physics/constants.js';
-import { steamEscape, waterworldFlux, waterLifetime, waterworldActive, WATER_SUBLIMATION_HEAT } from '../src/physics/waterworld.js';
+import { YEAR, G_GRAV, M_EARTH, psatH2O } from '../src/physics/constants.js';
+import { steamEscape, waterworldFlux, waterLifetime, waterworldActive, waterworldRadius, WATER_SUBLIMATION_HEAT } from '../src/physics/waterworld.js';
 
 let passed = 0;
 const check = (name, fn) => { fn(); console.log('PASS', name); passed++; };
@@ -17,7 +17,7 @@ const build = key => new Simulation({...PRESETS[key].params});
 
 check('paper equations 1, 8-11, with explicit SI units', () => {
   const p = PRESETS.smallWaterworld.params, d = derive(p), T = 300;
-  near(d.R / 6371000, 1.258 * p.mass**0.302);
+  near(waterworldRadius(p.mass) / 6371000, 1.258 * p.mass**0.302);
   const cs = Math.sqrt(461.5*T), rc = d.g*d.R*d.R/(2*cs*cs);
   const expected = psatH2O(T)/(cs*cs)*cs*(rc/d.R)**2*Math.exp(-0.5+d.g*d.R*d.R/(cs*cs)*(1/rc-1/d.R));
   const esc = steamEscape(T,d.g,d.R);
@@ -28,7 +28,7 @@ check('paper equations 1, 8-11, with explicit SI units', () => {
   near(waterLifetime(p.water*d.eoColumn,esc.flux),p.water*d.eoColumn/esc.flux/YEAR);
 });
 check('Figure 2 approximation expands LW more than SW', () => {
-  const d = derive({...PRESETS.smallWaterworld.params,mass:0.12});
+  const R=waterworldRadius(.12),d={R,g:G_GRAV*M_EARTH*.12/R**2};
   const f = waterworldFlux(400,d.g,d.R);
   near(f.longwave,1.195); near(f.shortwave,1.068);
   assert.ok(f.longwave>f.shortwave && f.shortwave>1);
@@ -44,7 +44,7 @@ check('thermal escape responds to binding energy and temperature, not XUV', () =
   assert.ok(steamEscape(300,d.g/2,d.R).flux>steamEscape(300,d.g,d.R).flux);
   const w=build('evaporatingWaterworld').world, rate=escapeRates(w).water;
   w.params.xuvFraction=0; update(w,0); near(escapeRates(w).water,rate);
-  assert.equal(waterworldActive({...w.params,lowGravityWaterworld:false},1,0),false);
+  assert.equal(waterworldActive({...w.params,lowGravityWaterworld:false},1,0),true);
   assert.equal(waterworldActive(w.params,1,1),false);
 });
 check('mass loss conserves water and produces no residual oxygen', () => {
@@ -67,21 +67,28 @@ check('warm, short-lived and cold-start branches settle without inventing oxygen
   const temps=[];
   for(const key of ['smallWaterworld','evaporatingWaterworld','icySmallWaterworld']) {
     const s=build(key),initial=s.world.diag.totalWater;
+    if(key==='evaporatingWaterworld')assert.equal(classify(s.world).id,'evaporatingWaterworld');
     for(let i=0;i<700;i++)s.stepOnce(Math.min(maxStep(s.world),1e5));
     const w=s.world; assert.ok(w.time>1e7); assert.ok(w.diag.smallWaterworld);
     assert.ok(Math.abs(w.diag.imbalance)<1e-5); assert.equal(w.o2,0);
     near(w.diag.totalWater+w.water.lost,initial,1e-10);
     temps.push(w.diag.Tmean);
-    if(key==='evaporatingWaterworld') {assert.ok(w.water.lost>1);assert.equal(classify(w).id,'evaporatingWaterworld');}
+    if(key==='evaporatingWaterworld') {
+      assert.ok(w.water.lost>1);
+      assert.equal(classify(w).id,w.diag.hasWater?'evaporatingWaterworld':'airless');
+      if(!w.diag.hasWater)assert.ok(w.diag.totalWater<1e-5 && !classify(w).habitable);
+    }
     if(key==='smallWaterworld')assert.equal(classify(w).id,'smallWaterworld');
     console.log(' ',key,`${w.diag.Tmean.toFixed(3)} K`,`${w.time.toExponential(3)} yr`,`${w.water.lost.toExponential(3)} EO lost`);
   }
-  assert.ok(temps[0]>273.15 && temps[1]>273.15 && temps[2]<273.15);
+  // The short-lived branch may already be dry by the end; its initial ocean
+  // classification is checked above, not imposed after its inventory is gone.
+  assert.ok(temps[0]>273.15 && temps[2]<273.15);
 });
 check('save/import/resume preserves mode, water and subsequent evolution', () => {
   const a=build('evaporatingWaterworld');a.runYears(10);
   const saved=parseSaveFile(JSON.stringify(captureWorld(a.world)))[0];
-  assert.equal(saved.params.lowGravityWaterworld,true);
+  assert.equal(saved.params.lowGravityWaterworld,undefined);
   const b=build('smallWaterworld');applyWorld(b,saved);
   for(let i=0;i<30;i++){a.stepOnce(10);b.stepOnce(10);}
   near(a.world.diag.Tmean,b.world.diag.Tmean,1e-12);

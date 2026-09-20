@@ -4979,7 +4979,8 @@ condition of using them; keep `CREDITS.md` with any copy.
 ## Small-waterworld extension
 
 Four small-waterworld presets implement expanded radiative surfaces, with
-collisional steam escape or tenuous-gas Jeans escape as appropriate. The icy
+collisional steam escape or tenuous-gas Jeans escape as appropriate. Selection
+is automatic from the physical parameters; there is no model checkbox. The icy
 preset includes internal heating and a calculated subglacial ocean. Europa,
 Ganymede and Callisto provide additional illustrative icy-moon interiors,
 using measured masses/radii but assumed heat fluxes and water inventories. See

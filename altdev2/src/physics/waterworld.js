@@ -1,16 +1,23 @@
 // Arnscheidt, Wordsworth & Ding (2019), arXiv:1906.10561v2.
 // Equations 1, 2 and 8-11; reduced radiation, NOT the paper's LBL calculation.
-import { R_EARTH, M_EARTH, G_GRAV, YEAR, SIGMA, psatH2O, clamp, smoothstep } from './constants.js';
+import { R_EARTH, M_EARTH, G_GRAV, EO_COLUMN, YEAR, SIGMA, psatH2O, clamp, smoothstep } from './constants.js';
+import { MAX_BASIN_DEPTH } from './hypsometry.js';
 
 export const WATER_GAS_CONSTANT = 461.5;
 export const WATER_LATENT_HEAT = 2.5e6;
 export const WATER_SUBLIMATION_HEAT = 2.834e6;
 export function waterworldRadius(mass) { return 1.258 * R_EARTH * mass ** 0.302; }
 
-// Opt in: the paper assumes water-rich planets and essentially pure steam.
-// Background-rich / H2-envelope planets must retain their existing model.
+// Automatic applicability, not a user-selectable physics switch. Structural
+// water exceeds even the maximum rocky basin capacity. Use the configured
+// inventory here, not the shrinking reservoir: its eventual dry radiative
+// limit must be continuous. Runtime gas composition is checked on every update.
+// These are the reduced model's applicability bounds, not universal physical
+// discontinuities or a claim of a quantitative mixed-atmosphere solution.
 export function waterworldActive(p, waterEO, backgroundBar = 0) {
-  return p.lowGravityWaterworld === true && p.mass >= 0.01 && p.mass <= 0.2
+  const structuralWater = (p.water ?? 0) * EO_COLUMN / p.mass**0.54 > MAX_BASIN_DEPTH * 1000;
+  return p.mass >= 0.01 && p.mass <= 0.2 && structuralWater
+    && (p.starTemp ?? 5772) >= 5200 && (p.starTemp ?? 5772) <= 6200
     && waterEO >= 0 && backgroundBar < 0.001;
 }
 

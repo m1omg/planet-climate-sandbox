@@ -577,7 +577,7 @@ export function coldPoolStructure(dg) {
 // entry threw on the first frame that drew one, which is a blank page rather
 // than a wrong pixel. So the list lives here, `add` refuses anything not on it,
 // and the smoketest holds it against the renderer's table in both directions.
-export const LAYER_KINDS = ['envelope', 'air', 'supercritical', 'steam', 'iceIh',
+export const LAYER_KINDS = ['envelope', 'air', 'supercritical', 'steam', 'vapour', 'iceIh',
   'interface', 'ocean', 'seaice', 'iceVI', 'iceVII', 'iceHP', 'rock'];
 
 export function columnLayers(w, dg, airThick, scaleH = 0) {
@@ -687,7 +687,14 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   // and half the temperature.
   const H = scaleH > 0 ? scaleH : airThick / 5;
   const pCritBar = P_CRIT_H2O / 1e5;
-  const sky = Math.max(airThick, 1);
+  // A scale height is not evidence that gas exists. A collisionless surface
+  // exosphere has no hydrostatic column thickness to draw. Otherwise cap the
+  // schematic sky at the approximate Kn=1 altitude in a constant-H column.
+  // The effective molecular collision area is an approximation, not a measured
+  // exobase or a treatment of a heated thermosphere.
+  const kn = pTot > 0 && H > 0 ? 1.380649e-23 * Ts
+    / (Math.SQRT2 * 2.7e-19 * pTot * 1e5 * H) : Infinity;
+  const sky = kn < 1 ? Math.max(0, Math.min(airThick, H * Math.log(1/kn))) : 0;
   const superSky = lid && Ts > T_CRIT_H2O && pTot > pCritBar
     ? Math.min(H * Math.log(pTot / pCritBar), sky) : 0;
   // The top of the drawn sky is near the level the planet radiates from, which
@@ -702,7 +709,7 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   const pH2Omean = dg.pH2O?.length
     ? [...dg.pH2O].reduce((a, b) => a + b, 0) / dg.pH2O.length : (+dg.pH2O || 0);
   const coolKind = envShare > 0.5 * pTot ? 'envelope'
-    : pH2Omean > 0.5 * pTot ? 'steam' : 'air';
+    : pH2Omean > 0.5 * pTot ? (Ts < 273.15 ? 'vapour' : 'steam') : 'air';
   if (superSky > 0) {
     // Cool steam on top of the supercritical fluid, meeting it at the critical
     // point -- which is where the crossing is, rather than at the water.
@@ -721,7 +728,9 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // worse: on that world there is frequently a cold pool drawn directly below,
     // with a top of its own. What is true there is where the sea went.
     add(lid ? 'steam' : coolKind, sky,
-      tEff < Ts - 0.5 ? [tEff, Ts] : [Ts], lid ? 'the sea is in it' : null);
+      tEff < Ts - 0.5 ? [tEff, Ts] : [Ts], lid ? 'the sea is in it'
+        : pTot < 0.001 ? '{0} Pa at base; schematic extent' : null,
+      !lid && pTot < 0.001 ? [(pTot * 1e5).toExponential(2)] : []);
   }
 
   if (lid) {
@@ -808,4 +817,19 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   }
   add('rock', Math.max((dg.d?.R ?? 6.371e6) * 0.35, 1), null, 'silicate interior');
   return layers;
+}
+
+// Both UI representations consume this one stack. In particular a shell's
+// ocean and its high-pressure floor must not be replaced by the hypothetical
+// open-surface oceanBase solve. Liquid excludes separately drawn boundaries
+// and supercritical layers, so the numbers match what the diagram labels.
+export function columnSummary(layers) {
+  const depth = kinds => layers.filter(l => kinds.includes(l.kind)).reduce((s,l) => s+l.metres,0);
+  const floors = layers.filter(l => ['iceVI','iceVII','iceHP'].includes(l.kind));
+  return {
+    liquidDepth: depth(['ocean']), shellDepth: depth(['iceIh','seaice']),
+    iceDepth: depth(['iceVI','iceVII','iceHP']),
+    basePhase: {iceVI:'ice VI',iceVII:'ice VII',iceHP:'high-pressure ice'}[floors.at(-1)?.kind],
+    superDepth: depth(['supercritical']),
+  };
 }

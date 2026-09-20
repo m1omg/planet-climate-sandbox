@@ -11,7 +11,7 @@ import { derive, maxWaterEO } from './physics/planet.js';
 import { scaleHeight } from './render/atmosphere.js';
 import { iceFraction } from './physics/radiation.js';
 import { transitRadius, waterMassFraction } from './physics/planet.js';
-import { columnLayers } from './physics/ocean.js';
+import { columnLayers, columnSummary } from './physics/ocean.js';
 import { NBANDS, lockFactor, setWaterInventory, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
@@ -515,7 +515,6 @@ function writeControl(d, v) {
 }
 
 function syncSliders() {
-  const ww = $('#chk-small-waterworld'); if (ww) ww.checked = !!params.lowGravityWaterworld;
   for (const d of SLIDERS) {
     const e = els[d.key];
     const s = clamp(toSlider(d, params[d.key]), 0, 1000);
@@ -935,6 +934,7 @@ const LAYER_STYLE = {
   // "steam" alone read as a substance sitting somewhere rather than as what the
   // planet's air is made of.
   steam:         ['#c79ad8', 'steam atmosphere'],
+  vapour:        ['#c79ad8', 'water vapour atmosphere'],
   ocean:         ['#2f7fbf', 'liquid ocean'],
   seaice:        ['#cfe6f5', 'sea ice'],
   iceIh:         ['#dcecf7', 'ice shell'],
@@ -947,7 +947,6 @@ const LAYER_STYLE = {
 
 function drawStructure(w, d, dg) {
   const host = $('#structure');
-  if (!host) return;
   // How deep the sky looks. The transit extent is the right number when there
   // is an envelope -- it is what the readout prints as "with envelope" -- but it
   // collapses to nothing on a rocky world, and drawing Earth with no atmosphere
@@ -956,6 +955,7 @@ function drawStructure(w, d, dg) {
   // already treats as the visible depth of the sky.
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
   const layers = columnLayers(w, dg, Math.max(rTr - d.R, 5 * scaleHeight(dg)), scaleHeight(dg));
+  if (!host) return layers;
 
   // Cube-root compression, then a floor so a thin layer is still a band.
   const H = 210, PAD = 2;
@@ -990,6 +990,7 @@ function drawStructure(w, d, dg) {
       + `<span class="layer-name">${t(label)}</span>`
       + `<span class="layer-size">${bits.join(' · ')}</span></div>`;
   }).join('');
+  return layers;
 }
 
 function updateReadout() {
@@ -1036,9 +1037,6 @@ function updateReadout() {
   const pool = dg.coldPool && dg.coldPool.liquidDepth > 0 && dg.coldT != null
     ? dg.coldT : null;
   $('#stats').innerHTML =
-    (params.lowGravityWaterworld && !dg.smallWaterworld
-      ? stat(t('Radiation model'), t('Standard (waterworld mode inactive)'), '',
-        'The reduced waterworld model requires 0.01–0.2 Earth masses and less than 0.001 bar of other gases; its dry limit remains continuous after water loss.') : '') +
     (dg.smallWaterworld ?
       stat(t(dg.hasWater ? 'Water lifetime' : 'Vapour residence time'), dg.totalWater <= 0 ? t('no water')
         : dg.smallWaterworld.lifetime > 1e12 ? '> 1000 Gyr' : fmtTime(dg.smallWaterworld.lifetime), '',
@@ -1150,8 +1148,9 @@ function updateReadout() {
       if (f <= 0) return mag;
       return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
-    (dg.smallWaterworld ? stat(t('Radiation model'), '2019 · reduced', '',
-      'Expanded radiation has no plane-parallel runaway ceiling. Escape can still exhaust the water.') :
+    stat(t('Radiation model'), t(dg.smallWaterworld ? 'Reduced waterworld · automatic' : 'Standard atmosphere · automatic'), '',
+      t('Selected from mass, bulk water, current atmospheric composition and stellar spectrum.')) +
+    (dg.smallWaterworld ? '' :
     stat(t('Runaway margin'), `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
       margin < 0 ? 'bad' : margin < 15 ? 'warn' : '',
       t('How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.'))) +
@@ -1189,14 +1188,14 @@ function updateReadout() {
   // bigger world spreads the same water over more area under more gravity. It
   // also ignored that the water only covers the flooded part, and that past a
   // gigapascal water is not liquid at all.
-  const ob = dg.oceanBase;
   const fmtDepth = (m) => (m >= 1e6 ? `${(m / 1000).toFixed(0)} km`
     : m >= 1e4 ? `${(m / 1000).toFixed(1)} km`
     : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(0)} m`);
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
   const xWater = waterMassFraction(params.mass, w.water.ocean + w.water.seaIce
     + w.water.landIce + w.water.vapour);
-  drawStructure(w, d, dg);
+  const layers = drawStructure(w, d, dg);
+  const structure = columnSummary(layers);
   $('#derived').innerHTML =
     `<div>gravity <b>${d.g.toFixed(2)} m/s²</b></div>` +
     `<div>radius <b>${(d.R / 6.371e6).toFixed(2)} R⊕</b></div>` +
@@ -1205,10 +1204,11 @@ function updateReadout() {
     (xWater > 0
       ? `<div>${t('water by mass')} <b>${(xWater * 100).toFixed(0)}%</b></div>` : '') +
     `<div>escape v <b>${(d.vesc / 1000).toFixed(1)} km/s</b></div>` +
-    `<div>${t('ocean')} <b>${fmtDepth(ob.liquidDepth)}</b></div>` +
-    (ob.iceDepth > 0
-      ? `<div>${t('then')} <b>${fmtDepth(ob.iceDepth)} ${t(ob.basePhase)}</b></div>` : '') +
-    (ob.superLayer ? `<div>${t('deep water is supercritical')}</div>` : '');
+    (structure.shellDepth > 0 ? `<div>${t('ice shell')} <b>${fmtDepth(structure.shellDepth)}</b></div>` : '') +
+    `<div>${t('ocean')} <b>${fmtDepth(structure.liquidDepth)}</b></div>` +
+    (structure.iceDepth > 0
+      ? `<div>${t('then')} <b>${fmtDepth(structure.iceDepth)} ${t(structure.basePhase)}</b></div>` : '') +
+    (structure.superDepth > 0 ? `<div>${t('supercritical')} <b>${fmtDepth(structure.superDepth)}</b></div>` : '');
 
   syncLiveControls();
   $('#simtime').textContent = fmtTime(w.time);
@@ -2286,14 +2286,6 @@ function bindControls() {
     toast(e.target.checked
       ? 'Starlight changes now walk to the new value instead of jumping'
       : 'Starlight changes apply at once');
-  });
-
-  $('#chk-small-waterworld').addEventListener('change', e => {
-    params.lowGravityWaterworld = e.target.checked;
-    sim.setParams({ lowGravityWaterworld: params.lowGravityWaterworld });
-    writeHash(); markTouched();
-    if (e.target.checked && !sim.world.diag.smallWaterworld)
-      toast(t('Small-waterworld model needs a low-mass, nearly pure-steam world. Try its preset.'));
   });
 
   $('#chk-xuv-decay').addEventListener('change', (e) => {

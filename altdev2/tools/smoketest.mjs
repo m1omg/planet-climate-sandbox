@@ -994,6 +994,19 @@ if (created < 20) {
     checkReadout('icySmallWaterworld', ['Ice over liquid ocean', 'Ice sublimation']);
     checkReadout('hotSmallWaterworld', ['Surface ocean', 'Evaporation']);
     for (const id of ['europa', 'ganymede', 'callisto']) checkReadout(id, ['Internal heat', 'Ice']);
+    app.loadPreset('callisto');
+    app.sim.world.T.fill(170);
+    update(app.sim.world,0);
+    app.sim.paused = true;
+    app.tick(0.2);
+    const derived = document.querySelector('#derived').innerHTML;
+    const structure = document.querySelector('#structure').innerHTML;
+    const oceanLabel = structure.match(/title="liquid ocean · ([^·]+) ·/);
+    const floorLabel = structure.match(/title="ice VI · ([^·]+) ·/);
+    if (!oceanLabel || !floorLabel || !derived.includes(`ocean <b>${oceanLabel[1].trim()}</b>`)
+      || !derived.includes(`then <b>${floorLabel[1].trim()} ice VI</b>`)) {
+      throw new Error('compact ocean/floor depths contradict the rendered structure');
+    }
     app.loadPreset('smallWaterworld');
     const w = app.sim.world;
     const initial = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour + w.water.lost;

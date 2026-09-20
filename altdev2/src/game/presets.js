@@ -11,7 +11,6 @@ import { waterForShareOfMass, condensedRadius } from '../physics/planet.js';
 export const EARTH = {
   tidalHeat: 0,
   life: false, // legacy preset flag; biosphere remains the active biology control
-  lowGravityWaterworld: false,
   radiusScale: 1, // measured moon radius / composition-model radius; scales with edited mass
   mass: 1.0,
   landFraction: 0.30,
@@ -785,19 +784,19 @@ export const PRESETS = {
   coldStart: { name: 'Cold-Start Runaway', icon: '❄️', params: { ...HYCEAN,
     mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
   smallWaterworld: { name: 'Small Waterworld (2019)', icon: '🌊', params: { ...EARTH,
-    lowGravityWaterworld: true, mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
+    mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
     n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
     internalHeat: 0, salinity: 0, insolation: 0.98, startT: 300 } },
   evaporatingWaterworld: { name: 'Evaporating Small Waterworld', icon: '💨', params: { ...EARTH,
-    lowGravityWaterworld: true, mass: 0.02, water: waterForShareOfMass(0.02, 0.4), landFraction: 0,
+    mass: 0.02, water: waterForShareOfMass(0.02, 0.4), landFraction: 0,
     n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
     internalHeat: 0, salinity: 0, insolation: 0.98, startT: 280 } },
   icySmallWaterworld: { name: 'Icy Small Waterworld', icon: '❄️', params: { ...EARTH,
-    lowGravityWaterworld: true, mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
+    mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
     n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
     internalHeat: 0.02, salinity: 0, insolation: 0.98, startT: 230 } },
   hotSmallWaterworld: { name: 'Hot Waterworld · 0.049 M⊕', icon: '♨️', params: { ...EARTH,
-    lowGravityWaterworld: true, mass: 0.049, water: waterForShareOfMass(0.049, 0.4), landFraction: 0,
+    mass: 0.049, water: waterForShareOfMass(0.049, 0.4), landFraction: 0,
     n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
     internalHeat: 0, salinity: 0, insolation: 1.11, startT: 390 } },
   // JPL measured GM/radii. Reservoir fractions and heat fluxes are explicit

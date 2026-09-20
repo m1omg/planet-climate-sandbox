@@ -3,9 +3,10 @@
 In **Worlds**, choose **Small Waterworld (2019)**, **Evaporating Small
 Waterworld**, **Icy Small Waterworld**, or **Hot Waterworld · 0.049 M⊕**.
 Europa, Ganymede and Callisto are separate icy-moon scenarios (see below).
-The additional checkbox under
-starlight enables/disables the model. Its flag survives save files and share
-links. All pre-existing presets leave it off.
+Selection is **automatic** from mass, bulk water inventory, current non-water
+gas pressure and stellar spectrum. There is no model checkbox. Legacy
+`lowGravityWaterworld=true/false` values in links or saves are ignored; neither
+can force or suppress the appropriate branch.
 
 Source: Arnscheidt, Wordsworth & Ding (2019), *Atmospheric Evolution on
 Low-gravity Waterworlds*, attached arXiv:1906.10561v2 PDF;
@@ -13,12 +14,18 @@ Low-gravity Waterworlds*, attached arXiv:1906.10561v2 PDF;
 
 ## What is implemented
 
-- Equation 1: `R/R_E = 1.258 (M/M_E)^0.302`. As in the paper, mass and solid
-  radius stay fixed as the reservoir evaporates. This approximation becomes
-  poor after losing a substantial fraction of the original planet mass.
+- Equation 1, `R/R_E = 1.258 (M/M_E)^0.302`, sets the reference geometry for
+  the radiation table. The actual world now uses the same composition-based
+  solid radius as every other world, with measured-radius corrections for the
+  moon presets. An atmosphere-model flag no longer changes the solid radius.
+  Mass and solid radius still stay fixed as the reservoir evaporates, a poor
+  approximation after substantial loss of the original planet mass.
 - Spherical, globally averaged forcing and a saturated, nearly pure water-vapor
-  atmosphere. The mode operates at 0.01–0.2 Earth masses and less than 0.001 bar
-  of non-water gases. Adding a substantial background atmosphere returns
+  atmosphere. The automatic branch operates at 0.01–0.2 Earth masses, a
+  5200–6200 K star, and less than 0.001 bar of non-water gases. The configured
+  inventory must exceed the maximum rocky-basin capacity (20 km global water
+  equivalent on the rocky-radius estimate). These are reduced-model applicability
+  bounds, not universal physical transitions. Adding a background atmosphere returns
   atmospheric calculations to the standard model. At reservoir exhaustion the
   radiation approaches its dry blackbody limit continuously; classification
   becomes dry/airless, not a waterworld. A tiny vapour residue is not an ocean.
@@ -110,15 +117,18 @@ Europa's ocean has strong evidence, whereas Callisto's remains possible, not
 confirmed (NASA: [Europa](https://science.nasa.gov/jupiter/jupiter-moons/europa/europa-facts/),
 [Ganymede](https://science.nasa.gov/jupiter/jupiter-moons/ganymede/facts/),
 [Callisto](https://science.nasa.gov/jupiter/jupiter-moons/callisto/facts/)).
-The standard icy-interior model is used, not the 2019 steam model. The climate
+The conductive icy-interior model is independent of atmospheric model selection.
+Ganymede and Callisto meet the low-mass water-rich bounds automatically; Europa
+is below the reduced branch's mass range. Cold vapour does not imply a steam wind.
+The climate
 treats their exospheres as negligible bulk atmosphere, uses the shared ice
 albedo, and omits Jovian plasma sputtering, eclipses, detailed tidal evolution,
 and differentiated layered ice transport. Their equilibrium mean temperatures
-near 96 K and calculated ocean depths must be read with those limits in mind.
+near 96–97 K and calculated ocean depths must be read with those limits in mind.
 
-At 1.11 Earth sunlight, the **0.049 M⊕** hot preset settles near **399.4 K
-(126.2 °C)** with an ocean and a damped, nearly zero energy residual. In that
-state, suppressing radiative-area expansion leaves roughly +60 W/m² of heating;
+At 1.11 Earth sunlight, the **0.049 M⊕** hot preset settles near **396.6 K
+(123.5 °C)** with an ocean and a damped, nearly zero energy residual. In that
+state, suppressing radiative-area expansion leaves roughly +62 W/m² of heating;
 escape cooling is below 1 W/m². Its hot equilibrium in this approximation is
 therefore supported by expanded thermal emission, not by an arbitrary
 temperature clamp or escape refrigeration. Low mass does not protect against
@@ -131,6 +141,7 @@ From the project root:
 ```sh
 node tools/reviewcheck.mjs
 node altdev2/tools/waterworldcheck.mjs
+node altdev2/tools/structurecheck.mjs
 node altdev2/tools/smoketest.mjs
 ```
 
@@ -159,3 +170,33 @@ implemented approximation; they do not certify the paper's quantitative results.
   not recorded as a pass. The targeted tests do not replace full calibration.
 - The interactive browser was unavailable in this session. DOM assertions and
   CPU-render tests passed, but are not a claim of visual browser verification.
+
+### Automatic selection and consistent structure — 2026-09-20
+
+The compact depth readout now sums the exact same layers drawn in the structure
+diagram. Previously it read a hypothetical open-ocean column even when the
+diagram correctly used the different subglacial column. Ice shell, liquid ocean,
+high-pressure ice floor and supercritical layers are now kept distinct.
+
+Atmospheric scale height alone no longer creates a gas layer in a vacuum or
+surface-collisionless exosphere. The schematic extent is capped at the estimated
+collisionless transition in a constant-scale-height column, using an assumed
+effective cross-section of `2.7e-19 m²`; it is not a measured atmospheric edge.
+Cold water-dominated gas is called water vapour, not steam, and very tenuous
+collisional layers show their base pressure. Real exospheres can extend far
+beyond the collisional column ([NASA overview](https://science.nasa.gov/moon/lunar-atmosphere/));
+omitting a bulk-atmosphere band does not mean absolutely no gas exists.
+
+The uniform composition-radius calculation slightly changes the four fictional
+waterworlds' gravity and escape rates: the evaporating preset can now exhaust
+its ocean before the 70 Myr check. Its final dry state is tested, not forced back
+to an ocean label. The hot preset remains a stable liquid-ocean equilibrium.
+Thirty-three unaffected presets retain bit-identical 200-step temperature,
+water and time trajectories. The 18 waterworld checks, four new model/structure
+checks, and real readout generation against the DOM stub pass. Full altdev2
+calibration again reached its 180-second bound; browser interaction was
+unavailable. Neither is claimed as a completed validation.
+The eleven root commands completed with 204 physics tests and 21 calibration
+anchors passing (3 known gaps reported). Shader parsing and CPU rendering/baking
+passed for both root and altdev2. Optional real-GPU checks skipped because the
+headless GL dependency is absent.
