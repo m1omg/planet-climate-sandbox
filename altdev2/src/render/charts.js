@@ -362,7 +362,7 @@ export function drawPhase(canvas, world) {
   let fmax = 0;
   for (let T = T0; T <= T1; T += 2) {
     if (dg.smallWaterworld) {
-      const f = waterworldFlux(T, dg.g, dg.d.R, dg.smallWaterworld.availablePressure);
+      const f = waterworldFlux(T, dg.g, dg.d.R, dg.smallWaterworld.availablePressure, dg.smallWaterworld.gases);
       const O = f.emitted + f.cooling;
       const A = Sglobal * dg.swTrans * (1-f.albedo) * f.shortwave + dg.Fint;
       pts.push([T,O,A]); fmax = Math.max(fmax,O,A);

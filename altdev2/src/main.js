@@ -1048,7 +1048,7 @@ function updateReadout() {
         : dg.smallWaterworld.hasIceReservoir ? 'Ice reservoir' : 'Water vapour'), '',
         t('Freezing the surface does not imply freezing the entire water column.')) +
       stat(t('Radiative area LW / SW'), `${dg.smallWaterworld.longwave.toFixed(3)} / ${dg.smallWaterworld.shortwave.toFixed(3)}`, '',
-        'Effective emitting and absorbing areas divided by the solid surface area. Reduced approximation to Figure 2, not a line-by-line calculation.') +
+        'Effective emitting and absorbing areas divided by the solid surface area. Pure water uses a reduced Figure 2 approximation; mixtures add grey gas opacity and molecular-weight-dependent heights. Neither is a line-by-line calculation.') +
       stat(t('Escape cooling'), `${dg.smallWaterworld.cooling.toPrecision(3)} W/m²`, '',
         'Energy used to evaporate liquid or sublimate ice and gravitationally unbind water molecules. Tenuous gas uses a reduced Jeans escape estimate, not an unchecked steam wind.') : '') +
     stat(pool ? t('Fluid top') : t('Mean surface'),
@@ -1148,7 +1148,9 @@ function updateReadout() {
       if (f <= 0) return mag;
       return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
-    stat(t('Radiation model'), t(dg.smallWaterworld ? 'Reduced waterworld · automatic' : 'Standard atmosphere · automatic'), '',
+    stat(t('Radiation model'), t(dg.smallWaterworld
+      ? dg.smallWaterworld.backgroundBar>0 ? 'Low gravity · mixed atmosphere' : 'Reduced waterworld · automatic'
+      : 'Standard atmosphere · automatic'), '',
       t('Selected from mass, bulk water, current atmospheric composition and stellar spectrum.')) +
     (dg.smallWaterworld ? '' :
     stat(t('Runaway margin'), `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,

@@ -259,7 +259,7 @@ export function classify(w) {
   // down. Which is exactly the mistake the runaway branch was making below.
   // The surface really is molten-hot; it is just not the whole planet, and the
   // water underneath is the part worth naming.
-  if (dg.smallWaterworld && !dg.hasWater) id = 'airless';
+  if (dg.smallWaterworld && !dg.hasWater && dg.smallWaterworld.backgroundBar<1e-6) id = 'airless';
   else if (dg.smallWaterworld && T < 273.15 && ice > 0.93) {
     id = dg.subglacial?.ocean && dg.subglacial.liquidDepth > 0 ? 'subglacial' : 'snowball';
   }
@@ -474,7 +474,9 @@ export function classify(w) {
   if (dg.smallWaterworld?.hasSurfaceOcean && ['smallWaterworld','evaporatingWaterworld'].includes(id)) {
     const longLived = dg.smallWaterworld.lifetime >= 1e9;
     return { id, name: longLived ? 'Small Waterworld' : 'Evaporating Waterworld', color: s.color,
-      blurb: 'Reduced 2019 waterworld model: expanded thermal emission and whole-molecule steam escape. The displayed lifetime assumes the current escape rate; it is not a prediction of biological habitability.',
+      blurb: dg.smallWaterworld.backgroundBar>0
+        ? 'Approximate low-gravity mixed-atmosphere extension: gas opacity, spherical radiative areas and diffusion-limited water supply. Not a numerical result from the pure-water 2019 paper.'
+        : 'Reduced 2019 waterworld model: expanded thermal emission and whole-molecule steam escape. The displayed lifetime assumes the current escape rate; it is not a prediction of biological habitability.',
       habitable: longLived && T < 335, Tsub, Tanti };
   }
   return { id, name: s.name, color: s.color, blurb: s.blurb, habitable, Tsub, Tanti };
@@ -498,10 +500,14 @@ export function reasonText(w, st, tr = enFormat) {
     : km >= 10 ? km.toFixed(1) : km.toFixed(2));
   const dg = w.diag, esc = w.escape ?? {};
   if (dg.smallWaterworld && !dg.hasWater) {
+    if (dg.smallWaterworld.backgroundBar>0)
+      return tr('{0} °C · no ocean · mixed atmosphere', (dg.Tmean-273.15).toFixed(1));
     return tr(dg.totalWater > 0 ? '{0} °C · no ocean · trace water vapour only'
       : '{0} °C · dry world · water reservoir exhausted', (dg.Tmean-273.15).toFixed(1));
   }
   if (dg.smallWaterworld?.hasSurfaceOcean) {
+    if (dg.smallWaterworld.backgroundBar>0)
+      return tr('{0} °C · low gravity · mixed atmosphere · approximate spherical model', (dg.Tmean-273.15).toFixed(1));
     return tr(dg.smallWaterworld.lifetime >= 1e9
       ? '{0} °C · long-lived water reservoir · thermal steam escape · reduced 2019 model'
       : '{0} °C · rapid water loss · thermal steam escape · reduced 2019 model',

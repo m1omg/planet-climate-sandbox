@@ -10,7 +10,7 @@ import { oceanStructure, coldPoolStructure, T_COLD_POOL, iceShell,
 import { floodedFraction } from './hypsometry.js';
 import { waterworldActive, waterworldFlux, waterLifetime } from './waterworld.js';
 
-import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN } from './volatiles.js';
+import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN, escapeRates } from './volatiles.js';
 
 export const NBANDS = 18;
 
@@ -280,9 +280,10 @@ export function update(w, dt) {
   const totalWater = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
   const availCol = totalWater * d.eoColumn;
   const smallWaterworld = waterworldActive(p, totalWater, pN2 + pCO2 + pCH4 + pO2 + pH2 + pHe);
+  const waterworldGases = smallWaterworld ? {pN2,pCO2,pCH4,pO2,pH2,pHe} : null;
   const escapeCooling = smallWaterworld ? new Float64Array(NBANDS) : null;
   const swScale = smallWaterworld ? new Float64Array(NBANDS) : null;
-  let bulkEscape = 0, coolingMean = 0, lwScaleMean = 0, swScaleMean = 0;
+  let bulkEscape = 0, bulkGasEscape = 0, coolingMean = 0, lwScaleMean = 0, swScaleMean = 0, molarMean = 0;
   let paperDomain = true;
 
   // How much of the planet is under water. This is derived, not chosen: it
@@ -577,11 +578,13 @@ export function update(w, dt) {
     out[i] = Math.max((1 - FIN_FRACTION) * moistOLR + FIN_FRACTION * dryOLR - ghgForce,
                       1e-3);
     if (smallWaterworld) {
-      const f = waterworldFlux(w.T[i], g, d.R, availCol * g);
+      const f = waterworldFlux(w.T[i], g, d.R, availCol * g, waterworldGases);
       alb[i] = f.albedo; out[i] = f.emitted; cloud[i] = 0;
       swScale[i] = f.shortwave; escapeCooling[i] = f.cooling;
       bulkEscape += f.flux / NBANDS; coolingMean += f.cooling / NBANDS;
+      bulkGasEscape += f.backgroundFlux / NBANDS;
       lwScaleMean += f.longwave / NBANDS; swScaleMean += f.shortwave / NBANDS;
+      molarMean += f.meanMolarMass / NBANDS;
       paperDomain &&= f.inDomain;
     }
     Tmean += w.T[i] / NBANDS;
@@ -843,11 +846,13 @@ export function update(w, dt) {
     // heated world at a permanent false imbalance it could never settle out of.
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted - coolingMean,
     escapeCooling, swScale,
-    smallWaterworld: smallWaterworld ? { bulkEscape, cooling: coolingMean,
+    smallWaterworld: smallWaterworld ? { bulkEscape, bulkGasEscape, cooling: coolingMean,
+      gases: waterworldGases, backgroundBar:pN2+pCO2+pCH4+pO2+pH2+pHe,
+      meanMolarMass:molarMean,
       hasSurfaceOcean: hasWater && w.water.ocean > 1e-5 && flooded >= 0.5
         && openOcean * liquidAllowed > 0.01 && Tmean < T_CRIT_H2O,
       hasIceReservoir: hasWater && (w.water.seaIce + w.water.landIce) > 1e-5,
-      lifetime: waterLifetime(availCol, bulkEscape), longwave: lwScaleMean,
+      get lifetime() { return waterLifetime(availCol, escapeRates(w).water/YEAR); }, longwave: lwScaleMean,
       shortwave: swScaleMean, inDomain: paperDomain && p.starTemp >= 5200 && p.starTemp <= 6200,
       availablePressure: availCol * g } : null,
     hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, cloudShare, totalWater, superFrac,
@@ -1260,6 +1265,18 @@ export function maxStep(w, maxDeltaT = 2.5) {
     const smoothed = Math.exp(0.7 * Math.log(dt) + 0.3 * Math.log(prev));
     dt = clamp(smoothed, dt * 0.25, dt * 4);
   }
+  // Small worlds can shed a collisional gas column in much less than a year.
+  // Apply the reservoir bound after smoothing, from CURRENT rates (including
+  // the first step), so neither smoothing nor a stale escape rate jumps across
+  // the loss of a background that was affecting opacity and cooling.
+  if (dg.smallWaterworld) {
+    const rates=escapeRates(w);
+    if(rates.water>0 && dg.hasWater)
+      dt=Math.min(dt,Math.max(1e-8,.05*dg.totalWater*dg.d.eoColumn/rates.water));
+    const gas=w.n2+w.co2+w.o2+w.ch4+w.h2+w.he;
+    if(rates.bulkGas>0 && dg.smallWaterworld.backgroundBar>1e-9)
+      dt=Math.min(dt,Math.max(1e-8,.05*gas/rates.bulkGas));
+  }
   return dt;
 }
 
@@ -1281,7 +1298,7 @@ export function radiativeDamping(w) {
     const h = 0.5;
     if (dg.smallWaterworld) {
       const net = t => {
-        const f = waterworldFlux(t, dg.g, dg.d.R, dg.smallWaterworld.availablePressure);
+        const f = waterworldFlux(t, dg.g, dg.d.R, dg.smallWaterworld.availablePressure, dg.smallWaterworld.gases);
         return f.emitted + f.cooling - dg.S[i] * dg.swTrans * (1-f.albedo) * f.shortwave;
       };
       k[i] = (net(T+h) - net(T-h)) / (2*h);

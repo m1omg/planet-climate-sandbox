@@ -993,6 +993,11 @@ if (created < 20) {
   try {
     checkReadout('icySmallWaterworld', ['Ice over liquid ocean', 'Ice sublimation']);
     checkReadout('hotSmallWaterworld', ['Surface ocean', 'Evaporation']);
+    app.sim.reset({...app.sim.world.params,mass:.005,co2Bar:.1,water:8.5});
+    app.sim.paused=true;
+    app.tick(.2);
+    if (!document.querySelector('#stats').innerHTML.includes('Low gravity · mixed atmosphere'))
+      throw new Error('CO2 or 0.005 Earth masses switched off the low-gravity readout');
     for (const id of ['europa', 'ganymede', 'callisto']) checkReadout(id, ['Internal heat', 'Ice']);
     app.loadPreset('callisto');
     app.sim.world.T.fill(170);

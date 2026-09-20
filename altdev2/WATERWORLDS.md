@@ -20,17 +20,20 @@ Low-gravity Waterworlds*, attached arXiv:1906.10561v2 PDF;
   moon presets. An atmosphere-model flag no longer changes the solid radius.
   Mass and solid radius still stay fixed as the reservoir evaporates, a poor
   approximation after substantial loss of the original planet mass.
-- Spherical, globally averaged forcing and a saturated, nearly pure water-vapor
-  atmosphere. The automatic branch operates at 0.01–0.2 Earth masses, a
-  5200–6200 K star, and less than 0.001 bar of non-water gases. The configured
+- Spherical, globally averaged forcing and saturated water vapour. The automatic
+  low-gravity branch covers positive masses up to 0.2 Earth masses, including
+  0.005 M⊕, and a 5200–6200 K star. The configured
   inventory must exceed the maximum rocky-basin capacity (20 km global water
   equivalent on the rocky-radius estimate). These are reduced-model applicability
-  bounds, not universal physical transitions. Adding a background atmosphere returns
-  atmospheric calculations to the standard model. At reservoir exhaustion the
-  radiation approaches its dry blackbody limit continuously; classification
-  becomes dry/airless, not a waterworld. A tiny vapour residue is not an ocean.
+  bounds, not universal physical transitions. There is no 1 mbar background-gas
+  cutoff: adding CO2 or another gas uses the approximate mixed-atmosphere
+  extension below, retaining low-gravity geometry. At reservoir exhaustion the
+  radiation approaches the dry limit continuously (blackbody only without
+  remaining greenhouse gases). A dry CO2 world is not automatically airless.
+  A tiny vapour residue is not an ocean.
 - Equation 2: shortwave and longwave areas are distinct. The energy balance is
   `f_SW (1-A) S/4 + F_internal - f_LW F_out - (gR+L) Phi`.
+  A mixed bulk wind also subtracts `gR Phi_background` for gas lifted away.
 - Equations 8–11 supply the collisional isothermal steam-wind branch, global
   mass loss, and remaining-water lifetime. At `r_c/r_s >= 10`, the wind branch
   uses equation 9. For weaker binding it solves the full isothermal Parker
@@ -118,8 +121,8 @@ confirmed (NASA: [Europa](https://science.nasa.gov/jupiter/jupiter-moons/europa/
 [Ganymede](https://science.nasa.gov/jupiter/jupiter-moons/ganymede/facts/),
 [Callisto](https://science.nasa.gov/jupiter/jupiter-moons/callisto/facts/)).
 The conductive icy-interior model is independent of atmospheric model selection.
-Ganymede and Callisto meet the low-mass water-rich bounds automatically; Europa
-is below the reduced branch's mass range. Cold vapour does not imply a steam wind.
+All three moons meet the low-mass water-rich bounds automatically. Cold vapour
+does not imply a steam wind.
 The climate
 treats their exospheres as negligible bulk atmosphere, uses the shared ice
 albedo, and omits Jovian plasma sputtering, eclipses, detailed tidal evolution,
@@ -142,6 +145,7 @@ From the project root:
 node tools/reviewcheck.mjs
 node altdev2/tools/waterworldcheck.mjs
 node altdev2/tools/structurecheck.mjs
+node altdev2/tools/mixedwatercheck.mjs
 node altdev2/tools/smoketest.mjs
 ```
 
@@ -200,3 +204,56 @@ The eleven root commands completed with 204 physics tests and 21 calibration
 anchors passing (3 known gaps reported). Shader parsing and CPU rendering/baking
 passed for both root and altdev2. Optional real-GPU checks skipped because the
 headless GL dependency is absent.
+
+### CO2 and very small waterworlds — 2026-09-20 follow-up
+
+The previous selector incorrectly disabled the entire low-gravity calculation
+below 0.01 M⊕ or above 0.001 bar of background gas. A 0.02 M⊕, 300 K example
+jumped from about 289 to 387 W/m² outgoing radiation across that gas cutoff.
+Neither cutoff is retained. The readout now identifies mixtures explicitly as
+**Low gravity · mixed atmosphere**.
+
+This extension is **not in the pure-water 2019 paper and has not been validated
+as a quantitative mixed-atmosphere climate model**. It combines existing
+semi-grey gas opacities, spherical geometry and simplified escape physics:
+
+- The existing CO2/CH4/H2 opacity and pressure-broadening contributions are
+  added as the mixed-minus-pure optical resistance, avoiding duplicate water
+  opacity. Hydrogen convective inhibition remains in that resistance.
+- Effective hydrostatic heights use the pressure-weighted mean molecular mass.
+  Additional grey photospheric heights use `R_specific T ln(1 + tau)` as a
+  potential difference in spherical gravity. Background scattering reuses the
+  existing Rayleigh approximation. This is not wavelength-resolved transfer or
+  a vertically resolved moist adiabat; area caps still limit unbound extrapolation.
+- A collisional mixture wind uses its mean molecular mass and removes both
+  water and background gas. A trace of CO2 therefore cannot act as an immovable
+  cap on an otherwise blowing-off atmosphere. In the collisionless/bound limit,
+  a hard-sphere binary diffusion conductance limits molecular water supply.
+  The transition uses the existing sonic-point Knudsen interpolation. This is
+  a one-fluid/kinetic approximation, not species-resolved drag, chemistry or
+  a heated-thermosphere calculation.
+- The existing photolytic, envelope and nonthermal loss channels remain for
+  mixtures. Photolytic water loss fades with background mole fraction toward
+  the pure molecular-water limit. Only that photolytic share leaves oxygen.
+  Lifetime uses combined current water loss; it is not a future-retention forecast.
+- Current water/gas loss rates constrain the timestep after smoothing, including
+  the first step, so a rapidly disappearing background is not skipped over.
+
+Physical motivation: expanded optical surfaces are discussed by
+[Goldblatt (2015)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4442573/);
+diffusion and drag in gas mixtures by
+[Hunten (1973)](https://journals.ametsoc.org/abstract/journals/atsc/30/8/1520-0469_1973_030_1481_teolgf_2_0_co_2.xml).
+These sources do not validate the combined approximate implementation above.
+
+Nine new regressions cover 0.005 M⊕, a 0–10 bar CO2 sweep, continuity across
+the old thresholds, actual opacity/molecular-weight effects, matching flux and
+damping, water conservation, gas drag, trace-gas continuity, dry atmospheres,
+save/import continuation, and four-times finer stepping through rapid gas loss.
+In the tested one-year transients the finer runs differ by less than 0.6 K,
+0.1% of water and 0.001 bar of CO2; this is a numerical check, not physical validation.
+The 18 existing waterworld checks, 4 structure checks and 30 cross-build review
+checks pass. All 38 unaffected presets have bit-identical 200-step trajectories;
+Europa now also uses the low-gravity branch and retains its subglacial ocean.
+The root suite again passes 204 physics tests and 21 calibration anchors, with
+3 known gaps reported. GPU-driver checks remain skipped without headless GL.
+The full altdev2 calibration limitation described above remains unresolved.

@@ -45,7 +45,7 @@ check('thermal escape responds to binding energy and temperature, not XUV', () =
   const w=build('evaporatingWaterworld').world, rate=escapeRates(w).water;
   w.params.xuvFraction=0; update(w,0); near(escapeRates(w).water,rate);
   assert.equal(waterworldActive({...w.params,lowGravityWaterworld:false},1,0),true);
-  assert.equal(waterworldActive(w.params,1,1),false);
+  assert.equal(waterworldActive(w.params,1,1),true);
 });
 check('mass loss conserves water and produces no residual oxygen', () => {
   const w=build('evaporatingWaterworld').world, initial=w.diag.totalWater;

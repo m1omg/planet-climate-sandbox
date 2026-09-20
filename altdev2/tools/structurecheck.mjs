@@ -15,14 +15,14 @@ check('physical conditions select the model, never a legacy checkbox', () => {
     const s = new Simulation({ ...p, lowGravityWaterworld: flag });
     assert.ok(s.world.diag.smallWaterworld);
   }
-  assert.equal(waterworldActive(p, p.water, 1), false);
+  assert.equal(waterworldActive(p, p.water, 1), true);
   assert.equal(waterworldActive({ ...p, mass: 1 }, p.water, 0), false);
   assert.equal(waterworldActive({ ...p, water: 0 }, 0, 0), false);
   assert.equal(waterworldActive({ ...p, starTemp: 3000 }, p.water, 0), false);
   assert.equal(waterworldActive(p, 0, 0), true); // depleted reservoir approaches dry limit continuously
   const s=new Simulation(p),w=s.world,R=w.diag.d.R;
   w.n2=1e5/w.diag.g;update(w,0);
-  assert.equal(w.diag.smallWaterworld,null);assert.equal(w.diag.d.R,R);
+  assert.ok(w.diag.smallWaterworld && w.diag.smallWaterworld.backgroundBar>0);assert.equal(w.diag.d.R,R);
   w.n2=0;update(w,0);assert.ok(w.diag.smallWaterworld);assert.equal(w.diag.d.R,R);
 });
 check('frozen, warm and buried summaries use exactly the displayed layers', () => {

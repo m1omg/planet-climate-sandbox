@@ -710,7 +710,7 @@ export function cloudDeepening(pH2O, share = 1) {
 }
 
 let rayP = -1, rayV = 0;
-function rayleighOf(pDry) {
+export function rayleighOf(pDry) {
   if (pDry === rayP) return rayV;
   rayP = pDry;
   return (rayV = Math.min(0.75, 0.06 * Math.pow(clamp(pDry, 0, 300), 0.545)));
