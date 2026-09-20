@@ -463,6 +463,13 @@ export function basinWater(w) {
 // ---------------------------------------------------------------------------
 export function escapeRates(w) {
   const p = w.params, dg = w.diag, d = dg.d;
+  if (dg.smallWaterworld && !(dg.smallWaterworld.backgroundBar>0)) {
+    const water = dg.smallWaterworld.bulkEscape * YEAR;
+    // Whole H2O molecules leave. Do not count the XUV channel a second time,
+    // and do not manufacture the oxygen of photolytic hydrogen escape.
+    return { water, bulkWater: water, background: 0, nonThermal: 0, envelope: 0,
+      fEnv: 0, fStrat: 1, Tct: dg.Tmean, diffusion: 0, energy: 0, xSteam: 1 };
+  }
   const pTot = Math.max(1e-6, dg.pTotMean);
   let pH2Omean = 0;
   for (let i = 0; i < NBANDS; i++) pH2Omean += dg.pH2O[i];
@@ -612,6 +619,15 @@ export function escapeRates(w) {
   // ions off whatever the magnetosphere does not cover. See nonThermalEscape.
   const nonThermal = nonThermalEscape(p, d, xuv, pTot) * escapeScale;
 
+  if (dg.smallWaterworld) {
+    const bulkWater=dg.smallWaterworld.bulkEscape*YEAR;
+    // Recover the pure molecular-water branch continuously when background
+    // gas vanishes. Preserve the ordinary XUV/cold-trap route in a carrier gas,
+    // and retain its oxygen accounting separately from whole-molecule loss.
+    const photolytic=water*clamp(1-xSteam,0,1);
+    return {water:bulkWater+photolytic,bulkWater,bulkGas:dg.smallWaterworld.bulkGasEscape*YEAR,background,nonThermal,envelope,
+      fEnv,fStrat,Tct,diffusion,energy,xSteam};
+  }
   return { water, background, nonThermal, envelope, fEnv, fStrat, Tct, diffusion, energy, xSteam };
 }
 
@@ -1083,7 +1099,8 @@ export function stepVolatiles(w, dtYears) {
       // years on a 25 kyr step and 5500 on an 87 kyr one. Methane then rang
       // between 0.5 and 2.4 ppm from step to step, and the step controller rang
       // with it. Early Venus spent its whole run doing this.
-      escapeO2 = dtYears > 0 ? lostEO * d.eoColumn * (32 / 18) * 0.15 / dtYears : 0;
+      const photolyticShare = esc.water > 0 ? Math.max(0, 1 - (esc.bulkWater ?? 0) / esc.water) : 0;
+      escapeO2 = dtYears > 0 ? lostEO * d.eoColumn * (32 / 18) * 0.15 * photolyticShare / dtYears : 0;
     }
   }
   // Proportional escape approaches zero asymptotically. Below a trillionth of
@@ -1507,6 +1524,11 @@ export function stepVolatiles(w, dtYears) {
   }
 
   // --- atmospheric escape of the background gas ---------------------------
+  if (esc.bulkGas > 0) {
+    const total=w.n2+w.co2+w.o2+w.ch4+w.h2+w.he;
+    const f=Math.max(0,1-esc.bulkGas*dtYears/Math.max(total,1e-30));
+    w.n2*=f;w.co2*=f;w.o2*=f;w.ch4*=f;w.h2*=f;w.he*=f;
+  }
   if (esc.background > 0) {
     const f = Math.max(0, 1 - esc.background * dtYears / Math.max(w.n2 + w.co2 + w.o2, 1e-6));
     w.n2 *= f; w.co2 *= f; w.o2 *= f;

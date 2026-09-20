@@ -11,6 +11,40 @@
 // podľa id. Chýbajúci záznam znamená angličtinu, nie prázdne miesto.
 export const SK = {
   ui: {
+    'Vapour residence time': 'Čas zotrvania pary',
+    'no water': 'bez vody',
+    'Water phase': 'Skupenstvo vody',
+    'Dry': 'Suchý svet',
+    'Trace vapour': 'Stopové množstvo pary',
+    'Ice over liquid ocean': 'Ľad nad kvapalným oceánom',
+    'Surface ocean': 'Povrchový oceán',
+    'Ice reservoir': 'Zásoba ľadu',
+    'Water vapour': 'Vodná para',
+    'Water supply': 'Zdroj vodnej pary',
+    'None': 'Žiadny',
+    'Residual vapour': 'Zvyšková para',
+    'Ice sublimation': 'Sublimácia ľadu',
+    'Evaporation': 'Vyparovanie',
+    'Remaining inventory divided by its current loss rate; not a promise of a liquid ocean.': 'Zostávajúca zásoba vydelená súčasným únikom; neznamená to, že existuje kvapalný oceán.',
+    'Freezing the surface does not imply freezing the entire water column.': 'Zamrznutý povrch neznamená, že zamrzla celá vodná vrstva.',
+    'Cold ice can supply trace vapour by sublimation. This is not a boiling ocean or a dense steam atmosphere.': 'Studený ľad môže sublimáciou uvoľňovať malé množstvo pary. Nejde o vriaci oceán ani hustú parnú atmosféru.',
+    '{0} °C · no ocean · trace water vapour only': '{0} °C · bez oceánu · iba stopové množstvo vodnej pary',
+    '{0} °C · dry world · water reservoir exhausted': '{0} °C · suchý svet · zásoba vody sa vyčerpala',
+    'Reduced waterworld · automatic': 'Zjednodušený vodný svet · automaticky',
+    'Low gravity · mixed atmosphere': 'Nízka gravitácia · zmiešaná atmosféra',
+    '{0} °C · no ocean · mixed atmosphere': '{0} °C · bez oceánu · zmiešaná atmosféra',
+    '{0} °C · low gravity · mixed atmosphere · approximate spherical model': '{0} °C · nízka gravitácia · zmiešaná atmosféra · približný sférický model',
+    'Standard atmosphere · automatic': 'Štandardná atmosféra · automaticky',
+    'Selected from mass, bulk water, current atmospheric composition and stellar spectrum.': 'Výber podľa hmotnosti, množstva vody, aktuálneho zloženia atmosféry a spektra hviezdy.',
+    'water vapour atmosphere': 'Atmosféra vodnej pary',
+    '{0} Pa at base; schematic extent': '{0} Pa pri povrchu; schematický rozsah',
+    'radiation + escape': 'žiarenie + únik vody',
+    '{0} °C · long-lived water reservoir · thermal steam escape · reduced 2019 model': '{0} °C · dlhodobá zásoba vody · tepelný únik pary · zjednodušený model 2019',
+    '{0} °C · rapid water loss · thermal steam escape · reduced 2019 model': '{0} °C · rýchla strata vody · tepelný únik pary · zjednodušený model 2019',
+    'Water lifetime': 'Čas do straty vody',
+    'Radiative area LW / SW': 'Vyžarujúca / pohlcujúca plocha',
+    'Escape cooling': 'Ochladzovanie únikom vody',
+    'Radiation model': 'Model žiarenia',
     // ---- hlavička a panely -------------------------------------------------
     'Planet Climate': 'Klíma planéty',
     'Sandbox': 'Pieskovisko',
@@ -460,6 +494,10 @@ export const SK = {
     'no atmosphere': 'bez atmosféry',
     'nitrogen and argon: the gas that neither condenses nor absorbs':
       'dusík a argón: plyn, ktorý ani nekondenzuje, ani nepohlcuje',
+    'hydrogen: light enough to escape a small warm world, so an envelope of it is a statement about the planet’s mass and its star':
+      'vodík: dostatočne ľahký na to, aby unikol z malého teplého sveta — obálka z neho teda hovorí o hmotnosti planéty a o jej hviezde',
+    'helium: the rest of a primordial envelope. Nothing on a planet makes it and nothing destroys it, so what is here was captured and has not yet escaped':
+      'hélium: zvyšok pôvodnej obálky. Na planéte ho nič nevytvára a nič nerozkladá, takže to, čo je tu, bolo zachytené a ešte neuniklo',
     'carbon dioxide': 'oxid uhličitý',
     'water vapour': 'vodná para',
     'water past its critical point: neither liquid nor gas':
@@ -554,6 +592,8 @@ export const SK = {
 
   // ---- klimatické stavy ----------------------------------------------------
   states: {
+    smallWaterworld: { name: 'Malý vodný svet', blurb: 'Vodný svet so slabou gravitáciou. Zväčšená vyžarujúca plocha pomáha udržať rovnováhu a zásoba vody pri súčasnom úniku vydrží viac než miliardu rokov. Zjednodušený model podľa Arnscheidta a kol. (2019).' },
+    evaporatingWaterworld: { name: 'Vyparujúci sa vodný svet', blurb: 'Do vesmíru unikajú celé molekuly vody. Pri súčasnom tempe by sa zásoba vyčerpala za menej než miliardu rokov, hoci na povrchu ešte môže byť kvapalná voda.' },
     magma: { name: 'Magmatický oceán',
       blurb: 'Povrch je roztavená hornina. Nad približne 1400 K sa kremičitany tavia a planéta žiari v blízkej infračervenej oblasti; atmosféru, ak nejakú má, tvorí horúca zmes horninových pár a vodnej pary.' },
     dryRunaway: { name: 'Suchý nekontrolovateľný skleníkový efekt',
@@ -656,6 +696,13 @@ export const SK = {
 
   // ---- predvolené svety ----------------------------------------------------
   presets: {
+    europa: 'Európa',
+    ganymede: 'Ganymedes',
+    callisto: 'Kallisto',
+    hotSmallWaterworld: 'Horúci vodný svet · 0,049 M⊕',
+    smallWaterworld: 'Malý vodný svet (2019)',
+    evaporatingWaterworld: 'Vyparujúci sa malý vodný svet',
+    icySmallWaterworld: 'Zamrznutý malý vodný svet',
     earth: 'Zem',
     moon: 'Mesiac',
     earlyMoon: 'Pradávny Mesiac',

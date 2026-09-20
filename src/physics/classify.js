@@ -4,6 +4,8 @@ import { clamp, T_CRIT_H2O as T_CRIT } from './constants.js';
 
 // Every state the game can recognise, with the real science behind it.
 export const STATES = {
+  smallWaterworld: { name: 'Small Waterworld', color: '#2f8fd6', blurb: 'A low-gravity ocean world with expanded thermal emission and a steam-escape lifetime above a billion years at current conditions. Reduced model after Arnscheidt et al. (2019).' },
+  evaporatingWaterworld: { name: 'Evaporating Waterworld', color: '#ffb03a', blurb: 'Whole water molecules escape thermally. The remaining water lasts less than a billion years at the current rate, even though a liquid surface can still exist.' },
   magma:      { name: 'Magma Ocean',          color: '#ff5a2b', blurb: 'The surface is molten rock. Above roughly 1400 K silicates melt and the planet radiates in the near-infrared; any atmosphere is a hot rock-vapour and steam envelope.' },
   dryRunaway: { name: 'Dry Runaway Greenhouse', color: '#e0553a', blurb: 'Venus. The ocean is gone — evaporated, photolysed, and the hydrogen dragged off to space — leaving a thick dry CO2 atmosphere and a surface hot enough to glow faintly. Irreversible on any human timescale.' },
   steamRunaway: { name: 'Steam Runaway Greenhouse', color: '#ff8340', blurb: 'Absorbed sunlight plus the planet\u2019s own internal heat exceeds the Simpson\u2013Nakajima limit (~282 W/m2), so no equilibrium exists at any temperature \u2014 and the sea has already gone into the sky. The water is all still here, as a massive steam envelope with nothing liquid under it, and losing it to space takes 10^8\u201310^9 years from this point. A world whose ocean is too big to boil away stops at Buried Ocean instead, and stays there while the lid works downward.' },
@@ -257,7 +259,16 @@ export function classify(w) {
   // down. Which is exactly the mistake the runaway branch was making below.
   // The surface really is molten-hot; it is just not the whole planet, and the
   // water underneath is the part worth naming.
-  if (buriedOcean) id = 'buriedOcean';
+  if (dg.smallWaterworld && !dg.hasWater && dg.smallWaterworld.backgroundBar<1e-6) id = 'airless';
+  else if (dg.smallWaterworld && T < 273.15 && ice > 0.93) {
+    id = dg.subglacial?.ocean && dg.subglacial.liquidDepth > 0 ? 'subglacial' : 'snowball';
+  }
+  else if (dg.smallWaterworld?.hasSurfaceOcean) {
+    // Expanded emission removes the plane-parallel runaway ceiling. A short
+    // reservoir lifetime is a different failure mode from a steam runaway.
+    id = dg.smallWaterworld.lifetime < 1e9 ? 'evaporatingWaterworld' : 'smallWaterworld';
+  }
+  else if (buriedOcean) id = 'buriedOcean';
   // Molten rock, tested where the rock is. A surface temperature is the top of
   // whatever the planet is wearing, and on a world with a quarter of a million
   // kilometres of water on it that is not a statement about the ground: the
@@ -460,6 +471,14 @@ export function classify(w) {
                      id === 'hycean' || id === 'lowSunHycean')
                     && water > 0.005;
 
+  if (dg.smallWaterworld?.hasSurfaceOcean && ['smallWaterworld','evaporatingWaterworld'].includes(id)) {
+    const longLived = dg.smallWaterworld.lifetime >= 1e9;
+    return { id, name: longLived ? 'Small Waterworld' : 'Evaporating Waterworld', color: s.color,
+      blurb: dg.smallWaterworld.backgroundBar>0
+        ? 'Approximate low-gravity mixed-atmosphere extension: gas opacity, spherical radiative areas and diffusion-limited water supply. Not a numerical result from the pure-water 2019 paper.'
+        : 'Reduced 2019 waterworld model: expanded thermal emission and whole-molecule steam escape. The displayed lifetime assumes the current escape rate; it is not a prediction of biological habitability.',
+      habitable: longLived && T < 335, Tsub, Tanti };
+  }
   return { id, name: s.name, color: s.color, blurb: s.blurb, habitable, Tsub, Tanti };
 }
 
@@ -480,6 +499,20 @@ export function reasonText(w, st, tr = enFormat) {
   const fmtKm = (km) => (km >= 100 ? km.toFixed(0)
     : km >= 10 ? km.toFixed(1) : km.toFixed(2));
   const dg = w.diag, esc = w.escape ?? {};
+  if (dg.smallWaterworld && !dg.hasWater) {
+    if (dg.smallWaterworld.backgroundBar>0)
+      return tr('{0} °C · no ocean · mixed atmosphere', (dg.Tmean-273.15).toFixed(1));
+    return tr(dg.totalWater > 0 ? '{0} °C · no ocean · trace water vapour only'
+      : '{0} °C · dry world · water reservoir exhausted', (dg.Tmean-273.15).toFixed(1));
+  }
+  if (dg.smallWaterworld?.hasSurfaceOcean) {
+    if (dg.smallWaterworld.backgroundBar>0)
+      return tr('{0} °C · low gravity · mixed atmosphere · approximate spherical model', (dg.Tmean-273.15).toFixed(1));
+    return tr(dg.smallWaterworld.lifetime >= 1e9
+      ? '{0} °C · long-lived water reservoir · thermal steam escape · reduced 2019 model'
+      : '{0} °C · rapid water loss · thermal steam escape · reduced 2019 model',
+      (dg.Tmean - 273.15).toFixed(1));
+  }
   const bits = [];
   // What the number is a temperature OF. `Tmean` is the mean of `w.T[]`, which
   // is the BOTTOM of the column -- the same array `iceFraction` asks whether the

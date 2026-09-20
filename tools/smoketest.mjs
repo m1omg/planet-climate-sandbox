@@ -969,5 +969,70 @@ if (created < 20) {
   }
 }
 
+// Exercise the actual preset-load/readout path with retained DOM output. This
+// is not a browser/visual test: it catches stale or contradictory phase labels.
+{
+  const { update } = await import('../src/physics/climate.js');
+  const { setLang } = await import('../src/game/i18n.js');
+  setLang('en');
+  const originalQuery = document.querySelector;
+  const retained = new Map();
+  document.querySelector = selector => {
+    if (!retained.has(selector)) retained.set(selector, originalQuery(selector));
+    return retained.get(selector);
+  };
+  const checkReadout = (id, required) => {
+    app.loadPreset(id);
+    app.sim.paused = true;
+    app.view.render = () => {};
+    const stats = document.querySelector('#stats');
+    stats.innerHTML = '';
+    app.tick(0.2);
+    if (!required.every(s => stats.innerHTML.includes(s))) throw new Error(`${id}: missing ${required.join(', ')}`);
+  };
+  try {
+    checkReadout('icySmallWaterworld', ['Ice over liquid ocean', 'Ice sublimation']);
+    checkReadout('hotSmallWaterworld', ['Surface ocean', 'Evaporation']);
+    app.sim.reset({...app.sim.world.params,mass:.005,co2Bar:.1,water:8.5});
+    app.sim.paused=true;
+    app.tick(.2);
+    if (!document.querySelector('#stats').innerHTML.includes('Low gravity · mixed atmosphere'))
+      throw new Error('CO2 or 0.005 Earth masses switched off the low-gravity readout');
+    for (const id of ['europa', 'ganymede', 'callisto']) checkReadout(id, ['Internal heat', 'Ice']);
+    app.loadPreset('callisto');
+    app.sim.world.T.fill(170);
+    update(app.sim.world,0);
+    app.sim.paused = true;
+    app.tick(0.2);
+    const derived = document.querySelector('#derived').innerHTML;
+    const structure = document.querySelector('#structure').innerHTML;
+    const oceanLabel = structure.match(/title="liquid ocean · ([^·]+) ·/);
+    const floorLabel = structure.match(/title="ice VI · ([^·]+) ·/);
+    if (!oceanLabel || !floorLabel || !derived.includes(`ocean <b>${oceanLabel[1].trim()}</b>`)
+      || !derived.includes(`then <b>${floorLabel[1].trim()} ice VI</b>`)) {
+      throw new Error('compact ocean/floor depths contradict the rendered structure');
+    }
+    app.loadPreset('smallWaterworld');
+    const w = app.sim.world;
+    const initial = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour + w.water.lost;
+    Object.assign(w.water, { ocean: 0, seaIce: 0, landIce: 0, vapour: 1e-8, lost: initial - 1e-8 });
+    w.T.fill(292.45);
+    update(w, 0);
+    app.sim.paused = true;
+    document.querySelector('#stats').innerHTML = '';
+    app.tick(0.2);
+    const html = document.querySelector('#stats').innerHTML;
+    if (!html.includes('Trace vapour') || !html.includes('Residual vapour') || html.includes('>Water lifetime<')) {
+      throw new Error('trace vapour readout still implies a water reservoir');
+    }
+    console.log('\x1b[32mPASS\x1b[0m  new presets load and actual readouts distinguish ice, ocean and trace vapour');
+  } catch (e) {
+    failed++;
+    console.log(`\x1b[31mFAIL\x1b[0m  water-phase readouts: ${e.message}`);
+  } finally {
+    document.querySelector = originalQuery;
+  }
+}
+
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);

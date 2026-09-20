@@ -95,8 +95,8 @@ export const SLIDERS = [
   // Ten Earth masses, not five. The sub-Neptunes this build exists to reach run
   // from about four to ten, and a hydrogen envelope on anything smaller does not
   // survive its star -- so a ceiling of five put the entire subject out of
-  // range. A range change only: no preset holds a mass anywhere near either end.
-  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.01, max: 10, log: true,
+  // range. The lower end also accommodates Europa (about 0.008 Earth masses).
+  { g: 'body', key: 'mass', label: 'Planet mass', min: 0.005, max: 10, log: true,
     // Precision boundaries sit half a displayed unit below the next range, so
     // a label can always be typed back to exactly the value the slider shows.
     // Four decimals retain the Moon's 0.0123 M⊕ rather than rounding it away.

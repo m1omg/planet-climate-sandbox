@@ -8,8 +8,9 @@ import { derive, volcanicActivity } from './planet.js';
 import { oceanStructure, coldPoolStructure, T_COLD_POOL, iceShell,
          freezeShift, SALINITY_EARTH } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
+import { waterworldActive, waterworldFlux, waterLifetime } from './waterworld.js';
 
-import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN } from './volatiles.js';
+import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN, escapeRates } from './volatiles.js';
 
 export const NBANDS = 18;
 
@@ -278,6 +279,12 @@ export function update(w, dt) {
   // Water available to evaporate, as a column and then as pressure
   const totalWater = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
   const availCol = totalWater * d.eoColumn;
+  const smallWaterworld = waterworldActive(p, totalWater, pN2 + pCO2 + pCH4 + pO2 + pH2 + pHe);
+  const waterworldGases = smallWaterworld ? {pN2,pCO2,pCH4,pO2,pH2,pHe} : null;
+  const escapeCooling = smallWaterworld ? new Float64Array(NBANDS) : null;
+  const swScale = smallWaterworld ? new Float64Array(NBANDS) : null;
+  let bulkEscape = 0, bulkGasEscape = 0, coolingMean = 0, lwScaleMean = 0, swScaleMean = 0, molarMean = 0;
+  let paperDomain = true;
 
   // How much of the planet is under water. This is derived, not chosen: it
   // follows from the water actually sitting in the basins and from the basin
@@ -326,7 +333,13 @@ export function update(w, dt) {
   // Below the triple point there is no liquid water at any temperature: ice
   // sublimates straight to vapour and standing water boils away. Mars sits just
   // under that line, which is why it has ice and frost but no lakes.
-  const pSurfPa = (w.n2 + w.co2 + w.ch4 + w.o2) * g + vapourPa(w, g);
+  // The pure-water branch assumes phase-equilibrated vapour. Use that same
+  // pressure at initialization: an empty bookkeeping vapour reservoir must
+  // not briefly prohibit the ocean in a hot, saturated starting state.
+  const waterPressure = smallWaterworld
+    ? w.T.reduce((sum,T) => sum + Math.min(psatH2O(T),availCol*g)/NBANDS,0)
+    : vapourPa(w,g);
+  const pSurfPa = (w.n2 + w.co2 + w.ch4 + w.o2) * g + waterPressure;
   const liquidAllowed = smoothstep(0.75 * P_TRIPLE_H2O, 1.15 * P_TRIPLE_H2O, pSurfPa);
 
   // Evaporation comes from open water only. A sea sealed under ice supplies
@@ -345,7 +358,7 @@ export function update(w, dt) {
   // sixteen watts a step and shortening the step to tens of years to resolve it.
   const airborne = clamp((w.water.vapour || 0) / Math.max(totalWater, 1e-12), 0, 1);
   const wetSky = clamp(openOcean * liquidAllowed + airborne, 0, 1);
-  const RH = clamp(0.34 + 0.44 * wetSky, 0.15, 0.85);
+  const RH = smallWaterworld ? 1 : clamp(0.34 + 0.44 * wetSky, 0.15, 0.85);
 
   // Land uncovered by a sea that has retreated or boiled away is bare ocean
   // floor -- dark basalt, not weathered continental rock -- so a drying world
@@ -509,6 +522,8 @@ export function update(w, dt) {
   const swTrans = hazeSW * ch4SW;
 
   const S = insolationProfile(p, B.S);
+  // The paper is globally averaged, with efficient redistribution.
+  if (smallWaterworld) S.fill(1361 * p.insolation / 4);
   const lam = lockFactor(p);
   const slowness = clamp(smoothstep(24, 1500, p.rotationHours), 0, 1) * 0.5 + slowRotation(p) * 0.5;
   // How well cloud reflects this particular star's light. 1 for a G star, and
@@ -562,6 +577,16 @@ export function update(w, dt) {
     // the outgoing flux to nothing would be a runaway with no physics behind it.
     out[i] = Math.max((1 - FIN_FRACTION) * moistOLR + FIN_FRACTION * dryOLR - ghgForce,
                       1e-3);
+    if (smallWaterworld) {
+      const f = waterworldFlux(w.T[i], g, d.R, availCol * g, waterworldGases);
+      alb[i] = f.albedo; out[i] = f.emitted; cloud[i] = 0;
+      swScale[i] = f.shortwave; escapeCooling[i] = f.cooling;
+      bulkEscape += f.flux / NBANDS; coolingMean += f.cooling / NBANDS;
+      bulkGasEscape += f.backgroundFlux / NBANDS;
+      lwScaleMean += f.longwave / NBANDS; swScaleMean += f.shortwave / NBANDS;
+      molarMean += f.meanMolarMass / NBANDS;
+      paperDomain &&= f.inDomain;
+    }
     Tmean += w.T[i] / NBANDS;
     // Two different questions, so two numbers. `iceMean` is how much of the
     // planet is frozen, which is what decides whether this is a snowball.
@@ -570,7 +595,7 @@ export function update(w, dt) {
     // with no water cycle stay bare frozen rock rather than growing a sheet.
     iceMean += (hasWater ? iceFraction(w.T[i], fShift) : 0) / NBANDS;
     iceArea += (hasWater ? flooded * iceFraction(w.T[i], fShift) + (1 - flooded) * glaciatedShare : 0) / NBANDS;
-    absorbed += S[i] * (1 - alb[i]) * swTrans / NBANDS;
+    absorbed += S[i] * (1 - alb[i]) * swTrans * (swScale?.[i] ?? 1) / NBANDS;
     emitted += out[i] / NBANDS;
     pTotMean += pTot / NBANDS;
   }
@@ -662,6 +687,7 @@ export function update(w, dt) {
     // the readout, which used to compute it itself, and now by classify(), which
     // needs it to tell a runaway with an ocean under it from one without.
     get runawayMargin() {
+      if (this.smallWaterworld) return Infinity; // no plane-parallel ceiling in this mode
       return runawayCache ?? (runawayCache = runawayLimit(this.pCO2,
         this.pN2 + this.pCH4, this.pH2 ?? 0, this.g, this.pHe ?? 0).flux
         - (this.absorbed + this.Fint));
@@ -818,7 +844,17 @@ export function update(w, dt) {
     // The imbalance, though, is the whole energy budget -- Settle stops when it
     // reaches zero, so leaving the interior out of it would park a tidally
     // heated world at a permanent false imbalance it could never settle out of.
-    Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted,
+    Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted - coolingMean,
+    escapeCooling, swScale,
+    smallWaterworld: smallWaterworld ? { bulkEscape, bulkGasEscape, cooling: coolingMean,
+      gases: waterworldGases, backgroundBar:pN2+pCO2+pCH4+pO2+pH2+pHe,
+      meanMolarMass:molarMean,
+      hasSurfaceOcean: hasWater && w.water.ocean > 1e-5 && flooded >= 0.5
+        && openOcean * liquidAllowed > 0.01 && Tmean < T_CRIT_H2O,
+      hasIceReservoir: hasWater && (w.water.seaIce + w.water.landIce) > 1e-5,
+      get lifetime() { return waterLifetime(availCol, escapeRates(w).water/YEAR); }, longwave: lwScaleMean,
+      shortwave: swScaleMean, inDomain: paperDomain && p.starTemp >= 5200 && p.starTemp <= 6200,
+      availablePressure: availCol * g } : null,
     hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, cloudShare, totalWater, superFrac,
     hazeTau, hazeSW, ch4SW, swTrans,
     // What the renderer draws vents and ash from. Here rather than in the
@@ -845,7 +881,8 @@ export function tendency(w) {
     // Interior heat enters exactly as sunlight does, so the greenhouse
     // amplifies it identically -- which is the point, and is why a flux far
     // below the runaway limit still moves the surface a long way.
-    dT[i] = (dg.S[i] * (1 - dg.alb[i]) * dg.swTrans + dg.Fint - dg.olr[i] + transport) / dg.C[i];
+    dT[i] = (dg.S[i] * (1 - dg.alb[i]) * dg.swTrans * (dg.swScale?.[i] ?? 1)
+      + dg.Fint - dg.olr[i] - (dg.escapeCooling?.[i] ?? 0) + transport) / dg.C[i];
   }
   return { dT, D };
 }
@@ -1228,6 +1265,18 @@ export function maxStep(w, maxDeltaT = 2.5) {
     const smoothed = Math.exp(0.7 * Math.log(dt) + 0.3 * Math.log(prev));
     dt = clamp(smoothed, dt * 0.25, dt * 4);
   }
+  // Small worlds can shed a collisional gas column in much less than a year.
+  // Apply the reservoir bound after smoothing, from CURRENT rates (including
+  // the first step), so neither smoothing nor a stale escape rate jumps across
+  // the loss of a background that was affecting opacity and cooling.
+  if (dg.smallWaterworld) {
+    const rates=escapeRates(w);
+    if(rates.water>0 && dg.hasWater)
+      dt=Math.min(dt,Math.max(1e-8,.05*dg.totalWater*dg.d.eoColumn/rates.water));
+    const gas=w.n2+w.co2+w.o2+w.ch4+w.h2+w.he;
+    if(rates.bulkGas>0 && dg.smallWaterworld.backgroundBar>1e-9)
+      dt=Math.min(dt,Math.max(1e-8,.05*gas/rates.bulkGas));
+  }
   return dt;
 }
 
@@ -1247,6 +1296,14 @@ export function radiativeDamping(w) {
   for (let i = 0; i < NBANDS; i++) {
     const T = w.T[i];
     const h = 0.5;
+    if (dg.smallWaterworld) {
+      const net = t => {
+        const f = waterworldFlux(t, dg.g, dg.d.R, dg.smallWaterworld.availablePressure, dg.smallWaterworld.gases);
+        return f.emitted + f.cooling - dg.S[i] * dg.swTrans * (1-f.albedo) * f.shortwave;
+      };
+      k[i] = (net(T+h) - net(T-h)) / (2*h);
+      continue;
+    }
     const scale = dg.humidityScale;
     // How the vapour column responds to a small temperature change. Where the
     // air is saturated it follows Clausius-Clapeyron. Where it is mass-limited

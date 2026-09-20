@@ -97,8 +97,10 @@ export function waterRadiusFactor(x) {
 // spread over -- NOT the radius a transit measures, which includes an envelope
 // that weighs almost nothing. See `transitRadius`.
 export function condensedRadius(params) {
+  // Radius follows bulk composition, independently of the atmosphere model.
+  // Changing gas or an obsolete model flag must not resize the solid planet.
   const x = waterMassFraction(params.mass, params.water ?? 0);
-  return radiusFromMass(params.mass) * waterRadiusFactor(x);
+  return radiusFromMass(params.mass) * waterRadiusFactor(x) * (params.radiusScale ?? 1);
 }
 
 // What a transit would measure: the condensed planet plus the height at which

@@ -7,7 +7,11 @@
 // the ocean has not finished responding to the CO2 already in the air, so a
 // modern Earth left to run warms a few tenths of a degree further with nothing
 // added. That is the committed warming.
+import { waterForShareOfMass, condensedRadius } from '../physics/planet.js';
 export const EARTH = {
+  tidalHeat: 0,
+  life: false, // legacy preset flag; biosphere remains the active biology control
+  radiusScale: 1, // measured moon radius / composition-model radius; scales with edited mass
   mass: 1.0,
   landFraction: 0.30,
   water: 1.0,            // Earth oceans
@@ -34,9 +38,8 @@ export const EARTH = {
   // It is in this list rather than only in the Hycean presets because this list
   // is also the allowlist for the URL hash: a parameter missing from it is
   // silently dropped from a shared link, so a Hycean world sent to someone else
-  // would arrive as a bare rock. (`tidalHeat` is missing from it and is dropped
-  // exactly that way -- a real bug, older than this branch, left alone here
-  // because fixing it is not this change.)
+  // would arrive as a bare rock. Tidal heating is included in the schema too,
+  // so a shared world retains the non-radiogenic part of its interior heat.
   h2Bar: 0,
   heliumFrac: 0.1,   // solar, by number -- the split only matters once h2Bar does
   emissions: 0,     // see the `earth` preset; only that world has us on it
@@ -780,4 +783,37 @@ export const PRESETS = {
   // layer takes to eat down through water that is not helping it.
   coldStart: { name: 'Cold-Start Runaway', icon: '❄️', params: { ...HYCEAN,
     mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
+  smallWaterworld: { name: 'Small Waterworld (2019)', icon: '🌊', params: { ...EARTH,
+    mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    internalHeat: 0, salinity: 0, insolation: 0.98, startT: 300 } },
+  evaporatingWaterworld: { name: 'Evaporating Small Waterworld', icon: '💨', params: { ...EARTH,
+    mass: 0.02, water: waterForShareOfMass(0.02, 0.4), landFraction: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    internalHeat: 0, salinity: 0, insolation: 0.98, startT: 280 } },
+  icySmallWaterworld: { name: 'Icy Small Waterworld', icon: '❄️', params: { ...EARTH,
+    mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    internalHeat: 0.02, salinity: 0, insolation: 0.98, startT: 230 } },
+  hotSmallWaterworld: { name: 'Hot Waterworld · 0.049 M⊕', icon: '♨️', params: { ...EARTH,
+    mass: 0.049, water: waterForShareOfMass(0.049, 0.4), landFraction: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    internalHeat: 0, salinity: 0, insolation: 1.11, startT: 390 } },
+  // JPL measured GM/radii. Reservoir fractions and heat fluxes are explicit
+  // interior scenarios, not measurements; these are not sun-locked planets.
+  europa: { name: 'Europa', icon: '🧊', params: icyMoon(3202.71210 / 398600.436,
+    1560.8, 2.5, 85.228, 102, 0.04) },
+  ganymede: { name: 'Ganymede', icon: '🧊', params: icyMoon(9887.83275 / 398600.436,
+    2631.2, waterForShareOfMass(9887.83275 / 398600.436, 0.4), 171.709, 110, 0.008) },
+  callisto: { name: 'Callisto', icon: '🧊', params: icyMoon(7179.28340 / 398600.436,
+    2410.3, waterForShareOfMass(7179.28340 / 398600.436, 0.4), 400.536, 125, 0.003) },
 };
+
+function icyMoon(mass, radiusKm, water, rotationHours, startT, internalHeat) {
+  const p = { ...EARTH, mass, water, rotationHours, startT, internalHeat,
+    landFraction: 0, insolation: 1 / (5.2044 ** 2), obliquity: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
+    magneticField: 0, salinity: 0, tidallyLocked: false };
+  p.radiusScale = radiusKm * 1000 / condensedRadius(p);
+  return p;
+}

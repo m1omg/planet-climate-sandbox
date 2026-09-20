@@ -1,3 +1,4 @@
+import { sanitizeParams } from './game/validation.js';
 import { Simulation } from './sim/clock.js';
 import { carbonBudget, FOSSIL_TOTAL } from './physics/volatiles.js';
 import { EARTH, PRESETS } from './game/presets.js';
@@ -10,7 +11,7 @@ import { derive, maxWaterEO } from './physics/planet.js';
 import { scaleHeight } from './render/atmosphere.js';
 import { iceFraction } from './physics/radiation.js';
 import { transitRadius, waterMassFraction } from './physics/planet.js';
-import { columnLayers } from './physics/ocean.js';
+import { columnLayers, columnSummary } from './physics/ocean.js';
 import { NBANDS, lockFactor, setWaterInventory, X as BAND_X } from './physics/climate.js';
 import { clamp } from './physics/constants.js';
 import { PlanetView, MIN_ZOOM, MAX_ZOOM, BODY_MAPS } from './render/planet.js';
@@ -784,41 +785,20 @@ const URL_BASE = PRESETS.earth.params;
 
 function writeHash() {
   const keep = {};
-  for (const k of Object.keys(EARTH)) if (params[k] !== URL_BASE[k]) keep[k] = params[k];
-  // The starlight control holds the *destination* while a smooth change is
-  // walking, which is right for the handle and wrong for the URL: the address
-  // bar is meant to be the world you are looking at, and writing the target
-  // there meant a reload arrived at the far end instantly. Someone who dragged
-  // to 100 S(+) with smoothing on, watched the star begin its walk, and then
-  // reloaded came back to a planet already at sixteen times Earth's sunlight --
-  // with the smoothing that was supposed to prevent exactly that jump switched
-  // on the whole time. What the world actually has is what gets shared.
-  if ('insolation' in keep) keep.insolation = sim.world.params.insolation;
-  if (keep.insolation === URL_BASE.insolation) delete keep.insolation;
-  const s = Object.entries(keep).map(([k, v]) => `${k}=${typeof v === 'number' ? +v.toPrecision(6) : v}`).join('&');
-  // Keep the query string. It carries ?renderer= and ?quality=, and writing
-  // location.pathname alone silently erased them the moment anything changed --
-  // so a forced renderer never survived to the next reload.
-  history.replaceState(null, '', `${location.pathname}${location.search}${s ? `#${s}` : ''}`);
+  for (const k of Object.keys(EARTH)) {
+    const v = k === 'insolation' ? sim.world.params.insolation : params[k];
+    if (v !== URL_BASE[k]) keep[k] = v;
+  }
+  const s = Object.entries(keep).map(([k,v]) => k + '=' + (typeof v === 'number' ? +v.toPrecision(6) : v)).join('&');
+  history.replaceState(null, '', location.pathname + location.search + (s ? '#' + s : ''));
 }
 function paramsFromHash() {
   const out = {};
-  const h = location.hash.replace(/^#/, '');
-  if (!h) return out;
-  for (const kv of h.split('&')) {
-    const [k, v] = kv.split('=');
-    if (!(k in EARTH)) continue;
-    // A number that is not a number is not a value to fall back from, it is a
-    // typo or a truncated link, and taking it poisons the world outright:
-    // `#mass=nope` is parseFloat NaN, and a NaN mass gives a NaN radius and a
-    // NaN temperature with nothing to say which control did it. Dropping the
-    // key leaves the preset's value, which is the same thing that happens when
-    // the key is absent -- the behaviour the rest of this function already has.
-    if (v === 'true' || v === 'false') { out[k] = v === 'true'; continue; }
-    const n = parseFloat(v);
-    if (Number.isFinite(n)) out[k] = n;
+  for (const [k,v] of new URLSearchParams(location.hash.replace(/^#/, ''))) {
+    if (!Object.prototype.hasOwnProperty.call(EARTH, k) || !v.trim()) continue;
+    out[k] = v === 'true' ? true : v === 'false' ? false : Number(v);
   }
-  return out;
+  return sanitizeParams(out);
 }
 
 // ---------------------------------------------------------------------------
@@ -856,6 +836,22 @@ function fmtTime(y) {
 // world it stops being a trace gas and becomes most of the atmosphere, and a
 // composition readout that hid that would be misleading exactly where it
 // matters most.
+//
+// Hydrogen and helium are in it for the same reason, and they were not.
+// Reported from play as "it doesn't show the percentage of atmosphere at all
+// when it comes to hydrogen", which is the smaller half of what was wrong:
+// `total` is the sum of the gases listed here, so a gas missing from the list
+// is missing from the denominator as well, and what is left gets renormalised
+// to 100%. Measured on the Hycean preset: 20.10 bar of air, of which 17.999 is
+// H2 and 2.000 is He, reported as "H2O CO2 CH4" summing to 100% of 0.103 bar.
+// The line reads as a statement about the atmosphere and was a statement about
+// half a percent of it -- on the one group of worlds whose envelope is the
+// entire point of them.
+//
+// Helium goes in alongside, not because it was asked for but because leaving
+// it out would keep the denominator wrong: on these worlds it is a tenth of
+// the envelope, so listing H2 alone would still put every trace gas at ten
+// times its share. The fault is the missing total, not a missing label.
 function composition(dg) {
   const pH2O = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length;
   const parts = [
@@ -863,6 +859,11 @@ function composition(dg) {
     // much -- nitrogen, oxygen and argon together -- so it is labelled for what
     // it is rather than pretending Earth's is pure nitrogen.
     ['N₂', dg.pN2, '#7f9ccc', t('nitrogen and argon: the gas that neither condenses nor absorbs')],
+    // The primordial envelope, if there is one. Light enough that a small warm
+    // world loses it and a large cold one does not, which is most of what
+    // decides whether a planet is a rock with air on it or a sub-Neptune.
+    ['H₂', dg.pH2 ?? 0, '#cfd8e3', t('hydrogen: light enough to escape a small warm world, so an envelope of it is a statement about the planet\u2019s mass and its star')],
+    ['He', dg.pHe ?? 0, '#f2cf63', t('helium: the rest of a primordial envelope. Nothing on a planet makes it and nothing destroys it, so what is here was captured and has not yet escaped')],
     ['CO₂', dg.pCO2, '#e0894a', t('carbon dioxide')],
     ['H₂O', pH2O * (1 - (dg.superFrac || 0)), '#4fa8d8', t('water vapour')],
     ['H₂O·sc', pH2O * (dg.superFrac || 0), '#c98ad0', t('water past its critical point: neither liquid nor gas')],
@@ -954,6 +955,7 @@ const LAYER_STYLE = {
   // "steam" alone read as a substance sitting somewhere rather than as what the
   // planet's air is made of.
   steam:         ['#c79ad8', 'steam atmosphere'],
+  vapour:        ['#c79ad8', 'water vapour atmosphere'],
   ocean:         ['#2f7fbf', 'liquid ocean'],
   seaice:        ['#cfe6f5', 'sea ice'],
   iceIh:         ['#dcecf7', 'ice shell'],
@@ -966,7 +968,6 @@ const LAYER_STYLE = {
 
 function drawStructure(w, d, dg) {
   const host = $('#structure');
-  if (!host) return;
   // How deep the sky looks. The transit extent is the right number when there
   // is an envelope -- it is what the readout prints as "with envelope" -- but it
   // collapses to nothing on a rocky world, and drawing Earth with no atmosphere
@@ -975,6 +976,7 @@ function drawStructure(w, d, dg) {
   // already treats as the visible depth of the sky.
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
   const layers = columnLayers(w, dg, Math.max(rTr - d.R, 5 * scaleHeight(dg)), scaleHeight(dg));
+  if (!host) return layers;
 
   // Cube-root compression, then a floor so a thin layer is still a band.
   const H = 210, PAD = 2;
@@ -1009,6 +1011,7 @@ function drawStructure(w, d, dg) {
       + `<span class="layer-name">${t(label)}</span>`
       + `<span class="layer-size">${bits.join(' · ')}</span></div>`;
   }).join('');
+  return layers;
 }
 
 function updateReadout() {
@@ -1055,6 +1058,20 @@ function updateReadout() {
   const pool = dg.coldPool && dg.coldPool.liquidDepth > 0 && dg.coldT != null
     ? dg.coldT : null;
   $('#stats').innerHTML =
+    (dg.smallWaterworld ?
+      stat(t(dg.hasWater ? 'Water lifetime' : 'Vapour residence time'), dg.totalWater <= 0 ? t('no water')
+        : dg.smallWaterworld.lifetime > 1e12 ? '> 1000 Gyr' : fmtTime(dg.smallWaterworld.lifetime), '',
+        t('Remaining inventory divided by its current loss rate; not a promise of a liquid ocean.')) +
+      stat(t('Water phase'), t(dg.totalWater <= 0 ? 'Dry'
+        : !dg.hasWater ? 'Trace vapour'
+        : dg.subglacial?.ocean ? 'Ice over liquid ocean'
+        : dg.smallWaterworld.hasSurfaceOcean ? 'Surface ocean'
+        : dg.smallWaterworld.hasIceReservoir ? 'Ice reservoir' : 'Water vapour'), '',
+        t('Freezing the surface does not imply freezing the entire water column.')) +
+      stat(t('Radiative area LW / SW'), `${dg.smallWaterworld.longwave.toFixed(3)} / ${dg.smallWaterworld.shortwave.toFixed(3)}`, '',
+        'Effective emitting and absorbing areas divided by the solid surface area. Pure water uses a reduced Figure 2 approximation; mixtures add grey gas opacity and molecular-weight-dependent heights. Neither is a line-by-line calculation.') +
+      stat(t('Escape cooling'), `${dg.smallWaterworld.cooling.toPrecision(3)} W/m²`, '',
+        'Energy used to evaporate liquid or sublimate ice and gravitationally unbind water molecules. Tenuous gas uses a reduced Jeans escape estimate, not an unchecked steam wind.') : '') +
     stat(pool ? t('Fluid top') : t('Mean surface'),
       `${(dg.Tmean - 273.15).toFixed(1)}<small> °C</small>`,
       '', pool ? t('At this temperature the air and the water below it are one fluid, with no boundary between them. This is the top of it; the ground is further down.') : '') +
@@ -1152,15 +1169,23 @@ function updateReadout() {
       if (f <= 0) return mag;
       return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
+    stat(t('Radiation model'), t(dg.smallWaterworld
+      ? dg.smallWaterworld.backgroundBar>0 ? 'Low gravity · mixed atmosphere' : 'Reduced waterworld · automatic'
+      : 'Standard atmosphere · automatic'), '',
+      t('Selected from mass, bulk water, current atmospheric composition and stellar spectrum.')) +
+    (dg.smallWaterworld ? '' :
     stat(t('Runaway margin'), `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
       margin < 0 ? 'bad' : margin < 15 ? 'warn' : '',
-      t('How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.')) +
+      t('How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.'))) +
     stat(t('Water left'), `${(dg.totalWater).toFixed(dg.totalWater < 1 ? 3 : 2)}<small> EO</small>`,
       w.water.lost > 0.02 ? 'warn' : '') +
     stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : t('negligible'),
       lossGyr > 0.05 ? 'bad' : lossGyr > 1e-3 ? 'warn' : '') +
+    (dg.smallWaterworld ? stat(t('Water supply'), t(dg.totalWater <= 0 ? 'None'
+      : !dg.hasWater ? 'Residual vapour' : dg.Tmean < 273.15 ? 'Ice sublimation' : 'Evaporation'), '',
+      t('Cold ice can supply trace vapour by sublimation. This is not a boiling ocean or a dense steam atmosphere.')) :
     stat(t('Stratospheric H₂O'), `${(w.escape?.fStrat ?? 0).toExponential(1)}`,
-      (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '') +
+      (w.escape?.fStrat ?? 0) > 1e-3 ? 'bad' : '')) +
     // Water loss above is water leaving the PLANET, on a gigayear scale. This
     // is liquid water ceasing to be liquid, which is a different thing on a
     // different clock: a moist world loses it to space, a runaway boils it, a
@@ -1186,14 +1211,14 @@ function updateReadout() {
   // bigger world spreads the same water over more area under more gravity. It
   // also ignored that the water only covers the flooded part, and that past a
   // gigapascal water is not liquid at all.
-  const ob = dg.oceanBase;
   const fmtDepth = (m) => (m >= 1e6 ? `${(m / 1000).toFixed(0)} km`
     : m >= 1e4 ? `${(m / 1000).toFixed(1)} km`
     : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(0)} m`);
   const rTr = transitRadius(params, d.R, d.g, dg.Tmean);
   const xWater = waterMassFraction(params.mass, w.water.ocean + w.water.seaIce
     + w.water.landIce + w.water.vapour);
-  drawStructure(w, d, dg);
+  const layers = drawStructure(w, d, dg);
+  const structure = columnSummary(layers);
   $('#derived').innerHTML =
     `<div>gravity <b>${d.g.toFixed(2)} m/s²</b></div>` +
     `<div>radius <b>${(d.R / 6.371e6).toFixed(2)} R⊕</b></div>` +
@@ -1202,10 +1227,11 @@ function updateReadout() {
     (xWater > 0
       ? `<div>${t('water by mass')} <b>${(xWater * 100).toFixed(0)}%</b></div>` : '') +
     `<div>escape v <b>${(d.vesc / 1000).toFixed(1)} km/s</b></div>` +
-    `<div>${t('ocean')} <b>${fmtDepth(ob.liquidDepth)}</b></div>` +
-    (ob.iceDepth > 0
-      ? `<div>${t('then')} <b>${fmtDepth(ob.iceDepth)} ${t(ob.basePhase)}</b></div>` : '') +
-    (ob.superLayer ? `<div>${t('deep water is supercritical')}</div>` : '');
+    (structure.shellDepth > 0 ? `<div>${t('ice shell')} <b>${fmtDepth(structure.shellDepth)}</b></div>` : '') +
+    `<div>${t('ocean')} <b>${fmtDepth(structure.liquidDepth)}</b></div>` +
+    (structure.iceDepth > 0
+      ? `<div>${t('then')} <b>${fmtDepth(structure.iceDepth)} ${t(structure.basePhase)}</b></div>` : '') +
+    (structure.superDepth > 0 ? `<div>${t('supercritical')} <b>${fmtDepth(structure.superDepth)}</b></div>` : '');
 
   syncLiveControls();
   $('#simtime').textContent = fmtTime(w.time);
@@ -1338,7 +1364,7 @@ const OVERWRITE_MS = 6000;
 function clearPending() { pendingOverwrite = null; pendingUntil = 0; }
 
 function readSlot(i) {
-  try { return JSON.parse(localStorage.getItem(slotKey(i)) || 'null'); } catch { return null; }
+  try { return parseSaveFile(localStorage.getItem(slotKey(i)) || 'null')?.[0] ?? null; } catch { return null; }
 }
 
 // The autosave used to BE slot 1, so a player arriving at this version has
@@ -1640,19 +1666,10 @@ const HIST_ZOOM_MAX = 4096;
 // either way, which is exactly the part that should not be written twice.
 function applyWorldState(s) {
   suspendCapture = true;
-  // Going back along a world's own history un-happens everything after where
-  // you land, milestones included: a mark on an event that this branch has not
-  // reached yet would be a note about a future that was just dropped.
-  const when = s.world?.time ?? s.time;
-  if (isFinite(when)) {
-    const kept = marks.filter((m) => m.t <= when + 1);
-    if (kept.length !== marks.length) { marks = kept; renderMarks(); }
-    truncateEpochs(when);
-  }
   // The live params object is handed through rather than replaced: the sliders
   // read and write it, and it is what makes a change made after a rewind reach
   // the simulation at all.
-  Object.assign(params, s.params);
+  Object.assign(params, EARTH, s.params);
   renderState.seed = s.seed ?? renderState.seed;
   applyWorld(sim, s, params);
   suspendCapture = false;
@@ -1927,6 +1944,9 @@ function scrubTo(t, commit) {
     syncSliders();
   }
   if (!commit) { scrubMark = p.time; return; }
+  marks = marks.filter(m => m.t <= p.time);
+  renderMarks();
+  truncateEpochs(p.time);
 
   // Letting go is what actually costs the future.
   const w = sim.world;
