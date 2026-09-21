@@ -1170,9 +1170,13 @@ function updateReadout() {
       return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
     stat(t('Radiation model'), t(dg.smallWaterworld
-      ? dg.smallWaterworld.backgroundBar>0 ? 'Low gravity · mixed atmosphere' : 'Reduced waterworld · automatic'
+      ? dg.smallWaterworld.weight<1 ? 'Blended atmosphere · automatic'
+        : dg.smallWaterworld.backgroundBar>0 ? 'Low gravity · mixed atmosphere' : 'Reduced waterworld · automatic'
       : 'Standard atmosphere · automatic'), '',
       t('Selected from mass, bulk water, current atmospheric composition and stellar spectrum.')) +
+    (dg.smallWaterworld?.weight<1 ? stat(t('Low-gravity contribution'),
+      `${(100*dg.smallWaterworld.weight).toFixed(1)}%`, '',
+      t('Smooth numerical overlap of approximate models, not a physical boundary from the paper.')) : '') +
     (dg.smallWaterworld ? '' :
     stat(t('Runaway margin'), `${margin > 0 ? '+' : ''}${margin.toFixed(1)}<small> W/m²</small>`,
       margin < 0 ? 'bad' : margin < 15 ? 'warn' : '',
@@ -1622,7 +1626,7 @@ function noteEpoch(w, st) {
   // recorded as beginning at 190 years and ending at 0, because the epoch was
   // closed with the new world's clock. A rewind inside one run is a different
   // thing and is handled by truncateEpochs, which reopens the span landed in.
-  if (last && w.time + 1 < last.from) { epochs = []; last = undefined; }
+  if (last && epochCandidate.from < last.from) { epochs = []; last = undefined; }
   if (last && last.id === st.id) { last.to = null; return; }
   // Dated from when the state STARTED, not from when it was confirmed: the
   // debounce is there to decide whether a span counts, not to move it.
@@ -1636,9 +1640,10 @@ function noteEpoch(w, st) {
 // the world is standing in is reopened, and everything after it is gone,
 // because on this branch it has not happened.
 function truncateEpochs(when) {
+  epochCandidate = null;
   const kept = [];
   for (const e of epochs) {
-    if (e.from > when + 1) continue;
+    if (e.from > when) continue;
     kept.push(e.to != null && e.to > when ? { ...e, to: null } : e);
   }
   if (kept.length) kept[kept.length - 1].to = null;
@@ -1696,6 +1701,7 @@ function restore(s) {
         .map((e) => ({ id: e.id, name: STATES[e.id].name, color: STATES[e.id].color,
                        from: +e.from, to: e.to == null ? null : +e.to }))
     : [];
+  epochCandidate = null;
   renderEpochs();
   // A loaded world has no past in this session yet: the run it came from
   // happened before, and its history did not travel in the slot.
@@ -1915,7 +1921,14 @@ sim.onSample = (w) => {
   // A reset, a preset, a scenario or a loaded slot all clear the history and
   // take one fresh sample. That is the signal that this is a different world
   // and the old restore points are not its past.
-  if (w.history.length <= 1) restorePoints.length = 0;
+  if (w.history.length <= 1) {
+    restorePoints.length = 0;
+    // Reset is an explicit lifecycle event, not an inferred one-year rewind.
+    // Clear before snapshot() so the new world's first restore point is clean.
+    epochs = []; epochCandidate = null; renderEpochs();
+    marks = []; renderMarks();
+    histZoom = 1; histPan = 1;
+  }
   pushRestore(restorePoints, snapshot(), RESTORE_CAP);
 };
 

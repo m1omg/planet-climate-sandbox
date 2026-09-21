@@ -1,5 +1,34 @@
 # Review fixes — September 2026
 
+## September 21 continuation
+
+- Save validation now drops invalid numeric nulls while preserving structured
+  `weathering` and `lifeRoom` runtime state in all four builds. Exact JSON
+  round-trip and continuation checks cover the shared repair. Altdev also
+  preserves an unset sunlight-transition rate rather than changing it to null.
+- Altdev/altdev2 clear epochs and milestones at reset/preset/scenario creation,
+  before taking the new world's first restore point. Altdev2 clears its pending
+  epoch candidate on restore/rewind too; sub-year starts cannot mix two runs.
+- Altdev2's former hard mass/spectrum/water-depth model gates are replaced by
+  documented smooth overlap weights, consistently applied to energy fluxes,
+  humidity, escape and damping. This numerical interpolation is not claimed
+  as a quantitatively validated unified atmospheric model.
+- Altdev2 retains physically motivated water-rich interiors. Tests protect
+  inherited rocky presets without incorrectly banning ice mantles from moons.
+  The shell salinity offset and missing cold high-pressure ice floor were
+  corrected. Callisto's preset heat flux is explicitly an assumed 4 mW/m²
+  ocean-bearing scenario; low-heat custom worlds are not forced to have oceans.
+
+See [the detailed model assumptions](altdev2/WATERWORLDS.md). Earlier verification
+entries below describe their dated runs, not the latest validation.
+
+Latest results: altdev2 **410 self-tests, 0 failures**, **35 calibration anchors**
+(12 known gaps); root **204 self-tests**, **21 anchors** (3 known gaps).
+The **36 cross-build review checks** and **17 new status regressions** pass,
+as do the waterworld, mixed-atmosphere, structure, shader-parser, CPU-render,
+bake and fallback/resume checks. Interactive browser verification was unavailable;
+optional real-GPU checks were skipped without headless GL.
+
 Applied to main (`src/`), `dev/`, `altdev/`, and `altdev2/` where applicable:
 
 - Imported save names are escaped before insertion into slot HTML.

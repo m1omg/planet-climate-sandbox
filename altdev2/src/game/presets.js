@@ -806,7 +806,9 @@ export const PRESETS = {
   ganymede: { name: 'Ganymede', icon: '🧊', params: icyMoon(9887.83275 / 398600.436,
     2631.2, waterForShareOfMass(9887.83275 / 398600.436, 0.4), 171.709, 110, 0.008) },
   callisto: { name: 'Callisto', icon: '🧊', params: icyMoon(7179.28340 / 398600.436,
-    2410.3, waterForShareOfMass(7179.28340 / 398600.436, 0.4), 400.536, 125, 0.003) },
+    // Assumed ocean-bearing heat flux, within published 2.6–4.2 mW/m²
+    // interior scenarios (LPSC 2017 #1137), not a measured surface heat flux.
+    2410.3, waterForShareOfMass(7179.28340 / 398600.436, 0.4), 400.536, 125, 0.004) },
 };
 
 function icyMoon(mass, radiusKm, water, rotationHours, startT, internalHeat) {

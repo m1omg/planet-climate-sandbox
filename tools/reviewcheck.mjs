@@ -55,6 +55,16 @@ for (const build of ['', 'dev/', 'altdev/', 'altdev2/']) {
     assert.equal(b.world.history.length, 1); assert.equal(b.world.history[0].t, 10);
     assert.equal(b.world.history[0].T, b.world.diag.Tmean);
   });
+  check('valid JSON import preserves runtime objects and exact continuation', () => {
+    const a=new Simulation({...EARTH}),b=new Simulation({...EARTH});a.stepOnce(.1);
+    const shot=captureWorld(a.world);
+    applyWorld(b,parseSaveFile(JSON.stringify(shot))[0]);
+    assert.deepEqual(captureWorld(b.world),shot);
+    for(let i=0;i<10;i++){a.stepOnce(.1);b.stepOnce(.1);}
+    assert.deepEqual(captureWorld(b.world),captureWorld(a.world));
+    const bad=parseSaveFile(JSON.stringify({params:{},coldT:Infinity}))[0];
+    assert.equal(bad.coldT,undefined);
+  });
   check('history records water rather than other gases', () => {
     const s = new Simulation({ ...EARTH }); s.sample(); const d = s.world.diag;
     assert.ok(Math.abs(s.world.history[0].pH2O - d.pH2O.reduce((a,b) => a+b,0) / d.pH2O.length) < 1e-12);
@@ -65,6 +75,16 @@ for (const build of ['', 'dev/', 'altdev/', 'altdev2/']) {
     assert.match(fn('syncSlots'), /escHtml\(s.name/);
   });
   if (build.startsWith('altdev')) {
+    check('reset sampling clears epochs before capturing the new world', () => {
+      const hook=source.match(/sim.onSample = \(w\) => \{[\s\S]*?\n\};/)[0];
+      const run=new Function('w',`let suspendCapture=false,epochs=[{id:'old'}],marks=[{t:.2}],
+        restorePoints=[{}],epochCandidate={id:'old'},histZoom=2,histPan=.5;
+        const renderEpochs=()=>{},renderMarks=()=>{},snapshot=()=>({epochs,marks}),RESTORE_CAP=1;
+        const pushRestore=(r,s)=>r.push(s),sim={};${hook};sim.onSample(w);return {epochs,marks,restorePoints};`);
+      const clean=run({history:[{}]});assert.deepEqual(clean.epochs,[]);assert.deepEqual(clean.marks,[]);
+      assert.deepEqual(clean.restorePoints,[{epochs:[],marks:[]}]);
+      assert.equal(run({history:[{},{}]}).epochs.length,1);
+    });
     check('save preserves a sunlight transition', () => {
       const a = new Simulation({ ...EARTH, smoothInsolation: true }); a.runYears(10); a.setParams({ insolation: 1.5 });
       const b = new Simulation({ ...EARTH }); applyWorld(b, JSON.parse(JSON.stringify(captureWorld(a.world))));

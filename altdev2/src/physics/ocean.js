@@ -283,7 +283,7 @@ export function iceShell(columnKg, g, Tsurf, Fint, pSurfPa = 0, shift = 0) {
 // ocean over a third of a planet is three times deeper than the same water
 // spread everywhere. Integrated downward in pressure rather than depth, since
 // pressure is what decides both the density and the phase.
-export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
+export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0, meltShift = 0) {
   const out = {
     depth: 0, liquidDepth: 0, iceDepth: 0, superDepth: 0,
     basePressure: 0, basePhase: 'none', pMelt: meltingPressure(Tsurf),
@@ -361,9 +361,10 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   const pTop = pSurfBar * 1e5;
   const K_ADIABAT = ADIABAT_K_PER_PA * K0;
   const adiabat = (pp) => Tsurf * (1 + K_ADIABAT * Math.log1p(Math.max(pp - pTop, 0) / K0));
-  const meltT = (pp) => (pp <= P_VI_0 ? 0
+  const meltT = (pp) => (pp < P_IH_III ? 0
+    : pp < P_VI_0 ? meltingTemperature(pp)
     : pp < P_VI_VII ? T_VI_0 + (T_VI_VII - T_VI_0) * (pp - P_VI_0) / (P_VI_VII - P_VI_0)
-    : T_VI_VII * Math.pow(pp / P_VI_VII, 1 / 3.24));
+    : T_VI_VII * Math.pow(pp / P_VI_VII, 1 / 3.24)) + meltShift;
   // Freezing means the water has got COLDER than the ice it would freeze into:
   // the adiabat has fallen below the melting curve. What matters is the
   // SHALLOWEST pressure at which that is true, and it has to be searched for
@@ -380,7 +381,10 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
   // the adiabat back above the curve and concluded, wrongly, that nothing ever
   // freezes.
   const pFloorMax = pTop + pBase;
-  const pStart = Math.max(pTop, P_VI_0);
+  // Cold subglacial oceans encounter ice III/V before the VI field. Starting
+  // at 0.632 GPa falsely kept Callisto's liquid ~9 K below its melting curve.
+  // Reuse the documented approximate III/V curve; this is not a full ice EOS.
+  const pStart = Math.max(pTop, P_IH_III);
   let pFreeze = 0;
   if (pFloorMax > pStart) {
     // Coarse sweep in log pressure for the first sign change, then bisect
@@ -456,7 +460,7 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
     return pLiq > pTop ? depthTo(pLiq).meanT : null;
   };
 
-  if (pFreeze > pTop) {
+  if (pFreeze > 0 && pFreeze >= pTop) {
     const liq = depthTo(pFreeze);
     if (liq.mass < columnKg) {
       const rest = columnKg - liq.mass;
@@ -466,7 +470,8 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
       out.basePressure = pFreeze + rest * g;
       out.baseTemperature = adiabat(pFreeze);
       out.meanTemperature = meanLiquidT(pFreeze);
-      out.basePhase = out.baseTemperature >= T_VI_VII ? 'ice VII' : 'ice VI';
+      out.basePhase = pFreeze < P_VI_0 ? 'high-pressure ice'
+        : out.baseTemperature >= T_VI_VII ? 'ice VII' : 'ice VI';
       out.pMelt = pFreeze;
       // Nixon & Madhusudhan's third regime: warm enough and the bottom of the
       // liquid column is past water's critical point before it reaches the ice,
@@ -513,6 +518,7 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0) {
 // froze, and inventing a second to justify splitting the band would be worse
 // than naming it honestly.
 export function iceKind(pTop, pBase) {
+  if (pTop < P_VI_0) return 'iceHP'; // includes unresolved ice III/V, not just VI/VII
   if (pBase <= P_VI_VII) return 'iceVI';
   if (pTop >= P_VI_VII) return 'iceVII';
   return 'iceHP';
@@ -777,14 +783,15 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
       const ice = (w.water.seaIce ?? 0) + (w.water.landIce ?? 0);
       const tot = ice + (w.water.ocean ?? 0);
       const sub = dg.subglacial;
-      if (sub && sub.ocean) {
+      if (sub && (sub.ocean || sub.under?.iceDepth > 0)) {
         // Frozen at the top, liquid underneath. The shell carries the whole
         // temperature drop from the surface to the melting point at its base --
         // that IS what sets its thickness -- so it is drawn as a descent rather
         // than a slab, and the water below starts at the base temperature the
         // shell hands it rather than at the surface.
         add('iceIh', sub.shellDepth, [Ts, sub.baseT],
-          '{0} km of shell over liquid', [(sub.shellDepth / 1000).toFixed(1)]);
+          sub.ocean ? '{0} km of shell over liquid' : 'frozen through',
+          [(sub.shellDepth / 1000).toFixed(1)]);
         // Solve the water under the shell as its own column: it starts at the
         // pressure the ice above it applies, and if it is deep enough it has an
         // ice VI floor of its own -- which is Ganymede, and is a real structure
@@ -808,7 +815,8 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // draws that column's floor. `ob` is the same water solved as if it had a
     // surface, so letting this run as well would stack a second, contradictory
     // floor under the first.
-    const drewOwnFloor = !!(dg.subglacial && dg.subglacial.ocean) && !(hot > 0.005 && liquid > 0);
+    const drewOwnFloor = !!(dg.subglacial && (dg.subglacial.ocean || dg.subglacial.under?.iceDepth > 0))
+      && !(hot > 0.005 && liquid > 0);
     if (ob.iceDepth > 0 && !drewOwnFloor) {
       add(iceKind(ob.pMelt, ob.basePressure ?? 0), ob.iceDepth,
         [ob.baseTemperature ?? Ts], '{0} GPa at the floor',

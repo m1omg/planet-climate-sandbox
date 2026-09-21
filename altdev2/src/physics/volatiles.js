@@ -463,7 +463,7 @@ export function basinWater(w) {
 // ---------------------------------------------------------------------------
 export function escapeRates(w) {
   const p = w.params, dg = w.diag, d = dg.d;
-  if (dg.smallWaterworld && !(dg.smallWaterworld.backgroundBar>0)) {
+  if (dg.smallWaterworld?.weight===1 && !(dg.smallWaterworld.backgroundBar>0)) {
     const water = dg.smallWaterworld.bulkEscape * YEAR;
     // Whole H2O molecules leave. Do not count the XUV channel a second time,
     // and do not manufacture the oxygen of photolytic hydrogen escape.
@@ -624,8 +624,10 @@ export function escapeRates(w) {
     // Recover the pure molecular-water branch continuously when background
     // gas vanishes. Preserve the ordinary XUV/cold-trap route in a carrier gas,
     // and retain its oxygen accounting separately from whole-molecule loss.
-    const photolytic=water*clamp(1-xSteam,0,1);
-    return {water:bulkWater+photolytic,bulkWater,bulkGas:dg.smallWaterworld.bulkGasEscape*YEAR,background,nonThermal,envelope,
+    const photolytic=water*(1-dg.smallWaterworld.weight*clamp(xSteam,0,1));
+    const carrierShare=1-dg.smallWaterworld.weight*clamp(xSteam,0,1);
+    return {water:bulkWater+photolytic,bulkWater,bulkGas:dg.smallWaterworld.bulkGasEscape*YEAR,
+      background:background*carrierShare,nonThermal:nonThermal*carrierShare,envelope,
       fEnv,fStrat,Tct,diffusion,energy,xSteam};
   }
   return { water, background, nonThermal, envelope, fEnv, fStrat, Tct, diffusion, energy, xSteam };

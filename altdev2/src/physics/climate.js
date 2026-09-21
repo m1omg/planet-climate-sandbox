@@ -6,9 +6,9 @@ import { olr, planetaryAlbedo, planetaryAlbedoInto, cloudThinning, cloudThinShar
          hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness } from './radiation.js';
 import { derive, volcanicActivity } from './planet.js';
 import { oceanStructure, coldPoolStructure, T_COLD_POOL, iceShell,
-         freezeShift, SALINITY_EARTH } from './ocean.js';
+         freezeShift, freezingDepression, SALINITY_EARTH } from './ocean.js';
 import { floodedFraction } from './hypsometry.js';
-import { waterworldActive, waterworldFlux, waterLifetime } from './waterworld.js';
+import { waterworldWeight, waterworldFlux, waterLifetime } from './waterworld.js';
 
 import { EARTH_INTERNAL_FLUX, OTHER_GHG_FULL, AEROSOL_FULL, MIX_EFF_DOWN, escapeRates } from './volatiles.js';
 
@@ -279,7 +279,8 @@ export function update(w, dt) {
   // Water available to evaporate, as a column and then as pressure
   const totalWater = w.water.ocean + w.water.seaIce + w.water.landIce + w.water.vapour;
   const availCol = totalWater * d.eoColumn;
-  const smallWaterworld = waterworldActive(p, totalWater, pN2 + pCO2 + pCH4 + pO2 + pH2 + pHe);
+  const modelWeight = waterworldWeight(p, totalWater, pN2 + pCO2 + pCH4 + pO2 + pH2 + pHe);
+  const smallWaterworld = modelWeight > 0;
   const waterworldGases = smallWaterworld ? {pN2,pCO2,pCH4,pO2,pH2,pHe} : null;
   const escapeCooling = smallWaterworld ? new Float64Array(NBANDS) : null;
   const swScale = smallWaterworld ? new Float64Array(NBANDS) : null;
@@ -337,7 +338,8 @@ export function update(w, dt) {
   // pressure at initialization: an empty bookkeeping vapour reservoir must
   // not briefly prohibit the ocean in a hot, saturated starting state.
   const waterPressure = smallWaterworld
-    ? w.T.reduce((sum,T) => sum + Math.min(psatH2O(T),availCol*g)/NBANDS,0)
+    ? modelWeight*w.T.reduce((sum,T) => sum + Math.min(psatH2O(T),availCol*g)/NBANDS,0)
+      + (1-modelWeight)*vapourPa(w,g)
     : vapourPa(w,g);
   const pSurfPa = (w.n2 + w.co2 + w.ch4 + w.o2) * g + waterPressure;
   const liquidAllowed = smoothstep(0.75 * P_TRIPLE_H2O, 1.15 * P_TRIPLE_H2O, pSurfPa);
@@ -358,7 +360,8 @@ export function update(w, dt) {
   // sixteen watts a step and shortening the step to tens of years to resolve it.
   const airborne = clamp((w.water.vapour || 0) / Math.max(totalWater, 1e-12), 0, 1);
   const wetSky = clamp(openOcean * liquidAllowed + airborne, 0, 1);
-  const RH = smallWaterworld ? 1 : clamp(0.34 + 0.44 * wetSky, 0.15, 0.85);
+  const ordinaryRH = clamp(0.34 + 0.44 * wetSky, 0.15, 0.85);
+  const RH = modelWeight + (1-modelWeight)*ordinaryRH;
 
   // Land uncovered by a sea that has retreated or boiled away is bare ocean
   // floor -- dark basalt, not weathered continental rock -- so a drying world
@@ -523,7 +526,8 @@ export function update(w, dt) {
 
   const S = insolationProfile(p, B.S);
   // The paper is globally averaged, with efficient redistribution.
-  if (smallWaterworld) S.fill(1361 * p.insolation / 4);
+  if (smallWaterworld) for(let i=0;i<NBANDS;i++)
+    S[i]=(1-modelWeight)*S[i]+modelWeight*1361*p.insolation/4;
   const lam = lockFactor(p);
   const slowness = clamp(smoothstep(24, 1500, p.rotationHours), 0, 1) * 0.5 + slowRotation(p) * 0.5;
   // How well cloud reflects this particular star's light. 1 for a G star, and
@@ -579,11 +583,17 @@ export function update(w, dt) {
                       1e-3);
     if (smallWaterworld) {
       const f = waterworldFlux(w.T[i], g, d.R, availCol * g, waterworldGases);
-      alb[i] = f.albedo; out[i] = f.emitted; cloud[i] = 0;
-      swScale[i] = f.shortwave; escapeCooling[i] = f.cooling;
-      bulkEscape += f.flux / NBANDS; coolingMean += f.cooling / NBANDS;
-      bulkGasEscape += f.backgroundFlux / NBANDS;
-      lwScaleMean += f.longwave / NBANDS; swScaleMean += f.shortwave / NBANDS;
+      // Blend absorbed flux, not albedo and area independently: the latter
+      // introduces a spurious cross term into the energy budget.
+      swScale[i] = 1+modelWeight*(f.shortwave-1);
+      alb[i] = modelWeight===1 ? f.albedo : 1-((1-modelWeight)*(1-alb[i])
+        +modelWeight*(1-f.albedo)*f.shortwave)/swScale[i];
+      out[i] = (1-modelWeight)*out[i]+modelWeight*f.emitted;
+      cloud[i] *= 1-modelWeight;
+      escapeCooling[i] = modelWeight*f.cooling;
+      bulkEscape += modelWeight*f.flux / NBANDS; coolingMean += modelWeight*f.cooling / NBANDS;
+      bulkGasEscape += modelWeight*f.backgroundFlux / NBANDS;
+      lwScaleMean += (1+modelWeight*(f.longwave-1)) / NBANDS; swScaleMean += swScale[i] / NBANDS;
       molarMean += f.meanMolarMass / NBANDS;
       paperDomain &&= f.inDomain;
     }
@@ -798,7 +808,11 @@ export function update(w, dt) {
       // and is an ordinary partly-frozen ocean however cold the global mean has
       // got. The shell picture only becomes true once the lid closes.
       if ((this.openOcean ?? 0) > 0.01) return (subCache = null);
-      const sh = iceShell(col, this.g, Tmean, this.Fint, this.pSurfPa, fShift);
+      // iceShell starts from PURE-water melting, unlike the sea-ice climate
+      // curve calibrated at Earth's salinity. Apply the absolute depression,
+      // not the Earth-relative shift (which warmed fresh melting by 1.92 K).
+      const sh = iceShell(col, this.g, Tmean, this.Fint, this.pSurfPa,
+        -freezingDepression(p.salinity ?? SALINITY_EARTH));
       // shellDepth 0 means the surface is above the melting point: an ordinary
       // ocean, and `oceanBase` is already the right answer about it.
       if (!(sh.shellDepth > 0)) return (subCache = null);
@@ -809,9 +823,12 @@ export function update(w, dt) {
       // ice VI at the bottom -- so a Ganymede read as "70 km of ocean" on one
       // line and 48 km of ocean over a floor on the next.
       sh.under = sh.ocean
-        ? oceanStructure(sh.oceanKg, this.g, sh.baseT, sh.basePressure / 1e5)
+        ? oceanStructure(sh.oceanKg, this.g, sh.baseT, sh.basePressure / 1e5,
+          -freezingDepression(p.salinity ?? SALINITY_EARTH))
         : null;
       sh.liquidDepth = sh.under ? sh.under.liquidDepth : 0;
+      sh.ocean = sh.liquidDepth > 0;
+      sh.frozenSolid = !sh.ocean;
       return (subCache = sh);
     },
     freezeShift: fShift,
@@ -846,14 +863,14 @@ export function update(w, dt) {
     // heated world at a permanent false imbalance it could never settle out of.
     Tmean, iceMean, iceArea, absorbed, emitted, imbalance: absorbed + Fint - emitted - coolingMean,
     escapeCooling, swScale,
-    smallWaterworld: smallWaterworld ? { bulkEscape, bulkGasEscape, cooling: coolingMean,
+    smallWaterworld: smallWaterworld ? { weight:modelWeight, bulkEscape, bulkGasEscape, cooling: coolingMean,
       gases: waterworldGases, backgroundBar:pN2+pCO2+pCH4+pO2+pH2+pHe,
       meanMolarMass:molarMean,
       hasSurfaceOcean: hasWater && w.water.ocean > 1e-5 && flooded >= 0.5
         && openOcean * liquidAllowed > 0.01 && Tmean < T_CRIT_H2O,
       hasIceReservoir: hasWater && (w.water.seaIce + w.water.landIce) > 1e-5,
       get lifetime() { return waterLifetime(availCol, escapeRates(w).water/YEAR); }, longwave: lwScaleMean,
-      shortwave: swScaleMean, inDomain: paperDomain && p.starTemp >= 5200 && p.starTemp <= 6200,
+      shortwave: swScaleMean, inDomain: modelWeight===1 && paperDomain && p.starTemp >= 5200 && p.starTemp <= 6200,
       availablePressure: availCol * g } : null,
     hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, cloudShare, totalWater, superFrac,
     hazeTau, hazeSW, ch4SW, swTrans,
@@ -1293,6 +1310,22 @@ export function radiativeDamping(w) {
   const dg = w.diag;
   const B = scratch(w);
   const k = B.k;
+  if (dg.smallWaterworld && dg.smallWaterworld.weight < 1) {
+    // In the overlap humidity, saturation supply and both albedos respond.
+    // Measure the same combined flux update() actually uses, keeping all other
+    // bands fixed. No independent blend of incompatible Jacobians.
+    const net = (i,t) => {
+      w.T[i]=t;update(w,0);
+      const d=w.diag;
+      return d.olr[i]+(d.escapeCooling?.[i]??0)
+        -d.S[i]*d.swTrans*(1-d.alb[i])*(d.swScale?.[i]??1);
+    };
+    for(let i=0;i<NBANDS;i++) {
+      const T=w.T[i];k[i]=(net(i,T+.5)-net(i,T-.5));w.T[i]=T;
+    }
+    update(w,0);
+    return k;
+  }
   for (let i = 0; i < NBANDS; i++) {
     const T = w.T[i];
     const h = 0.5;

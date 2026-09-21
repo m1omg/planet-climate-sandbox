@@ -1268,7 +1268,7 @@ function noteEpoch(w, st) {
   // recorded as beginning at 190 years and ending at 0, because the epoch was
   // closed with the new world's clock. A rewind inside one run is a different
   // thing and is handled by truncateEpochs, which reopens the span landed in.
-  if (last && w.time + 1 < last.from) { epochs = []; last = undefined; }
+  if (last && w.time < last.from) { epochs = []; last = undefined; }
   if (last && last.id === st.id) { last.to = null; return; }
   if (last) last.to = w.time;
   epochs.push({ id: st.id, name: st.name, color: st.color, from: w.time, to: null });
@@ -1281,7 +1281,7 @@ function noteEpoch(w, st) {
 function truncateEpochs(when) {
   const kept = [];
   for (const e of epochs) {
-    if (e.from > when + 1) continue;
+    if (e.from > when) continue;
     kept.push(e.to != null && e.to > when ? { ...e, to: null } : e);
   }
   if (kept.length) kept[kept.length - 1].to = null;
@@ -1514,7 +1514,12 @@ sim.onSample = (w) => {
   // A reset, a preset, a scenario or a loaded slot all clear the history and
   // take one fresh sample. That is the signal that this is a different world
   // and the old restore points are not its past.
-  if (w.history.length <= 1) restorePoints.length = 0;
+  if (w.history.length <= 1) {
+    restorePoints.length = 0;
+    epochs = []; renderEpochs();
+    marks = []; renderMarks();
+    histZoom = 1; histPan = 1;
+  }
   pushRestore(restorePoints, snapshot(), RESTORE_CAP);
 };
 

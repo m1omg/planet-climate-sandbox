@@ -31,7 +31,8 @@ export const NUMERIC_FIELDS = ['time','waterInitial','iceSheet','hotLayer','cold
 const runtimeScalars = new Set(['dtPrev','trustOver','ringing','lastMove','insolationTarget',
   'insolationRate','weathering','o2Rate','ch4Source','ch4Tau','iceDeep','iceRate',
   'liquidRate','vapourRate','lifeRoom','landIceTarget','trapActive','emitting']);
-const runtimeBags = new Set(['escape','o2Flux','iceMark','liquidMark','vapourMark']);
+const runtimeBags = new Set(['escape','o2Flux','iceMark','liquidMark','vapourMark',
+  'weathering','lifeRoom']);
 const finite = v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e100;
 const safeKey = k => !['__proto__','constructor','prototype'].includes(k);
 function numbers(v, signed = true) {
@@ -59,8 +60,9 @@ export function sanitizeWorld(w) {
   for (const [k,v] of Object.entries(w)) {
     if (!safeKey(k) || k === 'params') continue;
     if (NUMERIC_FIELDS.includes(k)) {
-      if (v === null) out[k] = null;
-      else if (finite(v) && (k === 'h2Rate' || v >= 0)
+      // JSON converts non-finite numbers to null. Omit numeric nulls; the
+      // restore path already supplies the appropriate uninitialised default.
+      if (finite(v) && (k === 'h2Rate' || v >= 0)
         && (k !== 'time' || v <= 1e15)) out[k] = v;
     } else if (k === 'T') {
       if (Array.isArray(v) && v.length > 0 && v.length <= 18 && v.every(t => finite(t) && t >= 1 && t <= 5000)) out[k] = v;

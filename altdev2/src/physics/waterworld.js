@@ -16,11 +16,20 @@ export function waterworldRadius(mass) { return 1.258 * R_EARTH * mass ** 0.302;
 // escape calculation; they must not disable spherical geometry.
 // These are the reduced model's applicability bounds, not universal physical
 // discontinuities or a claim of a quantitative mixed-atmosphere solution.
+export function waterworldWeight(p, waterEO, backgroundBar = 0) {
+  if (!(p.mass > 0 && waterEO >= 0 && backgroundBar >= 0)) return 0;
+  const depth = (p.water ?? 0) * EO_COLUMN / p.mass**0.54 / 1000;
+  const star = p.starTemp ?? 5772;
+  // Numerical overlap of two approximate closures, NOT boundaries derived
+  // from the paper. Preserve the low-mass, deep-water, solar-spectrum core;
+  // taper to the standard band model with zero slope at both ends. Configured
+  // inventory prevents a depleted reservoir from abruptly changing models.
+  return (1-smoothstep(.12,.30,p.mass))
+    * smoothstep(4800,5200,star) * (1-smoothstep(6200,6600,star))
+    * smoothstep(MAX_BASIN_DEPTH,2*MAX_BASIN_DEPTH,depth);
+}
 export function waterworldActive(p, waterEO, backgroundBar = 0) {
-  const structuralWater = (p.water ?? 0) * EO_COLUMN / p.mass**0.54 > MAX_BASIN_DEPTH * 1000;
-  return p.mass > 0 && p.mass <= 0.2 && structuralWater
-    && (p.starTemp ?? 5772) >= 5200 && (p.starTemp ?? 5772) <= 6200
-    && waterEO >= 0 && backgroundBar >= 0;
+  return waterworldWeight(p,waterEO,backgroundBar)>0;
 }
 
 // Surface mass flux in kg/m2/s. The exponential branch is eq. 9. Outside its

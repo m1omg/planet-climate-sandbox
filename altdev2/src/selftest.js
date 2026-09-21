@@ -36,6 +36,8 @@ import { DEFAULT_PAN_SPEED, PAN_SPEEDS, panRadiansPerPixel, wheelZoomFactor } fr
 
 let pass = 0, fail = 0;
 const log = [];
+const waterRich = new Set(['smallWaterworld','evaporatingWaterworld',
+  'icySmallWaterworld','hotSmallWaterworld','europa','ganymede','callisto']);
 function check(name, ok, detail) {
   (ok ? pass++ : fail++);
   const line = `${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  —  ' + detail : ''}`;
@@ -5724,23 +5726,17 @@ function runChecks() {
       near(waterRadiusFactor(0.5), 1.24, 0.001),
       `f(0.5) = ${waterRadiusFactor(0.5).toFixed(4)} against the paper's 1.24`);
 
-    // No world from before this work may acquire interior water. The threshold is
-    // what the basins can hold, every inherited preset is below it, and that is
-    // why the radius relation could be replaced without moving any of them.
-    //
-    // The sub-Neptunes are above it, which is the point of them -- five hundred
-    // oceans is a planet made of water, not a planet with water on it -- so they
-    // are excluded by carrying an envelope rather than by name. A rocky preset
-    // cannot get past this by accident: it would have to grow a hydrogen
-    // atmosphere first, and the check above says which four are allowed to have
-    // one.
+    // Preserve the inherited rocky presets, but do not equate "no hydrogen"
+    // with "no interior water". The added water-rich bodies intentionally have
+    // differentiated water/ice mantles without an H2 envelope. An explicit set
+    // keeps this a regression guard rather than filtering by the tested result.
     const wet = Object.entries(PRESETS)
-      .filter(([, v]) => !(v.params.h2Bar > 0)
+      .filter(([k, v]) => !waterRich.has(k) && !(v.params.h2Bar > 0)
         && waterMassFraction(v.params.mass, v.params.water) > 0).map(([k]) => k);
-    check('No rocky world has water in its interior',
+    check('Inherited rocky presets do not acquire water mantles',
       wet.length === 0,
       `${Object.keys(PRESETS).filter((k) => !(PRESETS[k].params.h2Bar > 0)).length} `
-        + `envelope-free presets, ${wet.length} above the 7.3 EO the basins hold`
+        + `envelope-free presets, ${wet.length} unexpected water mantles`
         + (wet.length ? `: ${wet.join(', ')}` : ''));
 
     check('Earth, Venus and Mars keep the radii they had',
@@ -5804,23 +5800,18 @@ function runChecks() {
         `${(ob.depth / 1000).toFixed(2)} km on ${ob.basePhase}, ${(ob.basePressure / 1e5).toFixed(0)} bar at the floor`);
     }
 
-    // No world that shipped before this has an ice floor: they are all films of
-    // water on rock, which is the regime the rest of the model assumes.
-    // The sub-Neptunes are excluded, and by the property that makes them
-    // sub-Neptunes rather than by name. An ice floor is the whole point of a
-    // water world deep enough to have one -- coldStart grew one the moment it
-    // was given enough water to be interesting -- while a rocky world that
-    // acquired one would mean the depth model had come loose.
-    const floored = Object.entries(PRESETS).filter(([, v]) => {
-      if (v.params.h2Bar > 0) return false;
+    // Deep water-rich bodies may have high-pressure ice floors; the inherited
+    // shallow rocky oceans must still rest on rock.
+    const floored = Object.entries(PRESETS).filter(([k, v]) => {
+      if (v.params.h2Bar > 0 || waterRich.has(k)) return false;
       const sim = new Simulation({ ...v.params });
       sim.stepOnce(1);
       return sim.world.diag.oceanBase.iceDepth > 0;
     }).map(([k]) => k);
-    check('No rocky world stands on ice instead of rock',
+    check('Inherited rocky oceans still rest on rock',
       floored.length === 0,
       `${Object.keys(PRESETS).filter((k) => !(PRESETS[k].params.h2Bar > 0)).length} `
-        + `envelope-free presets, ${floored.length} with a high-pressure ice floor`
+        + `envelope-free presets, ${floored.length} unexpected high-pressure ice floors`
         + (floored.length ? `: ${floored.join(', ')}` : ''));
 
     // And the behaviour that makes a Hycean ocean interesting: the melting
