@@ -1,5 +1,37 @@
 # Small waterworlds (altdev2 only)
 
+### September 21: shallow Venus and temperature history
+
+The Early Venus transition at 2.121632 Gyr reproduced the reported 327 m
+"buried ocean": 649.07 K at the atmospheric base, a remembered cold-pool
+temperature of 646.096 K, 30.696 bar, and all 0.107431 EO already in the vapour
+reservoir. That column was a diagnostic error. Thermal conversion history
+alone cannot establish liquid: the pool calculation now checks the saturation
+pressure before treating its proposed top as compressed liquid. At that
+temperature even the old diagram's 60-bar floor was far below saturation.
+See the [IAPWS saturation reference](https://iapws.org/faqs/faq1).
+This rejects the unsupported column; it does not introduce a new vertical
+two-phase solver or change the integrated temperature and water reservoirs.
+
+Physically supported shallow pools use the same basin-filling law as open
+oceans when clouds are hidden. The previous fraction-of-20-km rule, multiplied
+by the hot-area fraction, reduced visible coverage to 0.0077% in this case.
+The pressure check is shared by classification, Structure and temperature
+selection, so the UI cannot present that rejected column as a real ocean.
+
+History now records changes of at least 2 K between samples and always draws
+the current state as its endpoint, including paused edits. The former 2%-of-age
+schedule could wait 42 Myr at this transition and leave the chart near 40 C
+while the ground was already 376 C. The common sampling/endpoint correction
+also applies to stable, dev and altdev. Buried-liquid and atmospheric traces
+remain specific to altdev2. Old saved samples are not retroactively recomputed.
+
+Reproduction checks: `node tools/venusdisplaycheck.mjs` and
+`node tools/venuspaintcheck.mjs`. The second executes the software renderer
+and chart drawing against in-memory canvas buffers; it is not a browser-layout
+test. Optional browser/GPU verification still depends on those facilities
+being available.
+
 In **Worlds**, choose **Small Waterworld (2019)**, **Evaporating Small
 Waterworld**, **Icy Small Waterworld**, or **Hot Waterworld · 0.049 M⊕**.
 Europa, Ganymede and Callisto are separate icy-moon scenarios (see below).

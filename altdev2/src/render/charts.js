@@ -2,6 +2,7 @@ import { NBANDS, X, lockFactor, insolationProfile } from '../physics/climate.js'
 import { olr, planetaryAlbedo, iceFraction } from '../physics/radiation.js';
 import { psatH2O, clamp } from '../physics/constants.js';
 import { waterworldFlux } from '../physics/waterworld.js';
+import { temperatureHistory } from '../physics/surface.js';
 // Chart furniture is prose too: axis ends, the legend and the two empty-state
 // lines were the last English left on a Slovak page.
 import { t } from '../game/i18n.js';
@@ -98,7 +99,7 @@ export function historyTimeAtX(x, tMax, w, zoom = 1, pan = 1) {
 export function drawHistory(canvas, world, markT = null, opts = {}) {
   const { ctx, w, h } = setup(canvas);
   const pad = HISTORY_PAD;
-  const H = world.history;
+  const H = temperatureHistory(world);
   axes(ctx, w, h, pad);
   if (H.length < 2) { label(ctx, t('collecting…'), w / 2, h / 2, 'center'); return; }
 

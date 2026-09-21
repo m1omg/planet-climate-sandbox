@@ -1,5 +1,5 @@
 import { clamp, steamOpacity } from '../physics/constants.js';
-import { MAX_BASIN_DEPTH } from '../physics/hypsometry.js';
+import { floodedFraction } from '../physics/hypsometry.js';
 
 // How the atmosphere should look, in the two modes.
 //
@@ -96,15 +96,15 @@ export function surfaceHidden(dg, steam) {
 // not the ground the water is standing on.
 //
 // Conversion measures vertical inventory, NOT exposed area. A thousand km of
-// remaining water still covers every mountain. Only below the maximum basin
-// relief can the remaining column reveal terrain. Require actual liquid: ice
+// remaining water still covers every mountain. Shallow pools fill the same
+// basins as an open ocean. Require actual liquid: ice
 // and fully supercritical water must not be painted as a hidden blue ocean.
 export function buriedOceanCover(dg) {
   if (!((dg.totalWater ?? 0) > 0.005)) return 0;
   if (!((dg.coldPool?.liquidDepth ?? 0) > (dg.coldPool?.superDepth ?? 0))) return 0;
   const left = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
   const column = dg.totalWater * (dg.d?.eoColumn ?? 0) * left;
-  return clamp(dg.hotTarget ?? 0, 0, 1) * clamp(column / (1000 * MAX_BASIN_DEPTH), 0, 1);
+  return floodedFraction(column, dg.basinLandFraction ?? .3, dg.d?.eoColumn ?? 0);
 }
 
 // What volcanism looks like from orbit, from the melt production the physics

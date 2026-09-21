@@ -1,5 +1,32 @@
 # Review fixes — September 2026
 
+## September 21 Venus display and history follow-up
+
+- Reject thermally remembered buried liquid when its proposed temperature and
+  overlying pressure cannot support liquid water. The reported Early Venus
+  state had all of its tracked water in vapour; its 327 m ocean was spurious.
+- Render physically supported shallow buried pools using the existing basin
+  coverage law. Classification, Structure and surface-temperature selection
+  share the corrected liquid diagnostic.
+- Record temperature changes of at least 2 K between scheduled history samples
+  and include the live state at the chart endpoint, including paused edits.
+  The history fix applies to all four builds. Previously saved samples retain
+  their recorded values.
+- Focused validation: four Venus display/phase checks, four cross-build history
+  checks, the software-renderer/chart check, and 36 review checks pass. The
+  renderer distinguishes the valid pool from dry ground in 13,690 pixels.
+- The integrated physical states of all 39 altdev2 presets match the preceding
+  version in the bounded comparison. Stable has 204 passing self-tests and
+  21 calibration anchors; altdev2 has 35 passing anchors (12 known model gaps).
+  All eleven stable pre-push checks completed, with the three optional GPU
+  checks skipped because headless GL is unavailable. Browser discovery returned
+  no available browser, so interactive layout verification remains unavailable.
+- The full `altdev2` suite passes all 410 checks, including the 19-preset
+  fast/exact comparison. The full `altdev` suite passes all 302 checks.
+- The full experimental `dev` suite reports 249 passed and 17 failed in both
+  the changed version and a clean pre-change baseline; every failure detail
+  matches. These existing failures remain visible and are not new regressions.
+
 ## September 21 continuation
 
 - Save validation now drops invalid numeric nulls while preserving structured

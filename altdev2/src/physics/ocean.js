@@ -1,4 +1,4 @@
-import { clamp, T_CRIT_H2O, P_CRIT_H2O, SIGMA } from './constants.js';
+import { clamp, T_CRIT_H2O, P_CRIT_H2O, SIGMA, psatH2O } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // How deep the water goes, and what it turns into on the way down.
@@ -558,7 +558,18 @@ const K_WATER = 0.6;
 export function coldPoolStructure(dg) {
   const share = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
   const col = Math.max((dg.totalWater ?? 0) * (dg.d?.eoColumn ?? 0) * share, 0);
-  return oceanStructure(col, dg.g, dg.coldT ?? T_COLD_POOL, dg.pTotMean ?? 0);
+  const T = dg.coldT ?? T_COLD_POOL, p = dg.pTotMean ?? 0;
+  // The unconverted fraction is a thermal memory, not proof of liquid. In a
+  // shallow runaway all water can already be vapour while hotLayer still
+  // approaches its target. At 373 C, 31 bar cannot confine a liquid pool.
+  // Check the saturation curve before constructing a compressed-liquid column;
+  // otherwise the same water is counted in both the sky and a fictitious sea.
+  if (T >= T_CRIT_H2O || (T >= 273.16 && p*1e5 < psatH2O(T))) {
+    return {depth:0,liquidDepth:0,iceDepth:0,superDepth:0,
+      basePressure:p*1e5,basePhase:T>=T_CRIT_H2O && p*1e5>=P_CRIT_H2O?'supercritical':'vapour',
+      meanTemperature:null};
+  }
+  return oceanStructure(col, dg.g, T, p);
 }
 
 // --- the cross-section, as data --------------------------------------------

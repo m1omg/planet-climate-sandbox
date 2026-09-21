@@ -103,7 +103,11 @@ export class Simulation {
     w.time += dt;
     update(w, dt);
 
-    if (w.time >= this._nextSample) {
+    // A calendar-only sample can miss an entire runaway on an old planet.
+    const last = w.history.at(-1);
+    const changed = last && (Math.abs(w.diag.Tmean-last.T)>=2
+      || Math.abs(w.diag.Tmin-last.Tmin)>=2 || Math.abs(w.diag.Tmax-last.Tmax)>=2);
+    if (w.time >= this._nextSample || changed) {
       this.sample();
       this._nextSample = w.time + Math.max(1, w.time * 0.02);
     }

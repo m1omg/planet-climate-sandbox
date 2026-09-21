@@ -1254,11 +1254,11 @@ function runChecks() {
     //   out  `unconverted > 0.02` withdrew the name at `hotLayer` 0.9809 with
     //        7.7 m of liquid still under the lid
     //
-    // So this runs the raw column solve itself, independently of whatever the
-    // diagnostic chooses to expose, and asserts the only thing that can make
-    // the sequence honest: the name tracks the water. Liquid under a lid is a
-    // Buried Ocean at every frame, and the name is one contiguous run rather
-    // than something that can be handed back and picked up again.
+    // The old check below required a buried phase and thus enshrined a second
+    // bug: the supposed 317 m of liquid was at ~373 C under only ~31 bar,
+    // with ALL of the 0.107 EO already booked as vapour. Require agreement with
+    // the saturation curve too. This shallow Venus loses its liquid outright;
+    // the deeper lastOcean test above still exercises a real buried phase.
     {
       // The hash from the report, verbatim.
       const burial = new Simulation({ ...PRESETS.earth.params,
@@ -1271,6 +1271,7 @@ function runChecks() {
         resurfacingN2Bar: 2.65, xuvDecay: true, hotRockOxidation: 1 });
       burial.runYears(2.118e9, 2e6);
       let wet = 0, held = 0, runs = 0, prev = false, badIn = null, badOut = null;
+      let lowPressureSteam = 0;
       for (let yr = burial.world.time; yr <= 2.150e9; yr += 5e4) {
         burial.runYears(yr - burial.world.time, 5e4);
         const w = burial.world, dg = w.diag;
@@ -1281,6 +1282,7 @@ function runChecks() {
         const surface = (w.water.ocean + w.water.seaIce) > 0.02 * total;
         const liquid = surface ? 0 : (coldPoolStructure(dg).liquidDepth ?? 0);
         const named = classify(w).id === 'buriedOcean';
+        if (!surface && dg.coldT>640 && dg.pTotMean<100 && liquid===0 && !named) lowPressureSteam++;
         if (liquid > 1) {
           wet++;
           if (named) held++;
@@ -1291,14 +1293,14 @@ function runChecks() {
         if (named && !prev) runs++;
         prev = named;
       }
-      check('Liquid under a lid is a Buried Ocean at every frame of the burial',
-        wet > 0 && held === wet,
+      check('Low-pressure Venus steam does not acquire an imaginary buried ocean',
+        lowPressureSteam > 0 && wet === 0 && held === wet,
         badIn ? `${wet - held} of ${wet} frames misnamed — worst ${badIn.id} `
             + `over ${badIn.m.toFixed(1)} m of liquid at `
             + `${(100 * badIn.h).toFixed(2)}% converted`
-          : `${wet} frames with a pool, all Buried Ocean`);
+          : `${lowPressureSteam} hot low-pressure steam frames, ${wet} liquid pools`);
       check('…and the name is never handed back and picked up again',
-        runs === 1 && !badOut,
+        runs === 0 && !badOut,
         badOut ? `named with no pool at ${(100 * badOut.h).toFixed(2)}% converted`
           : `${runs} run${runs === 1 ? '' : 's'} of Buried Ocean`);
     }

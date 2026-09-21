@@ -63,7 +63,10 @@ export function historyTimeAtX(x, tMax, w) {
 export function drawHistory(canvas, world, markT = null) {
   const { ctx, w, h } = setup(canvas);
   const pad = HISTORY_PAD;
-  const H = world.history;
+  // Include the current state even between stored samples or after a paused
+  // slider edit. Keep this display endpoint out of saved checkpoints.
+  const H = [...world.history.filter(p=>p.t<world.time),
+    {t:world.time,T:world.diag.Tmean,Tmin:world.diag.Tmin,Tmax:world.diag.Tmax}];
   axes(ctx, w, h, pad);
   if (H.length < 2) { label(ctx, 'collecting…', w / 2, h / 2, 'center'); return; }
 
