@@ -1,6 +1,6 @@
 import { NBANDS, X, lockFactor } from './climate.js';
 import { iceFraction } from './radiation.js';
-import { clamp, T_CRIT_H2O as T_CRIT } from './constants.js';
+import { clamp, T_CRIT_H2O as T_CRIT, P_CRIT_H2O } from './constants.js';
 
 // Every state the game can recognise, with the real science behind it.
 export const STATES = {
@@ -188,7 +188,7 @@ export function classify(w) {
   // what is left the readout is already solving that column to draw it.
   const poolLiquid = () => {
     const cp = dg.coldPool;
-    return cp ? (cp.liquidDepth ?? 0) > 1 : false;
+    return cp ? (cp.liquidDepth ?? 0) - (cp.superDepth ?? 0) > 1 : false;
   };
   //
   // `unconverted > 0.02` was the third term here, and it is gone. It is the
@@ -573,8 +573,7 @@ export function reasonText(w, st, tr = enFormat) {
     // with a surface it starts at the surface. The same expression the
     // cross-section uses for the bottom of its top band, so the picture and the
     // line cannot disagree about where the water begins.
-    const bTop = noSurface
-      ? Math.min(T_CRIT, Math.max(dg.Tmean, bulk ?? dg.Tmean)) : dg.Tmean;
+    const bTop = noSurface ? Math.max(dg.Tmean, bulk ?? dg.Tmean) : dg.Tmean;
     const bBot = bulk ?? bTop;
     // Named for what the top of the column actually is, and named the way the
     // cross-section names it, so the line and the picture cannot disagree: an
@@ -583,7 +582,7 @@ export function reasonText(w, st, tr = enFormat) {
     // boundary between air and water, and an atmosphere everywhere else.
     bits.push((dg.pH2 ?? 0) + (dg.pHe ?? 0) > 0.5 * (dg.pTotMean ?? 1)
       ? tr('envelope {0} °C', c(dg.Tmean))
-      : dg.Tmean > T_CRIT ? tr('supercritical {0} °C', c(dg.Tmean))
+      : dg.Tmean > T_CRIT && (dg.pTotMean ?? 0)*1e5>=P_CRIT_H2O ? tr('supercritical {0} °C', c(dg.Tmean))
       : tr('atmosphere {0} °C', c(dg.Tmean)));
     // Dropped entirely when it is neither a span nor distinct from what is above
     // it: on a world with no lid and no lag there is no boundary to report, and

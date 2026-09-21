@@ -445,7 +445,11 @@ export class Simulation {
     // asking every step costs about 0.3% of a run.
     if (this.onStep) this.onStep(w);
 
-    if (w.time >= this._nextSample) {
+    const last = w.history.at(-1);
+    const changed = last && (Math.abs(w.diag.Tmean-last.T)>=2
+      || Math.abs(w.diag.Tmin-last.Tmin)>=2 || Math.abs(w.diag.Tmax-last.Tmax)>=2
+      || (last.surfaceKind==='buried ocean' && Math.abs(w.diag.coldT-last.surfaceT)>=2));
+    if (w.time >= this._nextSample || changed) {
       this.sample();
       this._nextSample = w.time + Math.max(1, w.time * 0.02);
     }
