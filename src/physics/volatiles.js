@@ -1176,7 +1176,11 @@ export function stepVolatiles(w, dtYears) {
   // crust, so nominal land remains the upper bound. Flooding can also drown
   // those continents, though: count only the smaller of the reference land and
   // the land that is actually still above water.
-  const landExposed = clamp(Math.min(p.landFraction, dg.landFrac) * (1 - dg.iceMean), 0, 1);
+  // `landFrac` is the radiative surface: it tends to one when an ocean gains
+  // a hot lid, NOT when its submerged continents emerge. Use the actual basin
+  // coverage for water-rock contact. Otherwise a 70%-water buried ocean
+  // acquires a fictional continental sink and maxStep collapses to ~7 years.
+  const landExposed = clamp(Math.min(p.landFraction, 1-dg.basinFlooded) * (1 - dg.iceMean), 0, 1);
   const pCO2rel = Math.max(dg.pCO2 / 280e-6, 1e-6);
   // Two silicate sinks, not one.
   //

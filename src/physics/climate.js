@@ -834,7 +834,7 @@ export function update(w, dt) {
     freezeShift: fShift,
     g, d, pN2, pCO2, pCH4, pO2, pH2, pHe, pH2O, pTot: pTotArr, pTotMean, Fint,
     S, alb, olr: out, cloud, C, oceanFrac, RH, humidityScale: scale, waterCap, pH2Odry,
-    flooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
+    flooded, basinFlooded, openOcean: openOcean * liquidAllowed, seaIceFrac, frozenShare,
     exposedBasin, effLandAlbedo, liquidAllowed, pSurfPa,
     bio: w.bio ?? 0,
     landFrac: clamp(1 - flooded, 0, 1),

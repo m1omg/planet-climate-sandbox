@@ -982,9 +982,7 @@ function drawStructure(w, d, dg) {
   const H = 210, PAD = 2;
   const raw = layers.map((l) => Math.cbrt(l.metres));
   const sum = raw.reduce((a, b) => a + b, 0) || 1;
-  let px = raw.map((r) => Math.max((r / sum) * (H - PAD * layers.length), 14));
-  const over = px.reduce((a, b) => a + b, 0) / H;
-  if (over > 1) px = px.map((v) => v / over);
+  const px = raw.map((r) => Math.max((r / sum) * (H - PAD * layers.length), 48));
 
   const fmt = (m) => (m >= 1e6 ? `${(m / 1000).toFixed(0)} km`
     : m >= 1e4 ? `${(m / 1000).toFixed(1)} km`
@@ -997,19 +995,24 @@ function drawStructure(w, d, dg) {
   const temp = (T) => (!T || !T.length ? ''
     : T.length > 1 && Math.abs(T[1] - T[0]) >= 0.5 ? `${C(T[0])} → ${C(T[1])} °C`
     : `${C(T[0])} °C`);
+  const pressure = p => p>=1e9 ? `${(p/1e9).toPrecision(3)} GPa`
+    : p>=1e5 ? `${(p/1e5).toPrecision(3)} bar`
+    : `${p<.01 && p>0?p.toExponential(1):p.toPrecision(3)} Pa`;
 
   host.innerHTML = layers.map((l, i) => {
     const [colour, label] = LAYER_STYLE[l.kind];
     const h = px[i];
     const bits = [l.kind === 'rock' ? '' : fmt(l.metres), temp(l.T),
       l.note ? tp(l.note, ...l.noteArgs) : ''].filter(Boolean);
-    // The label is what fits and the tooltip is the whole line: a 14px band on a
-    // narrow panel has room for "supercriti…" and the numbers, and the numbers
-    // are the half worth keeping whole.
-    const full = [t(label), ...bits].join(' · ').replace(/"/g, '&quot;');
-    return `<div class="layer" title="${full}" style="height:${h.toFixed(1)}px;background:${colour}">`
+    // Give pressure its own visible line rather than hiding it in a tooltip.
+    // Minimum height, not fixed height: translated details can wrap safely.
+    const pressureText = l.P?.length>1 ? l.P.map(pressure).join(' → ')
+      : l.P?.length ? `${t('at rock top')}: ${pressure(l.P[0])}` : '';
+    const full = [t(label), ...bits, pressureText].join(' · ').replace(/"/g, '&quot;');
+    return `<div class="layer" title="${full}" style="min-height:${h.toFixed(1)}px;background:${colour}">`
       + `<span class="layer-name">${t(label)}</span>`
-      + `<span class="layer-size">${bits.join(' · ')}</span></div>`;
+      + `<span class="layer-size">${bits.join(' · ')}</span>`
+      + `<span class="layer-pressure">${pressureText}</span></div>`;
   }).join('');
   return layers;
 }
