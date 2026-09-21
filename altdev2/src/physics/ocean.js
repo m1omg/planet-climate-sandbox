@@ -590,9 +590,16 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   const ob = dg.oceanBase || {};
   const Ts = dg.Tmean;
   const layers = [];
-  const add = (kind, metres, T, note, args) => {
+  const add = (kind, metres, T, note, args, P) => {
     if (!LAYER_KINDS.includes(kind)) throw new Error(`unknown layer kind: ${kind}`);
-    if (metres > 0) layers.push({ kind, metres, T, note, noteArgs: args || [] });
+    if (!(metres > 0)) return;
+    if (!P) {
+      const start=layers.at(-1)?.P?.at(-1) ?? (dg.pTotMean ?? 0)*1e5;
+      const rho=['iceVI','iceVII','iceHP'].includes(kind)?RHO_ICE_HP
+        : ['iceIh','seaice'].includes(kind)?RHO_ICE_IH:waterDensity(start);
+      P=kind==='rock'?[start]:[start,start+rho*dg.g*metres];
+    }
+    layers.push({ kind, metres, T, P, note, noteArgs: args || [] });
   };
   // A water column drawn as the phases it is actually in. Above the critical
   // temperature there is no liquid at any pressure, so a column whose adiabat
@@ -616,6 +623,7 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   // is what put 800 °C fluid directly on 30 °C water.
   const addWater = (st, depth, topT, bulkT, note, args) => {
     if (!(depth > 0)) return;
+    const first = layers.length;
     const jump = topT - bulkT;
     const flux = Math.max(dg.mixedFlux ?? 0, 1e-6);
     // Never more than a fiftieth of the water it sits on. A dim world with a big
@@ -647,6 +655,20 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // the eye believes.
     add('supercritical', deep, [Math.max(bulkT, T_CRIT_H2O), baseT],
       depth > deep ? 'no boundary' : note, depth > deep ? [] : args);
+    // Integrate the same compressible density law as oceanStructure. Anchor
+    // both ends to its pressure solve (rather than rounding depth back to mass).
+    const p0 = layers[first-1]?.P?.at(-1) ?? (dg.pTotMean ?? 0)*1e5;
+    const p1 = st.iceDepth>0 ? st.pMelt : st.basePressure;
+    const exponent = 1-1/K_PRIME;
+    const a = Math.pow(1+K_PRIME*p0/K0,exponent);
+    const b = Math.pow(1+K_PRIME*Math.max(p1,p0)/K0,exponent);
+    let z=0,previous=p0;
+    for(let i=first;i<layers.length;i++){
+      z+=layers[i].metres;
+      const next=i===layers.length-1 ? Math.max(p1,p0)
+        : K0/K_PRIME*(Math.pow(a+(b-a)*z/depth,1/exponent)-1);
+      layers[i].P=[previous,next];previous=next;
+    }
   };
 
   const pTot = dg.pTotMean ?? 0;
@@ -666,9 +688,6 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   // a second one that agrees with it today.
   const lid = !!dg.lidded;
   const envShare = (dg.pH2 ?? 0) + (dg.pHe ?? 0);
-  // No pressure on the air band: it is a tile of its own two rows above this in
-  // the readout, and the line is long enough with a thickness and a temperature
-  // on it to start losing its own label to an ellipsis on a narrow panel.
   // With a pool under it the lid's own base is at the critical temperature --
   // that is where it stops being supercritical -- so it reads as the descent it
   // is rather than as one number belonging to its top.
@@ -720,7 +739,7 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // Cool steam on top of the supercritical fluid, meeting it at the critical
     // point -- which is where the crossing is, rather than at the water.
     if (cool > 0) add(coolKind, cool, [Math.min(tEff, T_CRIT_H2O), T_CRIT_H2O],
-      'above the critical pressure');
+      'above the critical pressure', [], [pTot*1e5*Math.exp(-sky/H),pTot*1e5*Math.exp(-superSky/H)]);
     // "no surface" is what this said, and it was reported from play as wrong,
     // which it is. Supercritical water has no liquid-vapour boundary IN IT --
     // that is the whole content of being past the critical point -- but the
@@ -728,7 +747,8 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // two rows down: hot silicate, or ice VI and VII on a world with enough
     // water to make them. Saying a world covered in supercritical steam has no
     // surface confuses a missing phase boundary with a missing planet.
-    add('supercritical', superSky, [T_CRIT_H2O, Ts], 'no liquid-vapour boundary');
+    add('supercritical', superSky, [T_CRIT_H2O, Ts], 'no liquid-vapour boundary', [],
+      [pTot*1e5*Math.exp(-superSky/H),pTot*1e5]);
   } else {
     // ...and the same words were on the steam band under a lid, where they were
     // worse: on that world there is frequently a cold pool drawn directly below,
@@ -736,7 +756,8 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     add(lid ? 'steam' : coolKind, sky,
       tEff < Ts - 0.5 ? [tEff, Ts] : [Ts], lid ? 'the sea is in it'
         : pTot < 0.001 ? '{0} Pa at base; schematic extent' : null,
-      !lid && pTot < 0.001 ? [(pTot * 1e5).toExponential(2)] : []);
+      !lid && pTot < 0.001 ? [(pTot * 1e5).toExponential(2)] : [],
+      [pTot*1e5*Math.exp(-sky/H),pTot*1e5]);
   }
 
   if (lid) {
@@ -791,7 +812,7 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
         // shell hands it rather than at the surface.
         add('iceIh', sub.shellDepth, [Ts, sub.baseT],
           sub.ocean ? '{0} km of shell over liquid' : 'frozen through',
-          [(sub.shellDepth / 1000).toFixed(1)]);
+          [(sub.shellDepth / 1000).toFixed(1)], [pTot*1e5,sub.basePressure]);
         // Solve the water under the shell as its own column: it starts at the
         // pressure the ice above it applies, and if it is deep enough it has an
         // ice VI floor of its own -- which is Ganymede, and is a real structure

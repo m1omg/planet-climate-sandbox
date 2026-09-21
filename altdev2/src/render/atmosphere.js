@@ -1,4 +1,5 @@
 import { clamp, steamOpacity } from '../physics/constants.js';
+import { MAX_BASIN_DEPTH } from '../physics/hypsometry.js';
 
 // How the atmosphere should look, in the two modes.
 //
@@ -94,15 +95,16 @@ export function surfaceHidden(dg, steam) {
 // holds 489 EO. Switching the shroud off should show you the water it is hiding,
 // not the ground the water is standing on.
 //
-// The pool is global -- it is one column, not a basin -- so the cover is the
-// share of the planet that has gone over, times the share of the column the hot
-// layer has NOT converted. Once conversion finishes there is no liquid left and
-// this falls to zero on its own, which is the moment the world really is a dry
-// hot rock and should be drawn as one.
+// Conversion measures vertical inventory, NOT exposed area. A thousand km of
+// remaining water still covers every mountain. Only below the maximum basin
+// relief can the remaining column reveal terrain. Require actual liquid: ice
+// and fully supercritical water must not be painted as a hidden blue ocean.
 export function buriedOceanCover(dg) {
   if (!((dg.totalWater ?? 0) > 0.005)) return 0;
+  if (!((dg.coldPool?.liquidDepth ?? 0) > (dg.coldPool?.superDepth ?? 0))) return 0;
   const left = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
-  return clamp((dg.hotTarget ?? 0) * left, 0, 1);
+  const column = dg.totalWater * (dg.d?.eoColumn ?? 0) * left;
+  return clamp(dg.hotTarget ?? 0, 0, 1) * clamp(column / (1000 * MAX_BASIN_DEPTH), 0, 1);
 }
 
 // What volcanism looks like from orbit, from the melt production the physics

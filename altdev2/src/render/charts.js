@@ -107,7 +107,14 @@ export function drawHistory(canvas, world, markT = null, opts = {}) {
   const win = historyWindow(tMax, zoom, pan);
   const lx = (t) => historyX(t, tMax, w, zoom, pan);
   let tlo = 1e9, thi = -1e9;
-  for (const p of H) { tlo = Math.min(tlo, p.Tmin); thi = Math.max(thi, p.Tmax); }
+  const value = p => Object.hasOwn(p,'surfaceT') ? p.surfaceT : p.T;
+  const low = p => Object.hasOwn(p,'surfaceMin') ? p.surfaceMin : p.Tmin;
+  const high = p => Object.hasOwn(p,'surfaceMax') ? p.surfaceMax : p.Tmax;
+  const lid = H.some(p => p.surfaceKind && p.surfaceKind !== 'surface');
+  for (const p of H) {
+    if(Number.isFinite(value(p))){tlo=Math.min(tlo,low(p));thi=Math.max(thi,high(p));}
+    if(lid){tlo=Math.min(tlo,p.Tmin);thi=Math.max(thi,p.Tmax);}
+  }
   tlo = Math.min(tlo, 240); thi = Math.max(thi, 320);
   const pad2 = (thi - tlo) * 0.08;
   tlo -= pad2; thi += pad2;
@@ -137,15 +144,32 @@ export function drawHistory(canvas, world, markT = null, opts = {}) {
     ctx.globalAlpha = 1;
   }
 
-  ctx.beginPath();
-  for (let i = 0; i < H.length; i++) ctx[i ? 'lineTo' : 'moveTo'](lx(H[i].t), ly(H[i].Tmax));
-  for (let i = H.length - 1; i >= 0; i--) ctx.lineTo(lx(H[i].t), ly(H[i].Tmin));
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(120,200,255,0.14)'; ctx.fill();
-
-  ctx.beginPath();
-  for (let i = 0; i < H.length; i++) ctx[i ? 'lineTo' : 'moveTo'](lx(H[i].t), ly(H[i].T));
-  ctx.strokeStyle = '#7fd4ff'; ctx.lineWidth = 1.8; ctx.stroke();
+  // Separate segments across disappearance/appearance of a liquid surface.
+  // Never interpolate a fictitious ocean through a fully supercritical phase.
+  let segment=[];
+  const flush=()=>{
+    if(!segment.length)return;
+    ctx.beginPath();
+    segment.forEach((p,i)=>ctx[i?'lineTo':'moveTo'](lx(p.t),ly(high(p))));
+    for(let i=segment.length-1;i>=0;i--)ctx.lineTo(lx(segment[i].t),ly(low(segment[i])));
+    ctx.closePath();ctx.fillStyle='rgba(120,200,255,0.14)';ctx.fill();
+    ctx.beginPath();segment.forEach((p,i)=>ctx[i?'lineTo':'moveTo'](lx(p.t),ly(value(p))));
+    ctx.strokeStyle='#7fd4ff';ctx.lineWidth=1.8;ctx.stroke();segment=[];
+  };
+  for(const p of H){
+    if(!Number.isFinite(value(p))){flush();continue;}
+    if(segment.length && segment.at(-1).surfaceKind!==p.surfaceKind)flush();
+    segment.push(p);
+  }
+  flush();
+  if(lid){
+    ctx.beginPath();ctx.setLineDash([3,3]);let drawing=false;
+    for(const p of H){
+      if(!p.surfaceKind || p.surfaceKind==='surface'){drawing=false;continue;}
+      ctx[drawing?'lineTo':'moveTo'](lx(p.t),ly(p.T));drawing=true;
+    }
+    ctx.strokeStyle='#ffb86b';ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]);
+  }
 
   label(ctx, `${(thi - 273.15).toFixed(0)}°C`, pad.l - 4, pad.t + 8, 'right');
   label(ctx, `${(tlo - 273.15).toFixed(0)}°C`, pad.l - 4, h - pad.b, 'right');
@@ -169,7 +193,8 @@ export function drawHistory(canvas, world, markT = null, opts = {}) {
     label(ctx, fmtSpan(win.t0), pad.l + 2, h - 5, 'left', 'rgba(233,240,255,0.45)', 9);
   }
   label(ctx, zoom > 1 ? `${fmtSpan(win.t1)} →` : t('time →'), w - pad.r, h - 5, 'right');
-  label(ctx, t('surface temperature'), pad.l + 4, pad.t + 8, 'left', 'rgba(233,240,255,0.4)');
+  label(ctx, t(lid?'surface / buried ocean top':'surface temperature'), pad.l+4,pad.t+8,'left','#7fd4ff',9);
+  if(lid)label(ctx,t('dashed: atmosphere base'),pad.l+4,pad.t+20,'left','#ffb86b',9);
 
   // The scrub handle, drawn last so it sits over the trace. Everything to the
   // right of it is the future being abandoned, dimmed to say so.

@@ -1,6 +1,7 @@
 import { createWorld, resetWorld, update, stepTemperature, maxStep, NBANDS, DX, X } from '../physics/climate.js';
 import { stepVolatiles } from '../physics/volatiles.js';
 import { clamp, smoothstep, YEAR } from '../physics/constants.js';
+import { surfaceTemperature } from '../physics/surface.js';
 import { evolvedParams, brightnessAfter, radiogenic, EARTH_AGE, approach, walkRate }
   from '../physics/evolution.js';
 
@@ -454,6 +455,7 @@ export class Simulation {
     const w = this.world, dg = w.diag;
     w.history.push({
       t: w.time, T: dg.Tmean, Tmax: dg.Tmax, Tmin: dg.Tmin,
+      ...surfaceTemperature(dg),
       // The water vapour, and not "everything that is not nitrogen or carbon
       // dioxide", which is what this was: `pTotMean - pN2 - pCO2` counts the
       // oxygen, the methane and any hydrogen envelope as water, so present-day

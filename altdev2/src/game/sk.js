@@ -292,6 +292,9 @@ export const SK = {
     // ---- popisky grafov ----------------------------------------------------
     // Pozor na svetové strany: slovenské S je sever, nie south.
     'surface temperature': 'teplota povrchu',
+    'surface / buried ocean top': 'povrch / vrch skrytého oceánu',
+    'dashed: atmosphere base': 'prerušovaná: spodok atmosféry',
+    'at rock top': 'na povrchu horniny',
     'collecting…': 'zbierajú sa údaje…',
     'no water on this world': 'na tomto svete nie je voda',
     'anti-stellar': 'protihviezdny bod',
