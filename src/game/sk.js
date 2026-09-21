@@ -32,6 +32,10 @@ export const SK = {
     '{0} °C · dry world · water reservoir exhausted': '{0} °C · suchý svet · zásoba vody sa vyčerpala',
     'Reduced waterworld · automatic': 'Zjednodušený vodný svet · automaticky',
     'Low gravity · mixed atmosphere': 'Nízka gravitácia · zmiešaná atmosféra',
+    'Blended atmosphere · automatic': 'Kombinovaná atmosféra · automaticky',
+    'Low-gravity contribution': 'Podiel modelu nízkej gravitácie',
+    'Smooth numerical overlap of approximate models, not a physical boundary from the paper.':
+      'Plynulý prechod medzi približnými modelmi, nie fyzikálna hranica odvodená zo štúdie.',
     '{0} °C · no ocean · mixed atmosphere': '{0} °C · bez oceánu · zmiešaná atmosféra',
     '{0} °C · low gravity · mixed atmosphere · approximate spherical model': '{0} °C · nízka gravitácia · zmiešaná atmosféra · približný sférický model',
     'Standard atmosphere · automatic': 'Štandardná atmosféra · automaticky',

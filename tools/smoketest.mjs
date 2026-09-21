@@ -44,6 +44,7 @@ const mkEl = (tag = 'div') => ({
   min: '0', max: '1000', clientWidth: 800, clientHeight: 600, width: 800, height: 600,
   listeners: {},
   appendChild(c) { this.children.push(c); return c; },
+  append(...children) { this.children.push(...children); },
   insertAdjacentHTML() {}, setAttribute() {}, getAttribute: () => null,
   // useRenderer swaps the canvas element, because a canvas keeps its context
   // type for life. Without these the swap threw and start() died silently.
@@ -1007,9 +1008,9 @@ if (created < 20) {
     const derived = document.querySelector('#derived').innerHTML;
     const structure = document.querySelector('#structure').innerHTML;
     const oceanLabel = structure.match(/title="liquid ocean · ([^·]+) ·/);
-    const floorLabel = structure.match(/title="ice VI · ([^·]+) ·/);
+    const floorLabel = structure.match(/title="(ice VI|high-pressure ice) · ([^·]+) ·/);
     if (!oceanLabel || !floorLabel || !derived.includes(`ocean <b>${oceanLabel[1].trim()}</b>`)
-      || !derived.includes(`then <b>${floorLabel[1].trim()} ice VI</b>`)) {
+      || !derived.includes(`then <b>${floorLabel[2].trim()} ${floorLabel[1]}</b>`)) {
       throw new Error('compact ocean/floor depths contradict the rendered structure');
     }
     app.loadPreset('smallWaterworld');
@@ -1033,6 +1034,25 @@ if (created < 20) {
     document.querySelector = originalQuery;
   }
 }
+
+// Exercise the real preset/scenario reset hooks, including sub-year starts.
+try {
+  const { classify } = await import('../src/physics/classify.js');
+  const record = (time) => { app.sim.world.time=time; app.sim.onStep(app.sim.world); };
+  app.loadPreset('hycean');record(.2);record(1.3);
+  if (!app.epochs().length) throw new Error('no initial epoch recorded');
+  app.loadPreset('earth');
+  if (app.epochs().length) throw new Error('preset inherited previous epochs');
+  record(.1);record(1.2);
+  if (app.epochs().length!==1 || app.epochs()[0].id!==classify(app.sim.world).id)
+    throw new Error('new world inherited the old candidate');
+  app.startScenario(app.scenarios[0].id);
+  if (app.epochs().length) throw new Error('scenario inherited previous epochs');
+  record(.1);record(1.2);
+  app.sim.reset({...app.sim.world.params});
+  if (app.epochs().length) throw new Error('reset inherited previous epochs');
+  console.log('PASS  preset, scenario and reset isolate epoch history at sub-year times');
+} catch(e) { failed++;console.log('FAIL  epoch reset:',e.message); }
 
 console.log(`\n${files.length - 1} modules loaded, ${failed} failed`);
 process.exit(failed ? 1 : 0);

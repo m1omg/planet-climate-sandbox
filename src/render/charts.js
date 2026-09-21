@@ -354,14 +354,15 @@ export function drawPhase(canvas, world) {
   const pad = { l: 40, r: 10, t: 12, b: 22 };
   axes(ctx, w, h, pad);
   const p = world.params, dg = world.diag;
-  const T0 = dg.smallWaterworld ? 200 : 240, T1 = dg.smallWaterworld ? 600 : 420;
+  const weight = dg.smallWaterworld?.weight ?? 0;
+  const T0 = 240-40*weight, T1 = 420+180*weight;
   const px = (T) => pad.l + ((T - T0) / (T1 - T0)) * (w - pad.l - pad.r);
 
   const Sglobal = dg.S.reduce((a, b) => a + b, 0) / NBANDS;
   const pts = [];
   let fmax = 0;
   for (let T = T0; T <= T1; T += 2) {
-    if (dg.smallWaterworld) {
+    if (weight===1) {
       const f = waterworldFlux(T, dg.g, dg.d.R, dg.smallWaterworld.availablePressure, dg.smallWaterworld.gases);
       const O = f.emitted + f.cooling;
       const A = Sglobal * dg.swTrans * (1-f.albedo) * f.shortwave + dg.Fint;
@@ -370,7 +371,7 @@ export function drawPhase(canvas, world) {
     }
     const pw = Math.min(dg.RH * psatH2O(T) / 1e5, dg.totalWater * dg.d.eoColumn * dg.g / 1e5);
     const pTot = dg.pN2 + dg.pCO2 + dg.pCH4 + (dg.pH2 ?? 0) + (dg.pHe ?? 0) + pw;
-    const O = olr(T, dg.pCO2, pw, dg.pCH4, pTot, dg.pH2 ?? 0, dg.g, dg.pHe ?? 0);
+    let O = olr(T, dg.pCO2, pw, dg.pCH4, pTot, dg.pH2 ?? 0, dg.g, dg.pHe ?? 0);
     const a = planetaryAlbedo(T, {
       oceanFrac: dg.oceanFrac, landAlbedo: p.landAlbedo, hasWater: dg.hasWater,
       waterCap: dg.waterCap, pH2O: pw, pTot, slowness: dg.slowness, subStellar: 0.4,
@@ -378,7 +379,12 @@ export function drawPhase(canvas, world) {
     // Interior heat counts here too. The caption under this chart promises that
     // where the curves cross is where the climate rests, and on a tidally
     // heated world a sunlight-only curve crosses somewhere the planet is not.
-    const A = Sglobal * (1 - a.albedo) + (dg.Fint ?? 0);
+    let A = Sglobal * (1 - a.albedo) + (dg.Fint ?? 0);
+    if (weight>0) {
+      const f = waterworldFlux(T,dg.g,dg.d.R,dg.smallWaterworld.availablePressure,dg.smallWaterworld.gases);
+      O=(1-weight)*O+weight*(f.emitted+f.cooling);
+      A=(1-weight)*A+weight*(Sglobal*dg.swTrans*(1-f.albedo)*f.shortwave+dg.Fint);
+    }
     pts.push([T, O, A]);
     fmax = Math.max(fmax, O, A);
   }

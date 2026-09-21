@@ -20,12 +20,14 @@ Low-gravity Waterworlds*, attached arXiv:1906.10561v2 PDF;
   moon presets. An atmosphere-model flag no longer changes the solid radius.
   Mass and solid radius still stay fixed as the reservoir evaporates, a poor
   approximation after substantial loss of the original planet mass.
-- Spherical, globally averaged forcing and saturated water vapour. The automatic
-  low-gravity branch covers positive masses up to 0.2 Earth masses, including
-  0.005 M⊕, and a 5200–6200 K star. The configured
-  inventory must exceed the maximum rocky-basin capacity (20 km global water
-  equivalent on the rocky-radius estimate). These are reduced-model applicability
-  bounds, not universal physical transitions. There is no 1 mbar background-gas
+- Spherical, globally averaged forcing and saturated water vapour in the core
+  regime: positive masses up to 0.12 Earth masses (including 0.005 M⊕), a
+  5200–6200 K star, and at least 40 km of configured global water equivalent
+  on the rocky-radius estimate. The contribution tapers smoothly to zero across
+  0.12–0.30 M⊕, 4800–5200 / 6200–6600 K, and 20–40 km water depth.
+  These overlap widths are **numerical model choices, not physical thresholds
+  derived from the paper**. They prevent the former hard 0.2 M⊕, spectrum and
+  basin-capacity switches from creating finite climate jumps. There is no 1 mbar background-gas
   cutoff: adding CO2 or another gas uses the approximate mixed-atmosphere
   extension below, retaining low-gravity geometry. At reservoir exhaustion the
   radiation approaches the dry limit continuously (blackbody only without
@@ -112,7 +114,7 @@ save/import/share links; it defaults to 1 for every pre-existing world.
 |---|---:|---:|---:|
 | Europa | 1560.8 | 2.5 Earth oceans | 40 mW/m² |
 | Ganymede | 2631.2 | 40% of mass | 8 mW/m² |
-| Callisto | 2410.3 | 40% of mass | 3 mW/m² |
+| Callisto | 2410.3 | 40% of mass | 4 mW/m² |
 
 These are illustrative ocean-bearing interior scenarios, **not calibrated
 predictions of present-day ice/ocean thickness or surface temperature**.
@@ -257,3 +259,55 @@ Europa now also uses the low-gravity branch and retains its subglacial ocean.
 The root suite again passes 204 physics tests and 21 calibration anchors, with
 3 known gaps reported. GPU-driver checks remain skipped without headless GL.
 The full altdev2 calibration limitation described above remains unresolved.
+
+### Save, boundary and interior consistency — further September 20 review
+
+The earlier validation paragraphs are historical snapshots, not the current
+test status. The follow-up adds `tools/statuscheck.mjs` and repairs:
+
+- Numeric `null` imports (including JSON-encoded infinities) are dropped; valid
+  `weathering` and `lifeRoom` runtime objects are preserved. Exact JSON
+  save/restore/continuation is tested on Earth, Hycean and icy/hot waterworlds.
+- Epochs, pending epoch candidates and marks reset with a new world, before its
+  first restore point is captured. Sub-year starts cannot inherit another run.
+- The overlap above blends humidity, illumination, outgoing radiation, absorbed
+  flux and molecular cooling/loss. Photolytic and carrier-gas escape approach
+  their ordinary limits continuously. Damping differentiates the actual combined
+  flux in the overlap. The UI reports **Blended atmosphere** and its contribution;
+  the overlap is not claimed to reproduce either paper's quantitative results.
+- Absence of an H2 envelope is no longer used as proof of a rocky, shallow-water
+  interior. Explicit guards still protect inherited rocky presets. New water-rich
+  moons and planets may have differentiated water/ice mantles.
+- Subglacial shells apply salinity's **absolute** melting-point depression, not
+  the sea-ice climate curve's Earth-relative shift. That removed an erroneous
+  1.92 K warming of freshwater melting. The high-pressure floor now includes the
+  existing approximate ice III/V melting curve rather than allowing all liquid
+  to persist until the ice VI field at 0.632 GPa. A floor spanning unresolved
+  phases is labelled **high-pressure ice**, not specifically ice VI.
+
+The cold III/V curve is still a reduced interpolation between melting-curve
+endpoints, not the reference-quality [IAPWS phase equations](https://iapws.org/public/documents/MdUFK/MeltSub2011.pdf).
+Salt depression is a simple offset, not a high-pressure brine equation of state.
+Ice convection, phase-dependent conductivity/density and internal differentiation
+remain approximate; these are not precision reconstructions of moon interiors.
+
+At 3 mW/m² and a 97 K surface the old pure-water Callisto scenario no longer
+has a liquid layer in this closure; it is correctly labelled frozen instead of
+inventing water beneath the shell. The **preset** now explicitly assumes
+4 mW/m², within the published 2.6–4.2 mW/m² scenario range
+([LPSC 2017, abstract 1137](https://www.hou.usra.edu/meetings/lpsc2017/pdf/1137.pdf)).
+It retains a calculated subglacial ocean. This heat flux is an assumption, not a
+measurement; existing saves/custom worlds keep their heat settings. A 3 mW/m²
+test ensures the code does not force the ocean to exist.
+
+Final September 21 validation: **410 self-tests passed, 0 failed**, and **35
+calibration anchors passed**, with 12 known model gaps reported separately.
+The 17 new status regressions, 18 waterworld checks, 9 mixed-atmosphere checks,
+4 structure checks, 36 cross-build review checks and module/readout smoke tests
+pass. Thirty-eight of 39 presets retain bit-identical temperature/water
+trajectories over 200 fixed steps; Callisto changes with its documented heat
+setting. The root build passes 204 self-tests and 21 calibration anchors
+(3 known gaps). Shader parsing, CPU rendering/baking and fallback/resume tests
+pass. Real GPU-driver tests skip without headless GL; no browser connection
+was available for interactive visual verification. These numerical checks do
+not validate the approximate atmosphere/interior closures as precision models.
