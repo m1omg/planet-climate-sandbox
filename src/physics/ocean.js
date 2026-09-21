@@ -773,7 +773,16 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
 
   if (lid) {
     const cp = dg.coldPool;
-    if (cp && cp.liquidDepth > 0) {
+    // `cp.depth`, not `cp.liquidDepth`. Gated on the liquid, a pool whose liquid has
+    // been squeezed out renders as nothing at all: measured on the reported world at
+    // 2.4 Myr, 1307 km of ice VII under the lid and a cross-section that drew
+    // supercritical fluid standing directly on rock. The pool did not go
+    // anywhere -- as `coldT` climbs, the thin liquid layer at its top is
+    // squeezed out between the hot boundary above and the ice VII below, and
+    // what is left is still thirteen hundred kilometres of water. `addWater`
+    // already no-ops on a zero liquid depth and the ice band below is drawn
+    // from `cp.iceDepth`, so widening the gate is the whole of the fix.
+    if (cp && cp.depth > 0) {
       const cold = 100 * (1 - clamp(dg.hotLayer ?? 1, 0, 1));
       const top = dg.coldT ?? T_COLD_POOL;
       // Nothing sits at 800 °C directly on water at 30. What is between them is a
