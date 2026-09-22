@@ -800,6 +800,21 @@ export const PRESETS = {
     mass: 2, water: waterForShareOfMass(2, 0.5), landFraction: 0, insolation: 1.20,
     n2Bar: 1, co2Bar: 0.001, o2Bar: 0, ch4Bar: 0, biosphere: 0, emissions: 0,
     brightening: 1, startT: 290 } },
+  // The same world with half a bar of hydrogen on it. A Hycean at Earth's
+  // sunlight is past its inner edge from the start (Innes, Tsai &
+  // Pierrehumbert 2023 put it near 0.4 S(+) for a bar of H2), so this is a
+  // cold-start runaway from the moment it exists: temperate for half a
+  // megayear, then a lid, then a HUNDRED megayears of buried ocean -- twice
+  // the hydrogen-free world's, because the hydrogen sky runs hotter and each
+  // kilogram the lid converts costs more of the mixed-down flux, and the pool
+  // warms to hold liquid deeper before ice VII. Half a bar and not more,
+  // because this is the one hydrogen world in the scan that is temperate at
+  // all before it crosses: at two bar the sky is past the runaway limit at
+  // 290 K, and the ends of those runs sit on the model's 4000 K ceiling.
+  hydrogenColdStart: { name: 'Hydrogen Cold Start', icon: '🌫️', params: { ...EARTH,
+    mass: 2, water: waterForShareOfMass(2, 0.5), landFraction: 0, insolation: 1.20,
+    n2Bar: 1, h2Bar: 0.5, co2Bar: 0.001, o2Bar: 0, ch4Bar: 0, biosphere: 0, emissions: 0,
+    brightening: 1, startT: 290 } },
   smallWaterworld: { name: 'Small Waterworld (2019)', icon: '🌊', params: { ...EARTH,
     mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
     n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,

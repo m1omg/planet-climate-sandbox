@@ -781,6 +781,31 @@ function runChecks() {
           + `${steam} steam-runaway samples`);
     }
 
+    // ...and the same world under half a bar of hydrogen, which is the longest
+    // buried ocean the model produces from a temperate start: about a hundred
+    // megayears, against fifty without the hydrogen. Pinned the same way. The
+    // end of this run sits near 3200 K, past what the radiation is anchored
+    // on, so the span is what is held and the end date is not.
+    {
+      const sim = new Simulation({ ...PRESETS.hydrogenColdStart.params });
+      const first = {}, last = {};
+      let steam = 0;
+      for (let yr = 0; yr <= 2e8; yr += 5e5) {
+        sim.runYears(yr - sim.world.time);
+        const cid = classify(sim.world).id;
+        first[cid] ??= yr; last[cid] = yr;
+        if (cid === 'steamRunaway') steam++;
+        if (cid === 'supercriticalEnvelope') break;
+      }
+      const buried = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
+      const dry = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
+      check('The hydrogen cold start is temperate first and buried for about twice as long as without hydrogen',
+        first.moist != null && buried > 8e7 && first.supercriticalEnvelope > first.buriedOcean && steam === 0
+          && PRESETS.hydrogenColdStart.params.h2Bar > 0,
+        `moist from ${((first.moist ?? 0) / 1e6).toFixed(1)} Myr, buried for ${(dry / 1e6).toFixed(0)} Myr from `
+          + `${((first.buriedOcean ?? 0) / 1e6).toFixed(1)} Myr, supercritical at ${((first.supercriticalEnvelope ?? 0) / 1e6).toFixed(0)} Myr`);
+    }
+
     // Runaway Greenhouse, the state for a sea that is already in the sky, while
     // the cross-section under the label drew 200 km of liquid water and said
     // 79% not converted. Caught in a browser, so it is held here in Node.
