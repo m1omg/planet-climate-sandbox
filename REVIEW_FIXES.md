@@ -1,5 +1,21 @@
 # Review fixes — September 2026
 
+## September 22, fifth push: Slovak that reads like Slovak
+
+- **The Slovak tables rewritten** in `altdev2` and `altdev`: shorter sentences,
+  ordinary phrasing, and no word-for-word calques ("každý ovládací prvok
+  zostáva živý", "tavný film", "pozícia" for a save slot). One set of terms
+  in both builds: slot, nadkritický, obálka, kôra, oceánsky svet. Where the
+  English is the same string in both builds the Slovak is the same too; the
+  seven strings only altdev has, its own scenario texts and its
+  wet-runaway state are translated from altdev's English. Keys, `{n}`
+  placeholders and markup are unchanged (checked against the old tables).
+  The runaway-terminology lint in `smoketest.mjs` caught one sentence
+  ("vodík unikol") on the first pass and it was reworded.
+- **`quick.mjs` asked for self-test section 9**, which no build has, so an
+  edit to `sk.js` failed the quick gate before running anything. Section 8
+  holds the translation checks; the map names that alone now.
+
 ## September 22, fourth push: what the boundary under a lid is made of
 
 - **No liquid above its boiling point.** Reported from play, on a 2.58 M⊕
