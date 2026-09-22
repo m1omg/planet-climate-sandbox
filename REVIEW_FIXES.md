@@ -23,6 +23,11 @@
   · 374 → 467 °C" there on a world correctly named Supercritical Ocean. It is
   drawn only when the melting point is below the critical temperature now,
   and that world is pinned in `phasecheck.mjs`.
+- **A hydrogen cold start.** `hydrogenColdStart`: the icy super-Earth under
+  half a bar of H₂ at 1.20 S⊕. Past the Hycean inner edge from the start, so
+  temperate for half a megayear and then a Buried Ocean for about 107 Myr,
+  twice the hydrogen-free span: a hotter sky costs more of the mixed-down
+  flux per kilogram converted, and the pool warms to hold liquid deeper.
 - **A hydrogen-free cold start.** `icyColdStart`: two Earth masses, half
   water by mass under a bar of nitrogen, temperate at 1.20 S⊕ with a
   brightening star. It crosses at 3 Myr and is a Buried Ocean for 50 Myr,

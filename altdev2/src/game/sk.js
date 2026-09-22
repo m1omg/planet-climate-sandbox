@@ -806,5 +806,6 @@ export const SK = {
     superRunaway: 'Vodný svet za hranou nekontrolovateľnosti',
     coldStart: 'Skleníkový útek zo studeného štartu',
     icyColdStart: 'Ľadová super-Zem, studený štart',
+    hydrogenColdStart: 'Vodíkový studený štart',
   },
 };
