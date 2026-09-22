@@ -2565,6 +2565,7 @@ stable Hycean that does not exist.
 | **Low Sunlight Hycean** — 5 M⊕, 500 EO, 60 bar H₂, 0.0005 S⊕ | 84 °C | 376 km, on ice VII | Low Sunlight Hycean |
 | **Super-Runaway Waterworld** — 10 M⊕, 60 EO, 20 bar H₂, 0.03 S⊕, built at 900 K | 1073 °C | none, no surface | Supercritical Envelope |
 | **Cold-Start Runaway** — 10 M⊕, 500 EO, 20 bar H₂, 0.099 S⊕, brightening | temperate → runaway | ocean buried under a hot lid | Hycean → **Buried Ocean** → magma |
+| **Icy Super-Earth, Cold Start** — 2 M⊕, 50% water by mass (4266 EO), 1 bar N₂, no hydrogen, 1.20 S⊕, brightening | temperate → runaway at 3 Myr | 200 km of liquid on ice VI, buried for **50 Myr** | Waterworld → Moist → **Buried Ocean** → Supercritical Ocean |
 
 The first is the Hycean argument in one preset: at **a tenth of Earth's sunlight**, where a
 rocky planet is a snowball, this one has a warm 262 km sea. It carries five hundred oceans

@@ -805,5 +805,6 @@ export const SK = {
     lowSunHycean: 'Hyceánsky svet so slabým svetlom',
     superRunaway: 'Vodný svet za hranou nekontrolovateľnosti',
     coldStart: 'Skleníkový útek zo studeného štartu',
+    icyColdStart: 'Ľadová super-Zem, studený štart',
   },
 };

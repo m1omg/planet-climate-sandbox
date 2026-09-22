@@ -16,6 +16,19 @@
   are shares now, resolved against the mass control; a stop goes through the
   same 70% ceiling the slider does; and the sanitiser caps a hash or a save
   at the same ceiling. Self-test: every stop on every preset, and the cap.
+- **The melt film only where liquid exists.** Ice VII's melting point passes
+  the critical temperature near 13 GPa; on a ten-Earth-mass world with thirty
+  thousand oceans the ice starts at 24 GPa and melts at 740 K, so the fluid
+  reaching it is supercritical to the last metre. The film drew "liquid ocean
+  · 374 → 467 °C" there on a world correctly named Supercritical Ocean. It is
+  drawn only when the melting point is below the critical temperature now,
+  and that world is pinned in `phasecheck.mjs`.
+- **A hydrogen-free cold start.** `icyColdStart`: two Earth masses, half
+  water by mass under a bar of nitrogen, temperate at 1.20 S⊕ with a
+  brightening star. It crosses at 3 Myr and is a Buried Ocean for 50 Myr,
+  the longest the model produces: the span is the liquid above the ice VI
+  onset over the mixed-down flux, so it is longer on lighter worlds (68 Myr
+  at 1.2 M⊕) and a few megayears at 8 M⊕. Pinned as a path in the self-test.
 - **Verification.** `tools/sections.mjs <build> --only 3c,7j` runs named
   self-test sections (`--list`), and without `--only` runs the whole
   self-test across the machine's cores — the 25-minute altdev2 suite in

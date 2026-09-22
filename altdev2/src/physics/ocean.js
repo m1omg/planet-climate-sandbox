@@ -832,14 +832,26 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
       // above it. It is the conductive layer carrying the mixed-down flux,
       // k*dT/F like the ocean's own boundary, tens to hundreds of metres, and
       // it sits on the ice because it is denser than the fluid above it.
+      //
+      // Only where the ice melts BELOW the critical temperature. Ice VII's
+      // melting point climbs with pressure and passes 647 K near 13 GPa; on a
+      // world whose ice starts at 24 GPa it melts at 740 K, so the fluid
+      // reaching it is supercritical to the last metre and freezes without
+      // ever being liquid. The first version of this drew a "liquid ocean ·
+      // 374 → 467 °C" there -- hotter at its base than its top, every degree
+      // of it past the critical point -- on a world the state correctly
+      // called Supercritical Ocean. The film is the liquid part of the
+      // descent, from the critical point down to the melting point, and it
+      // exists only when that interval exists.
       if (cp.iceDepth > 0 && !(cp.liquidDepth > 0) && (dg.hotLayer ?? 0) > 0.005) {
         const pIce = cp.pMelt > 0 ? cp.pMelt : (dg.pTotMean ?? 0) * 1e5;
         const tMelt = meltingTemperature(pIce);
         const hotBase = Math.max(Ts, top);
-        if (hotBase > tMelt + 1) {
+        if (tMelt < T_CRIT_H2O - 1 && hotBase > tMelt + 1) {
           const flux = Math.max(dg.mixedFlux ?? 0, 1e-6);
-          const film = clamp(K_WATER * (hotBase - tMelt) / flux, 1, 0.02 * cp.iceDepth);
-          add('ocean', film, [Math.min(hotBase, T_CRIT_H2O), tMelt], 'melt film on the ice');
+          const topT = Math.min(hotBase, T_CRIT_H2O);
+          const film = clamp(K_WATER * (topT - tMelt) / flux, 1, 0.02 * cp.iceDepth);
+          add('ocean', film, [topT, tMelt], 'melt film on the ice');
         }
       }
       if (cp.iceDepth > 0) {

@@ -785,6 +785,21 @@ export const PRESETS = {
   // helping it, which is the Buried Ocean this preset is named for.
   coldStart: { name: 'Cold-Start Runaway', icon: '❄️', params: { ...HYCEAN,
     mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
+  // The same road with no hydrogen on it: a two-Earth-mass world that is half
+  // water by mass under a bar of nitrogen, built temperate at 1.20 S(+) and
+  // left to a brightening star. It crosses in three megayears and then spends
+  // FIFTY as a Buried Ocean -- the longest the model produces -- before the
+  // last liquid under the lid is gone and it is fluid on ice VII for good.
+  // Measured across mass, water share and starlight: the span is set by how
+  // much of the column is liquid before the ice VI onset, so it is LONGER on
+  // a lighter world (68 Myr at 1.2 M(+), 70% water) and shorter on a heavier
+  // one (4-6 Myr at 8 M(+)); two Earth masses is where "super-Earth" and "as
+  // long as it gets" meet. Below 1.20 S(+) the same world stays a moist
+  // greenhouse for the whole run, so the threshold is the preset.
+  icyColdStart: { name: 'Icy Super-Earth, Cold Start', icon: '🧊', params: { ...EARTH,
+    mass: 2, water: waterForShareOfMass(2, 0.5), landFraction: 0, insolation: 1.20,
+    n2Bar: 1, co2Bar: 0.001, o2Bar: 0, ch4Bar: 0, biosphere: 0, emissions: 0,
+    brightening: 1, startT: 290 } },
   smallWaterworld: { name: 'Small Waterworld (2019)', icon: '🌊', params: { ...EARTH,
     mass: 0.08, water: waterForShareOfMass(0.08, 0.4), landFraction: 0,
     n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, biosphere: 0, outgassing: 0,
