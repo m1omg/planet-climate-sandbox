@@ -2565,8 +2565,8 @@ stable Hycean that does not exist.
 | **Low Sunlight Hycean** — 5 M⊕, 500 EO, 60 bar H₂, 0.0005 S⊕ | 84 °C | 376 km, on ice VII | Low Sunlight Hycean |
 | **Super-Runaway Waterworld** — 10 M⊕, 60 EO, 20 bar H₂, 0.03 S⊕, built at 900 K | 1073 °C | none, no surface | Supercritical Envelope |
 | **Cold-Start Runaway** — 10 M⊕, 500 EO, 20 bar H₂, 0.099 S⊕, brightening | temperate → runaway | ocean buried under a hot lid | Hycean → **Buried Ocean** → magma |
-| **Icy Super-Earth, Cold Start** — 2 M⊕, 50% water by mass (4266 EO), 1 bar N₂, no hydrogen, 1.20 S⊕, brightening | temperate → runaway at 3 Myr | 200 km of liquid on ice VI, buried for **50 Myr** | Waterworld → Moist → **Buried Ocean** → Supercritical Ocean |
-| **Hydrogen Cold Start** — the same world under 0.5 bar H₂ | temperate → runaway at 0.6 Myr | buried for **~107 Myr**; a hotter sky costs more per kilogram converted | Waterworld → Moist → **Buried Ocean** → Supercritical Ocean |
+| **Icy Super-Earth, Cold Start** — 2 M⊕, 50% water by mass (4266 EO), 1 bar N₂, no hydrogen, 1.19 S⊕ (limit 1.19), brightening | temperate for 158 Myr → runaway | buried for **47 Myr** | Waterworld → Moist → **Buried Ocean** → Supercritical Ocean |
+| **Hydrogen Cold Start** — the same world under 0.5 bar H₂, 1.03 S⊕ (limit 1.015) | temperate → runaway at 2 Myr | buried for **~119 Myr**; a hotter sky costs more per kilogram converted | Waterworld → Moist → **Buried Ocean** → Supercritical Ocean |
 
 The first is the Hycean argument in one preset: at **a tenth of Earth's sunlight**, where a
 rocky planet is a snowball, this one has a warm 262 km sea. It carries five hundred oceans

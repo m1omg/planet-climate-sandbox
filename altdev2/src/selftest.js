@@ -754,18 +754,16 @@ function runChecks() {
     // critical" is unreachable by construction and fires on the cap instead of
     // on the physics. It did: a hundred-Myr cold start came out labelled Steam
     // The hydrogen-free twin. Half water by mass at two Earth masses under a
-    // bar of nitrogen, temperate at 1.20 S(+), and the longest Buried Ocean
-    // the model produces: the span is the liquid above the ice VI onset
-    // divided by the mixed-down flux, and it was measured across mass, water
-    // share and starlight before this world was chosen. Pinned as a path,
-    // like the Hycean one: moist, then buried for tens of megayears, then
-    // fluid on ice with no liquid left, and never Steam Runaway -- a sea
-    // four thousand oceans deep does not go into the sky.
+    // bar of nitrogen, at 1.19 S(+), just inside its runaway limit: a moist
+    // greenhouse for over a hundred megayears until the brightening star
+    // carries it across, then buried for tens of megayears, then fluid on ice
+    // with no liquid left, and never Steam Runaway -- a sea four thousand
+    // oceans deep does not go into the sky.
     {
       const sim = new Simulation({ ...PRESETS.icyColdStart.params });
       const first = {}, last = {};
       let steam = 0;
-      for (let yr = 0; yr <= 1.5e8; yr += 5e5) {
+      for (let yr = 0; yr <= 3e8; yr += 1e6) {
         sim.runYears(yr - sim.world.time);
         const cid = classify(sim.world).id;
         first[cid] ??= yr; last[cid] = yr;
@@ -773,8 +771,8 @@ function runChecks() {
         if (cid === 'supercriticalEnvelope') break;
       }
       const buried = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
-      check('The icy super-Earth crosses without hydrogen and stays a buried ocean for tens of megayears',
-        first.moist != null && buried > 3e7 && first.supercriticalEnvelope > first.buriedOcean
+      check('The icy super-Earth is temperate for over 100 Myr, then crosses and stays a buried ocean for tens of megayears',
+        first.moist != null && first.buriedOcean > 1e8 && buried > 3e7 && first.supercriticalEnvelope > first.buriedOcean
           && steam === 0 && !(PRESETS.icyColdStart.params.h2Bar > 0),
         `moist from ${((first.moist ?? 0) / 1e6).toFixed(1)} Myr, buried for ${(buried / 1e6).toFixed(0)} Myr from `
           + `${((first.buriedOcean ?? 0) / 1e6).toFixed(1)} Myr, supercritical at ${((first.supercriticalEnvelope ?? 0) / 1e6).toFixed(0)} Myr, `
@@ -799,8 +797,8 @@ function runChecks() {
       }
       const buried = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
       const dry = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
-      check('The hydrogen cold start is temperate first and buried for about twice as long as without hydrogen',
-        first.moist != null && buried > 8e7 && first.supercriticalEnvelope > first.buriedOcean && steam === 0
+      check('The hydrogen cold start, just past its limit at 1.03 S⊕, crosses at once and is buried for about a hundred megayears',
+        (first.moist != null || first.waterworld != null) && first.buriedOcean < 1e7 && buried > 8e7 && first.supercriticalEnvelope > first.buriedOcean && steam === 0
           && PRESETS.hydrogenColdStart.params.h2Bar > 0,
         `moist from ${((first.moist ?? 0) / 1e6).toFixed(1)} Myr, buried for ${(dry / 1e6).toFixed(0)} Myr from `
           + `${((first.buriedOcean ?? 0) / 1e6).toFixed(1)} Myr, supercritical at ${((first.supercriticalEnvelope ?? 0) / 1e6).toFixed(0)} Myr`);
