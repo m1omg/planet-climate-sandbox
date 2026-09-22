@@ -40,7 +40,9 @@ import { DEFAULT_PAN_SPEED, PAN_SPEEDS, panRadiansPerPixel, wheelZoomFactor } fr
 let pass = 0, fail = 0;
 const log = [];
 const waterRich = new Set(['smallWaterworld','evaporatingWaterworld',
-  'icySmallWaterworld','hotSmallWaterworld','europa','ganymede','callisto']);
+  'icySmallWaterworld','hotSmallWaterworld','europa','ganymede','callisto',
+  // Half water by mass on purpose: the cold-start runaway needs the ocean.
+  'icyColdStart']);
 function check(name, ok, detail) {
   (ok ? pass++ : fail++);
   const line = `${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  —  ' + detail : ''}`;
