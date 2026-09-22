@@ -684,8 +684,16 @@ export function update(w, dt) {
   let subCache;
   w.diag = {
     get oceanBase() {
+      // The sea's column: the water that is still under a sea surface, over
+      // the area that still has one. `flooded` already loses the share of the
+      // basins the hot target has taken, so the water under that share comes
+      // out of the numerator too -- otherwise the whole reservoir was divided
+      // by a shrinking area while the lid closed, and the drawn column
+      // ballooned to 382 km against 259 settled at a third of the surface gone
+      // over. The water under the lid is the pool, and `coldPool` draws it.
+      const seaShare = 1 - clamp(this.hotTarget ?? 0, 0, 1);
       return oceanBaseCache ?? (oceanBaseCache = oceanStructure(
-        (w.water.ocean + w.water.seaIce) * d.eoColumn / Math.max(this.flooded, 1e-3),
+        (w.water.ocean + w.water.seaIce) * seaShare * d.eoColumn / Math.max(this.flooded, 1e-3),
         this.g, w.coldT ?? this.Tmean, this.pTotMean));
     },
     // How far this world is from having no equilibrium at all: the
@@ -697,10 +705,16 @@ export function update(w, dt) {
     // the readout, which used to compute it itself, and now by classify(), which
     // needs it to tell a runaway with an ocean under it from one without.
     get runawayMargin() {
-      if (this.smallWaterworld) return Infinity; // no plane-parallel ceiling in this mode
-      return runawayCache ?? (runawayCache = runawayLimit(this.pCO2,
+      // The expanded-emission closure has no plane-parallel ceiling, so the
+      // margin goes to infinity as the world becomes that closure -- and goes
+      // there continuously with the overlap weight, rather than jumping the
+      // moment the weight leaves zero.
+      const ww = this.smallWaterworld?.weight ?? 0;
+      if (ww >= 1) return Infinity;
+      const m = runawayCache ?? (runawayCache = runawayLimit(this.pCO2,
         this.pN2 + this.pCH4, this.pH2 ?? 0, this.g, this.pHe ?? 0).flux
         - (this.absorbed + this.Fint));
+      return ww > 0 ? m / (1 - ww) : m;
     },
     // The cold water under a supercritical lid, and null whenever there is a sea
     // surface -- with one, `oceanBase` IS the ocean and a second answer about
@@ -874,6 +888,11 @@ export function update(w, dt) {
       shortwave: swScaleMean, inDomain: modelWeight===1 && paperDomain && p.starTemp >= 5200 && p.starTemp <= 6200,
       availablePressure: availCol * g } : null,
     hasWater, vapourCol: vapCol, lam, slowness, cloudWhite, cloudShare, totalWater, superFrac,
+    // The water that is not in the sky: what a pool under a lid can at most be
+    // made of. The hot layer's unconverted share is a thermal memory of a deep
+    // column; on a shallow one the reservoir bookkeeping has already lifted the
+    // sea into steam, and the same water must not be counted in both places.
+    condensedWater: (w.water.ocean ?? 0) + (w.water.seaIce ?? 0) + (w.water.landIce ?? 0),
     hazeTau, hazeSW, ch4SW, swTrans,
     // What the renderer draws vents and ash from. Here rather than in the
     // render layer so both renderers read one number and the tests can pin it.
@@ -1102,7 +1121,21 @@ export function maxStep(w, maxDeltaT = 2.5) {
   const hotLockedColdTrap = !!w.params.tidallyLocked && dg.hasWater
     && dg.totalWater > 0.015 && dg.totalWater < 0.12
     && dg.Tmax > 340 && dg.Tmin < 273.16;
-  const quasiGain = hotLockedColdTrap ? 46 : 4000;
+  // The same trap on any world with a moving ice edge, locked or not. The
+  // band ice fraction is what the two branches of an ice-albedo bistability
+  // differ by, and it is updated explicitly AFTER the implicit temperature
+  // solve, so a step that lands on the warm branch has aimed at an equilibrium
+  // the albedo then moves. Reported from play as a world that "cycles between
+  // molten and frozen": near the outer edge the shortcut turned a 1.2 kyr
+  // accuracy step into 137 kyr the moment the edge went quiet, the world fell
+  // off the warm branch, and forty steps later it was back to try again --
+  // 102 crossings of the half-ice line in 60 Myr against 4 at a 1 kyr step.
+  // `ringing` never saw it because a sawtooth is one reversal followed by
+  // forty monotone steps. `iceMeanPrev` is the band ice at the end of the last
+  // step, written by stepVolatiles.
+  const iceEdgeLive = dg.hasWater && dg.iceMean > 0.08 && dg.iceMean < 0.92
+    && w.iceMeanPrev != null && Math.abs(dg.iceMean - w.iceMeanPrev) > 0.004;
+  const quasiGain = hotLockedColdTrap || iceEdgeLive ? 46 : 4000;
   if (quasi > 0) dt = Math.min(dt * (1 + quasi * quasiGain), 5e6);
 
   // The other half of the trust region in stepTemperature. If the last step's
@@ -1151,10 +1184,23 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // number that matters. (The same test also shows this world is not converged
   // at 20 kyr either -- 6e7 against 7.5e7 at 5 kyr -- so if anything the bound
   // is loose. That is a separate finding and is in the README.)
+  //
+  // ...with the one exemption the oxygen bound below already has. A world whose
+  // CO2 sits at the floor with weathering outrunning the volcanoes is pinned:
+  // the reservoir cannot fall further, so the tendency this bounds against is a
+  // demand the world cannot meet, not a change it is about to make. Earth's
+  // Last Ocean is exactly that -- 0.1 ppm, weathering four times the supply --
+  // and this bound held it at 420-year steps for 250 megayears while the
+  // accuracy step alone allowed a megayear: 400 000 steps and a clock that
+  // crawled at play speed. Reported from play as the sluggishness of every
+  // world heating up with its carbon gone. Measured against a 2 kyr reference,
+  // the exempted trajectory is the same.
   if (w.weathering) {
-    const net = Math.abs(w.weathering.V - w.weathering.W) / Math.max(w.weathering.kappa, 1);
+    const { V, W } = w.weathering;
+    const net = Math.abs(V - W) / Math.max(w.weathering.kappa, 1);
     const floor = 0.02 * CO2_EARTH_COL;
-    if (net > 0) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
+    const pinned = w.co2 <= floor && W > V;
+    if (net > 0 && !pinned) dt = Math.min(dt, Math.max(0.25 * (w.co2 + floor) / net, 1.0));
   }
 
   // Oxygen, and this is the important one. Methane's lifetime pivots on pO2 from
@@ -1217,6 +1263,20 @@ export function maxStep(w, maxDeltaT = 2.5) {
   if (w.iceSheet != null && dg.iceSheetTarget != null) {
     if (Math.abs(dg.iceSheetTarget - w.iceSheet) > 0.02) dt = Math.min(dt, 3500);
   }
+  // The band ice that carries the albedo has no relaxation of its own -- it is
+  // a diagnostic of the temperatures -- but a step that moves it by more than a
+  // few percent has moved the albedo the solve was built on. Same bound, same
+  // reason, on the quantity the bistability actually lives in (see quasiGain).
+  if (w.iceMeanPrev != null && isFinite(w.iceMeanPrev)) {
+    const moved = Math.abs(dg.iceMean - w.iceMeanPrev);
+    if (moved > 0.02) dt = Math.min(dt, 3500);
+    // Predictive, not merely reactive: the edge's speed over the last step
+    // says how far the next one may reach before the albedo has moved by more
+    // than the solve can follow. On the reported world the step before the
+    // shortcut armed moved the ice twelve points in 1158 years -- a rate that
+    // bounds the next step at 200 years, where the shortcut wanted 113 000.
+    if (moved > 1e-4 && w.dtPrev > 0) dt = Math.min(dt, Math.max(0.02 * w.dtPrev / moved, 50));
+  }
   // Same argument for the hot layer, on its own timescale. A step that moves the
   // boundary a long way in one go jumps over the vapour ceiling it sets, and
   // the ceiling is what the greenhouse is built on.
@@ -1235,8 +1295,18 @@ export function maxStep(w, maxDeltaT = 2.5) {
   // physics sets it first.
   if (w.hotLayer != null && dg.hotCapacity > 0
       && Math.abs(dg.hotTarget - w.hotLayer) > 0.02) {
-    const flux = MIX_EFF_DOWN * Math.max(dg.absorbed + dg.Fint, 0);
+    // The flux that is actually moving the boundary in the direction it is
+    // going: the mixed-down share of what arrives while it advances, and what
+    // the planet radiates while it retreats. Bounding a retreat on the
+    // downward flux -- 0.005 W/m² on a dimmed world -- gave a bound of four
+    // gigayears, so a single step carried the surface from 668 K to 44 K with
+    // the layer left where it was, which is the state reported from play.
+    const retreating = dg.hotTarget < w.hotLayer;
+    const flux = retreating ? Math.max(dg.emitted, 0)
+      : MIX_EFF_DOWN * Math.max(dg.absorbed + dg.Fint, 0);
     if (flux > 0) dt = Math.min(dt, Math.max(0.05 * dg.hotCapacity / (flux * YEAR), 1.0));
+    // ...and a layer that is recondensing does so on its own clock.
+    if (retreating && dg.Tmean < T_CRIT_H2O && !(dg.hotTarget > 0)) dt = Math.min(dt, 2500);
   }
 
   // The cold pool's own temperature is the one integrated state here with no

@@ -73,6 +73,12 @@ export function resetWorld(w, params) {
   w.fossil = null;     // a fresh world has its fossil carbon still in the ground
   w.carbonDeep = null; // rebuilt from the planet's mass on the first step
   w.bio = null;        // the living biosphere, grown from the conditions
+  // The step controller's memory and the smoothed rates it bounds on. None of
+  // it is climate, and none of it was cleared: a preset loaded after a runaway
+  // started from the runaway's escape flux and oxygen rate, and took its first
+  // steps against a world that no longer existed. Fresh means fresh.
+  w.escape = undefined; w.o2Flux = undefined; w.o2Rate = undefined;
+  w.ch4Source = undefined; w.ch4Tau = undefined; w.emitting = undefined;
   update(w, 0);
 }
 

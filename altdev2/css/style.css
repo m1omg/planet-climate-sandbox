@@ -101,6 +101,24 @@ body.hide-right{--col-right:0px}
 }
 .group>h2 small{font-weight:400;letter-spacing:.02em;text-transform:none;font-size:10.5px;opacity:.85}
 
+/* ---------------- the planet builder ---------------- */
+.builder{margin:0 0 12px;padding:10px 12px;border:1px solid var(--accent);border-radius:var(--radius);
+  background:rgba(127,212,255,.07)}
+.builder[hidden]{display:none}
+.builder-steps{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.builder-steps button{flex:1 1 auto;font:inherit;font-size:11px;padding:4px 6px;border-radius:6px;
+  border:1px solid var(--line);background:transparent;color:var(--fg-dim);cursor:pointer}
+.builder-steps button:hover{color:var(--fg);border-color:var(--line-2)}
+.builder-steps button.active{color:#071018;background:var(--accent);border-color:var(--accent);font-weight:600}
+.builder-hint{margin:0 0 8px;font-size:12px;line-height:1.45;color:var(--fg-dim)}
+.builder-live{font:11.5px/1.4 var(--mono);color:var(--fg);margin-bottom:8px;word-break:break-word}
+.builder-nav{display:flex;gap:6px;flex-wrap:wrap}
+.builder-nav button[hidden]{display:none}
+/* A folded group keeps its heading, dimmed, as the way back to it. */
+.group.collapsed>*:not(h2){display:none}
+.group.collapsed>h2{opacity:.45;cursor:pointer}
+.group.collapsed>h2:hover{opacity:.8}
+
 /* ---------------- sliders ---------------- */
 .ctl{margin-bottom:13px}
 .ctl-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}

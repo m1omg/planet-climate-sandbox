@@ -373,6 +373,12 @@ function syncSliders() {
     e.out.value = d.fmt(params[d.key]);
   }
   els._lock.setAttribute('aria-pressed', String(!!params.tidallyLocked));
+  // The mantle checkbox is a control like the others and has to follow the
+  // world: it did not, so a preset loaded after it was ticked kept an infinite
+  // mantle the preset never asked for, and the box showed it ticked on worlds
+  // whose params said otherwise.
+  const mantle = $('#chk-mantle-inf');
+  if (mantle) mantle.checked = !!params.mantleInfinite;
   markBody();
 }
 
@@ -499,6 +505,9 @@ function startScenario(id) {
   Object.assign(params, s.params);
   renderState.seed = Math.random() * 100;
   sim.reset(params);
+  // A scenario is an invented world. Loaded over a real one it kept that
+  // body's surface map, so the Great Oxidation played out on Earth's coastlines.
+  applyBody(null);
   syncSliders(); setPresetActive(null);
   rememberStart(); markTouched();
   document.querySelectorAll('[data-scenario]').forEach((b) => b.classList.toggle('active', b.dataset.scenario === id));
@@ -690,7 +699,11 @@ function updateReadout() {
   // When the planet is in a stiff transition the integrator cannot keep up with
   // the requested acceleration. Say so, rather than letting it look frozen.
   const rateOut = $('#rate-out');
-  const achieved = sim.actualRate / 0.1;   // readout runs ten times a second
+  // What the last frame advanced, over the real seconds it was paid for. It
+  // divided by a tenth of a second, the readout's own period, when the number
+  // is per FRAME: at 60 Hz that read six times low, and the "running as fast
+  // as it can" rate was a sixth of the truth.
+  const achieved = sim.actualRate / Math.max(sim.lastRealDt || 0, 1e-3);
   if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
     rateOut.textContent = `${fmtTime(Math.max(achieved, 0))} / s`;
     rateOut.classList.add('throttled');
@@ -1439,7 +1452,9 @@ function advanceSettle() {
   const w = sim.world;
   const before = w.diag.Tmean;
   sim.runYears(Math.max(2000, w.time * 0.08 + 2000), 2e6, 26);
-  sim.sample();
+  // No sample here: stepOnce() already samples on the calendar and on any
+  // two-kelvin move, and one more per frame put a point every few kiloyears
+  // into a history that thins itself by dropping half.
   settleRounds++;
   const quiet = Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05;
   if (quiet || settleRounds > 4000) {

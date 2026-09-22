@@ -321,6 +321,7 @@ function graphicsFromUrl() {
   return true;   // default
 }
 let activeScenario = null, scenarioResult = null, settling = false, activePreset = 'earth';
+let scenarioResultAt = 0, scenarioFresh = false;   // when a verdict landed, and whether the readout has shown it
 
 // The world as it was handed to you. Reset restores exactly this, because the
 // composition controls drift on their own as the simulation runs them and
@@ -654,6 +655,7 @@ function buildPresets() {
   const host = $('#presets');
   host.innerHTML = '';
   for (const [id, p] of Object.entries(PRESETS)) {
+    if (p.builder) continue;   // reached through "Build a planet", not the chips
     const b = document.createElement('button');
     b.className = 'chip'; b.dataset.preset = id;
     b.innerHTML = `<span>${p.icon}</span>${tx('presets', id) || p.name}`;
@@ -717,6 +719,7 @@ function applyBody(id) {
 }
 
 function loadPreset(id) {
+  if (builderOpen()) exitBuilder(false);
   Object.assign(params, PRESETS[id].params);
   // A real world keeps its own geography; only invented ones get a new seed.
   if (!BODY_MAPS[id]) renderState.seed = Math.random() * 100;
@@ -730,6 +733,79 @@ function loadPreset(id) {
   toast(BODY_MAPS[id] && view.bodyCapable
     ? `${PRESETS[id].icon} ${pname} — ${t('real surface map')}`
     : `${PRESETS[id].icon} ${pname}`);
+}
+
+// --- the planet builder ------------------------------------------------------
+// "Build a planet" loads the blank world paused and walks the four control
+// groups one at a time, folding the other three. It is a view over the same
+// sliders, not a second interface: every control stays live, the readout
+// keeps reading, and leaving the builder leaves the world exactly as built.
+const BUILDER_STEPS = [
+  { host: 'sliders-body', hint: 'How big it is and how much water it carries. Gravity, radius and escape velocity follow from the mass; the basins decide how far the water spreads.' },
+  { host: 'sliders-star', hint: 'What it orbits and how it spins. Starlight sets the energy budget, the star\u2019s colour sets how much of it ice and water reflect, and the spin sets the day \u2014 or locks one face to the star.' },
+  { host: 'sliders-atmo', hint: 'What the air is made of. Nitrogen broadens the greenhouse, carbon dioxide and methane are the greenhouse, hydrogen makes an envelope. A bare rock has none of it yet.' },
+  { host: 'sliders-surface', hint: 'Albedo, life, industry, the heat coming up from below and how old the world is when the clock starts. Then start the clock \u2014 everything stays live once it runs.' },
+];
+let builderStep = -1;
+const builderOpen = () => builderStep >= 0;
+function startBuilder() {
+  loadPreset('blank');
+  sim.paused = true; syncPlay();
+  builderStep = 0;
+  $('#builder').hidden = false;
+  applyBuilderStep();
+  toast(t('A bare rock, paused. Build it one group at a time, then start the clock.'), 6000);
+}
+function applyBuilderStep() {
+  const step = BUILDER_STEPS[builderStep];
+  document.querySelectorAll('#controls .scroller section.group').forEach((sec) => {
+    const host = sec.querySelector('[id^="sliders-"]');
+    const active = !!host && !!step && host.id === step.host;
+    sec.classList.toggle('collapsed', builderOpen() && !active);
+    if (active && builderOpen() && sec.scrollIntoView) sec.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+  document.querySelectorAll('#builder-steps button').forEach((b, i) => b.classList.toggle('active', i === builderStep));
+  if (!step) return;
+  $('#builder-hint').textContent = t(step.hint);
+  $('#builder-back').disabled = builderStep === 0;
+  $('#builder-next').hidden = builderStep === BUILDER_STEPS.length - 1;
+  $('#builder-start').hidden = builderStep !== BUILDER_STEPS.length - 1;
+  syncBuilderLive();
+}
+// What the world built so far comes to, in the four numbers a builder wants
+// while dragging: gravity, escape velocity, surface temperature, state.
+function syncBuilderLive() {
+  if (!builderOpen()) return;
+  const w = sim.world, d = w.diag, st = classify(w);
+  $('#builder-live').textContent = `${d.g.toFixed(2)} m/s² · ${(d.d.vesc / 1000).toFixed(1)} km/s · `
+    + `${(d.Tmean - 273.15).toFixed(0)} °C · ${tx('states', st.id, 'name') || st.name}`;
+}
+function exitBuilder(start) {
+  if (!builderOpen()) return;
+  builderStep = -1;
+  document.querySelectorAll('#controls .scroller section.group').forEach((sec) => sec.classList.remove('collapsed'));
+  $('#builder').hidden = true;
+  if (start) {
+    sim.paused = false; syncPlay();
+    writeHash(); markTouched(); rememberStart();
+    toast(t('The clock is running. Every control stays live.'));
+  }
+}
+function wireBuilder() {
+  document.querySelectorAll('#builder-steps button').forEach((b, i) =>
+    b.addEventListener('click', () => { if (builderOpen()) { builderStep = i; applyBuilderStep(); } }));
+  $('#builder-back').addEventListener('click', () => { builderStep = Math.max(0, builderStep - 1); applyBuilderStep(); });
+  $('#builder-next').addEventListener('click', () => { builderStep = Math.min(BUILDER_STEPS.length - 1, builderStep + 1); applyBuilderStep(); });
+  $('#builder-start').addEventListener('click', () => exitBuilder(true));
+  $('#builder-exit').addEventListener('click', () => exitBuilder(false));
+  // A folded group's heading is the way back to it.
+  document.querySelectorAll('#controls .scroller section.group > h2').forEach((h) =>
+    h.addEventListener('click', () => {
+      if (!builderOpen()) return;
+      const host = h.parentElement.querySelector('[id^="sliders-"]');
+      const i = BUILDER_STEPS.findIndex((s) => host && s.host === host.id);
+      if (i >= 0) { builderStep = i; applyBuilderStep(); }
+    }));
 }
 
 function buildScenarios() {
@@ -747,10 +823,20 @@ function buildScenarios() {
 }
 function startScenario(id) {
   const s = SCENARIOS.find((x) => x.id === id);
-  activeScenario = s; scenarioResult = null;
+  if (builderOpen()) exitBuilder(false);
+  activeScenario = s; scenarioResult = null; scenarioResultAt = 0; scenarioFresh = false;
+  if (els.biosphere) els.biosphere.shown = undefined;
+  // Whatever was running is over: a settle in progress would drive the new
+  // world from advanceSettle instead of the clock, and the last scenario's
+  // verdict stayed in the banner until the next readout tick.
+  endSettle();
+  const status = $('#scenario-banner .sc-status');
+  if (status) { status.className = 'sc-status'; status.textContent = ''; }
+  applyBody(null);
   Object.assign(params, s.params);
   renderState.seed = Math.random() * 100;
   sim.reset(params);
+  if (s.walk?.insolation != null) sim.walkTo(s.walk.insolation);
   syncSliders(); setPresetActive(null);
   rememberStart(); markTouched();
   document.querySelectorAll('[data-scenario]').forEach((b) => b.classList.toggle('active', b.dataset.scenario === id));
@@ -1243,11 +1329,17 @@ function updateReadout() {
   syncLiveControls();
   $('#simtime').textContent = fmtTime(w.time);
   syncClocks(w);
+  syncBuilderLive();
 
   // When the planet is in a stiff transition the integrator cannot keep up with
   // the requested acceleration. Say so, rather than letting it look frozen.
   const rateOut = $('#rate-out');
-  const achieved = sim.actualRate / 0.1;   // readout runs ten times a second
+  // Years advanced by the last frame over the real seconds that frame took.
+  // This was `/ 0.1` on the reasoning that the readout runs ten times a
+  // second -- but actualRate is one frame's advance, not a tenth of a
+  // second's, so at 60 Hz the number was six times too small and the
+  // "throttled" branch below was almost always taken once the flag was set.
+  const achieved = sim.actualRate / Math.max(sim.lastRealDt || 0, 1e-3);
   // It is a text field now, so it is written to with `value` -- and never while
   // it has the caret in it, because overwriting what someone is halfway through
   // typing ten times a second makes it impossible to type at all.
@@ -1293,36 +1385,33 @@ function updateReadout() {
     // nothing has to watch it happen rather than being left with a stable world.
     // Driven off simulated time so the rate does not depend on the frame rate or
     // on how fast the clock is running.
-    if (activeScenario.evolve && !scenarioResult) {
+    // The step writes the evolving control into the live params (scenarioStep
+    // below); the readout's job is to keep the slider showing it.
+    if (activeScenario.evolve) {
       const e = els.biosphere;
-      if (!e.editing && !e.dragging) {
-        const v = activeScenario.evolve(w);
-        if (Math.abs(v - params.biosphere) > 1e-4) {
-          params.biosphere = v;
-          applyParams('biosphere');
-          const pos = clamp(toSlider(e.def, v), 0, 1000);
-          e.input.value = String(pos);
-          e.input.style.setProperty('--fill', `${pos / 10}%`);
-          writeControl(e.def, v);
-        }
+      if (!e.editing && !e.dragging && Math.abs(params.biosphere - (e.shown ?? NaN)) > 1e-4) {
+        e.shown = params.biosphere;
+        applyParams('biosphere');
+        const pos = clamp(toSlider(e.def, params.biosphere), 0, 1000);
+        e.input.value = String(pos);
+        e.input.style.setProperty('--fill', `${pos / 10}%`);
+        writeControl(e.def, params.biosphere);
       }
     }
     const el = $('#scenario-banner .sc-status');
-    if (!scenarioResult) {
-      if (activeScenario.fail && activeScenario.fail(w)) scenarioResult = 'lose';
-      else if (activeScenario.check(w)) scenarioResult = 'win';
-      else if (w.time > activeScenario.limit) scenarioResult = 'lose';
-      // Winning stops the clock, but only on the frame it is won. This used to
-      // live in the banner branch below, which runs ten times a second for as
-      // long as the win stands -- so pressing play un-paused the world for a
-      // tenth of a second and then it snapped back, and the button looked
-      // broken. Once you have won you are allowed to keep playing.
+    // Winning stops the clock, but only on the frame it is won. This used to
+    // live in the banner branch below, which runs ten times a second for as
+    // long as the win stands -- so pressing play un-paused the world for a
+    // tenth of a second and then it snapped back, and the button looked
+    // broken. Once you have won you are allowed to keep playing.
+    if (scenarioFresh) {
+      scenarioFresh = false;
       if (scenarioResult === 'win') { sim.paused = true; endSettle(); syncPlay(); }
     }
     el.className = 'sc-status' + (scenarioResult ? ' ' + scenarioResult : '');
-    if (scenarioResult === 'win') { el.textContent = tp('✓ Complete — {0} elapsed', fmtTime(w.time)); }
+    if (scenarioResult === 'win') { el.textContent = tp('✓ Complete — {0} elapsed', fmtTime(scenarioResultAt)); }
     else if (scenarioResult === 'lose') {
-      el.textContent = tp('✕ Failed — {0} elapsed. Reset to try again.', fmtTime(w.time));
+      el.textContent = tp('✕ Failed — {0} elapsed. Reset to try again.', fmtTime(scenarioResultAt));
     } else {
       el.textContent = tp('{0} / {1} — in progress', fmtTime(w.time), fmtTime(activeScenario.limit));
     }
@@ -1332,7 +1421,11 @@ function updateReadout() {
 let toastTimer;
 function toast(msg, ms = 2600) {
   const box = $('#toast');
-  box.textContent = msg; box.classList.add('show');
+  // Translated here, once, so that a plain English literal at any call site is
+  // enough. Fifteen toasts were English-only on the Slovak page because each
+  // had to remember to call t() itself; t() returns its argument unchanged
+  // when there is no entry, so a message built from pieces loses nothing.
+  box.textContent = t(msg); box.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => box.classList.remove('show'), ms);
 }
@@ -1365,10 +1458,6 @@ let armedToSave = false;
 // your mind, click a slot to LOAD it, and the world in it was gone with no
 // prompt. Confirming costs a click only when something is actually at stake --
 // an empty slot still saves on the first click.
-let pendingOverwrite = null;
-let pendingUntil = 0;
-const OVERWRITE_MS = 6000;
-function clearPending() { pendingOverwrite = null; pendingUntil = 0; }
 
 function readSlot(i) {
   try { return parseSaveFile(localStorage.getItem(slotKey(i)) || 'null')?.[0] ?? null; } catch { return null; }
@@ -1630,7 +1719,12 @@ function noteEpoch(w, st) {
   // closed with the new world's clock. A rewind inside one run is a different
   // thing and is handled by truncateEpochs, which reopens the span landed in.
   if (last && epochCandidate.from < last.from) { epochs = []; last = undefined; }
-  if (last && last.id === st.id) { last.to = null; return; }
+  // Reopening a closed span is a change the list has to show, or the row keeps
+  // its finished duration until something else happens to redraw it.
+  if (last && last.id === st.id) {
+    if (last.to !== null) { last.to = null; renderEpochs(); }
+    return;
+  }
   // Dated from when the state STARTED, not from when it was confirmed: the
   // debounce is there to decide whether a span counts, not to move it.
   if (last) last.to = epochCandidate.from;
@@ -1734,22 +1828,18 @@ function buildSlots() {
           toast(t('That one keeps itself — pick a numbered slot'));
           return;
         }
-        // Something already in it: say what would be lost and make them mean it.
-        const had = readSlot(i);
-        if (had && !(pendingOverwrite === i && Date.now() < pendingUntil)) {
-          pendingOverwrite = i; pendingUntil = Date.now() + OVERWRITE_MS;
-          syncSlots();
-          toast(tp('Click again to overwrite {0} — {1} in', had.name, fmtTime(had.time || 0)));
-          return;
-        }
+        // Whatever was in it is overwritten, at once. The two-click "click
+        // again to overwrite" latch that stood here cost five clicks per save
+        // -- the menu closed on the confirming click -- and its six-second
+        // window lapsed with no signal, so a slow hand was asked twice. Saving
+        // over a slot you picked while armed is the thing you asked for.
         try { localStorage.setItem(slotKey(i), JSON.stringify(snapshot())); }
         catch { toast(t('Could not save — storage is full or blocked')); return; }
-        armedToSave = false; clearPending();
+        armedToSave = false;
         syncSlots();
         toast(tp('Saved to slot {0}', i));
         return;
       }
-      clearPending();
       const s = readSlot(i);
       if (!s) {
         toast(i === AUTO ? t('Nothing saved automatically yet')
@@ -1778,7 +1868,6 @@ function tiles() {
 }
 
 function syncSlots() {
-  if (pendingOverwrite !== null && Date.now() >= pendingUntil) clearPending();
   for (const i of tiles()) {
     const b = $(`.slot[data-slot="${i}"]`);
     if (!b) continue;
@@ -1786,7 +1875,6 @@ function syncSlots() {
     b.classList.toggle('empty', !s);
     // The autosave tile is never a save target, so it does not light up armed.
     b.classList.toggle('armed', armedToSave && i !== AUTO);
-    b.classList.toggle('warn', pendingOverwrite === i);
     // The badge span is emitted on every tile, empty where it does not apply, so
     // all of them keep the same four grid columns and the elapsed time stays in
     // line down the row.
@@ -1890,7 +1978,7 @@ function exportSaves() {
   // Revoked on the next turn of the event loop: revoking synchronously can
   // race the download on some browsers.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast(`Exported ${worlds.length} world${worlds.length === 1 ? '' : 's'}`);
+  toast(worlds.length === 1 ? t('Exported one world') : tp('Exported {0} worlds', worlds.length));
 }
 
 function importSaves(text) {
@@ -1906,8 +1994,8 @@ function importSaves(text) {
   if (writes.some((wr) => wr.slot === AUTO)) { dirty = false; lastAutosave = Date.now(); }
   syncSlots();
   toast(writes.length
-    ? `Imported ${writes.length} world${writes.length === 1 ? '' : 's'}` +
-      (skipped ? `, ${skipped} did not fit` : '')
+    ? (writes.length === 1 ? t('Imported one world') : tp('Imported {0} worlds', writes.length)) +
+      (skipped ? tp(', {0} did not fit', skipped) : '')
     : 'Nothing imported — every slot is full and the file named none of them');
 }
 
@@ -1917,7 +2005,32 @@ function importSaves(text) {
 // Every step, so the record cannot miss a state the world was in. Debounced
 // inside noteEpoch; see the note there for why a raw per-step record is
 // unusable and what the threshold is.
-sim.onStep = (w) => { if (!suspendCapture) noteEpoch(w, classify(w)); };
+sim.onStep = (w) => {
+  if (!suspendCapture) noteEpoch(w, classify(w));
+  scenarioStep(w);
+};
+
+// A scenario is decided per STEP, not per readout frame. Sampled ten times a
+// second against a world that moves megayears per frame, the Great Oxidation
+// was won or lost depending on the clock rate: at a fine step the snowball at
+// 19.5 Myr fired `fail`, at play speed the frames jumped over it and a player
+// who did nothing was congratulated at 31 Myr. Every step sees every state,
+// so the first of fail, check and the limit to hold is the one that counts,
+// and it holds at the same simulated year whatever the frame rate. The
+// evolving control is written here for the same reason: a biosphere that grew
+// only when the readout looked lagged the clock by up to a frame.
+function scenarioStep(w) {
+  if (!activeScenario) return;
+  if (activeScenario.evolve && !scenarioResult) {
+    const e = els.biosphere;
+    if (!(e && (e.editing || e.dragging))) w.params.biosphere = activeScenario.evolve(w);
+  }
+  if (scenarioResult) return;
+  if (activeScenario.fail && activeScenario.fail(w)) scenarioResult = 'lose';
+  else if (activeScenario.check(w)) scenarioResult = 'win';
+  else if (w.time > activeScenario.limit) scenarioResult = 'lose';
+  if (scenarioResult) { scenarioResultAt = w.time; scenarioFresh = true; }
+}
 
 sim.onSample = (w) => {
   if (suspendCapture) return;
@@ -2231,7 +2344,9 @@ function bindControls() {
     epochs = []; renderEpochs();
     histZoom = 1; histPan = 1;
     syncSliders();
-    scenarioResult = null; endSettle(); sim.paused = resetPaused; syncPlay();
+    scenarioResult = null; scenarioResultAt = 0; scenarioFresh = false;
+    if (els.biosphere) els.biosphere.shown = undefined;
+    endSettle(); sim.paused = resetPaused; syncPlay();
     writeHash(); markTouched();
     toast(resetPaused ? 'Reset to the starting world — paused'
                       : 'Reset to the starting world');
@@ -2257,7 +2372,6 @@ function bindControls() {
 
   $('#btn-slot-save').addEventListener('click', () => {
     armedToSave = !armedToSave;
-    clearPending();
     syncSlots();
     if (armedToSave) toast(t('Pick a slot to save into'));
   });
@@ -2314,7 +2428,7 @@ function bindControls() {
                     resurfacingBoost: params.resurfacingBoost });
     syncSliders(); writeHash(); markTouched();
     toast(e.target.checked
-      ? `Mantle turnover ${params.resurfacingAge.toFixed(2)} Gyr from now, ${params.resurfacingBoost.toFixed(0)}× volcanism`
+      ? tp('Mantle turnover {0} Gyr from now, {1}× volcanism', params.resurfacingAge.toFixed(2), params.resurfacingBoost.toFixed(0))
       : 'No resurfacing event');
   });
 
@@ -2341,7 +2455,7 @@ function bindControls() {
     sim.setParams({ realisticGeology: params.realisticGeology });
     writeHash(); markTouched();
     toast(e.target.checked
-      ? `Interior decaying from ${(params.startAge ?? 4.567).toFixed(2)} Gyr — volcanism follows it down`
+      ? tp('Interior decaying from {0} Gyr — volcanism follows it down', (params.startAge ?? 4.567).toFixed(2))
       : 'Interior heat holds steady');
   });
 
@@ -2462,8 +2576,8 @@ function bindControls() {
     // Say so rather than silently landing somewhere else, because the ends of
     // this range are a long way apart and a typo is easy.
     if (Math.abs(Math.log10(got / v)) > 0.01) {
-      toast(`Time acceleration runs from ${fmtTime(Math.pow(10, lo))} to ` +
-        `${fmtTime(Math.pow(10, hi))} a second — set to ${fmtTime(got)} / s`);
+      toast(tp('Time acceleration runs from {0} to {1} a second — set to {2} / s',
+        fmtTime(Math.pow(10, lo)), fmtTime(Math.pow(10, hi)), fmtTime(got)));
     }
   };
   // Changing the unit keeps the number and moves the decimal point: 250 kyr/s
@@ -2607,8 +2721,8 @@ function bindControls() {
       await useRenderer('software');
       toast(t('No GPU rendering available here — staying in software'));
     } else {
-      const why = skipped.length ? `  ·  skipped ${skipped[0]}` : '';
-      toast(LABELS[next] + why + '  ·  reload returns to the best available');
+      const why = skipped.length ? `  ·  ${tp('skipped {0}', skipped[0])}` : '';
+      toast(LABELS[next] + why + '  ·  ' + t('reload returns to the best available'));
     }
   });
   $('#btn-quality').addEventListener('click', () => {
@@ -2770,7 +2884,8 @@ function bindControls() {
   $('#menu-scrim').addEventListener('click', () => openMenu(null));
   $('#presets').addEventListener('click', () => openMenu(null));
   $('#slots').addEventListener('click', () => openMenu(null));
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') openMenu(null); });
+  $('#btn-builder').addEventListener('click', () => { openMenu(null); startBuilder(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') { openMenu(null); exitBuilder(false); } });
 
   // The timebar wraps to two rows on a narrow screen, so how much room the view
   // controls have above it is not a constant. Measure it instead of guessing:
@@ -2912,8 +3027,11 @@ let settleRounds = 0;
 function advanceSettle() {
   const w = sim.world;
   const before = w.diag.Tmean;
+  // No sample of its own: runYears already samples on the model-time schedule
+  // (two percent of the age, or a two-kelvin move), and a sample per frame on
+  // top of that made the chart's density -- and the restore points' -- a
+  // function of the display's refresh rate.
   sim.runYears(Math.max(2000, w.time * 0.08 + 2000), 2e6, 26);
-  sim.sample();
   settleRounds++;
   const quiet = Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05;
   if (quiet || settleRounds > 4000) {
@@ -2999,6 +3117,7 @@ function frame(now) {
 // ---------------------------------------------------------------------------
 buildSliders();
 buildPresets();
+wireBuilder();
 buildSlots();
 buildScenarios();
 bindScrub();

@@ -29,8 +29,12 @@ export const NUMERIC_FIELDS = ['time','waterInitial','iceSheet','hotLayer','cold
   'landIceMass','co2Frozen','otherGHG','aerosol','carbonDeep','bio','fossil',
   'industrial','co2','n2','o2','ch4','h2','he','euk','eukReady','ch4Escape','h2Rate','dtPrev'];
 const runtimeScalars = new Set(['dtPrev','trustOver','ringing','lastMove','insolationTarget',
-  'insolationRate','weathering','o2Rate','ch4Source','ch4Tau','iceDeep','iceRate',
-  'liquidRate','vapourRate','lifeRoom','landIceTarget','trapActive','emitting']);
+  'insolationRate','o2Rate','ch4Source','ch4Tau','iceDeep','iceRate',
+  'liquidRate','vapourRate','landIceTarget','trapActive','emitting']);
+// `weathering` ({V, W, kappa, liquid}) and `lifeRoom` ({pro, euk, carbon, ...})
+// are both bags, and both were listed as scalars too. The bag test runs first,
+// so nothing was lost -- but a field on both lists is a field nobody has
+// decided about, and the next reader has to work out which test wins.
 const runtimeBags = new Set(['escape','o2Flux','iceMark','liquidMark','vapourMark',
   'weathering','lifeRoom']);
 const finite = v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e100;

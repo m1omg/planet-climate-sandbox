@@ -1,13 +1,10 @@
 # /dev — the development build
 
-Built by `tools/builddev.mjs` from the `claude/hot-ocean-stability-review-b8xdsz`
-branch and served at <https://m1omg.github.io/planet-climate-sandbox/dev/>.
-
-**Do not edit anything in here.** Edit the branch and rebuild:
-
-```bash
-node tools/builddev.mjs /path/to/main/checkout
-```
+Served at <https://m1omg.github.io/planet-climate-sandbox/dev/>. It is edited
+in place, in this tree, like the other builds: there is no `builddev.mjs` and
+no branch it is generated from -- an earlier README said there was, and both
+had been gone for some time. Its one check is `node src/selftest.js` from
+this directory; this build has no `tools/` and no calibration run of its own.
 
 `assets/` is deliberately absent: this copy sets `window.__assetBase` to
 `../assets/` and borrows the surface maps at the site root, which is 668 KB
@@ -28,8 +25,9 @@ export file carry parameters rather than physics state.
 standing failures, every one of them a test asserting a deviation the README
 names and explains; two of them assert the *old* deviation, since snowball
 deglaciation now lands at 140 mbar against the literature's 100–300 where it
-used to be thirty times too low. `calibrate.mjs` passes all 28 of its anchors
-and reports eight known gaps that never fail.
+used to be thirty times too low. The calibration numbers quoted below were
+measured on the branch this build was once generated from; there is no
+`calibrate.mjs` here to re-run them.
 
 Two of those gaps were failing anchors until recently and are reclassified
 rather than fixed: Earth's pre-industrial temperature, which is 0.79 K warm and

@@ -1396,11 +1396,18 @@ try {
     // offer and asking for it would make this check a liar.
     const closeEnough = sameSeq && slow.every((e, i) =>
       Math.abs(e.span - fast[i].span) <= 0.1 * Math.max(e.span, fast[i].span, 1));
-    ok(sameSeq && closeEnough && slow.some((e) => e.id === 'buriedOcean'),
+    // The short epoch this world passes through is the one the per-frame
+    // record used to lose. It was a Buried Ocean while the classifier named
+    // an ordinary runaway that; with a tenth of an ocean on a Venus-mass world
+    // the sea boils off through its own surface and no lid ever forms, so the
+    // transient here is the Steam Runaway between the dune and the dry
+    // runaway -- tens of megayears inside a 2.65 Gyr run, and still the epoch
+    // a frame at play speed can swallow whole.
+    const short = (r) => r.find((e) => e.id === 'steamRunaway') || { span: 0 };
+    ok(sameSeq && closeEnough && short(slow).span > 0,
       'One world recorded twice at different speeds gives the same history',
-      `${seq(slow)} — buried ocean ${
-        (slow.find((e) => e.id === 'buriedOcean') || { span: 0 }).span.toExponential(1)} yr `
-      + `against ${(fast.find((e) => e.id === 'buriedOcean') || { span: 0 }).span.toExponential(1)}`);
+      `${seq(slow)} — steam runaway ${short(slow).span.toExponential(1)} yr `
+      + `against ${short(fast).span.toExponential(1)}`);
   }
 
   ok(browserErrors.length === 0, 'No browser exceptions or error-level console messages');

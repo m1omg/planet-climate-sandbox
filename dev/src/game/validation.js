@@ -29,10 +29,13 @@ export const NUMERIC_FIELDS = ['time','waterInitial','iceSheet','hotLayer','cold
   'landIceMass','co2Frozen','otherGHG','aerosol','carbonDeep','bio','fossil',
   'industrial','co2','n2','o2','ch4','h2','he','euk','eukReady','ch4Escape','h2Rate','dtPrev'];
 const runtimeScalars = new Set(['dtPrev','trustOver','ringing','lastMove','insolationTarget',
-  'insolationRate','weathering','o2Rate','ch4Source','ch4Tau','iceDeep','iceRate',
-  'liquidRate','vapourRate','lifeRoom','landIceTarget','trapActive','emitting']);
+  'insolationRate','o2Rate','ch4Source','ch4Tau','iceDeep','iceRate',
+  'liquidRate','vapourRate','landIceTarget','trapActive','emitting']);
+// `weathering` is a bag ({V, W, kappa, liquid}) and was listed as a scalar too;
+// the bag test runs first so it happened to survive, but a field that is on
+// both lists is a field nobody has decided about.
 const runtimeBags = new Set(['escape','o2Flux','iceMark','liquidMark','vapourMark',
-  'weathering','lifeRoom']);
+  'weathering']);
 const finite = v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e100;
 const safeKey = k => !['__proto__','constructor','prototype'].includes(k);
 function numbers(v, signed = true) {

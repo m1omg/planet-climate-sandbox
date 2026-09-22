@@ -81,11 +81,11 @@ export const SLIDERS = [
     fmt: (v) => `${(v * 100).toFixed(0)} % land`, units: { '%': 0.01 }, unitFor: () => '%',
     note: 'How much of this world would stand above the sea at Earth-like water. Actual coverage is worked out from the water it really has — see the readout.' },
 
-  { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 4, log: true,
+  { g: 'star', key: 'insolation', label: 'Starlight received', min: 0.05, max: 20, log: true,
     fmt: (v) => `${v.toFixed(3)} S⊕`,
     units: { s: 1, 'se': 1, 's⊕': 1, 'w/m2': 1 / 1361, 'w/m²': 1 / 1361, w: 1 / 1361 },
     note: 'Relative to Earth. 1 S⊕ = 1361 W/m².' },
-  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2600, max: 9000, step: 10,
+  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2300, max: 9000, step: 10,
     fmt: (v) => `${v.toFixed(0)} K`, units: { k: 1 } },
   { g: 'star', key: 'xuvFraction', label: 'Stellar XUV activity', min: 1e-6, max: 1e-2, log: true,
     fmt: (v) => `${(v / 3.4e-6).toFixed(v / 3.4e-6 < 10 ? 1 : 0)}× Sun`,

@@ -15,11 +15,33 @@
 // make every save and every rewind slightly wrong.
 import { update } from '../physics/climate.js';
 
+// The state the step-size chooser carries between steps, and the smoothed rates
+// it reads as bounds. None of this is climate -- it is the integrator's own
+// memory -- and all of it used to be dropped, on the reasoning that `update()`
+// rebuilds what it needs. It does not: these come back `undefined` and are
+// rebuilt from nothing on the first step after a restore, so the world resumes
+// on a different step sequence from the one it was on. `dtPrev` above all: it
+// was called "a hint ... re-derived within one step", and `maxStep` low-passes
+// the step against it, so without it the first step after a load was 1.8x the
+// one the same world was taking and Earth at 0.94 S⊕ was 0.05 K off its own
+// trajectory 700 kyr later. The capped round-trip test could not see it; the
+// free-step one can.
+const RUNTIME = ['dtPrev', 'escape', 'o2Flux', 'o2Rate', 'ch4Source', 'ch4Tau', 'emitting'];
+
+function captureRuntime(w) {
+  const out = {};
+  for (const k of RUNTIME) {
+    const v = w[k];
+    if (v === undefined) continue;
+    out[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+  }
+  return out;
+}
+
 // Everything about a world that is not derived from the rest of it.
 //
 // Deliberately absent: `history`, which is the run rather than the world and is
-// megabytes of it; `diag`, which update() rebuilds from this; and `dtPrev`,
-// which is a hint to the step-size chooser and is re-derived within one step.
+// megabytes of it; and `diag`, which update() rebuilds from this.
 export function captureWorld(w) {
   return {
     params: { ...w.params },
@@ -33,6 +55,7 @@ export function captureWorld(w) {
     carbonDeep: w.carbonDeep,
     bio: w.bio,
     co2: w.co2, n2: w.n2, o2: w.o2, ch4: w.ch4,
+    runtime: captureRuntime(w),
   };
 }
 
@@ -58,6 +81,16 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.n2 != null) w.n2 = s.n2;
   if (s.o2 != null) w.o2 = s.o2;
   if (s.ch4 != null) w.ch4 = s.ch4;
+  // Before update(), so a zero-length step sees the bounds and the smoothed
+  // rates the world had when it was captured. A save from before this field
+  // existed has no `runtime` and restores exactly as it used to.
+  if (s.runtime) {
+    for (const k of RUNTIME) {
+      const v = s.runtime[k];
+      if (v === undefined) continue;
+      w[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+    }
+  }
   update(w, 0);
   w.history = [];
   sim.sample();

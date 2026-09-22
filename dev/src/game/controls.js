@@ -126,7 +126,7 @@ export const SLIDERS = [
         </label>
         <span id="star-status" class="star-status"></span>
       </div>` },
-  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2600, max: 9000, step: 10,
+  { g: 'star', key: 'starTemp', label: 'Star temperature', min: 2300, max: 9000, step: 10,
     fmt: (v) => `${v.toFixed(0)} K`, units: { k: 1 } },
   { g: 'star', key: 'xuvFraction', label: 'Stellar XUV activity', min: 1e-6, max: 1e-2, log: true,
     fmt: (v) => `${(v / 3.4e-6).toFixed(v / 3.4e-6 < 10 ? 1 : 0)}× Sun`,

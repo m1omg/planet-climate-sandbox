@@ -62,6 +62,26 @@
     </header>
 
     <div class="scroller">
+      <!-- The planet builder. Hidden until "Build a planet" opens it; it folds
+           the three groups that are not the current step and shows what the
+           world built so far comes to. No modal: every control stays live. -->
+      <div id="builder" class="builder" hidden>
+        <div id="builder-steps" class="builder-steps">
+          <button type="button">1 · Body</button>
+          <button type="button">2 · Star</button>
+          <button type="button">3 · Atmosphere</button>
+          <button type="button">4 · Surface</button>
+        </div>
+        <p id="builder-hint" class="builder-hint"></p>
+        <div id="builder-live" class="builder-live"></div>
+        <div class="builder-nav">
+          <button type="button" id="builder-back" class="supply-btn">← Back</button>
+          <button type="button" id="builder-next" class="supply-btn">Next →</button>
+          <button type="button" id="builder-start" class="supply-btn" hidden>▶ Start the clock</button>
+          <button type="button" id="builder-exit" class="supply-btn"
+            title="Leave the builder; the world stays as built">✕</button>
+        </div>
+      </div>
       <p class="panel-note">Every control is live. Change one mid-run and the planet keeps its
       current temperature, ice and history — you are intervening on a running world, not restarting
       it. The four highlighted below also move on their own as the simulation evolves them.
@@ -99,6 +119,11 @@
         <h2>Worlds <small>presets — click one to load it</small></h2>
         <div id="presets" class="chip-row"></div>
       </section>
+      <section class="group">
+        <h2>From scratch <small>a bare rock, one group at a time</small></h2>
+        <button type="button" id="btn-builder" class="chip"
+          title="Load an airless, dry, lifeless rock, paused, and build it up group by group"><span>🪨</span>Build a planet</button>
+      </section>
     </div>
 
     <div class="menu" id="menu-saves" hidden>
@@ -112,7 +137,7 @@
         </label>
         <div id="slots" class="slot-row"></div>
         <div class="slot-hint">Click a slot to load it. <button type="button" id="btn-slot-save"
-          class="supply-btn">Save…</button> then pick a numbered slot; a full one asks first.
+          class="supply-btn">Save…</button> then pick a numbered slot; it saves over whatever was there.
           The ↻ tile keeps itself and is never written by hand.<br>
           <button type="button" id="btn-saves-export" class="supply-btn"
             title="Every saved world in one file, to keep somewhere that is not this browser">Export all…</button>

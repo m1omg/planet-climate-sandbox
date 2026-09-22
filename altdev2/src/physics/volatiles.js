@@ -261,10 +261,30 @@ const CO2_PER_C = 44 / 12;
 const HP_ICE_LEAK = 0.05;     // floor: convective permeability, never sealed
 const HP_ICE_SCALE = 5e4;     // metres of ice that halve the delivery
 
-function sealFactor(w) {
-  const ice = w.diag?.oceanBase?.iceDepth ?? 0;
+//
+// The ice it reads is `iceDeep`, the high-pressure ice the step below keeps
+// solved once a kiloyear -- under the pool when there is a lid, under the sea
+// over the whole basin when there is not -- turned back into metres. It read
+// `oceanBase.iceDepth`, the SEA's column, and the sea is the water that still
+// has a surface: once a lid closed there was none, the seal read zero ice and
+// opened, and thirty bar of CO2 came up through 230 km of ice VII. Before that
+// the same column was the whole inventory divided by a flooded fraction on its
+// way to zero, 243 000 km of ice, and the seal sat on its floor. The Cold-Start
+// Runaway was 1770 K or 1417 K at ten megayears depending on which wrong column
+// it read; with the ice that is actually there (190 km, seal 0.25) it is 1500.
+export function sealFactor(w) {
+  const ice = deepIceDepth(w);
   if (!(ice > 0)) return 1;
   return HP_ICE_LEAK + (1 - HP_ICE_LEAK) / (1 + ice / HP_ICE_SCALE);
+}
+
+// `iceDeep` in metres of ice: it is kept in Earth oceans per square metre of
+// planet, and the ice sits on the fraction of the planet the water is in.
+function deepIceDepth(w) {
+  const dg = w.diag ?? {};
+  const eo = dg.d?.eoColumn ?? 0;
+  const area = dg.lidded ? 1 : Math.max(dg.basinFlooded ?? dg.flooded ?? 1, 1e-3);
+  return Math.max(w.iceDeep ?? 0, 0) * eo / (RHO_ICE_HP * area);
 }
 
 // Volcanic outgassing is melt production times the CO2 dissolved in the melt --
@@ -463,10 +483,17 @@ export function basinWater(w) {
 // ---------------------------------------------------------------------------
 export function escapeRates(w) {
   const p = w.params, dg = w.diag, d = dg.d;
-  if (dg.smallWaterworld?.weight===1 && !(dg.smallWaterworld.backgroundBar>0)) {
+  // At weight 1 with no background gas the blended branch at the end of this
+  // function gives exactly this: whole molecules leave and the XUV channel is
+  // not counted a second time. It is still taken as its own exit, because the
+  // blend's steam fraction is 0.999999... rather than 1 and the residue
+  // manufactured 1e-14 bar of oxygen on a pure-water world from photolysis
+  // that is not happening. This is not the step in the escape rate that used
+  // to sit here -- 3e-23 to 1e-7 oceans a year across 0.005 Earth masses --
+  // which was the blend being skipped below weight 1; the blend now carries
+  // every weight under 1 and this exit is its exact limit.
+  if (dg.smallWaterworld?.weight >= 1 && !(dg.smallWaterworld.backgroundBar > 0)) {
     const water = dg.smallWaterworld.bulkEscape * YEAR;
-    // Whole H2O molecules leave. Do not count the XUV channel a second time,
-    // and do not manufacture the oxygen of photolytic hydrogen escape.
     return { water, bulkWater: water, background: 0, nonThermal: 0, envelope: 0,
       fEnv: 0, fStrat: 1, Tct: dg.Tmean, diffusion: 0, energy: 0, xSteam: 1 };
   }
@@ -681,6 +708,18 @@ function advanceIceSheet(w, dtYears) {
 // to fill, so the layer snaps to its target and nothing about that world
 // changes. Every preset this branch inherited is in that category.
 export const MIX_EFF_DOWN = 0.02;
+// Latent heat of melting for the high-pressure ices, J/kg. Ice VII's is below
+// ice Ih's 334 kJ/kg -- the dense phases sit closer to the liquid -- and the
+// literature spread (Frank et al. 2004; Dunaeva 2010) brackets 250-320 kJ/kg
+// for VI and VII. Taken at the low end so that this budget bounds the floor's
+// retreat without being tuned to a number nobody has measured on a planet.
+export const L_FUSION_HP = 2.5e5;
+// Once the surface is back under the critical point the converted water has
+// nowhere to stay converted: the column can hold only what saturation allows,
+// and the rest condenses on the timescale the ocean overturns, not the
+// timescale the planet radiates. Ten thousand years is the same order as the
+// deep-ocean mixing time and much shorter than any step that can cross it.
+export const RECONDENSE_YEARS = 1e4;
 
 // The temperature of the water the hot layer is eating into.
 //
@@ -744,7 +783,32 @@ function advanceColdPool(w, dtYears) {
   const flux = down
     ? MIX_EFF_DOWN * Math.max(dg.absorbed + dg.Fint, 0)
     : Math.max(dg.emitted, 0);
-  const step = flux * YEAR * Math.max(dtYears, 0) / cap;
+  // Melting is not free. The floor is wherever the adiabat meets the melting
+  // curve, so warming the pool moves it down and the ice VI/VII above the new
+  // floor is melt -- and that melt used to cost nothing, because this budget
+  // charged only the sensible heat of the water. Measured: 1250 km of ice VII
+  // gone in 4 Myr on 6.8 W/m² reaching the pool, when the latent heat alone
+  // needs 4.8 of that. Charged for the ice that went over the last step, per
+  // square metre of the planet (the column is per covered metre), so the
+  // floor can retreat no faster than the energy arriving at it allows.
+  //
+  // Charged on the MASS of ice per square metre of planet, not on the drawn
+  // depth: the sea's column is the water under a sea surface over the area
+  // that still has one, and as a lid closes both shrink together while the
+  // ice itself has not moved. Read as a depth, that bookkeeping registered as
+  // melting and cost the Cold-Start Runaway 350 K at ten megayears.
+  //
+  // The ice is `iceDeep`, the deep-ice bookkeeping's own number: solved purely
+  // once a kiloyear, under the pool when there is a lid and over the whole
+  // basin when there is not, and already in Earth oceans per square metre of
+  // planet. It was read off the lazily cached sea column instead, which
+  // populated that cache mid-step against a `coldT` that had since moved, and
+  // shrank as the lid closed over ice that had not moved -- charged as melting.
+  const iceNow = Math.max(w.iceDeep ?? 0, 0) * (dg.d?.eoColumn ?? 0);
+  const melted = w.poolIce != null && isFinite(w.poolIce) ? Math.max(w.poolIce - iceNow, 0) : 0;
+  w.poolIce = iceNow;
+  const latent = down ? melted * L_FUSION_HP : 0;
+  const step = Math.max(flux * YEAR * Math.max(dtYears, 0) - latent, 0) / cap;
   // Never past the surface it is chasing, and never past the critical point --
   // water that hot is not a pool, it is the hot layer, and moving that boundary
   // is advanceHotLayer's job and costs the latent heat as well.
@@ -779,6 +843,19 @@ function advanceHotLayer(w, dtYears) {
   w.hotLayer = down
     ? Math.min(target, w.hotLayer + step)
     : Math.max(target, w.hotLayer - step);
+  // Reported from play: a world heated past the critical point and then dimmed
+  // to 0.001 S⊕ kept "supercritical · -228 °C · 31% converted" for hundreds of
+  // megayears. The retreat above is rationed by what the planet radiates, which
+  // on a frozen world is a fifth of a watt -- a gigayear to give the layer back
+  // -- and one coarse step across the cooling transit left the layer where it
+  // was. But a layer that is supercritical is a claim about the water's phase,
+  // and below the critical temperature the claim is false whatever the energy
+  // bookkeeping says: the fluid has condensed, and condensation is not rationed
+  // by radiation to space. So with no target left and the surface under the
+  // critical point, the layer recondenses on the overturning timescale.
+  if (!(target > 0) && dg.Tmean < T_CRIT_H2O && w.hotLayer > 0) {
+    w.hotLayer = Math.max(0, w.hotLayer - Math.max(dtYears, 0) / RECONDENSE_YEARS);
+  }
 }
 
 // How long a methane molecule lasts, in years.
@@ -947,6 +1024,15 @@ const BIO_GROW = 5000;    // yr
 
 export function stepVolatiles(w, dtYears) {
   const dg0 = w.diag ?? {};
+  // The band ice this step arrived at, and the one the step before it did, so
+  // maxStep can read the move the last step made. Band ice is a function of
+  // the temperatures, which the volatile step does not change, so the value
+  // here is the value at the end of the step. A plain field read, no column
+  // solve.
+  if (isFinite(dg0.iceMean)) {
+    w.iceMeanPrev = w.iceMeanLast ?? dg0.iceMean;
+    w.iceMeanLast = dg0.iceMean;
+  }
   advanceIceSheet(w, dtYears);
   advanceColdPool(w, dtYears);
   // How fast the liquid is disappearing, whatever is taking it: escape on a
@@ -1017,8 +1103,14 @@ export function stepVolatiles(w, dtYears) {
   // has none. The gate opens at 0.5 GPa, below the onset on the coldest world
   // this model can build, and the first ice actually appears between 50 and 80
   // Earth oceans.
+  //
+  // Over the BASIN extent, not the flooded fraction. `flooded` loses the share
+  // of the basins a hot layer has taken, so dividing by it stretched the same
+  // water into a taller column as the lid closed -- 243 000 km of ice VII on
+  // the Cold-Start Runaway at hotTarget 1 -- while the ice under the lid is the
+  // pool's, and `coldPoolStructure` draws that once the lid has closed.
   const eoCol = dg0.d?.eoColumn ?? 0;
-  const wet = Math.max(dg0.flooded ?? 0, 1e-3);
+  const wet = Math.max(dg0.basinFlooded ?? dg0.flooded ?? 0, 1e-3);
   const colKg = ((w.water.ocean ?? 0) + (w.water.seaIce ?? 0)) * eoCol / wet;
   const canHaveDeepIce = colKg * (dg0.g ?? 9.81) > 5e8;
   const iceSpan = w.time - (w.iceMark?.t ?? w.time);

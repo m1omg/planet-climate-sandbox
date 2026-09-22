@@ -719,12 +719,18 @@ function splitRate(v) {
   const dp = n >= 100 ? 0 : n >= 10 ? 1 : 2;
   return { mult, n: parseFloat(n.toFixed(dp)) };
 }
-function showRate(v) {
+function showRate(v, shownOnly = false) {
   const out = $('#rate-out'), unit = $('#rate-unit');
   if (!out || !unit) return;
   const { mult, n } = splitRate(v);
   out.value = String(n);
   unit.value = String(mult);
+  // What the field shows while the clock is held back is the ACHIEVED rate,
+  // not the one asked for. Remember it, so that a focus and a blur with
+  // nothing typed does not commit the throttled number as the new request --
+  // which is what happened, and the slider then held the slow rate for good.
+  out.shownOnly = shownOnly ? String(n) : null;
+  unit.shownOnlyMult = shownOnly ? String(mult) : null;
 }
 
 function fmtTime(y) {
@@ -954,7 +960,11 @@ function updateReadout() {
   // When the planet is in a stiff transition the integrator cannot keep up with
   // the requested acceleration. Say so, rather than letting it look frozen.
   const rateOut = $('#rate-out');
-  const achieved = sim.actualRate / 0.1;   // readout runs ten times a second
+  // What the last frame advanced, over the real seconds it was paid for. It
+  // divided by a tenth of a second, the readout's own period, when the number
+  // is per FRAME: at 60 Hz that read six times low, and the "running as fast
+  // as it can" rate was a sixth of the truth.
+  const achieved = sim.actualRate / Math.max(sim.lastRealDt || 0, 1e-3);
   // It is a text field now, so it is written to with `value` -- and never while
   // it has the caret in it, because overwriting what someone is halfway through
   // typing ten times a second makes it impossible to type at all.
@@ -966,13 +976,13 @@ function updateReadout() {
     // actually advancing at, not what was asked for -- a field reading
     // "10 Myr / s" while the planet crawls through a tipping is the readout
     // lying about the one moment the player is watching most closely.
-    showRate(Math.max(achieved, 0));
+    showRate(Math.max(achieved, 0), true);
     rateOut.classList.add('eased');
     rateOut.classList.remove('throttled');
     rateOut.title = tp('Auto-ease is holding the clock back so this tipping can be watched — '
       + '{0} / s was asked for. Turn off "ease" to run at full speed.', fmtTime(sim.rate));
   } else if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
-    showRate(Math.max(achieved, 0));
+    showRate(Math.max(achieved, 0), true);
     rateOut.classList.remove('eased');
     rateOut.classList.add('throttled');
     rateOut.title = t('The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.');
@@ -2032,6 +2042,10 @@ function bindControls() {
     // a unit in it overrides the menu, so anything the readout has ever printed
     // can be pasted straight back in.
     const typed = String(rateOut.value).trim();
+    // Nothing typed over a number the readout only displayed: keep the rate
+    // that was asked for.
+    if (rateOut.shownOnly != null && typed === rateOut.shownOnly
+        && String(rateUnit.value) === rateUnit.shownOnlyMult) { applyRate(); return; }
     const bare = /^[-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?$/.test(typed.replace(',', '.'));
     const v = bare ? parseFloat(typed.replace(',', '.')) * (+rateUnit.value || 1)
                    : parseRate(typed);
@@ -2386,7 +2400,9 @@ function advanceSettle() {
   const w = sim.world;
   const before = w.diag.Tmean;
   sim.runYears(Math.max(2000, w.time * 0.08 + 2000), 2e6, 26);
-  sim.sample();
+  // No sample here: stepOnce() already samples on the calendar and on any
+  // two-kelvin move, and one more per frame put a point every few kiloyears
+  // into a history that thins itself by dropping half.
   settleRounds++;
   const quiet = Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05;
   if (quiet || settleRounds > 4000) {

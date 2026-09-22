@@ -16,7 +16,14 @@ const clearShot = join(tmpdir(), 'altdev-clouds-off.png');
 const volcanoScreenshot = join(tmpdir(), 'altdev-volcanism.png');
 const epochScreenshot = join(tmpdir(), 'altdev-epochs.png');
 const drownedScreenshot = join(tmpdir(), 'altdev-browsercheck-drowned.png');
+// Chrome's sandbox cannot be set up as root, which is how a container runs
+// this check. Passing --no-sandbox unconditionally would weaken it for a
+// developer on their own machine, so it is passed only when there is no
+// sandbox to be had anyway.
+const rootless = typeof process.getuid === 'function' && process.getuid() === 0
+  ? ['--no-sandbox'] : [];
 const chrome = spawn(chromePath, [
+  ...rootless,
   '--headless=new',
   '--enable-unsafe-swiftshader',
   '--no-first-run',

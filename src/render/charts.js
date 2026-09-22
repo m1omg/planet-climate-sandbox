@@ -65,12 +65,19 @@ export function drawHistory(canvas, world, markT = null) {
   const pad = HISTORY_PAD;
   // Include the current state even between stored samples or after a paused
   // slider edit. Keep this display endpoint out of saved checkpoints.
-  const H = [...world.history.filter(p=>p.t<world.time),
-    {t:world.time,T:world.diag.Tmean,Tmin:world.diag.Tmin,Tmax:world.diag.Tmax}];
+  //
+  // Mid-drag the future is kept: the world has been put back to `markT` and
+  // its samples past that point are the run the pointer is standing in, and
+  // the whole point of the chart is to see where letting go would cut it.
+  // Dropping them drew the temperature chart truncated at the handle while
+  // the water chart, which reads the history whole, still showed the end.
+  const live = {t:world.time,T:world.diag.Tmean,Tmin:world.diag.Tmin,Tmax:world.diag.Tmax};
+  const H = [...world.history.filter(p=>p.t<world.time), live,
+    ...(markT != null ? world.history.filter(p=>p.t>world.time) : [])];
   axes(ctx, w, h, pad);
   if (H.length < 2) { label(ctx, 'collecting…', w / 2, h / 2, 'center'); return; }
 
-  const tMax = Math.max(world.time, 10);
+  const tMax = Math.max(world.time, H[H.length - 1].t, 10);
   const lx = (t) => historyX(t, tMax, w);
   let tlo = 1e9, thi = -1e9;
   for (const p of H) { tlo = Math.min(tlo, p.Tmin); thi = Math.max(thi, p.Tmax); }

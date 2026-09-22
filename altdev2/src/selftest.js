@@ -642,7 +642,11 @@ function runChecks() {
     // names, because a list is a second thing to remember: add a Hycean preset,
     // forget to exclude it, and the check fails on its own success. A world with
     // no h2Bar is a world from before this work, whenever it was written.
-    const HYCEAN = ['hycean', 'lowSunHycean', 'supercriticalEnvelope'];
+    // `supercriticalEnvelope` is not in this list any more, on purpose: the
+    // post-runaway supercritical state is a claim about the planet's own water
+    // (Pierrehumbert 2023, "applies for terrestrial planets as well") and needs
+    // no hydrogen. The two Hycean states do.
+    const HYCEAN = ['hycean', 'lowSunHycean'];
     const trespass = [];
     for (const id of Object.keys(PRESETS)) {
       if ((PRESETS[id].params.h2Bar ?? 0) > 0) continue;
@@ -1053,7 +1057,7 @@ function runChecks() {
       // look like a discontinuity: what is on top, the boundary the water starts
       // at drawn as the span it is, and the AVERAGE of the liquid.
       check('A buried ocean describes the descent, not its two ends',
-        /(envelope|atmosphere|fluid) [-\d.]+ °C/.test(line)
+        /(envelope|atmosphere|fluid|supercritical) [-\d.]+ °C/.test(line)
           && /boundary [-\d.]+ (→ [-\d.]+ )?°C/.test(line)
           && /ocean averages [-\d.]+ °C/.test(line),
         line.slice(0, 130));
@@ -1171,8 +1175,17 @@ function runChecks() {
     // hundred kiloyears with the step sequence, because a different march
     // through a stiff transition is a different trajectory; the width, the
     // liquid and the ordering do not move.
+    //
+    // Sixty oceans, not one. With Buried Ocean requiring the lid (a hot target
+    // over the pool, Pierrehumbert 2023 §4) and the pool made only of water
+    // that has not evaporated, Earth's own ocean is never buried: it boils
+    // through its surface and is in the sky before the lid closes, which is the
+    // terrestrial case of the paper. The window this walk measures is the one a
+    // deep ocean has -- measured at 3.0 Myr for sixty oceans under the same
+    // brightening Sun, 136 km of liquid at 109 °C under a 402 °C sky when it
+    // opens.
     {
-      const win = new Simulation({ ...PRESETS.lastOcean.params });
+      const win = new Simulation({ ...PRESETS.lastOcean.params, water: 60 });
       const FINE = 1000;
       let first = null, lastSeen = null, onset = null, worst = null;
       let drawn = 0, named = 0, yr = 0;
@@ -1211,9 +1224,9 @@ function runChecks() {
       // "ocean" beside 2.68 km of liquid is the correct reading of a buried
       // world rather than a thin one. The reservoir is printed as context and
       // tested on nothing.
-      check('…and Earth’s last ocean is buried for as long as the lid takes to eat it',
-        first != null && width > 5e3 && width < 1.5e5
-          && onset.km > 1 && onset.pool > 350,
+      check('…and a deep last ocean is buried for as long as the lid takes to eat it',
+        first != null && width > 1e6 && width < 1e7
+          && onset.km > 10 && onset.pool > 350,
         first == null ? 'never classified as a buried ocean'
           : `${(width / 1e3).toFixed(1)} kyr at +${(first / 1e6).toFixed(2)} Myr · `
             + `${onset.km.toFixed(2)} km of liquid at `
@@ -1222,17 +1235,29 @@ function runChecks() {
             + `${onset.ocean.toFixed(4)} EO`);
       // ...and the sampling artefact itself, pinned, so the walk above is not
       // free to go back to being cheap.
-      const coarse = new Simulation({ ...PRESETS.lastOcean.params });
-      let sawCoarse = false;
-      for (let y = 0; y <= 2.5e8; y += 1e6) {
+      const coarse = new Simulation({ ...PRESETS.lastOcean.params, water: 60 });
+      let sawCoarse = 0;
+      for (let y = 0; y <= 2.5e8; y += 2e7) {
         coarse.runYears(y - coarse.world.time);
-        if (classify(coarse.world).id === 'buriedOcean') sawCoarse = true;
+        if (classify(coarse.world).id === 'buriedOcean') sawCoarse++;
         if (coarse.world.water.ocean < 1e-9 && (coarse.world.diag.hotLayer ?? 0) > 0.99) break;
       }
-      check('…and a megayear step walks straight over it, which is how it was missed',
-        !sawCoarse && first != null,
-        `1 Myr steps: ${sawCoarse ? 'seen' : 'never seen'}; `
+      check('…and a twenty-megayear step walks straight over it, which is how it was missed',
+        sawCoarse === 0 && first != null,
+        `20 Myr steps: ${sawCoarse ? 'seen ' + sawCoarse + 'x' : 'never seen'}; `
           + `${FINE} yr steps: ${first != null ? 'seen' : 'never seen'}`);
+      // ...and the one-ocean world really is not buried: its sea is in the sky
+      // before there is a lid to bury it under.
+      const one = new Simulation({ ...PRESETS.lastOcean.params });
+      const seen = new Set();
+      for (let y = 0; y <= 2.5e8; y += (one.world.diag.Tmean < 345 ? 1e6 : 2e3)) {
+        one.runYears(y - one.world.time, one.world.diag.Tmean < 345 ? 2e6 : 2e3);
+        seen.add(classify(one.world).id);
+        if (one.world.diag.Tmean > 800) break;
+      }
+      check('…while Earth’s own last ocean boils away through its surface, never buried',
+        !seen.has('buriedOcean') && seen.has('steamRunaway'),
+        [...seen].join(' → '));
     }
 
     // The same question asked where the gate cannot hide the answer. The check
@@ -1475,16 +1500,15 @@ function runChecks() {
         rows.push({ water, buried, steam, first,
           liquid: sim.world.water.ocean });
       }
-      // A 1 EO world is buried for tens of kiloyears; a 500 EO world for tens of
-      // megayears. The bound here used to be `rows[0].buried < 1e4`, and that
-      // number was not a measurement of anything -- it was the classifier
-      // truncating the state at the moment the SURFACE sea emptied, which on a
-      // world being buried is the moment the state begins. With the label
-      // following the liquid, 1 EO is 25 kyr rather than under 1, and the
-      // contrast the check exists for is 700-fold rather than 50.
+      // A 1 EO world is never buried -- its sea boils through its own surface
+      // before a lid can form over it, the terrestrial case of Pierrehumbert
+      // 2023 -- while 60 oceans are buried for a megayear and 500 for ten.
+      // Measured: 0 · 1145 kyr · 10 207 kyr. The bound on the one-ocean row
+      // used to be `> 5e3`, from a classifier that named the state without
+      // asking whether a lid existed.
       check('A runaway with an ocean under it is not the same state as one without',
-        rows[0].buried > 5e3 && rows[0].buried < 1e5
-          && rows[2].buried > 5e6 && rows[2].buried > 100 * rows[0].buried,
+        rows[0].buried === 0
+          && rows[1].buried > 3e5 && rows[2].buried > 5e6 && rows[2].buried > 3 * rows[1].buried,
         rows.map((r) => `${r.water} EO: buried to ${(r.buried / 1e3).toFixed(0)} kyr`).join(' · '));
       // ...and every one of them ends with the ocean gone, which is what makes
       // the other name the right one for the end state.
@@ -4648,12 +4672,16 @@ function runChecks() {
     // was made about. A factor of two, not equality: a gigayear of ordinary
     // Earth above moves 0.26 K between rates, so exact invariance is not on
     // offer and pretending otherwise would make this check a liar.
+    // Sixty oceans, for the reason given at the burial walk above: one is never
+    // buried, and a window that does not open cannot be timed.
     const buriedAt = (rate) => {
-      const s = new Simulation({ ...PRESETS.lastOcean.params });
-      s.runYears(1.25e8);
+      const s = new Simulation({ ...PRESETS.lastOcean.params, water: 60 });
+      // The deep world starts at 349 K and its lid closes at 86 kyr, so the
+      // window is in the first few megayears rather than at 134 Myr.
+      s.runYears(2e4);
       s.rate = rate; s.autoEase = true;
       let inB = false, start = null, f = 0;
-      while (s.world.time < 4e8 && f++ < 4e6) {
+      while (s.world.time < 2e7 && f++ < 4e6) {
         s.advance(1 / 60);
         const b = classify(s.world).id === 'buriedOcean';
         if (b && !inB) { inB = true; start = s.world.time; }
@@ -5874,6 +5902,25 @@ function runChecks() {
         && inhibitionFactor(0.3, 1.0, 2.3, 300) > 1,
       '0.05 bar of H₂ under 1 bar of air: off. 1 bar of H₂ under 0.3 bar of steam: on');
 
+    // And the gate is a ramp, not a cliff. It was a cliff: hydrogen's share of
+    // the dry air fell through a half as volcanic CO2 accumulated under a 18
+    // bar envelope, and the outgoing flux tripled -- 17 to 52 W/m² -- between
+    // 17.99 and 18.01 bar of CO2 on a 1550 K world, which fell 260 K in a step
+    // and then sat pinned at the CO2 pressure where the flux had jumped. The
+    // Cold-Start Runaway read 1417 K at ten megayears because of it.
+    {
+      let worst = 0, at = null;
+      for (let c = 6; c < 60; c += 0.5) {
+        const a = olr(1550, c, 3270, 0, 3270 + c + 18, 18, 28);
+        const b = olr(1550, c + 0.5, 3270, 0, 3270 + c + 18.5, 18, 28);
+        const r = Math.abs(b - a) / Math.min(a, b);
+        if (r > worst) { worst = r; at = c; }
+      }
+      check('The hydrogen-background gate is continuous across the half share',
+        worst < 0.05,
+        `largest step between half-bar CO₂ neighbours ${(100 * worst).toFixed(1)}% at ${at} bar`);
+    }
+
     // And it makes the world it is meant to make: at a fixed absorbed flux, an
     // inhibited atmosphere holds a hotter surface than the same atmosphere
     // without it, which is the whole consequence being carried.
@@ -5976,6 +6023,10 @@ function runChecks() {
       const idle = [];
       for (const sc of SCENARIOS) {
         const sim = new Simulation({ ...sc.params });
+        // The star sets off for its destination at the start, as main.js and
+        // scenariocheck.mjs start it: a scenario that opens stable and walks
+        // into its threat is only a puzzle with the walk.
+        if (sc.walk?.insolation != null) sim.walkTo(sc.walk.insolation);
         const w = sim.world;
         let g = 0, won = false;
         while (w.time < sc.limit && g++ < 3e5) {

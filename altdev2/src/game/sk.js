@@ -11,6 +11,66 @@
 // podľa id. Chýbajúci záznam znamená angličtinu, nie prázdne miesto.
 export const SK = {
   ui: {
+    'Exported one world': 'Exportovaný jeden svet',
+    'Exported {0} worlds': 'Exportované svety: {0}',
+    'Imported one world': 'Importovaný jeden svet',
+    'Imported {0} worlds': 'Importované svety: {0}',
+    ', {0} did not fit': ', {0} sa nezmestilo',
+    'Reset to the starting world — paused': 'Vrátené na počiatočný svet — pozastavené',
+    'Reset to the starting world': 'Vrátené na počiatočný svet',
+    'The star now brightens by 10% every billion years': 'Hviezda teraz jasnie o 10 % každú miliardu rokov',
+    'The star holds steady': 'Hviezda svieti stále rovnako',
+    'Mantle turnover {0} Gyr from now, {1}× volcanism': 'Prevrat plášťa o {0} Gyr, {1}× vulkanizmus',
+    'No resurfacing event': 'Bez obnovy povrchu',
+    'Starlight changes now walk to the new value instead of jumping': 'Zmeny svetla hviezdy teraz prechádzajú k novej hodnote postupne, nie skokom',
+    'Starlight changes apply at once': 'Zmeny svetla hviezdy platia okamžite',
+    'Interior decaying from {0} Gyr — volcanism follows it down': 'Vnútro chladne od {0} Gyr — vulkanizmus klesá s ním',
+    'Interior heat holds steady': 'Vnútorné teplo zostáva stále',
+    'Time acceleration runs from {0} to {1} a second — set to {2} / s': 'Zrýchlenie času ide od {0} do {1} za sekundu — nastavené na {2} / s',
+    'Auto-ease on — the clock slows through a tipping': 'Automatické spomalenie zapnuté — čas sa pri zlome spomalí',
+    'Auto-ease off': 'Automatické spomalenie vypnuté',
+    'Fast physics on — about 1.4×, third-digit accuracy': 'Rýchla fyzika zapnutá — asi 1,4×, presnosť na tretiu číslicu',
+    'Fast physics off — full accuracy': 'Rýchla fyzika vypnutá — plná presnosť',
+    'skipped {0}': 'vynechané: {0}',
+    'reload returns to the best available': 'po opätovnom načítaní sa vráti najlepšie dostupné',
+    'Low detail — smaller render, no relief shading, simpler clouds': 'Nízke detaily — menšie vykreslenie, bez tieňovania reliéfu, jednoduchšie oblaky',
+    'High detail': 'Vysoké detaily',
+    'Realistic atmosphere — true scale height. Earth\u2019s air is 0.7% of its radius, and Venus shows only cloud tops.':
+      'Realistická atmosféra — skutočná výška škály. Zemský vzduch je 0,7 % jej polomeru a Venuša ukazuje len vrcholy oblakov.',
+    'Stylised atmosphere — the shell is exaggerated so you can watch it change.': 'Štylizovaná atmosféra — obal je zväčšený, aby ste videli, ako sa mení.',
+    'Generated surface maps': 'Generované mapy povrchu',
+    'Procedural graphics': 'Procedurálna grafika',
+    'As close as the view goes': 'Bližšie sa pohľad nedostane',
+    'As far out as the view goes': 'Ďalej sa pohľad nedostane',
+    'no carbon outgassing': 'bez sopečného uhlíka',
+    '{0}× Earth’s outgassing': '{0}× zemské odplyňovanie',
+    'Pick a world to start from, and name it': 'Vyberte svet, z ktorého začnete, a pomenujte ho',
+    'Save slots, import and export': 'Pozície na ukladanie, import a export',
+    'presets — click one to load it': 'predvolené svety — kliknutím načítate',
+    'Build a planet': 'Postaviť planétu',
+    'From scratch': 'Od nuly',
+    'a bare rock, one group at a time': 'holá skala, skupina po skupine',
+    'Load an airless, dry, lifeless rock, paused, and build it up group by group':
+      'Načíta holú skalu bez vzduchu, vody a života, pozastavenú, a nechá vás ju postaviť skupinu po skupine',
+    '1 · Body': '1 · Teleso',
+    '2 · Star': '2 · Hviezda',
+    '3 · Atmosphere': '3 · Atmosféra',
+    '4 · Surface': '4 · Povrch',
+    '← Back': '← Späť',
+    'Next →': 'Ďalej →',
+    '▶ Start the clock': '▶ Spustiť čas',
+    'Leave the builder; the world stays as built': 'Opustiť staviteľa; svet zostane tak, ako je postavený',
+    'How big it is and how much water it carries. Gravity, radius and escape velocity follow from the mass; the basins decide how far the water spreads.':
+      'Aké je veľké a koľko vody nesie. Gravitácia, polomer a úniková rýchlosť vyplývajú z hmotnosti; panvy rozhodujú, kam až sa voda rozleje.',
+    'What it orbits and how it spins. Starlight sets the energy budget, the star\u2019s colour sets how much of it ice and water reflect, and the spin sets the day \u2014 or locks one face to the star.':
+      'Okolo čoho obieha a ako sa otáča. Svetlo hviezdy určuje energetickú bilanciu, farba hviezdy to, koľko z neho odrazí ľad a voda, a rotácia dĺžku dňa \u2014 alebo pripúta jednu stranu k hviezde.',
+    'What the air is made of. Nitrogen broadens the greenhouse, carbon dioxide and methane are the greenhouse, hydrogen makes an envelope. A bare rock has none of it yet.':
+      'Z čoho je vzduch. Dusík rozširuje skleníkový efekt, oxid uhličitý a metán ho tvoria, vodík vytvára obal. Holá skala zatiaľ nemá nič z toho.',
+    'Albedo, life, industry, the heat coming up from below and how old the world is when the clock starts. Then start the clock \u2014 everything stays live once it runs.':
+      'Albedo, život, priemysel, teplo stúpajúce zdola a vek sveta na začiatku. Potom spustite čas \u2014 po spustení zostáva všetko živé.',
+    'A bare rock, paused. Build it one group at a time, then start the clock.':
+      'Holá skala, pozastavená. Postavte ju skupinu po skupine a potom spustite čas.',
+    'The clock is running. Every control stays live.': 'Čas beží. Každý ovládací prvok zostáva živý.',
     'Vapour residence time': 'Čas zotrvania pary',
     'no water': 'bez vody',
     'Water phase': 'Skupenstvo vody',
@@ -66,8 +126,8 @@ export const SK = {
       'Ako sa tento svet volá. Názov ide do uložených pozícií, do exportovaného súboru aj do riadku, ktorý sa vypíše po načítaní. Načítanie predvoleného sveta vráti jeho vlastný názov.',
     'Click a slot to load it.': 'Kliknutím na pozíciu ju načítate.',
     'Save…': 'Uložiť…',
-    'then pick a slot to overwrite. Slot 1 keeps itself.':
-      'a potom vyberte pozíciu, ktorá sa má prepísať. Pozícia 1 sa ukladá sama.',
+    'then pick a numbered slot; it saves over whatever was there. The ↻ tile keeps itself and is never written by hand.':
+      'a potom vyberte číslovanú pozíciu; uloží sa hneď, cez čokoľvek, čo tam bolo. Dlaždica ↻ sa ukladá sama a ručne sa do nej nezapisuje.',
     'Export all…': 'Exportovať všetko…',
     'Every saved world in one file, to keep somewhere that is not this browser':
       'Všetky uložené svety v jednom súbore — na uchovanie mimo tohto prehliadača',
@@ -155,7 +215,6 @@ export const SK = {
     'fast': 'rýchlo',
     'custom': 'vlastné',
     'Ease off automatically when the climate tips': 'Automaticky spomaliť, keď sa klíma preklápa',
-    'Auto-ease is holding the clock back so this tipping can be ': 'Automatické spomalenie drží hodiny, aby sa dalo preklopenie ',
     'The climate is changing too fast to skip over — the simulation is running as quickly as it accurately can.':
       'Klíma sa mení príliš rýchlo na to, aby sa dala preskočiť — simulácia beží tak rýchlo, ako to presnosť dovoľuje.',
 
@@ -332,7 +391,6 @@ export const SK = {
     'Loaded the autosave — {0}, {1} in': 'Načítané automatické uloženie — {0}, v čase {1}',
     // Genitív po „prepísať": prepísať ČO, teda meno sveta necháme ako je -- je
     // to vlastné meno v úvodzovkách povahy, nie skloňované podstatné meno.
-    'Click again to overwrite {0} — {1} in': 'Kliknite znova a prepíšete {0} — v čase {1}',
     'That one keeps itself — pick a numbered slot':
       'Tá sa udržiava sama — vyberte číslovanú pozíciu',
     'Nothing saved automatically yet': 'Zatiaľ nič automaticky uložené',
@@ -667,7 +725,7 @@ export const SK = {
     hold: {
       name: 'Zadržať nekontrolovateľný efekt',
       brief: 'Svet šesť wattov na meter štvorcový pod Simpsonovou–Nakajimovou hranicou — obývateľný, a bez akejkoľvek rezervy. Jeho hviezda je ťažšia než Slnko a spaľuje vodík trikrát rýchlejšie, takže sa táto medzera zatvára sama a neprestane. Udržte planétu obývateľnú miliardu rokov.',
-      hint: 'Hviezdu stlmiť neviete a jasnieť jej nezabránite. Vziať sa dá skleníkový efekt: odstráňte CO₂ a držte ho dole, lebo 2,5-násobný vulkanizmus ho vracia späť. Ak to prestane stačiť, pamätajte, že hranica platí pre pohltené žiarenie oproti tomu, čo atmosféra dokáže vyžiariť — zosvetlite povrch, a suchšia planéta vyžaruje lepšie než vlhká.',
+      hint: 'Hviezdu stlmiť neviete a jasnieť jej nezabránite a CO₂ tu nie je páka: termostat ho už stiahol tak nízko, ako to ide, a jeho úplné odstránenie prehráva pri 654 Myr oproti 763 Myr bez zásahu. Hviezdu triedy F prežije púšť. Vysušte oceán na pár percent jedného a zdvihnite geometriu panví, aby sa zvyšok nemal kam rozliať — púštny svet vydrží do 1,70 S⊕ tam, kde oceánsky vrie pri 1,30. Nezabudnite, že púšť s vodou pod povrchom sa stále počíta ako obývateľná.',
     },
     terraform: {
       name: 'Terraformovať studenú púšť',
@@ -676,12 +734,12 @@ export const SK = {
     },
     eyeball: {
       name: 'Oko červeného trpaslíka',
-      brief: 'Svet s viazanou rotáciou navždy otočený k činnému červenému trpaslíkovi. Jedna pologuľa horí, druhá je chladná pasca, ktorá kradne vodu a nikdy ju nevráti. Udržte pod hviezdou otvorený oceán miliardu rokov.',
-      hint: 'Hustý vzduch prenáša teplo na nočnú stranu a bráni tomu, aby sa tam voda presunula natrvalo. Sledujte XUV — činný červený trpaslík strháva vodu rýchlo.',
+      brief: 'Slapovo uzamknutý svet s plným oceánom pod svojím červeným trpaslíkom a hviezda jasnie: o polovicu za najbližších dvadsať miliónov rokov, dosť na to, aby more pod hviezdou zovrelo. Udržte otvorený oceán pod hviezdou miliardu rokov.',
+      hint: 'Tento svet nezachráni ani hustý vzduch, ani svetlá pevnina — namerané, posunú dátum zlomu o milión rokov. Zachráni ho menej vody (Lobo a kol. 2023): oceán príliš malý na to, aby roznášal teplo okolo planéty, nechá more pod hviezdou a suchú nočnú stranu, a to oko zostane otvorené. Znížte zásobu na pätinu oceánu.',
     },
     dune: {
       name: 'Postaviť púštny svet',
-      brief: 'Umiestnite obývateľnú planétu tam, kde by sa oceánický svet vyvaril. Púštne planéty prežijú oveľa bližšie k hviezde: nenasýtený vzduch vyžaruje nad klasickú hranicu nekontrolovateľného skleníkového efektu a suchá stratosféra brzdí stratu vody.',
+      brief: 'Umiestnite obývateľnú planétu tam, kde by oceánsky svet zovrel. Hviezda stúpa k 1,4 S⊕ počas dvadsiatich miliónov rokov, za hranicu oceánskeho sveta. Púštne planéty prežijú oveľa bližšie k svojej hviezde: nenasýtený vzduch vyžaruje nad klasickú hranicu nekontrolovateľného skleníka a suchá stratosféra brzdí únik vody.',
       hint: 'Proti intuícii, no skutočne (Abe a kol. 2011): dajte jej *menej* vody. Samotné vysušenie však nestačí — pri hlbokých panvách zemského typu sa aj tá troška rozleje do širokých plytkých morí a vzduch zostane vlhký. Zvýšte aj geometriu panví, aby zvyšná voda nemala kam tiecť.',
     },
     oxidation: {
@@ -692,17 +750,18 @@ export const SK = {
     venus: {
       name: 'Zvrátiť Venušu',
       brief: 'Suchý nekontrolovateľný skleníkový efekt: 90 barov CO₂, 460 °C a voda dávno rozložená svetlom a odviata preč. Ochlaďte planétu pod bod varu.',
-      hint: 'Voda je preč a nevráti sa — posuvník zásoby je však váš. Pochovajte CO₂ a dajte zvetrávaciemu termostatu niečo, s čím môže pracovať.',
+      hint: 'Voda je preč a nevráti sa, a v tejto vzdialenosti od hviezdy by jej pridanie prinieslo parný skleníkový efekt. Pochovajte CO₂ — stiahnite posuvník — a povrch klesne pod bod varu do roka; potom zastavte sopky, lebo pri zemskom odplyňovaní je vzduch za dvadsať miliónov rokov späť nad 100 °C. Udržte ho pod varom desať miliónov rokov.',
     },
     hotbranch: {
       name: 'Horúci oceán',
       brief: 'Svet s plným oceánom pod hviezdou, ktorú ovládate. Za hranicou 50 °C existuje stabilná klíma — more, ktoré zostane morom pri teplote kúpeľa — ale vedie k nej len pomalá cesta a dvere sú úzke. Dostaňte planétu nad 50 °C s neporušeným oceánom a udržte ju tam ešte šesťdesiat miliónov rokov.',
-      hint: 'Plynulé zmeny žiarenia sú už zapnuté, takže jedno potiahnutie posunie hviezdu nahor počas dvadsiatich miliónov rokov namiesto skoku — najprv však nechajte bežať hodiny, lebo zmena v čase t = 0 stále skáče. 1,30 S⊕ nestačí a zastaví sa na 40 °C. 1,36 sú tie dvere. 1,40 nimi prejde a už sa nezastaví, a akýkoľvek cieľ dosiahnutý jediným skokom vynesie oceán do neba, albedo s ním, a cesta späť neexistuje.',
+      hint: 'Plynulé zmeny žiarenia sú už zapnuté, takže jedno potiahnutie posunie hviezdu nahor počas dvadsiatich miliónov rokov namiesto skoku — najprv nechajte bežať čas, lebo zmena v t = 0 stále skočí. 1,28 S⊕ nestačí a zastaví sa pri 46 °C. 1,30 sú dvere: 55 °C a more. 1,36 nimi prejde až k 98 °C, vlhkému skleníku, ktorý stráca vodu. 1,40 sa nezastaví vôbec a akýkoľvek cieľ dosiahnutý jedným skokom vezme oceán do neba, albedo s ním, a cesta späť nie je.',
     },
   },
 
   // ---- predvolené svety ----------------------------------------------------
   presets: {
+    blank: 'Nový svet',
     europa: 'Európa',
     ganymede: 'Ganymedes',
     callisto: 'Kallisto',

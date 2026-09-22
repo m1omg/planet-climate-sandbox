@@ -8,6 +8,10 @@ precision highp float;
 
 uniform vec2  uSize;
 uniform int   uFace;
+// The world's seed. planet.js has always set it for this program, and the
+// program never declared it, so every world -- invented or real -- was baked
+// the same cloud deck. Same offset rule as the terrain bake's fieldPoint().
+uniform float uSeed;
 
 //__NOISE__
 
@@ -24,7 +28,8 @@ vec3 faceDir(int face, vec2 uv){
 }
 
 void main(){
-  vec3 cq = faceDir(uFace, gl_FragCoord.xy / uSize);
+  vec3 cq = faceDir(uFace, gl_FragCoord.xy / uSize)
+          + vec3(uSeed*13.7, uSeed*7.1, uSeed*3.3);
   // Three scales: the broad deck, the churn within it, and the warp field that
   // shears one against the other at runtime.
   float lo   = fbm5(cq*2.4);

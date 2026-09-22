@@ -156,6 +156,10 @@ export function classify(w) {
   // the world is mostly made of.
   const steamShare = pH2Omean / Math.max(pTot, 1e-12);
   const runawayNow = (dg.runawayMargin ?? 1) < 0;
+  // How much of the water is in the sky, from the reservoirs. A runaway under
+  // way on a sea that has barely started to leave is a moist greenhouse in its
+  // last act, not yet a steam one.
+  const airborne = water > 0 ? 1 - (dg.condensedWater ?? water) / water : 0;
   const covered = superShare > 0.5 || (runawayNow && steamShare > 0.5);
   //
   // And there has to be some of it left. This was written as `coldT < T_CRIT`,
@@ -227,7 +231,25 @@ export function classify(w) {
   // `water.ocean`, so the state kept the name "a runaway with an ocean still
   // under it ... what is left is liquid" over a planet whose water is ice.
   // The same read-the-reservoir-not-the-column fault the entry gate had.
-  const buriedOcean = covered && water > 0.005 && seaLiquid();
+  //
+  // ...and there has to be a LID. `covered` alone let an ordinary runaway --
+  // Earth at 2.6 S⊕, forty years in, 415 K, 99% of its ocean still liquid and
+  // `hotTarget` zero -- read as Buried Ocean, under a blurb about a hot layer
+  // eating downward through water it cannot mix. That world has no such layer;
+  // its sea is leaving through its own surface, which is the steam runaway
+  // three states down. The paper's cold start (Pierrehumbert 2023 §4) is a hot
+  // isothermal upper layer in contact with a cold liquid or ice boundary, and
+  // `dg.lidded` is that layer: a hot target over the pool. The steam-over-sea
+  // disjunct of `covered` is still what carries the name once the lid forms
+  // over a world whose surface reservoir has emptied into the sky.
+  //
+  // Nothing about how much is left. A share-of-the-inventory term was tried
+  // here to suppress the ninety years on Earth at 2.6 S⊕ between the lid
+  // closing and the last half-kilometre of sea boiling under it, and it took
+  // half the frames of a 60-ocean world's three-megayear burial with it. The
+  // invariant a player can see is the one that holds: while the cross-section
+  // draws liquid under the lid, the state says so, however briefly.
+  const buriedOcean = !!dg.lidded && covered && water > 0.005 && seaLiquid();
 
   // The finished article, and it does NOT need hydrogen. This lived inside
   // hyceanState(), behind `envShare > 0.5` -- H2 and He more than half the dry
@@ -238,7 +260,12 @@ export function classify(w) {
   // nitrogen satisfies both and was falling through to Steam Runaway, whose
   // blurb says the sea is in the sky, over a planet that is supercritical
   // fluid on thirteen hundred kilometres of ice VII.
-  const supercriticalEnvelope = water > 0.005 && superShare > 0.5 && hotDone;
+  //
+  // Both halves of "supercritical", as everywhere else: past the critical
+  // temperature over most of the surface AND under more than the critical
+  // pressure. A hot world with a thin sky is a baked one, not this.
+  const supercriticalEnvelope = water > 0.005 && superShare > 0.5 && hotDone
+    && pTot * 1e5 >= P_CRIT_H2O;
 
   // Which Hycean state, or none. Returns null when the world has an envelope
   // but nothing under it worth naming, and the chain then carries on to the
@@ -291,14 +318,19 @@ export function classify(w) {
   // down. Which is exactly the mistake the runaway branch was making below.
   // The surface really is molten-hot; it is just not the whole planet, and the
   // water underneath is the part worth naming.
-  if (dg.smallWaterworld && !dg.hasWater && dg.smallWaterworld.backgroundBar<1e-6) id = 'airless';
-  else if (dg.smallWaterworld && T < 273.15 && ice > 0.93) {
+  // The low-gravity closure names the world once it is MOSTLY that closure.
+  // `dg.smallWaterworld` exists from the first non-zero overlap weight, and
+  // gating on its presence switched the whole chain at a weight of a
+  // thousandth -- the numbers underneath blend by weight, the name did not.
+  const sww = (dg.smallWaterworld?.weight ?? 0) >= 0.5 ? dg.smallWaterworld : null;
+  if (sww && !dg.hasWater && sww.backgroundBar<1e-6) id = 'airless';
+  else if (sww && T < 273.15 && ice > 0.93) {
     id = dg.subglacial?.ocean && dg.subglacial.liquidDepth > 0 ? 'subglacial' : 'snowball';
   }
-  else if (dg.smallWaterworld?.hasSurfaceOcean) {
+  else if (sww?.hasSurfaceOcean) {
     // Expanded emission removes the plane-parallel runaway ceiling. A short
     // reservoir lifetime is a different failure mode from a steam runaway.
-    id = dg.smallWaterworld.lifetime < 1e9 ? 'evaporatingWaterworld' : 'smallWaterworld';
+    id = sww.lifetime < 1e9 ? 'evaporatingWaterworld' : 'smallWaterworld';
   }
   else if (buriedOcean) id = 'buriedOcean';
   // Above magma for the same reason Buried Ocean is: this state's surface is
@@ -394,7 +426,16 @@ export function classify(w) {
   // opens "the sea has already gone into the sky". A runaway with its sea
   // still under it is a real state and the chain has names for it; this is
   // not one of them.
-  else if (T > 420 && dg.hasWater && !seaLiquid()) id = 'steamRunaway';
+  //
+  // ...and `!seaLiquid()` was the wrong test for it. It made the name wait for
+  // the LAST of the sea to go, so the whole of an ordinary runaway -- ocean
+  // boiling into a steam sky at 415 K with most of it still liquid -- had no
+  // name here and was being called Buried Ocean above. What the blurb claims
+  // is that the sea is going into the sky, and that is measurable: the world is
+  // past its runaway limit, or the air above the water is already mostly water.
+  // The reported 431 K world with 0.0008% of its water airborne and a closed
+  // energy budget fails both and reads Moist Greenhouse, as it should.
+  else if (T > 420 && dg.hasWater && (steamShare > 0.5 || (runawayNow && airborne > 0.1))) id = 'steamRunaway';
   else if (lossPerGyr > 0.015 && T > 305 && water > 0.01) id = 'moist';
   else if (T < 130 && dg.pN2 > 0.3) id = 'titan';
   else if (water < 0.015) id = T > 290 ? 'baked' : 'frozen';

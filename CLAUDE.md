@@ -27,21 +27,26 @@ and known broken. A red check is not an exception — fix it, then ship.
 
 ## Before pushing
 
-All eleven checks, every time:
+All thirteen checks, every time:
 
 ```bash
 node src/selftest.js            # physics, coverage, determinism, controls
 node tools/calibrate.mjs        # observational anchors + reported known gaps
 node tools/smoketest.mjs        # every module against a stub DOM
-node tools/glslcheck.mjs
-node tools/shadercompile.mjs
-node tools/gl1check.mjs
+node tools/glslcheck.mjs        # needs @shaderfrog/glsl-parser (npm i --no-save)
+node tools/shadercompile.mjs    # needs gl (npm i --no-save gl); xvfb-run on a headless box
+node tools/gl1check.mjs         # same
 node tools/rendercheck.mjs
-node tools/bakecheck.mjs        # slow, minutes
-node tools/bodycheck.mjs
+node tools/bakecheck.mjs        # slow, minutes; same GL dependency
+node tools/bodycheck.mjs        # same
 node tools/fallbackcheck.mjs
 node tools/resumecheck.mjs
+node tools/historycheck.mjs     # the history sampling rule, in all four builds
+node tools/reviewcheck.mjs      # the cross-build review regressions
 ```
+
+The GPU tools print "skipping" without their dependency; a skipped check is not
+a passed one. `altdev2/` has its own list in its README, and every tool in it.
 
 `calibrate.mjs` matters most: a change that fixes one anchor usually moves three
 others. Its yellow `GAP` rows are known deviations that report on every run and

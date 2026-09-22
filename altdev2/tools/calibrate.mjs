@@ -499,6 +499,24 @@ anchor('Mars', mars.diag.Tmean, 195, 235, 'K', 'observed ~215');
     '2023 gives the mechanism and no rate.');
 }
 
+// ---- the handoff between the two water closures -----------------------------
+{
+  // The Small Waterworld preset scaled in mass at fixed water share, settled a
+  // megayear each, at the two ends of the overlap weight's mass ramp.
+  const base = PRESETS.smallWaterworld.params;
+  const at = (m) => { const s = new Simulation({ ...base, mass: m, water: base.water * (m / 0.08) }); s.runYears(1e6); return s.world.diag.Tmean; };
+  deviation('Waterworld closure handoff, 0.12 → 0.30 M⊕', at(0.12) - at(0.30), -10, 10, 'K',
+    'The low-gravity closure (Arnscheidt et al. 2019) and the standard band model do ' +
+    'not agree on a gas-free steam world at 0.98 S⊕: one settles warm with a steam ' +
+    'greenhouse, the other freezes to a waterbelt under a millibar of vapour. The ' +
+    'overlap weight ramps the fluxes, escape, step bound and runaway margin between ' +
+    'them continuously (tools/handoffcheck.mjs holds that), so what is left is a ' +
+    'steep but smooth ramp. Water self-broadening was tried (x5 on the water ' +
+    'term) and moved the cold end by five kelvin, so the disagreement is the ' +
+    'standard closure\'s ice-albedo feedback under a thin sky, not its broadening. ' +
+    'Neither closure has an anchor in that regime; nothing is tuned to hide it.');
+}
+
 // ---- the far future: how long Earth has, and what ends it -----------------
 //
 // Three papers, and the useful thing about them together is that they disagree

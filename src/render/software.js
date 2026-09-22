@@ -157,6 +157,11 @@ export class SoftwareView {
       sun: [0.62, 0.28, 0.73], starColor: sc,
       terrain: this.terrain, bandT, bandIce,
       oceanFrac: dg.flooded ?? dg.oceanFrac,
+      // What the planet is actually supporting. The GL path has taken this
+      // since vegetation stopped being warmth-and-water alone; this one never
+      // got it, so the two renderers disagreed about whether a dead world is
+      // green.
+      bio: dg.bio ?? p.biosphere ?? 0,
       seaLevel: seaLevelForLand(1 - (dg.flooded ?? dg.oceanFrac)),
       waterCap: dg.waterCap, glaciated: dg.glaciatedShare ?? 1,
       locked: lam, cloud,

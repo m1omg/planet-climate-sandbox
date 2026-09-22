@@ -40,6 +40,8 @@ export const SK = {
     'Every control is live. Change one mid-run and the planet keeps its current temperature, ice and history — you are intervening on a running world, not restarting it. The four highlighted below also move on their own as the simulation evolves them. Click any value to type it exactly.':
       'Každý ovládací prvok je živý. Ak ho zmeníte počas behu, planéta si ponechá súčasnú teplotu, ľad aj históriu — zasahujete do bežiaceho sveta, nespúšťate ho odznova. Štyri zvýraznené prvky sa navyše hýbu samy, ako ich mení simulácia. Kliknutím na hodnotu ju možno zadať presne.',
     'Body': 'Teleso',
+    'no carbon outgassing': 'bez sopečného uhlíka',
+    '{0}× Earth’s outgassing': '{0}× zemské odplyňovanie',
     'Orbit & Star': 'Dráha a hviezda',
     'Atmosphere': 'Atmosféra',
     'Surface & Interior': 'Povrch a vnútro',

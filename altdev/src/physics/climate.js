@@ -130,6 +130,11 @@ export function resetWorld(w, params) {
   w.fossil = null;     // a fresh world has its fossil carbon still in the ground
   w.carbonDeep = null; // rebuilt from the planet's mass on the first step
   w.bio = null;        // the living biosphere, grown from the conditions
+  // The step controller's memory and the smoothed rates it bounds on. None of
+  // it is climate, and none of it was cleared: a preset loaded after a runaway
+  // started from the runaway's escape flux and oxygen rate.
+  for (const k of ['trustOver', 'ringing', 'lastMove', 'escape', 'o2Rate', 'o2Flux',
+    'ch4Source', 'ch4Tau', 'lifeRoom', 'landIceTarget', 'trapActive', 'emitting']) w[k] = undefined;
   // Where the evolving controls stood when the clock started. The star's
   // brightness and the interior's heat are absolute functions of age rather
   // than rates to integrate, so they are computed from here every step instead
