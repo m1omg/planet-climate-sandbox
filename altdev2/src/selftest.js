@@ -5695,13 +5695,15 @@ function runChecks() {
     // spot-checked, because "I added it switched off" is exactly the claim that
     // is easy to believe and cheap to break.
     //
-    // There are four worlds WITH an envelope now, and they are named here rather
+    // There are five worlds WITH an envelope now, and they are named here rather
     // than filtered out by a property. Every other check in this file that had
     // to learn about them uses a property, and this one is the exception on
     // purpose: it is the promise that the inherited set was not touched, so it
     // has to notice a twenty-seventh name appearing in it. If a future preset
     // belongs on this list, adding it here is the deliberate act.
-    const ENVELOPED = ['hycean', 'lowSunHycean', 'superRunaway', 'coldStart'];
+    // hydrogenColdStart: the icy super-Earth under half a bar of H2, added on
+    // purpose to show what the gas does to a cold-start burial.
+    const ENVELOPED = ['hycean', 'lowSunHycean', 'superRunaway', 'coldStart', 'hydrogenColdStart'];
     const carriers = Object.entries(PRESETS)
       .filter(([k, v]) => (v.params.h2Bar ?? 0) > 0 && !ENVELOPED.includes(k)).map(([k]) => k);
     const missing = ENVELOPED.filter((k) => !(PRESETS[k]?.params.h2Bar > 0));

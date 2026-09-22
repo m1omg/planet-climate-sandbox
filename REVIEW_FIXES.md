@@ -19,6 +19,13 @@
   0.8% for liquid and steam, 4% at worst near the critical point. The drop
   across the reported world's supercritical part is 7 bar over 233 m, not 33.
   Self-test 7i2, from that world, failed on the old code first.
+- **CI on main was red since the two cold-start presets**, and it was
+  reported green here. Three self-test checks keep explicit lists of the
+  presets that may be wet or carry hydrogen, on purpose, so a new one has
+  to be named; `icyColdStart` (half water) and `hydrogenColdStart` (half a
+  bar of H₂) never were. Named now. And `buriedcheck` counted the melt film
+  on ice VII — sixteen metres on 1246 km, below the critical point, correct —
+  as an ocean band; it excludes the film and holds it to being a film.
 
 ## September 22, third push: the lid, the water chips, and faster verification
 

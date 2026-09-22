@@ -11,7 +11,7 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 412 physics, coverage, determinism and control checks
+node src/selftest.js            # 421 physics, coverage, determinism and control checks
 node tools/calibrate.mjs        # 35 observational anchors + 13 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
