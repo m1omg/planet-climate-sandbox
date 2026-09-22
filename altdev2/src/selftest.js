@@ -753,6 +753,34 @@ function runChecks() {
     // pool's budget does not pay -- so a test of "is the pool still below
     // critical" is unreachable by construction and fires on the cap instead of
     // on the physics. It did: a hundred-Myr cold start came out labelled Steam
+    // The hydrogen-free twin. Half water by mass at two Earth masses under a
+    // bar of nitrogen, temperate at 1.20 S(+), and the longest Buried Ocean
+    // the model produces: the span is the liquid above the ice VI onset
+    // divided by the mixed-down flux, and it was measured across mass, water
+    // share and starlight before this world was chosen. Pinned as a path,
+    // like the Hycean one: moist, then buried for tens of megayears, then
+    // fluid on ice with no liquid left, and never Steam Runaway -- a sea
+    // four thousand oceans deep does not go into the sky.
+    {
+      const sim = new Simulation({ ...PRESETS.icyColdStart.params });
+      const first = {}, last = {};
+      let steam = 0;
+      for (let yr = 0; yr <= 1.5e8; yr += 5e5) {
+        sim.runYears(yr - sim.world.time);
+        const cid = classify(sim.world).id;
+        first[cid] ??= yr; last[cid] = yr;
+        if (cid === 'steamRunaway') steam++;
+        if (cid === 'supercriticalEnvelope') break;
+      }
+      const buried = (last.buriedOcean ?? -1) - (first.buriedOcean ?? 0);
+      check('The icy super-Earth crosses without hydrogen and stays a buried ocean for tens of megayears',
+        first.moist != null && buried > 3e7 && first.supercriticalEnvelope > first.buriedOcean
+          && steam === 0 && !(PRESETS.icyColdStart.params.h2Bar > 0),
+        `moist from ${((first.moist ?? 0) / 1e6).toFixed(1)} Myr, buried for ${(buried / 1e6).toFixed(0)} Myr from `
+          + `${((first.buriedOcean ?? 0) / 1e6).toFixed(1)} Myr, supercritical at ${((first.supercriticalEnvelope ?? 0) / 1e6).toFixed(0)} Myr, `
+          + `${steam} steam-runaway samples`);
+    }
+
     // Runaway Greenhouse, the state for a sea that is already in the sky, while
     // the cross-section under the label drew 200 km of liquid water and said
     // 79% not converted. Caught in a browser, so it is held here in Node.
