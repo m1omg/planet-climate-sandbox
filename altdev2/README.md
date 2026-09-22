@@ -23,7 +23,9 @@ node tools/bodycheck.mjs        # do the real surface maps reach both surface st
 node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
 node tools/resumecheck.mjs      # does the tab survive being switched away from?
 node tools/identity.mjs         # every preset's whole state, to compare against before a change
-node tools/phasecheck.mjs       # ice melts into liquid, supercritical needs supercritical conditions, ice edges are stepped through, the carbon seal reads the ice under the pool
+node ../tools/quick.mjs         # from the repo root: the checks for what the working tree changed
+node ../tools/sections.mjs altdev2 --only 3c,7j   # named self-test sections; no --only runs all, in parallel
+node tools/phasecheck.mjs       # ice melts into liquid, supercritical needs supercritical conditions, ice edges are stepped through, the carbon seal reads the ice under the pool, a lid does not need the critical point
 node tools/handoffcheck.mjs     # the low-gravity closure hands over to the band model without a gate
 node tools/scenariocheck.mjs    # every scenario is lost by doing nothing and won by its own hint
 node tools/waterworldcheck.mjs  # the small-waterworld presets and the icy moons

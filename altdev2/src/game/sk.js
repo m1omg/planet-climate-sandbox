@@ -489,6 +489,7 @@ export const SK = {
     // Kratšie ako „{0} % je stále studených“: pásmo prierezu má na úzkom paneli
     // miesto na jeden riadok a názov vrstvy sa oň delí.
     '{0}% not converted': 'nepremenených {0} %',
+    'melt film on the ice': 'tavný film na ľade',
     '{0} GPa at the floor': '{0} GPa na dne',
     'supercritical interior': 'superkritické vnútro',
     'deep water is supercritical': 'hlbinná voda je superkritická',
@@ -618,6 +619,8 @@ export const SK = {
     'none': 'žiadna',
     'dead': 'mŕtve',
     'ocean world': 'oceánický svet',
+    '10% water': '10 % vody',
+    'Hycean': 'hyceánsky',
     'Early Venus': 'Mladá Venuša',
     'Noachian Mars': 'Noachický Mars',
     'Archean': 'Archaikum',

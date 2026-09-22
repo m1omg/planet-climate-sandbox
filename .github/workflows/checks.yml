@@ -1,0 +1,93 @@
+# Every check in CLAUDE.md, on every push to main and every pull request, so
+# the full suite is something you read the result of rather than sit through.
+# The self-tests run through tools/sections.mjs across the runner's cores; the
+# GPU tools run under Xvfb with headless-gl, exactly as on a headless box.
+name: checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  altdev2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-utils libxi-dev libglu1-mesa-dev libglew-dev pkg-config
+      - run: npm i --no-save @shaderfrog/glsl-parser gl
+      - name: self-test (parallel)
+        run: node tools/sections.mjs altdev2
+      - name: calibrate, smoke, status, phase, handoff, scenarios
+        working-directory: altdev2
+        run: |
+          node tools/calibrate.mjs
+          node tools/smoketest.mjs
+          node tools/statuscheck.mjs
+          node tools/phasecheck.mjs
+          node tools/handoffcheck.mjs
+          node tools/scenariocheck.mjs
+      - name: water-world tools
+        working-directory: altdev2
+        run: |
+          node tools/buriedcheck.mjs
+          node tools/waterworldcheck.mjs
+          node tools/mixedwatercheck.mjs
+          node tools/structurecheck.mjs
+          node tools/venusdisplaycheck.mjs
+          node tools/venuspaintcheck.mjs
+      - name: shaders and renderers
+        working-directory: altdev2
+        run: |
+          node tools/glslcheck.mjs
+          xvfb-run -a node tools/shadercompile.mjs
+          xvfb-run -a node tools/gl1check.mjs
+          node tools/rendercheck.mjs
+          node tools/fallbackcheck.mjs
+          node tools/resumecheck.mjs
+          xvfb-run -a node tools/bodycheck.mjs
+          xvfb-run -a node tools/bakecheck.mjs
+  root-altdev-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-utils libxi-dev libglu1-mesa-dev libglew-dev pkg-config
+      - run: npm i --no-save @shaderfrog/glsl-parser gl
+      - name: self-tests (parallel)
+        run: |
+          node tools/sections.mjs .
+          node tools/sections.mjs altdev
+          # dev carries seventeen documented standing failures; it must not gain one
+          node tools/sections.mjs dev | tee dev.log || true
+          test "$(grep -c '^FAIL' dev.log)" -le 17
+      - name: root tools
+        run: |
+          node tools/calibrate.mjs
+          node tools/smoketest.mjs
+          node tools/glslcheck.mjs
+          xvfb-run -a node tools/shadercompile.mjs
+          xvfb-run -a node tools/gl1check.mjs
+          node tools/rendercheck.mjs
+          xvfb-run -a node tools/bakecheck.mjs
+          xvfb-run -a node tools/bodycheck.mjs
+          node tools/fallbackcheck.mjs
+          node tools/resumecheck.mjs
+          node tools/historycheck.mjs
+          node tools/reviewcheck.mjs
+      - name: altdev tools
+        working-directory: altdev
+        run: |
+          node tools/calibrate.mjs
+          node tools/smoketest.mjs
+          node tools/glslcheck.mjs
+          xvfb-run -a node tools/shadercompile.mjs
+          xvfb-run -a node tools/gl1check.mjs
+          node tools/rendercheck.mjs
+          xvfb-run -a node tools/bakecheck.mjs
+          xvfb-run -a node tools/bodycheck.mjs
+          node tools/fallbackcheck.mjs
+          node tools/resumecheck.mjs

@@ -264,8 +264,17 @@ export function classify(w) {
   // Both halves of "supercritical", as everywhere else: past the critical
   // temperature over most of the surface AND under more than the critical
   // pressure. A hot world with a thin sky is a baked one, not this.
-  const supercriticalEnvelope = water > 0.005 && superShare > 0.5 && hotDone
-    && pTot * 1e5 >= P_CRIT_H2O;
+  //
+  // Or the conversion has run out of liquid to convert. `hotDone` compares the
+  // hot layer with a target that is the whole column, and on a deep waterworld
+  // the column is mostly ice VI/VII that the hot layer eats through by
+  // conduction over gigayears -- so a world of supercritical fluid standing
+  // on three thousand kilometres of ice, its last liquid gone, read Steam
+  // Runaway ("the sea has gone into the sky") for the rest of its life. Once
+  // no liquid is left under the lid, the paper's terminal state is reached:
+  // fluid without a surface over a floor, and this is its name.
+  const supercriticalEnvelope = water > 0.005 && superShare > 0.5
+    && (hotDone || !seaLiquid()) && pTot * 1e5 >= P_CRIT_H2O;
 
   // Which Hycean state, or none. Returns null when the world has an envelope
   // but nothing under it worth naming, and the chain then carries on to the
