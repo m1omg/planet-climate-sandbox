@@ -475,7 +475,11 @@ export const SK = {
     'steam atmosphere': 'parná atmosféra',
     'liquid ocean': 'tekutý oceán',
     'high-pressure ice': 'vysokotlakový ľad',
-    'thermal boundary': 'tepelné rozhranie',
+    'thermal boundary (steam)': 'tepelné rozhranie (para)',
+    'thermal boundary (supercritical)': 'tepelné rozhranie (nadkritická tekutina)',
+    'thermal boundary (liquid)': 'tepelné rozhranie (kvapalina)',
+    'water boils at {0} °C under it': 'voda pod ním vrie pri {0} °C',
+    'grades into liquid at 374 °C': 'pri 374 °C plynule prechádza do kvapaliny',
     '{0} W/m² across it': 'prechádza ním {0} W/m²',
     'silicate interior': 'silikátové vnútro',
     // „bez povrchu“ to hovorilo predtým a bolo to nesprávne: superkritická

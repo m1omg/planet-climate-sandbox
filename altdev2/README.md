@@ -11,7 +11,7 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 412 physics, coverage, determinism and control checks
+node src/selftest.js            # 421 physics, coverage, determinism and control checks
 node tools/calibrate.mjs        # 35 observational anchors + 13 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
@@ -33,6 +33,7 @@ node tools/mixedwatercheck.mjs  # water under a background gas on a small world
 node tools/structurecheck.mjs   # the cross-section is hydrostatically consistent
 node tools/statuscheck.mjs      # saves resume identically; boundary diagnostics are continuous
 node tools/buriedcheck.mjs      # a buried ocean is named for what the column holds
+python3 tools/watereos.py       # regenerates the IAPWS-95 water density table (needs `pip install iapws`)
 node tools/venusdisplaycheck.mjs # a shallow Venus pool is drawn only where it can exist
 node tools/venuspaintcheck.mjs  # ...and the software renderer paints it
 node tools/browsercheck.mjs     # drives a real headless Chrome; needs the page served

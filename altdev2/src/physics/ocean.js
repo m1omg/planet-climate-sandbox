@@ -1,4 +1,5 @@
 import { clamp, T_CRIT_H2O, P_CRIT_H2O, SIGMA, psatH2O } from './constants.js';
+import { waterDensityAt, boilingPoint, steamConductivity } from './watereos.js';
 
 // ---------------------------------------------------------------------------
 // How deep the water goes, and what it turns into on the way down.
@@ -611,7 +612,7 @@ export function coldPoolStructure(dg) {
 // than a wrong pixel. So the list lives here, `add` refuses anything not on it,
 // and the smoketest holds it against the renderer's table in both directions.
 export const LAYER_KINDS = ['envelope', 'air', 'supercritical', 'steam', 'vapour', 'iceIh',
-  'interface', 'ocean', 'seaice', 'iceVI', 'iceVII', 'iceHP', 'rock'];
+  'boundarySteam', 'boundarySuper', 'interface', 'ocean', 'seaice', 'iceVI', 'iceVII', 'iceHP', 'rock'];
 
 export function columnLayers(w, dg, airThick, scaleH = 0) {
   const ob = dg.oceanBase || {};
@@ -651,8 +652,9 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
   const addWater = (st, depth, topT, bulkT, note, args) => {
     if (!(depth > 0)) return;
     const first = layers.length;
-    const jump = topT - bulkT;
     const flux = Math.max(dg.mixedFlux ?? 0, 1e-6);
+    const g = dg.g;
+    const p0 = layers[first-1]?.P?.at(-1) ?? (dg.pTotMean ?? 0)*1e5;
     // Never more than a fiftieth of the water it sits on. A dim world with a big
     // jump can put k*dT/F above the whole column, and a boundary layer thicker
     // than the thing it bounds is not a boundary layer -- it means the column is
@@ -672,10 +674,34 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // metres the metre floor exceeded the two-percent cap, and a clamp whose
     // floor is above its ceiling gave a THICKER skin for a smaller jump.
     const skinCap = Math.max(0.02 * bound, 0);
-    const skin = jump > 0.5
-      ? clamp(K_WATER * jump / flux, Math.min(1, skinCap), skinCap) : 0;
-    if (skin > 0) add('interface', skin, [topT, bulkT], '{0} W/m² across it', [flux < 1 ? flux.toFixed(2) : flux.toFixed(1)]);
-    const rest = Math.max(depth - skin, 0);
+    // A liquid surface is never hotter than water boils at the pressure on it.
+    // The boundary was drawn as one liquid band from the surface temperature
+    // down, and on a 20 bar hydrogen world that read 384 °C water at 198 bar,
+    // where it boils at 365, and later 985 °C "liquid" at 557 bar -- reported
+    // from play. Above the boiling point what sits on the water is steam; past
+    // the critical pressure there is no boiling point and no surface, and the
+    // part over 374 °C is supercritical fluid grading into the liquid under it.
+    // Both are the same conductive layer carrying the same flux, so each part
+    // is k·ΔT/F with its own conductivity -- steam's is a tenth of water's.
+    const ceiling = boilingPoint(p0);
+    const hot = topT > ceiling + 0.5;
+    const liqTop = hot ? ceiling : topT;
+    const hotMid = 0.5 * (topT + ceiling);
+    let hotSkin = hot ? steamConductivity(hotMid, waterDensityAt(hotMid, p0, 'fluid'))
+      * (topT - ceiling) / flux : 0;
+    let skin = liqTop - bulkT > 0.5 ? K_WATER * (liqTop - bulkT) / flux : 0;
+    if (topT - bulkT > 0.5 && hotSkin + skin > 0) {
+      const scale = clamp(hotSkin + skin, Math.min(1, skinCap), skinCap) / (hotSkin + skin);
+      hotSkin *= scale; skin *= scale;
+    } else hotSkin = skin = 0;
+    if (hotSkin > 0) {
+      if (p0 < P_CRIT_H2O) add('boundarySteam', hotSkin, [topT, ceiling],
+        'water boils at {0} °C under it', [(ceiling - 273.15).toFixed(0)]);
+      else add('boundarySuper', hotSkin, [topT, ceiling], 'grades into liquid at 374 °C');
+    }
+    if (skin > 0) add('interface', skin, [liqTop, bulkT], '{0} W/m² across it', [flux < 1 ? flux.toFixed(2) : flux.toFixed(1)]);
+    const skins = layers.length - first;
+    const rest = Math.max(depth - skin - hotSkin, 0);
     const deep = Math.min(st.superDepth ?? 0, rest);
     const baseT = st.baseTemperature ?? bulkT;
     add('ocean', rest - deep, [bulkT, Math.min(baseT, T_CRIT_H2O)], note, args);
@@ -686,18 +712,35 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // the eye believes.
     add('supercritical', deep, [Math.max(bulkT, T_CRIT_H2O), baseT],
       depth > deep ? 'no boundary' : note, depth > deep ? [] : args);
-    // Integrate the same compressible density law as oceanStructure. Anchor
-    // both ends to its pressure solve (rather than rounding depth back to mass).
-    const p0 = layers[first-1]?.P?.at(-1) ?? (dg.pTotMean ?? 0)*1e5;
+    // The boundary is weighed with the density it has at each depth: steam or
+    // supercritical fluid above the ceiling, hot liquid below it (IAPWS-95).
+    // The cold-ocean law gave all of it 1000 kg/m^3, which on a 985 °C top is
+    // six times too heavy.
+    let previous = p0;
+    for (let i = first; i < first + skins; i++) {
+      const l = layers[i], phase = l.kind === 'interface' ? 'liquid' : 'fluid';
+      const n = 24, dz = l.metres / n;
+      let p = previous;
+      for (let k = 0; k < n; k++) {
+        const T = l.T[0] + (l.T[1] - l.T[0]) * (k + 0.5) / n;
+        const half = p + 0.5 * waterDensityAt(T, p, phase) * g * dz;
+        p += waterDensityAt(T, half, phase) * g * dz;
+      }
+      l.P = [previous, p]; previous = p;
+    }
+    // Under it, integrate the same compressible density law as oceanStructure.
+    // Anchor both ends to its pressure solve (rather than rounding depth back to
+    // mass): the floor's pressure is the weight of all the water above it,
+    // whatever density the boundary was drawn with.
     const p1 = st.iceDepth>0 ? st.pMelt : st.basePressure;
     const exponent = 1-1/K_PRIME;
-    const a = Math.pow(1+K_PRIME*p0/K0,exponent);
-    const b = Math.pow(1+K_PRIME*Math.max(p1,p0)/K0,exponent);
-    let z=0,previous=p0;
-    for(let i=first;i<layers.length;i++){
+    const a = Math.pow(1+K_PRIME*previous/K0,exponent);
+    const b = Math.pow(1+K_PRIME*Math.max(p1,previous)/K0,exponent);
+    let z=0;
+    for(let i=first+skins;i<layers.length;i++){
       z+=layers[i].metres;
-      const next=i===layers.length-1 ? Math.max(p1,p0)
-        : K0/K_PRIME*(Math.pow(a+(b-a)*z/depth,1/exponent)-1);
+      const next=i===layers.length-1 ? Math.max(p1,previous)
+        : K0/K_PRIME*(Math.pow(a+(b-a)*z/rest,1/exponent)-1);
       layers[i].P=[previous,next];previous=next;
     }
   };
@@ -849,7 +892,7 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
         const hotBase = Math.max(Ts, top);
         if (tMelt < T_CRIT_H2O - 1 && hotBase > tMelt + 1) {
           const flux = Math.max(dg.mixedFlux ?? 0, 1e-6);
-          const topT = Math.min(hotBase, T_CRIT_H2O);
+          const topT = Math.min(hotBase, boilingPoint(pIce));
           const film = clamp(K_WATER * (topT - tMelt) / flux, 1, 0.02 * cp.iceDepth);
           add('ocean', film, [topT, tMelt], 'melt film on the ice');
         }
@@ -910,7 +953,7 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
         }
       } else if (tot > 0 && ice / tot > 0.5) {
         add('seaice', liquid || 1000, [Ts], 'frozen through');
-      } else addWater(ob, liquid, Math.min(Ts, T_CRIT_H2O), bulk);
+      } else addWater(ob, liquid, Ts, bulk);
     }
     // The subglacial branch above solves its own column under the shell and
     // draws that column's floor. `ob` is the same water solved as if it had a

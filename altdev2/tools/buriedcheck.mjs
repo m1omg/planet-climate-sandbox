@@ -75,16 +75,22 @@ const REPORTED = {...PRESETS.earth.params, mass:10, water:2986.1, insolation:1.9
   xuvFraction:0.00000306144, n2Bar:20, o2Bar:0.210064, co2Bar:0.00373358,
   ch4Bar:0.00000222286, internalHeat:0.088502, brightening:0};
 const at = (yrs) => { const s = new Simulation({...REPORTED}); s.runYears(yrs); return s.world; };
-const drawnLiquid = (w) => {
-  const dg = w.diag;
-  return columnLayers(w, dg, 5*scaleHeight(dg), scaleHeight(dg))
-    .filter((l) => l.kind === 'ocean').reduce((a, l) => a + l.metres, 0);
-};
+// The melt film is not an ocean. Ice VII at 2.8 GPa melts at 107 °C, below the
+// critical point, so between the 1100 °C fluid and the ice there is a liquid
+// layer carrying the flux down, k·ΔT/F thick -- sixteen metres here, on 1246 km
+// of ice. It was added after this check was written (a lid drew hot fluid
+// straight onto ice), and counting it made this red on main; the fault the
+// check is for is an ocean band, and the film is held to being a film.
+const isFilm = (l) => l.kind === 'ocean' && l.note === 'melt film on the ice';
+const layersOf = (w) => { const dg = w.diag; return columnLayers(w, dg, 5*scaleHeight(dg), scaleHeight(dg)); };
+const drawnLiquid = (w) => layersOf(w)
+  .filter((l) => l.kind === 'ocean' && !isFilm(l)).reduce((a, l) => a + l.metres, 0);
+const drawnFilm = (w) => layersOf(w).filter(isFilm).reduce((a, l) => a + l.metres, 0);
 const drawnBelowLid = (w) => {
   const dg = w.diag;
   const L = columnLayers(w, dg, 5*scaleHeight(dg), scaleHeight(dg));
   const i = L.findIndex((l) => l.kind === 'interface' || l.kind === 'ocean'
-    || /^ice/.test(l.kind));
+    || /^boundary|^ice/.test(l.kind));
   return i < 0 ? 0 : L.slice(i).filter((l) => l.kind !== 'rock')
     .reduce((a, l) => a + l.metres, 0);
 };
@@ -114,8 +120,10 @@ check('a runaway is not named for a sea in the sky while the sea is still liquid
 // the entry gate had.
 check('a buried ocean is not named for liquid once its pool is all ice VII', () => {
   const w = at(2.4e6);
-  assert.equal(drawnLiquid(w), 0, 'expected no liquid drawn');
+  assert.equal(drawnLiquid(w), 0, 'expected no ocean drawn');
   assert.ok((w.diag.coldPool?.iceDepth ?? 0) > 1e6, 'expected a deep ice floor');
+  assert.ok(drawnFilm(w) < 1e-4 * w.diag.coldPool.iceDepth,
+    `the melt film is ${drawnFilm(w).toFixed(0)} m on ${(w.diag.coldPool.iceDepth/1e3).toFixed(0)} km of ice`);
   assert.notEqual(classifyId(w), 'buriedOcean');
 });
 

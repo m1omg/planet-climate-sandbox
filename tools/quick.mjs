@@ -56,6 +56,9 @@ const gpu = (name) => ({ kind: 'gpu', name });
 const MAP = [
   [/^src\/physics\/(radiation|climate|volatiles|ocean|waterworld|evolution|hypsometry|planet|biosphere|constants)\.js$/,
     [ALL, tool('calibrate'), tool('phasecheck'), tool('handoffcheck'), tool('statuscheck')]],
+  // The drawn column's density and boiling point: read only by the cross-section.
+  [/^src\/physics\/watereos(-table)?\.js$/, [sections('3c', '7i', '7i2'), tool('structurecheck'),
+    tool('phasecheck'), tool('buriedcheck'), tool('smoketest')]],
   [/^src\/physics\/classify\.js$/, [ALL, tool('phasecheck'), tool('statuscheck'), tool('buriedcheck'), tool('waterworldcheck')]],
   [/^src\/physics\/surface\.js$/, [sections('7', '7e', '7f'), tool('historycheck'), tool('reviewcheck')]],
   [/^src\/sim\/clock\.js$/, [sections('7', '7d', '7e', '7f', '3o1z'), tool('smoketest'), tool('scenariocheck'), tool('resumecheck')]],
