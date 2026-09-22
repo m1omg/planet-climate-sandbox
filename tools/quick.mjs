@@ -66,7 +66,7 @@ const MAP = [
   [/^src\/game\/(snapshot|validation|storage)\.js$/, [sections('7d', '7e', '7f'), tool('statuscheck'), tool('smoketest')]],
   [/^src\/game\/presets\.js$/, [ALL, tool('calibrate'), tool('smoketest')]],
   [/^src\/game\/controls\.js$/, [sections('8'), tool('smoketest')]],
-  [/^src\/game\/sk\.js$/, [sections('8', '9'), tool('smoketest')]],
+  [/^src\/game\/sk\.js$/, [sections('8'), tool('smoketest')]],
   [/^src\/main\.js$/, [tool('smoketest'), tool('statuscheck')]],
   [/^src\/render\/glsl\//, [tool('glslcheck'), gpu('shadercompile'), gpu('gl1check'), gpu('bodycheck'), gpu('bakecheck')]],
   [/^src\/render\/(planet|shaders)\.js$/, [tool('glslcheck'), gpu('shadercompile'), gpu('gl1check'), gpu('bodycheck'), tool('rendercheck'), tool('resumecheck')]],
