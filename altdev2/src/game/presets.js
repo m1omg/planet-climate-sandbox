@@ -786,33 +786,32 @@ export const PRESETS = {
   coldStart: { name: 'Cold-Start Runaway', icon: '❄️', params: { ...HYCEAN,
     mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
   // The same road with no hydrogen on it: a two-Earth-mass world that is half
-  // water by mass under a bar of nitrogen, built temperate at 1.20 S(+) and
-  // left to a brightening star. It crosses in three megayears and then spends
-  // FIFTY as a Buried Ocean -- the longest the model produces -- before the
-  // last liquid under the lid is gone and it is fluid on ice VII for good.
+  // water by mass under a bar of nitrogen, built at 1.19 S(+) -- just inside
+  // its runaway limit, which sits between 1.190 and 1.192 -- and left to a
+  // brightening star. It is a moist greenhouse for 158 Myr until the star
+  // carries it over, then a Buried Ocean for 47 Myr before the last liquid
+  // under the lid is gone and it is fluid on ice VII for good.
   // Measured across mass, water share and starlight: the span is set by how
   // much of the column is liquid before the ice VI onset, so it is LONGER on
   // a lighter world (68 Myr at 1.2 M(+), 70% water) and shorter on a heavier
   // one (4-6 Myr at 8 M(+)); two Earth masses is where "super-Earth" and "as
-  // long as it gets" meet. Below 1.20 S(+) the same world stays a moist
-  // greenhouse for the whole run, so the threshold is the preset.
+  // long as it gets" meet.
   icyColdStart: { name: 'Icy Super-Earth, Cold Start', icon: '🧊', params: { ...EARTH,
-    mass: 2, water: waterForShareOfMass(2, 0.5), landFraction: 0, insolation: 1.20,
+    mass: 2, water: waterForShareOfMass(2, 0.5), landFraction: 0, insolation: 1.19,
     n2Bar: 1, co2Bar: 0.001, o2Bar: 0, ch4Bar: 0, biosphere: 0, emissions: 0,
     brightening: 1, startT: 290 } },
-  // The same world with half a bar of hydrogen on it. A Hycean at Earth's
-  // sunlight is past its inner edge from the start (Innes, Tsai &
-  // Pierrehumbert 2023 put it near 0.4 S(+) for a bar of H2), so this is a
-  // cold-start runaway from the moment it exists: temperate for half a
-  // megayear, then a lid, then a HUNDRED megayears of buried ocean -- twice
-  // the hydrogen-free world's, because the hydrogen sky runs hotter and each
-  // kilogram the lid converts costs more of the mixed-down flux, and the pool
-  // warms to hold liquid deeper before ice VII. Half a bar and not more,
+  // The same world with half a bar of hydrogen on it, at 1.03 S(+). Half a
+  // bar moves the runaway limit in from 1.19 to between 1.01 and 1.02, so
+  // this is just past it: temperate for two megayears, then a lid, then 119
+  // megayears of buried ocean -- over twice the hydrogen-free world's. Not
+  // because the hydrogen cools anything: the mixed-down flux is the same
+  // with or without it, but the hydrogen sky runs a thousand kelvin hotter,
+  // so each kilogram the lid converts costs about twice as much to heat. Half a bar and not more,
   // because this is the one hydrogen world in the scan that is temperate at
   // all before it crosses: at two bar the sky is past the runaway limit at
   // 290 K, and the ends of those runs sit on the model's 4000 K ceiling.
   hydrogenColdStart: { name: 'Hydrogen Cold Start', icon: '🌫️', params: { ...EARTH,
-    mass: 2, water: waterForShareOfMass(2, 0.5), landFraction: 0, insolation: 1.20,
+    mass: 2, water: waterForShareOfMass(2, 0.5), landFraction: 0, insolation: 1.03,
     n2Bar: 1, h2Bar: 0.5, co2Bar: 0.001, o2Bar: 0, ch4Bar: 0, biosphere: 0, emissions: 0,
     brightening: 1, startT: 290 } },
   smallWaterworld: { name: 'Small Waterworld (2019)', icon: '🌊', params: { ...EARTH,
