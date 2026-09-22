@@ -28,6 +28,7 @@ export const EARTH = {
   emissions: 0,     // see the `earth` preset; only that world has us on it
   fossilUsed: 0,    // share of the fossil reserve already burnt
   fossilInfinite: false,  // ignore the reserve and burn for ever
+  mantleInfinite: false,  // ignore the mantle's carbon budget and outgas for ever
   outgassing: 1.0,
   // Earth's measured interior heat: 47 +/- 2 TW over the globe, 0.092 W/m^2
   // (Davies & Davies 2010). A twenty-six-hundredth of the sunlight it absorbs,

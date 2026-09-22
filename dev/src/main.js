@@ -285,9 +285,9 @@ function starStatus(text) {
   if (el) el.textContent = text || '';
 }
 
-// Advance whichever mode is on. Called from updateReadout, ten times a second,
-// and idempotent: it reads w.time and writes the value that time implies.
-function driveStar(w) {
+// Where the star stands at the world's own time, or null when no mode is on.
+// Pure: it reads w.time and returns the value that time implies.
+function starValueAt(w) {
   if (mainSeqStar && starAge) {
     const gyr = (w.time - starAge.startYear) / 1e9;
     // Clamped to the slider's range *or wherever the star already was*,
@@ -296,7 +296,34 @@ function driveStar(w) {
     // against a 0.005 floor now, but it was 0.05 and turning the star on threw
     // Titan four and a half times brighter before it had ticked once.
     const lo = Math.min(SLIDER_MIN, starAge.baseS), hi = Math.max(SLIDER_MAX, starAge.baseS);
-    const v = clamp(starAge.baseS * Math.pow(1 + BRIGHTEN_PER_GYR, gyr), lo, hi);
+    return clamp(starAge.baseS * Math.pow(1 + BRIGHTEN_PER_GYR, gyr), lo, hi);
+  }
+  if (!slew) return null;
+  const span = Math.abs(slew.to - slew.from);
+  const need = span / EASE_PER_YEAR;
+  const f = need > 0 ? clamp((w.time - slew.startYear) / need, 0, 1) : 1;
+  return slew.from + (slew.to - slew.from) * f;
+}
+
+// Everything that moves a control off simulated time, run by the clock once
+// per step -- see Simulation.stepOnce() for why. The star used to be driven
+// from the readout, ten times a REAL second, which at the top of the rate
+// slider is once every thirty megayears of simulated time: a brightening Sun
+// was a staircase, and a step-size-dependent one, because each riser landed
+// wherever the frame happened to end.
+function stepDrive(w) {
+  scenarioDrive(w);
+  const v = starValueAt(w);
+  if (v != null && Math.abs((w.params.insolation ?? 0) - v) > 1e-9) w.params.insolation = v;
+}
+sim.drive = stepDrive;
+
+// Show whichever mode is on. Called from updateReadout, ten times a second,
+// and idempotent: the world's value is already set by stepDrive; this puts it
+// on the slider and writes the status line.
+function driveStar(w) {
+  const v = starValueAt(w);
+  if (mainSeqStar && starAge) {
     setStarValue(v);
     starStatus(`brightening ${(BRIGHTEN_PER_GYR * 100).toFixed(0)}% per Gyr` + sinceManual(w, v));
     return;
@@ -305,7 +332,6 @@ function driveStar(w) {
   const span = Math.abs(slew.to - slew.from);
   const need = span / EASE_PER_YEAR;
   const f = need > 0 ? clamp((w.time - slew.startYear) / need, 0, 1) : 1;
-  const v = slew.from + (slew.to - slew.from) * f;
   setStarValue(v);
   if (f >= 1) { slew = null; starStatus(''); return; }
   starStatus(`easing to ${slew.to.toFixed(3)} S⊕ — ${fmtTime(need * (1 - f))} to go`
@@ -345,8 +371,9 @@ function rebaseStar() {
 // Skipped while that control is being typed into or dragged, for the same reason
 // syncLiveControls skips: nothing should rewrite a field under someone's cursor.
 function setStarValue(v) {
-  if (Math.abs((sim.world.params.insolation ?? 0) - v) < 1e-9) return;
-  sim.setParams({ insolation: v });
+  // Normally already there, set by stepDrive on the last step; a paused world
+  // takes no steps, and then this is what moves it.
+  if (Math.abs((sim.world.params.insolation ?? 0) - v) > 1e-9) sim.setParams({ insolation: v });
   const e = els.insolation;
   if (!e || e.editing || e.dragging) return;
   params.insolation = v;
@@ -694,7 +721,6 @@ function scenarioDrive(w) {
 function startScenario(id) {
   const s = SCENARIOS.find((x) => x.id === id);
   activeScenario = s; scenarioResult = null;
-  sim.drive = s.evolve ? scenarioDrive : null;
   Object.assign(params, s.params);
   renderState.seed = Math.random() * 100;
   sim.reset(params);
@@ -710,7 +736,7 @@ function startScenario(id) {
   toast(`${s.icon} ${s.name} — ${s.hint}`, 7000);
 }
 function closeScenario() {
-  activeScenario = null; scenarioResult = null; sim.drive = null;
+  activeScenario = null; scenarioResult = null;
   $('#scenario-banner').hidden = true;
   document.querySelectorAll('[data-scenario]').forEach((b) => b.classList.remove('active'));
 }
@@ -942,7 +968,11 @@ function updateReadout() {
   // When the planet is in a stiff transition the integrator cannot keep up with
   // the requested acceleration. Say so, rather than letting it look frozen.
   const rateOut = $('#rate-out');
-  const achieved = sim.actualRate / 0.1;   // readout runs ten times a second
+  // What the last frame advanced, over the real seconds it was paid for. It
+  // divided by a tenth of a second, the readout's own period, when the number
+  // is per FRAME: at 60 Hz that read six times low, and the "running as fast
+  // as it can" rate was a sixth of the truth.
+  const achieved = sim.actualRate / Math.max(sim.lastRealDt || 0, 1e-3);
   if (!sim.paused && !settling && sim.throttled && achieved < sim.rate * 0.5) {
     rateOut.textContent = `${fmtTime(Math.max(achieved, 0))} / s`;
     rateOut.classList.add('throttled');
@@ -1849,7 +1879,9 @@ function advanceSettle() {
   const w = sim.world;
   const before = w.diag.Tmean;
   sim.runYears(Math.max(2000, w.time * 0.08 + 2000), 2e6, 26);
-  sim.sample();
+  // No sample here: stepOnce() already samples on the calendar and on any
+  // two-kelvin move, and one more per frame put a point every few kiloyears
+  // into a history that thins itself by dropping half.
   settleRounds++;
   const quiet = Math.abs(w.diag.Tmean - before) < 0.01 && Math.abs(w.diag.imbalance) < 0.05;
   if (quiet || settleRounds > 4000) {

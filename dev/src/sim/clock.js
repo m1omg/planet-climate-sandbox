@@ -28,6 +28,7 @@ export class Simulation {
     // below are shares of a frame rather than absolutes, and on a slow machine
     // the frame is not a sixtieth of a second. See advance().
     this.frameCost = 0;
+    this.lastRealDt = 0;      // the real seconds the last advance() was paid for
     // Optional per-step hook for anything that moves a control on simulated
     // time. See stepOnce().
     this.drive = null;
@@ -76,6 +77,7 @@ export class Simulation {
       ? this.frameCost + (seen - this.frameCost) * 0.1
       : seen;
     const dtReal = clamp(realDt, 0, clamp(this.frameCost * 3, 0.1, 1));
+    this.lastRealDt = dtReal;
     this.credit = Math.min(this.credit + dtReal * this.rate, this.rate * 4);
     return this.runCredit();
   }

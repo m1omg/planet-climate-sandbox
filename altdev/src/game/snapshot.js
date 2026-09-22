@@ -20,11 +20,36 @@ import { update } from '../physics/climate.js';
 // Deliberately absent: `history`, which is the run rather than the world and is
 // megabytes of it; `diag`, which update() rebuilds from this; and `dtPrev`,
 // which is a hint to the step-size chooser and is re-derived within one step.
+// The state the step-size chooser carries between steps, and the smoothed rates
+// it reads as bounds. None of this is climate -- it is the integrator's own
+// memory -- and it was dropped on the reasoning that `update()` rebuilds what
+// it needs. It does not: these come back `undefined`, are rebuilt from nothing
+// on the first step after a restore, and the world resumes on a different step
+// sequence from the one it was on. The capped round-trip test could not see it
+// because a binding cap gives the step chooser nothing to remember; the
+// free-step twin of that test can, and did: 0.03 K off after 700 kyr.
+const RUNTIME = ['dtPrev', 'trustOver', 'ringing', 'lastMove',
+  'insolationTarget', 'insolationRate',
+  'escape', 'o2Rate', 'o2Flux', 'ch4Source', 'ch4Tau', 'lifeRoom', 'landIceTarget',
+  'trapActive', 'emitting'];
+
+function captureRuntime(w) {
+  const out = {};
+  for (const k of RUNTIME) {
+    const v = w[k];
+    // `null` is carried, `undefined` is not: on several of these the two are
+    // different states, and a dropped null restored as undefined is a third.
+    if (v === undefined) continue;
+    out[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+  }
+  return out;
+}
+
 export function captureWorld(w) {
   return {
     params: { ...w.params },
     time: w.time,
-    runtime: { insolationTarget: w.insolationTarget, insolationRate: w.insolationRate },
+    runtime: captureRuntime(w),
     T: Array.from(w.T),
     water: { ...w.water },
     waterInitial: w.waterInitial,
@@ -75,8 +100,18 @@ export function applyWorld(sim, s, params = s.params) {
   if (s.n2 != null) w.n2 = s.n2;
   if (s.o2 != null) w.o2 = s.o2;
   if (s.ch4 != null) w.ch4 = s.ch4;
+  // Before update(), so that a zero-length step sees the bounds and the
+  // smoothed rates the world had when it was captured. A save that carries
+  // only the starlight walk, or none of this, restores exactly as it used to.
   w.insolationTarget = s.runtime?.insolationTarget ?? null;
   w.insolationRate = s.runtime?.insolationRate ?? undefined;
+  if (s.runtime) {
+    for (const k of RUNTIME) {
+      const v = s.runtime[k];
+      if (v === undefined) continue;
+      w[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+    }
+  }
   update(w, 0);
   w.history = [];
   sim.sample();

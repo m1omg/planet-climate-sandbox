@@ -53,6 +53,8 @@ export class Simulation {
     this.budgetMs = 12;       // hard wall-clock ceiling on physics per frame
     this.actualRate = 0;
     this.throttled = false;   // true when the budget, not the clock, is the limit
+    this.frameCost = 0;       // running mean of the real frame, seconds
+    this.lastRealDt = 0;      // the real seconds the last advance() was paid for
     // Auto-ease: hold the clock back through a tipping so it can be watched.
     this.autoEase = false;
     this.easeFactor = 1;      // what it is currently doing to the rate, for the UI
@@ -162,7 +164,18 @@ export class Simulation {
   // realDt in seconds; returns simulated years actually advanced.
   advance(realDt) {
     if (this.paused) { this.actualRate = 0; return 0; }
-    const dtReal = clamp(realDt, 0, 0.1);          // ignore huge stalls
+    // A stall is ignored; a slow frame is not. This clamped at a flat tenth of
+    // a second, so anything under ten frames a second was paid for a tenth
+    // however long the frame had taken -- at 5 fps half the clock was thrown
+    // away, silently, and the advertised rate was a lie on exactly the
+    // machines it matters on. The ceiling now follows the observed frame
+    // cost (three times its running mean, between 0.1 and 1 s), so a steady
+    // low frame rate keeps its time while a backgrounded tab or a GC pause
+    // -- one long frame that barely moves the mean -- is still cut off.
+    const seen = clamp(realDt, 0, 1);
+    this.frameCost = this.frameCost > 0 ? this.frameCost + (seen - this.frameCost) * 0.1 : seen;
+    const dtReal = clamp(realDt, 0, clamp(this.frameCost * 3, 0.1, 1));
+    this.lastRealDt = dtReal;
     const eff = this.governedRate();
     this.credit = Math.min(this.credit + dtReal * eff, eff * 2);
     return this.runCredit(eff, dtReal);

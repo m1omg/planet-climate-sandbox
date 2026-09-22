@@ -362,7 +362,12 @@ export function renderPlanet(rgba, W, H, s) {
         const elev = Math.max(h, 0) + 0.30*mount;
 
         const warmth = smoothstep(266, 284, T) * (1 - smoothstep(303, 322, T));
-        const life = warmth * smoothstep(0.10, 0.55, s.waterCap) * (1 - smoothstep(0.10, 0.30, elev));
+        // ...and something has to be alive, which this path did not ask. A
+        // world with the biosphere at zero, or one whose biosphere has been
+        // cooked off, drew forests on any band between -7 and 49 C.
+        const lush = smoothstep(0.02, 0.55, s.bio ?? 0);
+        const life = warmth * lush * smoothstep(0.10, 0.55, s.waterCap)
+          * (1 - smoothstep(0.10, 0.30, elev));
 
         // ground: desert -> steppe -> forest, then rock with altitude, matching
         // the same palette the shader mixes

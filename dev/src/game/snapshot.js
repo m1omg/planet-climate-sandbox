@@ -58,7 +58,28 @@ export function captureWorld(w) {
     // return values below the cap on exactly that world, the cap stopped
     // masking it, and 700 kyr later the two runs were 0.001 K apart.
     dtPrev: w.dtPrev,
+    runtime: captureRuntime(w),
   };
+}
+
+// The state the step-size chooser carries between steps, and the smoothed rates
+// it reads as bounds. None of this is climate -- it is the integrator's own
+// memory -- and it was dropped on the reasoning that `update()` rebuilds what
+// it needs. It does not: these come back `undefined`, are rebuilt from nothing
+// on the first step after a restore, and the world resumes on a different step
+// sequence from the one it was on. The capped round-trip test could not see it
+// because a binding cap gives the step chooser nothing to remember; the
+// free-step twin of that test can, and did: 0.03 K off after 700 kyr.
+const RUNTIME = ['escape', 'o2Rate', 'o2Flux', 'ch4Source', 'ch4Tau', 'emitting'];
+
+function captureRuntime(w) {
+  const out = {};
+  for (const k of RUNTIME) {
+    const v = w[k];
+    if (v === undefined) continue;
+    out[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+  }
+  return out;
 }
 
 // Put one back. The reset is what rebuilds the arrays and the derived planet;
@@ -104,6 +125,14 @@ export function applyWorld(sim, s, params = s.params) {
   // Older saves do not carry it; zero is what resetWorld leaves and what those
   // worlds were restored with before, so they behave exactly as they used to.
   if (s.dtPrev != null) w.dtPrev = s.dtPrev;
+  // The smoothed rates, after update() for the same reason as the two above.
+  if (s.runtime) {
+    for (const k of RUNTIME) {
+      const v = s.runtime[k];
+      if (v === undefined) continue;
+      w[k] = v !== null && typeof v === 'object' ? { ...v } : v;
+    }
+  }
   w.history = [];
   sim.sample();
   return w;

@@ -100,6 +100,10 @@ export function resetWorld(w, params) {
   w.bio = null;        // the living biosphere, grown from the conditions
   w.euk = null;        // how much of it has a nucleus
   w.eukReady = null;   // whether this world has evolved one at all yet
+  // The smoothed rates the step chooser bounds on. None of it is climate, and
+  // none of it was cleared: a preset loaded after a runaway started from the
+  // runaway's escape flux and oxygen rate.
+  for (const k of ['escape', 'o2Rate', 'o2Flux', 'ch4Source', 'ch4Tau', 'emitting']) w[k] = undefined;
   update(w, 0);
   // Seed the split from the world as built rather than leaving it to the first
   // step. Pause-on-reset is the default, so a world that waits for a step is a

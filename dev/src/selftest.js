@@ -3245,6 +3245,28 @@ export function run() {
       `${straight.length} state variables identical after 700 kyr, ` +
       `${(a.world.diag.Tmean - 273.15).toFixed(4)} \u00b0C either way`);
 
+    // The same again at the FREE step. The capped run above holds every step at
+    // two kiloyears, and while that cap binds the step chooser's memory has
+    // nothing to do; uncapped, a world restored without the smoothed rates it
+    // bounds on takes a different first step and never rejoins the trajectory
+    // it left -- 0.03 K off after 700 kyr, in every save slot and every drag of
+    // the history chart.
+    {
+      const f = new Simulation({ ...P });
+      f.runYears(3e5);
+      const mid = captureWorld(f.world);
+      f.runYears(7e5);
+      const g = new Simulation({ ...P });
+      applyWorld(g, mid, { ...mid.params });
+      g.runYears(7e5);
+      const s1 = [...state(f.world), f.world.dtPrev], s2 = [...state(g.world), g.world.dtPrev];
+      check('\u2026and at the free step too, so the step chooser\u2019s memory is in the save',
+        s1.every((v, i) => v === s2[i]),
+        `${(f.world.diag.Tmean - 273.15).toFixed(4)} \u00b0C straight, ` +
+        `${(g.world.diag.Tmean - 273.15).toFixed(4)} \u00b0C restored, last step ` +
+        `${f.world.dtPrev.toFixed(0)} against ${g.world.dtPrev.toFixed(0)} yr`);
+    }
+
     // And the point of it: the same moment, one thing changed, another fate.
     const c = new Simulation({ ...P });
     applyWorld(c, snap, { ...snap.params, insolation: 0.80 });

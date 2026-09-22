@@ -1,5 +1,53 @@
 # Review fixes — September 2026
 
+## September 22, second push: the shared fixes, ported
+
+The defects the status check found in more than one build, fixed in the root,
+`altdev` and `dev` builds the way altdev2 already has them.
+
+- **A save carries the step chooser's memory.** `captureWorld` dropped the
+  last step and the smoothed rates the step bound reads, and `resetWorld`
+  never cleared them, so a restored world took a first step 1.8× the one it
+  was taking and a preset loaded after a runaway started from the runaway's
+  escape flux. Each build's round-trip test now has a free-step twin (the
+  capped one could not see it): root and altdev were 0.05 K and 0.03 K off
+  their own trajectory 700 kyr later; identical now. `validation.js` lists
+  `weathering` and `lifeRoom` as bags only, not as scalars too.
+- **The clock keeps its time at a low frame rate** (root, altdev): the credit
+  clamp follows the observed frame cost instead of a flat tenth of a second,
+  and the "running as fast as it can" readout divides by the frame's own
+  seconds instead of the readout's period (six times low at 60 Hz). Settle no
+  longer adds a history sample every frame on top of the step's own rule.
+- **The star moves on the simulated clock** (dev): brightening and easing were
+  applied from the readout ten times a real second, a thirty-megayear
+  staircase at the top of the rate slider; they are a per-step drive now, the
+  same hook the scenarios use, and the readout only shows the value.
+- **The rate field** (altdev) no longer commits the throttled number it was
+  only displaying when it is focused and blurred untouched.
+- **Root**: the scrub preview keeps the future in the temperature chart (the
+  water chart already did); the cloud bake declares the seed it was always
+  handed, so worlds get their own cloud decks; the software renderer asks
+  what is alive before drawing forests; `mantleInfinite` is a preset field and
+  its checkbox follows the world; a scenario clears the body map; the star
+  temperature and starlight sliders cover every preset (2566 K, 18.8 S⊕);
+  the discovered-climates total reads 20 (22 in dev and altdev) before the
+  script corrects it.
+- **Slovak** for altdev's outgassing chips; altdev's `browsercheck.mjs` passes
+  `--no-sandbox` only as root, like altdev2's.
+- **dev/README** no longer names a build script and a branch that do not
+  exist; dev has no calibration run of its own and says so.
+- **Repository**: the six unreferenced PNG textures (17 MB; the renderers load
+  the JPEGs) and the unreferenced `earth_height.jpg` are gone. Not a
+  downscale — the JPEG surface maps are untouched.
+
+Verification: root **205 self-tests, 0 failed**, 21 anchors + 3 gaps,
+smoketest 24, glslcheck, shadercompile, gl1check, bodycheck, bakecheck under
+Xvfb, rendercheck, fallbackcheck, resumecheck, historycheck, reviewcheck;
+altdev self-test and calibrate (23 + 3), smoketest 30, the same GPU tools;
+dev **250 passed, 17 standing failures — the same seventeen as before**;
+altdev2 smoketest and statuscheck after its validation change; headless
+Chromium sweeps of the root, dev and altdev presets with no console errors.
+
 ## September 22: altdev2 — the water column, the scenarios, the saves, a builder
 
 Everything reported from play against the paper the buried ocean is built on
