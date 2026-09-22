@@ -84,6 +84,26 @@ one step and sat pinned at the pressure where the flux had jumped. The gate
 ramps from a quarter share to a half now (`INH_MIXED`); nothing above a
 half share changes, and the cold start reads 1465 K at ten megayears.
 
+**A lid does not need the critical point, and a lid over ice is the end.**
+Reported from play as two screenshots of one world: a 212 °C steam sky over
+a 23 °C stratified sea reading Steam Runaway, and the same world four
+megayears later — supercritical fluid on three thousand kilometres of ice
+VII, its last liquid gone — reading Steam Runaway again. The lid test was
+the critical point, so the paper's cold start at sub-critical temperature was
+not a lid; and Supercritical Ocean waited for the hot layer to convert a
+column that is mostly ice it eats through by conduction over gigayears.
+`dg.lidded` now also names the thermal lid: a sky more than half water
+(`LID_STEAM`), a surface `LID_JUMP` (100 K) above the pool, and more water
+than a sky can take (`LID_MIN_BAR`, 1000 bar, four Earth oceans — a bound,
+not a measurement, chosen so that Earth's own sea, which does leave through
+its surface, keeps reading as the steam runaway it is). Supercritical Ocean
+is reached when the conversion finishes OR when nothing liquid is left under
+the lid. And the melt film is drawn: between fluid at 900 °C and ice VII at
+50 °C there is water below the critical temperature, the conductive layer
+carrying the mixed-down flux, k·ΔT/F, tens to hundreds of metres, sitting on
+the ice because it is denser than the fluid above. `phasecheck.mjs` case 5
+holds all three on that world at 1 and 5 Myr.
+
 **The handoff to the standard band model** (`waterworld.js`) blends the
 energy fluxes by its overlap weight, but the escape path, the runaway margin
 and the state name switched on the weight merely being non-zero: 3e-23 to

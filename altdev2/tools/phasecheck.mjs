@@ -13,6 +13,18 @@
 //     gone: the seal opened, thirty bar of CO2 came up through 230 km of ice
 //     VII, and the Cold-Start Runaway was 350 K hotter or cooler at ten
 //     megayears depending on which of two wrong columns it happened to read.
+//  5. A lid does not need the critical point, and a lid over ice is the end.
+//     A steam sky at 212 C standing on a stably stratified sea at 23 C -- the
+//     paper's cold start in every particular -- read Steam Runaway because the
+//     lid test was the critical point; and once the pool under a supercritical
+//     lid had frozen through, the same world read Steam Runaway again for the
+//     rest of its life, with the hot fluid drawn standing directly on ice.
+//  5. A lid does not need the critical point, and a lid over ice is the end.
+//     A steam sky at 212 C standing on a stably stratified sea at 23 C -- the
+//     paper's cold start in every particular -- read Steam Runaway because the
+//     lid test was the critical point; and once the pool under a supercritical
+//     lid had frozen through, the same world read Steam Runaway again for the
+//     rest of its life, with the hot fluid drawn standing directly on ice.
 //  3. An ice edge is stepped through, not over. Near the outer edge the
 //     quasi-static shortcut multiplied the step 4000x at the moment the world
 //     reached its warm branch, and the explicit albedo landed it back on the
@@ -144,6 +156,56 @@ const column = (w) => w.diag.coldPool ?? w.diag.oceanBase;
     `lidded ${dg.lidded}, ${(lid.ice / 1e3).toFixed(0)} km of ice under the pool`);
   ok(Math.abs(lid.seal - open.seal) < 0.1 * open.seal, 'the carbon seal does not change because the sea surface went over to the lid',
     `seal ${open.seal.toFixed(3)} over ${(open.ice / 1e3).toFixed(0)} km before the lid, ${lid.seal.toFixed(3)} over ${(lid.ice / 1e3).toFixed(0)} km under it`);
+}
+
+// ---- 5. the thermal lid, and the lid over ice ------------------------------
+{
+  const s = new Simulation({ ...EARTH, mass: 6.1, water: 7000, insolation: 1.5, landFraction: 1,
+    internalHeat: 0.04, startT: 290, biosphere: 0, emissions: 0 });
+  s.runYears(1e6);
+  let w = s.world, dg = w.diag, col = dg.coldPool ?? dg.oceanBase;
+  const steamSky = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length / dg.pTotMean;
+  ok(dg.Tmean < T_CRIT_H2O && steamSky > 0.5 && (col?.liquidDepth ?? 0) > 1e4 && dg.Tmean - w.coldT > 100,
+    'a sub-critical steam sky stands on a cold, deep, stratified sea at 1 Myr',
+    `${(dg.Tmean - 273.15).toFixed(0)} °C sky, ${(steamSky * 100).toFixed(0)}% water, pool ${(w.coldT - 273.15).toFixed(0)} °C, ${((col?.liquidDepth ?? 0) / 1e3).toFixed(0)} km liquid`);
+  ok(classify(w).id === 'buriedOcean', 'that is a buried ocean, not a sea gone into the sky', classify(w).id);
+  s.runYears(4e6);
+  w = s.world; dg = w.diag; col = dg.coldPool ?? dg.oceanBase;
+  ok(dg.Tmean > T_CRIT_H2O && !(col?.liquidDepth > 0) && (col?.iceDepth ?? 0) > 1e6,
+    'by 5 Myr the pool under the supercritical lid has frozen through',
+    `${(dg.Tmean - 273.15).toFixed(0)} °C, ${((col?.iceDepth ?? 0) / 1e3).toFixed(0)} km of ice, no liquid`);
+  ok(classify(w).id === 'supercriticalEnvelope', 'fluid with no surface over an ice floor is the terminal state, not a steam runaway', classify(w).id);
+  const layers = columnLayers(w, dg, 1e5, scaleHeight(dg));
+  const iSc = layers.findIndex((l) => l.kind === 'supercritical');
+  const film = layers[iSc + 1];
+  ok(iSc >= 0 && film?.kind === 'ocean' && film.metres < 1e3 && /ice/.test(layers[iSc + 2]?.kind ?? ''),
+    'a melt film is drawn between the hot fluid and the ice, and it is thin',
+    layers.map((l) => `${l.kind} ${(l.metres / 1e3).toFixed(1)} km`).join(' → '));
+}
+
+// ---- 5. the thermal lid, and the lid over ice ------------------------------
+{
+  const s = new Simulation({ ...EARTH, mass: 6.1, water: 7000, insolation: 1.5, landFraction: 1,
+    internalHeat: 0.04, startT: 290, biosphere: 0, emissions: 0 });
+  s.runYears(1e6);
+  let w = s.world, dg = w.diag, col = dg.coldPool ?? dg.oceanBase;
+  const steamSky = dg.pH2O.reduce((a, b) => a + b, 0) / dg.pH2O.length / dg.pTotMean;
+  ok(dg.Tmean < T_CRIT_H2O && steamSky > 0.5 && (col?.liquidDepth ?? 0) > 1e4 && dg.Tmean - w.coldT > 100,
+    'a sub-critical steam sky stands on a cold, deep, stratified sea at 1 Myr',
+    `${(dg.Tmean - 273.15).toFixed(0)} °C sky, ${(steamSky * 100).toFixed(0)}% water, pool ${(w.coldT - 273.15).toFixed(0)} °C, ${((col?.liquidDepth ?? 0) / 1e3).toFixed(0)} km liquid`);
+  ok(classify(w).id === 'buriedOcean', 'that is a buried ocean, not a sea gone into the sky', classify(w).id);
+  s.runYears(4e6);
+  w = s.world; dg = w.diag; col = dg.coldPool ?? dg.oceanBase;
+  ok(dg.Tmean > T_CRIT_H2O && !(col?.liquidDepth > 0) && (col?.iceDepth ?? 0) > 1e6,
+    'by 5 Myr the pool under the supercritical lid has frozen through',
+    `${(dg.Tmean - 273.15).toFixed(0)} °C, ${((col?.iceDepth ?? 0) / 1e3).toFixed(0)} km of ice, no liquid`);
+  ok(classify(w).id === 'supercriticalEnvelope', 'fluid with no surface over an ice floor is the terminal state, not a steam runaway', classify(w).id);
+  const layers = columnLayers(w, dg, 1e5, scaleHeight(dg));
+  const iSc = layers.findIndex((l) => l.kind === 'supercritical');
+  const film = layers[iSc + 1];
+  ok(iSc >= 0 && film?.kind === 'ocean' && film.metres < 1e3 && /ice/.test(layers[iSc + 2]?.kind ?? ''),
+    'a melt film is drawn between the hot fluid and the ice, and it is thin',
+    layers.map((l) => `${l.kind} ${(l.metres / 1e3).toFixed(1)} km`).join(' → '));
 }
 
 console.log(failed ? `\x1b[31m— ${failed} phase checks failed —\x1b[0m` : '\x1b[32m— all phase checks passed —\x1b[0m');

@@ -27,6 +27,15 @@ and known broken. A red check is not an exception — fix it, then ship.
 
 ## Before pushing
 
+While working, the quick gate: `node tools/quick.mjs` runs the checks that read
+the files the working tree changed (the map is in the tool), and
+`node tools/sections.mjs <build> --only 3c,7j` runs named self-test sections
+(`--list` names them). Neither replaces the full run: before the push, every
+build's self-test in parallel (`node tools/sections.mjs altdev2`, `.`, `altdev`,
+`dev`; four workers, about a quarter of the wall time) and every tool below.
+`.github/workflows/checks.yml` runs the same on every push to `main`; a red run
+there is a revert, not a note.
+
 All thirteen checks, every time:
 
 ```bash

@@ -823,6 +823,25 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
       // supposed to be a statement about.
       addWater(cp, cp.liquidDepth, Math.max(Ts, top), top,
         '{0}% not converted', [cold.toFixed(0)]);
+      // The melt film. With the pool's liquid gone the hot fluid was drawn
+      // standing directly on ice at 47 C -- the false contact the boundary
+      // layer exists to remove, on the one interface the whole downward
+      // advance happens through. Ice VI at 1.8 GPa melts near 340 K, and
+      // everything between the fluid's base and that is water below the
+      // critical temperature: liquid, by the same rule that names the band
+      // above it. It is the conductive layer carrying the mixed-down flux,
+      // k*dT/F like the ocean's own boundary, tens to hundreds of metres, and
+      // it sits on the ice because it is denser than the fluid above it.
+      if (cp.iceDepth > 0 && !(cp.liquidDepth > 0) && (dg.hotLayer ?? 0) > 0.005) {
+        const pIce = cp.pMelt > 0 ? cp.pMelt : (dg.pTotMean ?? 0) * 1e5;
+        const tMelt = meltingTemperature(pIce);
+        const hotBase = Math.max(Ts, top);
+        if (hotBase > tMelt + 1) {
+          const flux = Math.max(dg.mixedFlux ?? 0, 1e-6);
+          const film = clamp(K_WATER * (hotBase - tMelt) / flux, 1, 0.02 * cp.iceDepth);
+          add('ocean', film, [Math.min(hotBase, T_CRIT_H2O), tMelt], 'melt film on the ice');
+        }
+      }
       if (cp.iceDepth > 0) {
         add(iceKind(cp.pMelt, cp.basePressure), cp.iceDepth,
           [cp.baseTemperature], '{0} GPa at the floor', [(cp.basePressure / 1e9).toFixed(1)]);

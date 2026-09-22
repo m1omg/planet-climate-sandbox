@@ -7,7 +7,7 @@ import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
 import { classify, reasonText, STATES } from './physics/classify.js';
-import { derive, maxWaterEO } from './physics/planet.js';
+import { derive, maxWaterEO, waterForShareOfMass } from './physics/planet.js';
 import { scaleHeight } from './render/atmosphere.js';
 import { iceFraction } from './physics/radiation.js';
 import { transitRadius, waterMassFraction } from './physics/planet.js';
@@ -372,14 +372,18 @@ function buildSliders() {
         const c = document.createElement('button');
         c.type = 'button'; c.className = 'stop';
         c.textContent = st.n;
-        c.dataset.v = String(st.v);
-        c.title = `${t(d.label)}: ${d.fmt(st.v, params)}`;
+        c.dataset.v = String(stopValue(d, st));
+        c.title = `${t(d.label)}: ${d.fmt(stopValue(d, st), params)}`;
         c.addEventListener('click', () => {
-          params[d.key] = st.v;
+          // Through the same ceiling the slider and the typed box go through.
+          // A stop wrote its number straight into params, which is how "10%
+          // water" put 7000 oceans on a one-Earth-mass planet.
+          const v = Math.min(stopValue(d, st), physicalMax(d));
+          params[d.key] = v;
           syncSliders();
           applyParams(d.key);
           markTouched();
-          toast(`${t(d.label)} — ${t(st.n)}, ${d.fmt(st.v, params)}`);
+          toast(`${t(d.label)} — ${t(st.n)}, ${d.fmt(v, params)}`);
         });
         row.appendChild(c);
       }
@@ -489,10 +493,25 @@ function markBody() {
 // stop below a millibar at once. A tenth of a percent is tight enough that two
 // neighbouring stops can never both match and loose enough to survive a value
 // that has been through a slider position and back.
+// What a stop is worth right now. A stop with a `share` is a share of the
+// planet's mass, so it moves with the mass control; `dataset.v` and the title
+// are refreshed here each time the stops are marked, which is every sync.
+function stopValue(d, st) {
+  if (st.share != null) return d.key === 'water' ? waterForShareOfMass(params.mass, st.share) : st.share;
+  return st.v;
+}
+
 function markStops(d) {
   const row = els[d.key]?.stopRow;
   if (!row) return;
   const v = params[d.key];
+  [...row.children].forEach((b, i) => {
+    const st = d.stops[i];
+    if (st?.share != null) {
+      b.dataset.v = String(stopValue(d, st));
+      b.title = `${t(d.label)}: ${d.fmt(stopValue(d, st), params)}`;
+    }
+  });
   for (const b of row.children) {
     const stopV = +b.dataset.v;
     b.classList.toggle('active',
@@ -3169,7 +3188,7 @@ function relabel() {
         const st = d.stops[i];
         if (!st) return;
         c.textContent = t(st.n);
-        c.title = `${t(d.label)}: ${d.fmt(st.v, params)}`;
+        c.title = `${t(d.label)}: ${d.fmt(stopValue(d, st), params)}`;
       });
     }
   }

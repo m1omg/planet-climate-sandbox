@@ -106,7 +106,14 @@ export const SLIDERS = [
   { g: 'body', key: 'water', stops: [
       { v: 0, n: 'dry' }, { v: 0.02, n: 'Mars' },
       { v: 0.108, n: 'Early Venus' }, { v: 1, n: 'Earth' }, { v: 6, n: 'ocean world' },
-      { v: 7000, n: '10% water' }, { v: 36000, n: 'Hycean' }], label: 'Water inventory', min: 0, max: 45000, floor: 1e-8, log: true, zero: true, live: 'water',
+      // Shares of the planet's MASS, resolved against the mass control when
+      // clicked. These were absolute -- 7000 and 36000 oceans -- which on an
+      // Earth-mass world is 164% and 840% water by mass: an ocean eight times
+      // heavier than the planet it was meant to be sitting on, past the 70%
+      // ceiling the sub-Neptune literature works in and past the cap the
+      // slider itself enforces. Madhusudhan et al. 2021 put Hycean interiors
+      // at 10-90% water by mass; half is the middle of that range.
+      { share: 0.1, n: '10% water' }, { share: 0.5, n: 'Hycean' }], label: 'Water inventory', min: 0, max: 45000, floor: 1e-8, log: true, zero: true, live: 'water',
     // Below a thousandth of an ocean, "0.000 EO" says nothing; a global layer a
     // few centimetres deep says a great deal. Metres, then, at the dry end.
     // The precision thresholds sit just below the round numbers on purpose: a

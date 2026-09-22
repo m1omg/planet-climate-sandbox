@@ -1,5 +1,31 @@
 # Review fixes — September 2026
 
+## September 22, third push: the lid, the water chips, and faster verification
+
+- **A lid does not need the critical point.** Two screenshots of one world:
+  a 212 °C steam sky on a 23 °C stratified sea read Steam Runaway, and the
+  same world four megayears on — supercritical fluid on three thousand
+  kilometres of ice VII, its last liquid gone — read Steam Runaway again.
+  `dg.lidded` now also names the thermal lid (a sky more than half water, a
+  surface 100 K above the pool, more water than a sky can take: 1000 bar, a
+  bound), Supercritical Ocean is reached when nothing liquid is left under
+  the lid, and the melt film between hot fluid and ice is drawn (k·ΔT/F, as
+  the ocean's own boundary). `phasecheck.mjs` case 5, from that world.
+- **The water chips were absolute.** "10% water" was 7000 oceans and "Hycean"
+  36 000, which on an Earth-mass planet is 164% and 840% water by mass. They
+  are shares now, resolved against the mass control; a stop goes through the
+  same 70% ceiling the slider does; and the sanitiser caps a hash or a save
+  at the same ceiling. Self-test: every stop on every preset, and the cap.
+- **Verification.** `tools/sections.mjs <build> --only 3c,7j` runs named
+  self-test sections (`--list`), and without `--only` runs the whole
+  self-test across the machine's cores — the 25-minute altdev2 suite in
+  about seven. `tools/quick.mjs` runs the checks that read the files the
+  working tree changed, from a map checked into the tool; anything unmapped
+  runs the whole suite. `.github/workflows/checks.yml` runs every build's
+  full suite, GPU tools under Xvfb included, on every push to `main` and
+  every pull request. The rule in CLAUDE.md is unchanged: the full suite
+  before a push. It is just no longer something to sit through.
+
 ## September 22, second push: the shared fixes, ported
 
 The defects the status check found in more than one build, fixed in the root,

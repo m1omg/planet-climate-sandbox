@@ -1,4 +1,5 @@
 import { EARTH } from './presets.js';
+import { maxWaterEO } from '../physics/planet.js';
 
 // Broad physical domains, not slider limits: evolved worlds can legitimately
 // leave the sliders' display ranges. Reject malformed values rather than clamp
@@ -23,6 +24,14 @@ export function sanitizeParams(p) {
     if (typeof reference !== 'number' || !Number.isFinite(v)) continue;
     const [lo, hi] = domains[k] || [0, 1e12];
     if (v >= lo && v <= hi) out[k] = v;
+  }
+  // The water domain is absolute and the ceiling is not: seventy per cent of
+  // the planet's mass, whatever the mass is. A hash or a save could carry an
+  // ocean heavier than its planet past the range check and straight into the
+  // world, which the slider and the stops are not allowed to do.
+  if (out.water != null) {
+    const cap = maxWaterEO(out.mass ?? EARTH.mass);
+    if (out.water > cap) out.water = cap;
   }
   return out;
 }

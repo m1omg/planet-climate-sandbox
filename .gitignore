@@ -1,2 +1,4 @@
 node_modules/
 package-lock.json
+# temporary cuts written by tools/sections.mjs
+**/src/.selftest-*.mjs

@@ -22,7 +22,8 @@ import { oceanStructure, meltingPressure, waterDensity, coldPoolStructure,
          iceShell, freezingDepression, freezeShift } from './physics/ocean.js';
 import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
-import { surfaceGravity } from './physics/planet.js';
+import { surfaceGravity, waterShareOfMass, waterForShareOfMass, MAX_WATER_FRACTION } from './physics/planet.js';
+import { sanitizeParams } from './game/validation.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight, surfaceHidden,
          buriedOceanCover } from './render/atmosphere.js';
@@ -5932,6 +5933,30 @@ function runChecks() {
 
   // ---- 8. the controls: typed values and slider round-trips ----------------
   {
+    // No stop on the water control can put an ocean heavier than the planet
+    // under it. Two of them did: "10% water" and "Hycean" were absolute --
+    // 7000 and 36000 oceans -- which on an Earth-mass world is 164% and 840%
+    // water by mass. Stops that mean a share now carry the share and resolve
+    // against the mass they are clicked on, and the sanitiser that admits a
+    // hash or a save caps the inventory at the same 70% the slider does.
+    {
+      const wd = SLIDERS.find((d) => d.key === 'water');
+      const resolve = (st, mass) => st.share != null ? waterForShareOfMass(mass, st.share) : st.v;
+      let worst = 0, at = '';
+      for (const [id, P] of Object.entries(PRESETS)) {
+        for (const st of wd.stops) {
+          const sh = waterShareOfMass(P.params.mass, resolve(st, P.params.mass));
+          if (sh > worst) { worst = sh; at = `${st.n} on ${id} (${P.params.mass} M⊕)`; }
+        }
+      }
+      check('No water stop puts more than 70% of the planet\u2019s mass into water on any preset',
+        worst <= MAX_WATER_FRACTION + 1e-9,
+        `heaviest: ${(worst * 100).toFixed(0)}% by mass, ${at}`);
+      const heavy = sanitizeParams({ ...EARTH, mass: 1, water: 7000 });
+      check('A hash or a save carrying an ocean heavier than its planet is capped, not admitted',
+        waterShareOfMass(1, heavy.water) <= MAX_WATER_FRACTION + 1e-9,
+        `7000 oceans on 1 M⊕ came back as ${heavy.water.toFixed(0)} EO, ${(waterShareOfMass(1, heavy.water) * 100).toFixed(0)}% by mass`);
+    }
     const by = (k) => SLIDERS.find((d) => d.key === k);
     const cases = [
       ['co2Bar', '420ppm', 280e-6, 420e-6], ['co2Bar', '420', 280e-6, 420e-6],

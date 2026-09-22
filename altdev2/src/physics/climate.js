@@ -71,6 +71,15 @@ const SUPER_WIDTH = 50;        // K
 // How far past the critical point a parcel of surface is: 0 below 647 K, 1 by
 // 697 K. Exported because the classifier needs the same number the ceiling is
 // built from, and two definitions of "supercritical" would eventually disagree.
+// The thermal lid -- see `lidded`. The steam share and the jump are the
+// paper's picture; the inventory floor is a bound, not a measurement: a sea
+// that could all go into the sky is a runaway on its way to a steam world,
+// and Pierrehumbert 2023 puts the boundary where the sea's own pressure
+// passes the critical point. A thousand bar is four Earth oceans, well past
+// that, so that Earth at 2.6 S(+) -- whose sea does leave through its
+// surface -- keeps reading as the steam runaway it is.
+export const LID_STEAM = 0.5, LID_JUMP = 100, LID_MIN_BAR = 1000;
+
 export function supercriticalShare(T) {
   return smoothstep(T_CRIT_H2O, T_CRIT_H2O + SUPER_WIDTH, T);
 }
@@ -767,7 +776,24 @@ export function update(w, dt) {
     get lidded() {
       if ((this.totalWater ?? 0) <= 0.005) return false;
       const hot = this.hotTarget ?? 0;
-      return hot > 0.5 || (hot > 0 && (this.openOcean ?? 0) <= 0.01);
+      if (hot > 0.5 || (hot > 0 && (this.openOcean ?? 0) <= 0.01)) return true;
+      // The thermal lid: the paper's cold start does not need the critical
+      // point. A steam sky standing on a sea it has heated from above, with a
+      // stably stratified cold ocean under a thin conductive boundary, is the
+      // same hot-layer-over-cold-water picture at 212 C as at 900 -- and it
+      // was reading Steam Runaway, "the sea has gone into the sky", on a world
+      // with seven thousand oceans and a quarter of one leaving per gigayear.
+      // Three things, all plain fields: the air over the water is mostly
+      // water (LID_STEAM), the surface stands LID_JUMP above the pool, and
+      // there is more water than a sky can take (LID_MIN_BAR of it), which is
+      // what separates this from Earth's own ocean going into the sky.
+      const coldT = this.coldT, pH2O = this.pH2O;
+      if (!(coldT > 0) || !pH2O || !(this.pTotMean > 0)) return false;
+      let steam = 0;
+      for (let i = 0; i < pH2O.length; i++) steam += pH2O[i];
+      steam /= pH2O.length * this.pTotMean;
+      const bar = (this.totalWater ?? 0) * (this.d?.eoColumn ?? 0) * this.g / 1e5;
+      return steam > LID_STEAM && this.Tmean - coldT > LID_JUMP && bar > LID_MIN_BAR;
     },
     get coldPool() {
       // Gated on `lidded` -- there is no sea on top -- and on nothing else.
