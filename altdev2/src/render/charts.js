@@ -99,11 +99,12 @@ export function historyTimeAtX(x, tMax, w, zoom = 1, pan = 1) {
 export function drawHistory(canvas, world, markT = null, opts = {}) {
   const { ctx, w, h } = setup(canvas);
   const pad = HISTORY_PAD;
-  const H = temperatureHistory(world);
+  const H = temperatureHistory(world, markT != null);
   axes(ctx, w, h, pad);
   if (H.length < 2) { label(ctx, t('collecting…'), w / 2, h / 2, 'center'); return; }
 
-  const tMax = Math.max(world.time, 10);
+  // Mid-drag the run extends past the world's own clock; the axis covers it.
+  const tMax = Math.max(world.time, H[H.length - 1].t, 10);
   const zoom = Math.max(opts.zoom || 1, 1), pan = opts.pan == null ? 1 : opts.pan;
   const win = historyWindow(tMax, zoom, pan);
   const lx = (t) => historyX(t, tMax, w, zoom, pan);

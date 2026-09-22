@@ -313,7 +313,8 @@ export function inhibitionMoleFraction(T) {
 // the 10 bar case has been accounted for. It has not, and there is a GAP row
 // saying so.
 const INH_STRENGTH = 4.0;
-const INH_DOMINANCE = 0.5;       // below this H2 share it is not the background
+const INH_DOMINANCE = 0.5;       // at this H2 share it is fully the background
+const INH_MIXED = 0.25;          // ...and below this share, not at all
 
 export function inhibitionFactor(pH2O, pH2, pTot, T) {
   if (!(pH2 > 0) || !(pTot > 0)) return 1;
@@ -326,9 +327,19 @@ export function inhibitionFactor(pH2O, pH2, pTot, T) {
   // condensation happens aloft where the water is a trace and the hydrogen is
   // unambiguously the background. What the gate is for is telling a hydrogen
   // world from a nitrogen one; water's own abundance is the OTHER test, below.
+  //
+  // The gate is a ramp from a quarter share to a half, not a step at a half.
+  // It was a step, and a step in optical depth is the trap named twenty lines
+  // down: volcanic CO2 accumulating under an 18 bar envelope took hydrogen's
+  // dry share through 0.5 at 18 bar of CO2, and the outgoing flux tripled
+  // between 17.99 and 18.01 bar on a 1550 K world -- which fell 260 K inside
+  // one step and then sat pinned at the pressure where the flux had jumped.
+  // Above a half share nothing changes; below a quarter the answer is still
+  // exactly 1; in between a mixed background inhibits in proportion.
   const dry = Math.max(pTot - pH2O, 1e-12);
   const fH2 = Math.min(pH2 / dry, 1);
-  if (fH2 < INH_DOMINANCE) return 1;
+  if (fH2 <= INH_MIXED) return 1;
+  const background = smoothstep(INH_MIXED, INH_DOMINANCE, fH2);
   const x = pH2O / pTot;
   const xInh = inhibitionMoleFraction(T);
   if (!(x > xInh)) return 1;
@@ -357,7 +368,7 @@ export function inhibitionFactor(pH2O, pH2, pTot, T) {
   // from the condensation level, which this model has no coordinate for. It is
   // chosen to be wide enough that the flux curve stays a curve.
   const engaged = smoothstep(xInh, 3 * xInh, x);
-  return 1 + INH_STRENGTH * fH2 * engaged;
+  return 1 + INH_STRENGTH * fH2 * engaged * background;
 }
 
 export function olr(T, pCO2, pH2O, pCH4, pTot, pH2 = 0, g = G_EARTH, pHe = 0) {

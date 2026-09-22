@@ -1,9 +1,25 @@
 import { EARTH } from './presets.js';
 import { classify } from '../physics/classify.js';
 
-// A scenario sets up a world and a goal. `check` is evaluated continuously on
-// the live simulation; `fail` ends the run early. Time limits are in simulated
-// years, so the accelerated clock is part of the puzzle.
+// A scenario sets up a world and a goal. `check` and `fail` are evaluated once
+// per STEP of the live simulation (main.js scenarioStep), so a verdict lands
+// at the same simulated year whatever the frame rate; `fail` ends the run
+// early. Time limits are in simulated years, so the accelerated clock is part
+// of the puzzle.
+//
+// A scenario may carry a `walk`: a starlight destination the star sets off
+// for the moment the scenario starts, on the twenty-megayear smoothing walk,
+// so a threat arrives over time rather than being built in.
+//
+// Every scenario carries a `solution`: the play its own hint describes, as
+// the controls the page would apply and the simulated year to apply them.
+// tools/scenariocheck.mjs plays each scenario three ways -- doing nothing,
+// the solution, and the solution at another step cap -- and every number in
+// a brief or a hint below was read off those runs on this build's physics.
+// The file was inherited from altdev byte for byte while the physics under
+// it was rewritten, and none of its numbers reproduced: one scenario was
+// unwinnable at any setting, one was won by waiting, one was won or lost
+// depending on the frame rate.
 //
 // Every scenario runs with `realisticGeology` on. These are all hundred-Myr to
 // Gyr puzzles, and over that span a planet's interior is not a constant: the
@@ -37,13 +53,15 @@ export const SCENARIOS = [
     limit: 2e8,
     check: (w) => w.diag.iceMean < 0.45 && w.diag.Tmean > 273,
     fail: (w) => w.diag.Tmean > 340,
+    // Measured: twenty times Earth's volcanism breaks the ice in 16 kyr.
+    solution: [{ at: 0, patch: { outgassing: 20 } }],
   },
   {
     id: 'hold',
     name: 'Hold Back the Runaway',
     icon: '🔥',
     brief: 'A world sitting six watts per square metre under the Simpson–Nakajima limit — habitable, and with nothing to spare. Its star is heavier than the Sun and burning through its hydrogen three times as fast, so that margin is closing on its own and will not stop. Keep this planet habitable for a billion years.',
-    hint: 'You cannot dim the star and you cannot stop it brightening. What you can take away is the greenhouse: strip the CO₂ and keep it stripped, because 2.5× volcanism puts it back. If that stops being enough, remember that the limit is on absorbed sunlight against what the atmosphere can radiate — brighten the ground, and a drier planet radiates better than a wet one.',
+    hint: 'You cannot dim the star and you cannot stop it brightening, and the CO₂ is no lever here: the thermostat has already drawn it down as far as it goes, and stripping it entirely loses at 654 Myr against 763 doing nothing. What survives an F star is a desert. Drain the ocean to a few percent of one and raise the basin geometry so what is left has nowhere to spread — a dune world holds to 1.70 S⊕ where an ocean world boils at 1.30. Remember that the limit is on absorbed sunlight against what the atmosphere can radiate — brighten the ground, and a drier planet radiates better than a wet one.',
     // It now starts where the brief says it starts, which it did not before.
     //
     // The old setup was 1.30 S(+) and a fixed star, and the brief called that
@@ -84,6 +102,11 @@ export const SCENARIOS = [
     limit: 1e9,
     check: (w) => w.time > 1e9 && classify(w).habitable,
     fail: (w) => w.diag.Tmean > 400 || w.water.lost > 0.25,
+    // Measured on this build: doing nothing runs away at 763 Myr; stripping
+    // the CO₂ and the volcanoes runs away at 654 Myr; draining the ocean to
+    // 0.05 EO over 90% land at the start sits out the gigayear at 38 °C as a
+    // dune world.
+    solution: [{ at: 0, patch: { water: 0.05, landFraction: 0.9 } }],
   },
   {
     id: 'terraform',
@@ -93,30 +116,62 @@ export const SCENARIOS = [
     hint: 'Low gravity means every kilogram of gas buys less pressure. You will need a lot of CO₂ — and enough water in the inventory for an ocean to exist at all.',
     params: { ...EARTH, realisticGeology: true, mass: 0.4, insolation: 0.62, water: 0.05, landFraction: 0.9, n2Bar: 0.02, co2Bar: 0.004, outgassing: 0.05, startT: 210 },
     limit: 5e8,
-    check: (w) => w.diag.Tmean > 278 && w.water.ocean > 0.01,
+    // Held for a megayear, not merely touched: with three bars of CO₂ added
+    // the mean passes 5 °C within decades, and a goal met in the first frame
+    // is not a terraforming.
+    check: (w) => w.time > 1e6 && w.diag.Tmean > 278 && w.water.ocean > 0.01,
     fail: null,
+    // Measured: 3 bar of CO₂ and twenty times the volcanism to keep it there
+    // settle a 0.05-ocean dune world at 39 °C; a single bar loses.
+    solution: [{ at: 0, patch: { co2Bar: 3, outgassing: 20 } }],
   },
   {
     id: 'eyeball',
     name: 'The Eye of the Red Dwarf',
     icon: '👁️',
-    brief: 'A tidally locked world facing an active M dwarf forever. One hemisphere burns, the other is a cold trap that steals water and never gives it back. Keep an open ocean under the star for a billion years.',
-    hint: 'Thick air moves heat to the night side and stops the water migrating there for good. Watch the XUV — an active red dwarf strips water fast.',
-    params: { ...EARTH, realisticGeology: true, mass: 1.2, insolation: 1.05, tidallyLocked: true, rotationHours: 300, starTemp: 3200, xuvFraction: 6e-4, xuvDecay: true, landFraction: 0.2, n2Bar: 1.5, startT: 265 },
+    brief: 'A tidally locked world with a full ocean under its red dwarf, and the star is brightening: half again over the next twenty million years, enough to boil the substellar sea. Keep an open ocean under the star for a billion years.',
+    hint: 'Neither thick air nor bright land saves this one — measured, they change the date of the runaway by a megayear. What does is less water (Lobo et al. 2023): an ocean too small to carry heat around the planet leaves a sea under the star and a dry night side, and that eye stays open. Cut the inventory to a fifth of an ocean.',
+    // Measured: doing nothing runs away at 18 Myr as the star arrives; five
+    // bars of nitrogen or a land albedo of 0.5 move a runaway by a megayear;
+    // a fifth of an ocean is a lobster world at 44 °C for as long as you run it.
+    // The old premise -- an active dwarf stripping the water unless thick air
+    // held it -- did not reproduce at any XUV from 6e-4 to 1e-2: the cold
+    // trap of a locked world holds, and the old setup won by waiting.
+    // It opens stable at 1.05 S⊕ and the star walks to 1.5 over twenty
+    // megayears (`walk`), because a world BUILT at 1.25 with a full ocean is a
+    // runaway inside sixteen centuries -- over before the first frame at play
+    // speed, and a puzzle nobody can act on -- while a world WALKED to 1.25,
+    // or to 1.45, stays on its cold branch and wins by waiting: walked, the
+    // full ocean first runs away at 1.5 (18 Myr in), and a fifth of an ocean
+    // walked to 1.5 is a lobster world at 44 °C for as long as you run it.
+    params: { ...EARTH, realisticGeology: true, mass: 1.2, insolation: 1.05, tidallyLocked: true, rotationHours: 300, starTemp: 3200, xuvFraction: 6e-4, xuvDecay: true, landFraction: 0.2, n2Bar: 1.5, startT: 265, smoothInsolation: true },
+    walk: { insolation: 1.5 },
     limit: 1e9,
     check: (w) => { const c = classify(w); return w.time > 1e9 && (c.id === 'eyeball' || c.id === 'lobster' || c.habitable); },
-    fail: (w) => w.water.lost > 0.6 || w.diag.iceMean > 0.985,
+    fail: (w) => w.water.lost > 0.6 || w.diag.iceMean > 0.985 || w.diag.Tmean > 450,
+    solution: [{ at: 0, patch: { water: 0.2 } }],
   },
   {
     id: 'dune',
     name: 'Build a Dune World',
     icon: '🏜️',
-    brief: 'Put a habitable planet where an ocean world would boil. Desert planets survive far closer to their star: unsaturated air radiates above the classical runaway limit and a dry stratosphere throttles water loss.',
+    brief: 'Put a habitable planet where an ocean world would boil. The star is walking up to 1.4 S⊕ over twenty million years, past the ocean world\u2019s limit. Desert planets survive far closer to their star: unsaturated air radiates above the classical runaway limit and a dry stratosphere throttles water loss.',
     hint: 'Counter-intuitive but real (Abe et al. 2011): give it *less* water. Draining it is not enough on its own, though — with deep Earth-like basins the little that remains spreads into wide shallow seas and the air stays wet. Raise the basin geometry too, so what water is left has nowhere to spread.',
-    params: { ...EARTH, realisticGeology: true, insolation: 1.5, water: 1.0, landFraction: 0.3, startT: 300 },
+    // 1.4 S⊕, measured: with its ocean this world is a steam runaway inside
+    // a century and supercritical by 35 kyr, and no amount of draining saved
+    // it at the old 1.5 -- every setting from 0.003 to 0.1 EO ran away too.
+    // At 1.4 the wet world still runs away and the drained one settles at
+    // 30 °C, which is the contrast the scenario is about.
+    // ...and it walks there. Built at 1.4 the ocean world is a steam runaway
+    // inside six centuries, before a player has seen the panel; it opens at
+    // 1.2, habitable, with the star walking to 1.4 over twenty megayears.
+    params: { ...EARTH, realisticGeology: true, insolation: 1.2, water: 1.0, landFraction: 0.3, startT: 295, smoothInsolation: true },
+    walk: { insolation: 1.4 },
     limit: 3e8,
     check: (w) => w.time > 3e7 && classify(w).habitable && w.diag.Tmean < 342,
-    fail: null,
+    // A sea in the sky is the end of this one; there is no waiting it out.
+    fail: (w) => w.diag.Tmean > 450,
+    solution: [{ at: 0, patch: { water: 0.05, landFraction: 0.95 } }],
   },
   {
     id: 'oxidation',
@@ -142,24 +197,39 @@ export const SCENARIOS = [
     limit: 3e8,
     check: (w) => w.diag.pO2 > 0.01 && w.diag.Tmean > 273 && w.diag.iceMean < 0.5,
     fail: (w) => w.diag.iceMean > 0.95,
+    // Measured: doing nothing snowballs at 20 Myr as the methane goes;
+    // 0.35 bar of CO₂ laid in at the start carries the world through and
+    // the oxygen arrives at 13 Myr.
+    solution: [{ at: 0, patch: { co2Bar: 0.35 } }],
   },
   {
     id: 'venus',
     name: 'Undo Venus',
     icon: '🌋',
     brief: 'A dry runaway greenhouse: 90 bar of CO₂, 460 °C, and the water long since photolysed and blown away. Cool it below boiling.',
-    hint: 'The water is gone and is not coming back — but the inventory slider is yours. Bury the CO₂ and give the weathering thermostat something to work with.',
+    hint: 'The water is gone and is not coming back, and at this distance from the star adding any brings a steam runaway instead. Bury the CO₂ — drop the slider — and the surface falls below boiling within the year; then stop the volcanoes, because at Earth\u2019s outgassing the air is back past 100 °C in twenty million years. Hold it below the boil for ten million.',
     params: { ...EARTH, realisticGeology: true, mass: 0.815, insolation: 1.91, water: 0, landFraction: 0.8, n2Bar: 3.5, co2Bar: 88, rotationHours: 5832, landAlbedo: 0.15, startT: 735 },
-    limit: 1e9,
-    check: (w) => w.diag.Tmean < 373,
+    limit: 1e8,
+    // Below boiling for ten million years running, not merely once: the
+    // instantaneous test was won in the first frame after the CO₂ slider
+    // moved, and the world then reheated to 118 °C by 30 Myr on its own
+    // volcanoes. `coolSince` lives on the world so a save carries it.
+    check: (w) => {
+      // Dated from the start of the step it was first seen in, so the hold
+      // does not begin a step late at a coarse cap.
+      if (w.diag.Tmean < 373) { w.coolSince ??= w.time - (w.dtPrev ?? 0); return w.time - w.coolSince > 1e7; }
+      w.coolSince = null; return false;
+    },
     fail: null,
+    // Measured: CO₂ to 10 mbar with the volcanoes stopped holds 61 °C.
+    solution: [{ at: 0, patch: { co2Bar: 0.01, outgassing: 0 } }],
   },
   {
     id: 'hotbranch',
     name: 'The Hot Ocean',
     icon: '♨️',
-    brief: 'A world with a full ocean under a star you control. There is a stable climate on the far side of 50 °C — a sea that stays a sea at bath temperature — but the only way in is slowly, and the doorway is narrow. Get this planet past 50 °C with its ocean intact and still there sixty million years later.',
-    hint: 'Smooth starlight changes are already on, so one drag walks the star up over twenty million years instead of jumping — let the clock run first, because a change made at t = 0 still jumps. 1.30 S⊕ is not enough and stops at 40 °C. 1.36 is the door. 1.40 goes through it and does not stop, and any target at all reached in one jump takes the ocean into the sky, the albedo with it, and there is no way back.',
+    brief: 'A world with a full ocean under a star you control. There is a stable climate on the far side of 50 °C — a sea that stays a sea at bath temperature — but the only way in is slowly, and the doorway is narrow. Get this planet past 50 °C with its ocean intact, still liquid and still there sixty million years later.',
+    hint: 'Smooth starlight changes are already on, so one drag walks the star up over twenty million years instead of jumping — let the clock run first, because a change made at t = 0 still jumps. 1.28 S⊕ is not enough and stops at 46 °C. 1.30 is the door: 55 °C and a sea. 1.36 goes through it to 98 °C, a moist greenhouse losing its water. 1.40 does not stop at all, and any target reached in one jump takes the ocean into the sky, the albedo with it, and there is no way back.',
     // Three things here, and none is decoration.
     //
     // The volcanoes run. They used to be dead, on the argument that a fixed CO2
@@ -189,7 +259,10 @@ export const SCENARIOS = [
     params: { ...EARTH, realisticGeology: true, insolation: 1.00, outgassing: 1, emissions: 0, fossilUsed: 0,
               biosphere: 0, smoothInsolation: true, startT: 288 },
     limit: 1e8,
-    check: (w) => w.time > 6e7 && w.diag.Tmean > 323 && w.water.ocean > 0.8,
+    check: (w) => w.time > 6e7 && w.diag.Tmean > 323 && w.diag.Tmean < 373 && w.water.ocean > 0.8,
     fail: (w) => w.water.ocean < 0.5 && w.diag.Tmean > 400,
+    // Measured through the clock's own walk: 1.28 → 46 °C (short), 1.30 →
+    // 55 °C (wins at 60 Myr), 1.36 → 98 °C moist, 1.40 → runaway at 19.5 Myr.
+    solution: [{ at: 1e6, patch: { insolation: 1.30 } }],
   },
 ];

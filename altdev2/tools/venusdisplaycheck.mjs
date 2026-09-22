@@ -25,6 +25,10 @@ check('the screenshot cannot invent 327 metres of 373 C liquid at 31 bar',()=>{
 });
 check('a physically cool shallow buried pool retains its basin coverage',()=>{
  const w=venus().world;
+ // A lid (the surface past the critical point everywhere) over a pool made
+ // of water that is still condensed: the reservoir, not the unconverted
+ // share, is what a pool is drawn from.
+ w.T.fill(700);w.water.ocean=.08;w.water.vapour=.0274311;
  w.coldT=400;update(w,0);const d=w.diag;
  assert.ok(coldPoolStructure(d).liquidDepth>0);
  assert.ok(buriedOceanCover(d)>.4,`cover=${buriedOceanCover(d)}`);

@@ -1,5 +1,103 @@
 # Small waterworlds (altdev2 only)
 
+### September 21, later: what a lid is, and what melts
+
+Four faults reported from play, all in the water column, all fixed against the
+same reference — Pierrehumbert 2023, *The runaway greenhouse on subNeptune
+waterworlds* (arXiv:2212.02644) — and each written as a failing check first
+(`node tools/phasecheck.mjs`, `node tools/handoffcheck.mjs`).
+
+**A lid is the cold-start case.** The paper's §4: a world that condensed an
+interior and then crossed the runaway threshold heats its atmosphere to the
+depth sunlight reaches, and with nothing driving convection below, a hot
+(possibly supercritical) isothermal layer sits on a cold liquid or ice boundary
+and advances downward by evaporating what it touches. `dg.lidded` is that
+layer — a hot target over the pool — and the lid is *hotter* than the water
+under it. **Buried Ocean now requires it.** An ordinary runaway (Earth at
+2.6 S⊕, 415 K, 99% of the ocean still liquid, no hot target) is not buried:
+its sea is leaving through its own surface, and it reads Steam Runaway from
+the moment the world is past its runaway limit with a tenth of the water
+airborne, or the air is more than half water, until the surface passes the
+critical point. Its sequence is temperate → moist → steam runaway →
+supercritical, as the paper has it for terrestrial planets — with one
+ninety-year Buried Ocean between the lid closing and the last half-kilometre
+of sea boiling under it, kept because the cross-section draws that pool and
+the name must not contradict the picture. Earth's Last Ocean, one ocean deep,
+is therefore never buried; sixty oceans under the same brightening Sun are
+buried for three megayears, and the self-tests measure that world now.
+
+**A pool is made of what has not evaporated.** `coldPoolStructure` is capped
+by the condensed reservoir (`dg.condensedWater`: ocean, sea ice, land ice).
+The unconverted share of `hotLayer` is a thermal memory written for a
+stratified column hundreds of kilometres deep; on Earth's it read most of an
+ocean as a cold pool under a sky that held the same water.
+
+**Melting is paid for.** Reported as "the high-pressure ice does not melt,
+it becomes supercritical": it does melt, and on a pool whose top is past
+~500 K what it melts into is fluid hotter than 647 K along the adiabat, which
+is the supercritical interior of the paper (and of Mousis et al. 2020) by its
+own name. Relabelling that fluid "ocean" because it sits in the ice VI field
+was tried and reverted. What was wrong is that the melt cost nothing: the
+pool's energy budget charged sensible heat only, so 1250 km of ice VII went in
+four megayears on energy that pays for half of it. Melting the floor is now
+charged its latent heat (`L_FUSION_HP`, 250 kJ/kg, the low end of the ice
+VI/VII literature) against the mixed-down flux, per square metre of planet.
+
+**A supercritical layer needs supercritical conditions.** The drawn band
+required only `hotLayer > 0` and took the surface temperature verbatim, which
+is how a world cooled to −228 °C was drawn with 35 km of "supercritical" over
+its ocean and lost its ice shell from the picture. The band now needs
+`T ≥ 647 K` and `p ≥ 220.6 bar` like every other use of the word, and the
+layer itself recondenses: with no hot target and the surface below the critical
+point, `hotLayer` relaxes to zero on the overturning timescale
+(`RECONDENSE_YEARS`, 10⁴ yr) rather than on the fifth of a watt a frozen
+planet radiates. The step bound uses the retreat flux while the layer
+retreats, so a cooling transit can no longer be stepped over in one go.
+
+**An ice edge is stepped through.** Near the outer edge the quasi-static
+shortcut multiplied the step 4000× at the moment the world reached its warm
+branch, and the explicit albedo update landed it back on the cold one: 102
+crossings of the half-ice line in 60 Myr against 4 at a 1 kyr step. The band
+ice at the end of the last step (`iceMeanPrev`, `iceMeanLast`) now bounds the
+next step by the edge's speed and cuts the shortcut to 46× while the edge is
+live, on any world. The slow ~20 Myr swing that remains on that world — CO₂
+building while it is frozen, drawing down while it is warm — is the
+weathering limit cycle and is kept.
+
+**The carbon seal reads the ice that is there.** Fixing the sea's column
+(the water still under a sea surface, over the area that still has one)
+moved the Cold-Start Runaway from 1770 K to 1417 K at ten megayears, and both
+numbers were wrong. `sealFactor` — how much volcanic CO₂ crosses the ice
+VI/VII floor to the air — read that column's ice depth. Before the fix the
+column was the whole inventory divided by a flooded fraction on its way to
+zero: 243 000 km of ice, seal on its floor. After it the sea under a closed
+lid was empty: zero ice, seal open, thirty bar of CO₂ up through 230 km of
+ice VII. The seal, the melt charge and the deep-ice bookkeeping now share
+one number, `iceDeep`: solved purely once a kiloyear, under the pool when
+there is a lid and over the basin extent when there is not, 191 km on that
+world and a seal of 0.25 either side of the lid closing. The same run then
+found a cliff in the radiation: convective inhibition switched off as a
+step when hydrogen's share of the dry air fell through a half, and the CO₂
+accumulating under the 18 bar envelope took it through at 18 bar — the
+outgoing flux tripled between 17.99 and 18.01 bar, the world fell 260 K in
+one step and sat pinned at the pressure where the flux had jumped. The gate
+ramps from a quarter share to a half now (`INH_MIXED`); nothing above a
+half share changes, and the cold start reads 1465 K at ten megayears.
+
+**The handoff to the standard band model** (`waterworld.js`) blends the
+energy fluxes by its overlap weight, but the escape path, the runaway margin
+and the state name switched on the weight merely being non-zero: 3e-23 to
+1e-7 oceans a year of escape across 0.005 M⊕, Infinity to a number for the
+margin. All three now follow the weight. What remains is the closures'
+disagreement — on a gas-free steam world at 0.98 S⊕ the low-gravity closure
+settles warm and the band model freezes, so the blended balance loses its warm
+equilibrium near a weight of 0.9 and the world drops ~40 K in a step somewhere
+on each ramp. Water self-broadening (×5 on the water term) was tried and moved
+the cold end by five kelvin while putting four calibration anchors off, so the
+gap is the band model's ice-albedo feedback under a thin sky, not its
+broadening. It is reported every run as a `GAP` row by `calibrate.mjs` and
+measured by `handoffcheck.mjs`; nothing is tuned to hide it.
+
 ### September 21: shallow Venus and temperature history
 
 The Early Venus transition at 2.121632 Gyr reproduced the reported 327 m

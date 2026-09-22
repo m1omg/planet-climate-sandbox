@@ -777,10 +777,12 @@ export const PRESETS = {
   superRunaway: { name: 'Super-Runaway Waterworld', icon: '🟣', params: { ...HYCEAN,
     mass: 10, water: 60, h2Bar: 20, insolation: 0.03, startT: 900 } },
 
-  // Built cold: the same star, the same sixty oceans, the same twenty bar of
-  // hydrogen -- and a snowball at -62 C. Turn `Stellar brightening` on and it
-  // will eventually be driven across; the point of watching is how long the hot
-  // layer takes to eat down through water that is not helping it.
+  // Built cold: five hundred oceans under the same twenty bar of hydrogen,
+  // three times the sunlight and a Hycean at 320 K to begin with, with
+  // stellar brightening on so that it is driven across the threshold within a
+  // few megayears. The point of watching is what happens after the crossing:
+  // how long the hot layer takes to eat down through water that is not
+  // helping it, which is the Buried Ocean this preset is named for.
   coldStart: { name: 'Cold-Start Runaway', icon: '❄️', params: { ...HYCEAN,
     mass: 10, water: 500, h2Bar: 20, insolation: 0.094, startT: 300, brightening: 1 } },
   smallWaterworld: { name: 'Small Waterworld (2019)', icon: '🌊', params: { ...EARTH,
@@ -809,6 +811,18 @@ export const PRESETS = {
     // Assumed ocean-bearing heat flux, within published 2.6–4.2 mW/m²
     // interior scenarios (LPSC 2017 #1137), not a measured surface heat flux.
     2410.3, waterForShareOfMass(7179.28340 / 398600.436, 0.4), 400.536, 125, 0.004) },
+  // The builder's starting point: a bare rock the size of Earth under a Sun,
+  // with nothing on it -- no air, no water, no life, no volcanoes, no heat
+  // from below. Everything the other presets carry, this one starts without,
+  // so that building a planet is adding things rather than removing them.
+  // `builder: true` keeps it out of the Worlds chips; it is reached through
+  // "Build a planet", which loads it paused.
+  blank: { name: 'New world', icon: '🪨', builder: true, params: { ...EARTH, ...SOLAR_HISTORY,
+    mass: 1, landFraction: 1, water: 0, insolation: 1, starTemp: 5772,
+    rotationHours: 24, tidallyLocked: false, obliquity: 0,
+    n2Bar: 0, o2Bar: 0, co2Bar: 0, ch4Bar: 0, h2Bar: 0, biosphere: 0,
+    emissions: 0, fossilUsed: 0, outgassing: 0, internalHeat: 0,
+    landAlbedo: 0.2, startT: 250, startAge: 0, magneticField: 0 } },
 };
 
 function icyMoon(mass, radiusKm, water, rotationHours, startT, internalHeat) {

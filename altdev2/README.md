@@ -11,8 +11,8 @@ the charts.
 
 ```bash
 python3 -m http.server 8000     # then open http://localhost:8000
-node src/selftest.js            # 350 physics, coverage, determinism and control checks
-node tools/calibrate.mjs        # 31 observational anchors + 9 reported known gaps
+node src/selftest.js            # 412 physics, coverage, determinism and control checks
+node tools/calibrate.mjs        # 35 observational anchors + 13 reported known gaps
 node tools/smoketest.mjs        # loads every module against a stub DOM
 node tools/glslcheck.mjs        # parses the shaders with a GLSL ES 3.0 grammar
 node tools/shadercompile.mjs    # compiles them on a real GL driver
@@ -23,8 +23,22 @@ node tools/bodycheck.mjs        # do the real surface maps reach both surface st
 node tools/fallbackcheck.mjs    # does the software renderer draw a planet?
 node tools/resumecheck.mjs      # does the tab survive being switched away from?
 node tools/identity.mjs         # every preset's whole state, to compare against before a change
+node tools/phasecheck.mjs       # ice melts into liquid, supercritical needs supercritical conditions, ice edges are stepped through, the carbon seal reads the ice under the pool
+node tools/handoffcheck.mjs     # the low-gravity closure hands over to the band model without a gate
+node tools/scenariocheck.mjs    # every scenario is lost by doing nothing and won by its own hint
+node tools/waterworldcheck.mjs  # the small-waterworld presets and the icy moons
+node tools/mixedwatercheck.mjs  # water under a background gas on a small world
+node tools/structurecheck.mjs   # the cross-section is hydrostatically consistent
+node tools/statuscheck.mjs      # saves resume identically; boundary diagnostics are continuous
+node tools/buriedcheck.mjs      # a buried ocean is named for what the column holds
+node tools/venusdisplaycheck.mjs # a shallow Venus pool is drawn only where it can exist
+node tools/venuspaintcheck.mjs  # ...and the software renderer paints it
 node tools/browsercheck.mjs     # drives a real headless Chrome; needs the page served
 ```
+
+`glslcheck.mjs` needs `@shaderfrog/glsl-parser` and the four GPU tools need `gl`
+(`npm i --no-save gl @shaderfrog/glsl-parser`, and `xvfb-run` on a machine with no
+display); both report themselves skipped or missing rather than passing.
 
 Shipping is one step longer here than on the stable site, and the difference is
 worth understanding before the first push. GitHub Pages serves `main:/` directly,
@@ -49,8 +63,8 @@ Verify after pushing by hash-matching a file you touched against
 `https://m1omg.github.io/planet-climate-sandbox/altdev2/`, because a "built"
 status is not proof the change is out there. See `CLAUDE.md`.
 
-All twelve, before pushing — `calibrate.mjs` above all, because a change that
-fixes one anchor almost always moves three others, and its nine `GAP` rows are
+All of them, before pushing — `calibrate.mjs` above all, because a change that
+fixes one anchor almost always moves three others, and its thirteen `GAP` rows are
 known deviations that report every run rather than failing. `identity.mjs` is the
 newest and answers the opposite question: not whether the anchors still hold, but
 whether anything moved that had no business moving. It runs every preset ten
@@ -112,7 +126,7 @@ the last** (7.9, 9.6, 11.4 W/m²…), which tipped the planet into a runaway at 
 the literature places a hundred times further out.
 
 `tools/calibrate.mjs` checks thirty-one anchors against published values in one run, and reports
-nine known gaps that are deliberately not fixed — among them snowball deglaciation CO₂ (0.010 bar
+thirteen known gaps that are deliberately not fixed — among them snowball deglaciation CO₂ (0.010 bar
 against a literature 0.08–0.4), snowball duration (0.22 Myr against 3–60) and the warmest a 0.35 S⊕
 world can be forced to (+67.7 °C, where the maximum greenhouse says it should not reach 0 °C). Every
 one of them prints its own numbers on every run, and the largest are taken apart under known

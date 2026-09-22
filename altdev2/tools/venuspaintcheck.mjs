@@ -18,11 +18,21 @@ globalThis.document={createElement:canvas,documentElement:{}};
 globalThis.getComputedStyle=()=>({getPropertyValue:()=>''});
 const s=new Simulation(PRESETS.earlyVenus.params),w=s.world;
 w.time=2.1e9;s.sample();
-w.T.fill(649.069);w.coldT=400;w.hotLayer=.0047044;
+// A lid over the pool: the surface past the critical point everywhere, so the
+// hot target is 1 and `lidded` holds; the pool itself is cold and shallow.
+w.T.fill(700);w.coldT=400;w.hotLayer=.0047044;
+// The pool is made of water that has NOT gone into the sky. With the whole
+// inventory in `vapour` there is nothing to draw a pool from, whatever the
+// unconverted share remembers -- the same water cannot be in both places --
+// so the dry case draws no ocean, and the pool case keeps most of its water
+// condensed.
 w.water={ocean:0,seaIce:0,landIce:0,vapour:.1074311,lost:.0005689};update(w,0);
 const view=new SoftwareView(canvas());await view.init();view.setQuality('low');view.showClouds=false;
 view.render(w,{seed:12.3,time:0},1);
-assert.ok(view.lastOceanFrac>.4 && view.lastOceanFrac<.7);
+assert.equal(view.lastOceanFrac,0);
+w.water={ocean:.08,seaIce:0,landIce:0,vapour:.0274311,lost:.0005689};update(w,0);
+view.render(w,{seed:12.3,time:0},1);
+assert.ok(view.lastOceanFrac>.4 && view.lastOceanFrac<.7, `ocean frac ${view.lastOceanFrac}`);
 assert.equal(view.lastCloud,0);assert.equal(view.lastSteam,0);
 const wet=view.image.data.slice();
 const ppm=Buffer.alloc(view.buffer.width*view.buffer.height*3);

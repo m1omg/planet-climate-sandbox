@@ -20,7 +20,15 @@ export function temperaturePoint(world) {
 
 // A live endpoint also covers paused slider edits and the interval between
 // stored samples. Drawing never mutates the saved timeline or its checkpoints.
-export function temperatureHistory(world) {
-  const history=world.history.filter(p=>p.t<world.time);
-  return [...history,temperaturePoint(world)];
+// `keepFuture` is the history scrubber's drag: the world stands at an earlier
+// time while the array still holds everything after it, and the chart dims
+// that span to show what letting go would discard. Filtering it away here
+// drew the dimming over an empty plot while the water chart, reading the raw
+// array, still showed it -- two charts disagreeing about one drag.
+export function temperatureHistory(world, keepFuture = false) {
+  const live = temperaturePoint(world);
+  const past = world.history.filter(p=>p.t<world.time);
+  if (!keepFuture) return [...past, live];
+  const future = world.history.filter(p=>p.t>world.time);
+  return [...past, live, ...future];
 }

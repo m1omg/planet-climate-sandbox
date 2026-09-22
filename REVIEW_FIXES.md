@@ -1,5 +1,97 @@
 # Review fixes — September 2026
 
+## September 22: altdev2 — the water column, the scenarios, the saves, a builder
+
+Everything reported from play against the paper the buried ocean is built on
+(Pierrehumbert 2023, arXiv:2212.02644), each written as a failing check first.
+Detail in `altdev2/WATERWORLDS.md`, "what a lid is, and what melts".
+
+- **The state chain.** Buried Ocean requires a lid — a hot target over the
+  pool, the paper's cold start — and Earth at 2.6 S⊕ no longer reads Buried
+  Ocean while 99% of its sea is still liquid under no lid. Steam Runaway is
+  a sea going into the sky (past the runaway limit with a tenth airborne, or
+  air more than half water); the 431 K world with 0.0008% airborne reads Moist.
+  Supercritical Ocean stays open to hydrogen-free worlds (the paper's terminal
+  state applies to terrestrial planets) and needs the critical pressure too.
+  The two self-tests HEAD shipped red are re-specified to this: the envelope-
+  free list holds the two Hycean states; the 2.6 S⊕ path is temperate → moist →
+  steam runaway → supercritical. Earth's Last Ocean is never buried (its sea
+  boils through its surface); the burial tests use sixty oceans, buried 3 Myr.
+- **A pool is made of what has not evaporated**: `coldPoolStructure` is capped
+  by the condensed reservoir, so the same water is never in the sky and in a
+  pool at once. The Venus display checks plant a condensed pool under a lid.
+- **Melting is paid for**: the cold pool's budget charges the latent heat of
+  the ice VI/VII that went over the last step (`L_FUSION_HP`); the floor used
+  to retreat at twice what the energy reaching it allows. Relabelling the
+  hot melt "ocean" was tried and reverted: above 647 K it is the paper's
+  supercritical interior.
+- **A supercritical layer needs supercritical conditions**: the drawn band
+  needs 647 K and 220.6 bar, and `hotLayer` recondenses on the overturning
+  timescale once the surface is below the critical point with no target left.
+  The step bound uses the retreat flux, so a cooling transit is walked.
+- **An ice edge is stepped through**: the band ice at the end of the last
+  step bounds the next step by the edge's speed and cuts the quasi-static
+  shortcut to 46× while the edge is live. The reported world's 102 crossings
+  in 60 Myr are 7; its ~20 Myr weathering cycle is real and kept.
+- **The low-gravity handoff** blends escape, the runaway margin and the state
+  name by the overlap weight instead of switching on it being non-zero. The
+  closures' disagreement (a 78 K ramp between 0.12 and 0.30 M⊕) is a new
+  calibrate GAP row; `tools/handoffcheck.mjs` holds the gates.
+- **Scenarios** are decided per step (main.js `scenarioStep`), so a verdict
+  lands at the same year at any frame rate; each carries a measured
+  `solution`, and `tools/scenariocheck.mjs` plays every one three ways. Dune
+  (unwinnable at 1.5) and the Eyeball (won by waiting) open stable and walk
+  the star to their threat; Hold, Venus and the Hot Ocean say what actually
+  works, with the numbers read off this build.
+- **Saves**: the two-click "click again to overwrite" latch is gone; a slot
+  picked while armed saves at once. Salinity's domain matches its slider.
+  History thins instead of dropping its first half, so a rewind to the start
+  no longer wipes the epochs; the scrub preview keeps the future in both charts.
+- **Clock**: the frame clamp follows the observed frame cost, so 5 fps keeps
+  its time (was half); the achieved-rate readout divides by the frame's own
+  seconds (was 6× low at 60 Hz).
+- **The sluggish heating worlds** (reported: Earth's Last Ocean and others
+  warming with their carbon gone): the CO₂ step bound rationed the step
+  against a change a pinned reservoir cannot make — 0.1 ppm with weathering
+  four times the supply — and held that world at 420-year steps for its whole
+  run, 400 000 steps where the accuracy step allowed a megayear. Pinned worlds
+  are exempt now, as the oxygen bound already exempted them: 44 000 steps,
+  nine times faster, and the tipping date converged at 129–133 Myr from
+  500-year steps to free ones.
+- **The carbon seal reads the ice that is there.** `sealFactor` read the
+  SEA's column for the ice VI/VII a volcano's CO₂ has to cross, and the sea is
+  the water that still has a surface: under a closed lid there was none, the
+  seal opened, and thirty bar of CO₂ came up through 230 km of ice. Before
+  the column fix it read the same water divided by a flooded fraction on its
+  way to zero — 243 000 km of ice — and sat on its floor. The Cold-Start
+  Runaway was 1770 K or 1417 K at ten megayears by which wrong column it read.
+  The seal, the melt charge and the deep-ice bookkeeping now share one number,
+  `iceDeep`, solved purely once a kiloyear over the basin or under the pool
+  (191 km, seal 0.25). `phasecheck.mjs` holds it.
+- **The hydrogen-background gate is a ramp.** Convective inhibition switched
+  off at a hydrogen dry share of one half, as a step: volcanic CO₂ under an
+  18 bar envelope took the share through it at 18 bar, and the outgoing flux
+  tripled between 17.99 and 18.01 bar on a 1550 K world, which fell 260 K in
+  one step and sat pinned at the pressure where the flux jumped. It ramps
+  from a quarter to a half now; nothing above a half share changes. The cold
+  start reads 1465 K at ten megayears, converged. A self-test scans the gate.
+- **Planet builder**: "Build a planet" in Worlds loads a bare rock paused and
+  walks Body → Star → Atmosphere → Surface, folding the rest; every control
+  stays live. Blank preset `blank`, Slovak throughout.
+- **Slovak** for the outgassing chips, the four menu hints and every toast
+  (`toast()` translates at source).
+
+Verification: altdev2 **412 self-tests, 0 failed**; calibrate **35 anchors,
+13 known gaps**; smoketest 33 modules; statuscheck 17; phasecheck; handoffcheck;
+scenariocheck; buriedcheck, waterworldcheck, mixedwatercheck, structurecheck,
+venusdisplaycheck, venuspaintcheck; glslcheck, shadercompile, gl1check,
+bodycheck, bakecheck under Xvfb with headless-gl; rendercheck, fallbackcheck,
+resumecheck; root historycheck and reviewcheck; identity diff moves only the
+ice-edge worlds by millikelvins, the deep-ice worlds by the seal's kiloyear
+sampling, and the cold start; headless Chromium drives
+of all 40 presets, all 8 scenarios and the builder, no console errors;
+browsercheck.mjs 28 passes to its documented GPU-less timeout.
+
 ## September 21 Venus display and history follow-up
 
 - Reject thermally remembered buried liquid when its proposed temperature and

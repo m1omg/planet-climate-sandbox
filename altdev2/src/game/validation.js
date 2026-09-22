@@ -9,7 +9,7 @@ const domains = {
   starTemp: [100, 1e6], rotationHours: [0.001, 1e9], startT: [1, 5000],
   landFraction: [0, 1], landAlbedo: [0, 1], heliumFrac: [0, 1],
   fossilUsed: [0, 1], obliquity: [0, 180], xuvFraction: [0, 1],
-  salinity: [0, 300], startAge: [0, 1e6], resurfacingSpan: [0.000001, 1e9],
+  salinity: [0, 350], startAge: [0, 1e6], resurfacingSpan: [0.000001, 1e9],
 };
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const bag = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -31,7 +31,8 @@ export const NUMERIC_FIELDS = ['time','waterInitial','iceSheet','hotLayer','cold
   'industrial','co2','n2','o2','ch4','h2','he','euk','eukReady','ch4Escape','h2Rate','dtPrev'];
 const runtimeScalars = new Set(['dtPrev','trustOver','ringing','lastMove','insolationTarget',
   'insolationRate','weathering','o2Rate','ch4Source','ch4Tau','iceDeep','iceRate',
-  'liquidRate','vapourRate','lifeRoom','landIceTarget','trapActive','emitting']);
+  'liquidRate','vapourRate','lifeRoom','landIceTarget','trapActive','emitting',
+  'poolIce','iceMeanPrev','iceMeanLast','coolSince']);
 const runtimeBags = new Set(['escape','o2Flux','iceMark','liquidMark','vapourMark',
   'weathering','lifeRoom']);
 const finite = v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e100;

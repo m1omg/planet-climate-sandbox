@@ -45,6 +45,8 @@ export class Simulation {
   constructor(params) {
     this.world = createWorld(params);
     this.credit = 0;
+    this.frameCost = 0;       // running mean of the real seconds a frame takes
+    this.lastRealDt = 0;      // the real seconds the last advance() was paid for
     // A year a second. Fast enough to watch weather-scale change, slow enough
     // that the industrial CO2 the default world is emitting is legible as it
     // happens rather than being over before the first frame.
@@ -75,6 +77,16 @@ export class Simulation {
     this._nextSample = 0;
     this.world.history.length = 0;
     this.sample();
+  }
+
+  // Begin a starlight walk to `insolation` from wherever the star is now,
+  // whatever the clock reads. setParams only smooths a change once the world
+  // has moved (`w.time > 0`), so a scenario that opens on a brightening star
+  // could not ask for one at the moment it starts; this is how it asks.
+  walkTo(insolation) {
+    const w = this.world;
+    w.insolationTarget = insolation;
+    w.insolationRate = walkRate(w.params.insolation, insolation);
   }
 
   setParams(patch) {
@@ -163,7 +175,18 @@ export class Simulation {
   // realDt in seconds; returns simulated years actually advanced.
   advance(realDt) {
     if (this.paused) { this.actualRate = 0; return 0; }
-    const dtReal = clamp(realDt, 0, 0.1);          // ignore huge stalls
+    // A stall is ignored; a slow frame is not. This clamped at a flat tenth of
+    // a second, so anything under ten frames a second was paid for a tenth
+    // however long the frame had taken -- at 5 fps half the clock was thrown
+    // away, silently, and the advertised rate was a lie on exactly the
+    // machines it matters on. The ceiling now follows the observed frame
+    // cost (three times its running mean, between 0.1 and 1 s), so a steady
+    // low frame rate keeps its time while a backgrounded tab or a GC pause
+    // -- one long frame that barely moves the mean -- is still cut off.
+    const seen = clamp(realDt, 0, 1);
+    this.frameCost = this.frameCost > 0 ? this.frameCost + (seen - this.frameCost) * 0.1 : seen;
+    const dtReal = clamp(realDt, 0, clamp(this.frameCost * 3, 0.1, 1));
+    this.lastRealDt = dtReal;
     const eff = this.governedRate();
     this.credit = Math.min(this.credit + dtReal * eff, eff * 2);
     return this.runCredit(eff, dtReal);
@@ -448,7 +471,8 @@ export class Simulation {
     const last = w.history.at(-1);
     const changed = last && (Math.abs(w.diag.Tmean-last.T)>=2
       || Math.abs(w.diag.Tmin-last.Tmin)>=2 || Math.abs(w.diag.Tmax-last.Tmax)>=2
-      || (last.surfaceKind==='buried ocean' && Math.abs(w.diag.coldT-last.surfaceT)>=2));
+      || (last.surfaceKind==='buried ocean' && Number.isFinite(last.surfaceT)
+         && Math.abs(w.diag.coldT-last.surfaceT)>=2));
     if (w.time >= this._nextSample || changed) {
       this.sample();
       this._nextSample = w.time + Math.max(1, w.time * 0.02);
@@ -481,7 +505,19 @@ export class Simulation {
       // rather than reconstructed from the flux.
       alb: dg.alb.reduce((a, b) => a + b, 0) / dg.alb.length,
     });
-    if (w.history.length > 4000) w.history.splice(0, 2000);
+    // Thinned, not beheaded. This used to drop the first two thousand samples
+    // outright, so after 2.16 Gyr of Earth `history[0]` sat at 2.159 Gyr while
+    // the restore points still began at year zero -- and a rewind to the start
+    // found no past at all, read as "a different world", and wiped the epochs,
+    // the milestones and the restore points with it. Every other old sample
+    // goes instead, the first one never: the chart keeps its whole span at a
+    // coarser resolution where nothing is happening, and the run keeps its
+    // beginning.
+    if (w.history.length > 4000) {
+      const kept = w.history.filter((h, i) => i >= 2000 || (i & 1) === 0);
+      w.history.length = 0;
+      for (const h of kept) w.history.push(h);
+    }
     if (this.onSample) this.onSample(w);
   }
 }

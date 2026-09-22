@@ -39,7 +39,15 @@ const RUNTIME = ['dtPrev', 'trustOver', 'ringing', 'lastMove',
   'insolationTarget', 'insolationRate',
   'escape', 'weathering', 'o2Rate', 'o2Flux',
   'ch4Source', 'ch4Tau', 'iceDeep', 'iceRate', 'iceMark', 'liquidRate', 'vapourRate',
-  'liquidMark', 'vapourMark', 'lifeRoom', 'landIceTarget', 'trapActive', 'emitting'];
+  'liquidMark', 'vapourMark', 'lifeRoom', 'landIceTarget', 'trapActive', 'emitting',
+  // The pool's ice floor at the end of the last step, which is what the melt
+  // over this step is charged against; and the band ice, which is what the
+  // ice-edge step bound compares to. Both are last-step memories: restored
+  // without them the first step after a load is unbounded and uncharged.
+  'poolIce', 'iceMeanPrev', 'iceMeanLast',
+  // The Undo Venus scenario's hold-below-boiling timer, so a save mid-hold
+  // resumes the hold rather than restarting it.
+  'coolSince'];
 
 // Fields that really are derived afresh every step, listed so that the
 // completeness check in selftest.js can tell "deliberately absent" from

@@ -448,6 +448,15 @@ export function oceanStructure(columnKg, g, Tsurf, pSurfBar = 0, meltShift = 0) 
   // critical temperature is supercritical from the top down and returns zero.
   const pCrit = Tsurf >= T_CRIT_H2O ? pTop
     : pTop + K0 * Math.expm1((T_CRIT_H2O / Tsurf - 1) / K_ADIABAT);
+  // Reported from play as "the high-pressure ice does not melt, it becomes
+  // supercritical": it does melt, and what it melts into on a pool whose top
+  // is past ~500 K is fluid hotter than 647 K, which is the supercritical
+  // interior of Pierrehumbert 2023 and Mousis 2020 by their own name. Labelling
+  // that fluid "ocean" because it sits in the ice VI field was tried and
+  // reverted -- it put the word on water that has no liquid-vapour boundary
+  // to speak of. What WAS wrong is fixed in advanceColdPool: the melt cost
+  // nothing, so the floor retreated at twice the rate the energy reaching the
+  // pool could pay for. The split stays where the physics puts it.
   const superFrom = (pEnd) => (pCrit >= pEnd ? 0 : depthTo(pEnd).z - depthTo(Math.max(pCrit, pTop)).z);
   // The average temperature of the LIQUID, which stops at the critical crossing:
   // `coldT` is the temperature at the TOP of the pool, immediately under the
@@ -557,7 +566,14 @@ const K_WATER = 0.6;
 
 export function coldPoolStructure(dg) {
   const share = 1 - clamp(dg.hotLayer ?? 1, 0, 1);
-  const col = Math.max((dg.totalWater ?? 0) * (dg.d?.eoColumn ?? 0) * share, 0);
+  // Never more than the water that is actually condensed. On Earth at 2.6 S⊕
+  // the reservoir lifts the whole sea into steam inside five hundred years
+  // while `hotLayer` -- a budget written for a stratified column hundreds of
+  // kilometres deep -- has converted a few percent, and the unconverted share
+  // was read as a cold pool of most of an ocean under a sky that held the same
+  // water. A pool is made of what has not evaporated.
+  const inventory = Math.min(dg.totalWater ?? 0, dg.condensedWater ?? dg.totalWater ?? 0);
+  const col = Math.max(inventory * (dg.d?.eoColumn ?? 0) * share, 0);
   const T = dg.coldT ?? T_COLD_POOL, p = dg.pTotMean ?? 0;
   // The unconverted fraction is a thermal memory, not proof of liquid. In a
   // shallow runaway all water can already be vapour while hotLayer still
@@ -652,8 +668,12 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     const deepAll = Math.min(st.superDepth ?? 0, depth);
     const liquidPart = Math.max(depth - deepAll, 0);
     const bound = liquidPart > 0 ? liquidPart : depth;
+    // The two ends of the clamp in the right order: on a pool under fifty
+    // metres the metre floor exceeded the two-percent cap, and a clamp whose
+    // floor is above its ceiling gave a THICKER skin for a smaller jump.
+    const skinCap = Math.max(0.02 * bound, 0);
     const skin = jump > 0.5
-      ? clamp(K_WATER * jump / flux, Math.min(1, bound), Math.max(0.02 * bound, 0)) : 0;
+      ? clamp(K_WATER * jump / flux, Math.min(1, skinCap), skinCap) : 0;
     if (skin > 0) add('interface', skin, [topT, bulkT], '{0} W/m² across it', [flux < 1 ? flux.toFixed(2) : flux.toFixed(1)]);
     const rest = Math.max(depth - skin, 0);
     const deep = Math.min(st.superDepth ?? 0, rest);
@@ -817,7 +837,16 @@ export function columnLayers(w, dg, airThick, scaleH = 0) {
     // that has been left behind by a COOLING surface overturns rather than
     // sitting there, which is the asymmetry advanceColdPool already carries.
     const bulk = Math.min(dg.coldT ?? Ts, Ts);
-    if (hot > 0.005 && liquid > 0) {
+    // Supercritical needs both halves of the definition, here as everywhere
+    // else in this file: hotter than 647 K AND denser than 220.6 bar. This
+    // branch used to draw the band on `hotLayer` alone, at the surface
+    // temperature verbatim -- which is how a world that had cooled to -228 °C
+    // was drawn with 35 km of "supercritical" on top of its ocean, and the
+    // ice shell that should have been there was never reached. The layer's
+    // own recondensation is advanceHotLayer's job; the picture must not wait
+    // for it.
+    const superNow = Ts >= T_CRIT_H2O && pTot * 1e5 >= P_CRIT_H2O;
+    if (hot > 0.005 && liquid > 0 && superNow) {
       add('supercritical', liquid * hot, [Ts], '{0}% converted', [(hot * 100).toFixed(0)]);
       addWater(ob, liquid * (1 - hot), Math.min(Ts, T_CRIT_H2O), bulk, 'still liquid');
     } else {

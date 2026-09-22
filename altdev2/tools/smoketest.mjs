@@ -920,7 +920,7 @@ if (created < 20) {
       wrong.push(`${sel} does not close the menu`);
     }
   }
-  if (!src.includes("'Escape') openMenu(null)")) wrong.push('Escape does not close the menu');
+  if (!src.includes("'Escape') { openMenu(null);")) wrong.push('Escape does not close the menu');
   if (!html.includes('id="shelf-world"') || !src.includes('function syncShelf')) {
     wrong.push('the Worlds button does not carry the world name');
   }
