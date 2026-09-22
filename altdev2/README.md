@@ -33,6 +33,7 @@ node tools/mixedwatercheck.mjs  # water under a background gas on a small world
 node tools/structurecheck.mjs   # the cross-section is hydrostatically consistent
 node tools/statuscheck.mjs      # saves resume identically; boundary diagnostics are continuous
 node tools/buriedcheck.mjs      # a buried ocean is named for what the column holds
+python3 tools/watereos.py       # regenerates the IAPWS-95 water density table (needs `pip install iapws`)
 node tools/venusdisplaycheck.mjs # a shallow Venus pool is drawn only where it can exist
 node tools/venuspaintcheck.mjs  # ...and the software renderer paints it
 node tools/browsercheck.mjs     # drives a real headless Chrome; needs the page served

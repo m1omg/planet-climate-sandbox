@@ -1,5 +1,21 @@
 # Small waterworlds (altdev2 only)
 
+### September 22: the boundary under a lid, by phase
+
+Between a lid and the pool is a conductive layer carrying the mixed-down flux,
+δ = k·ΔT/F. It was drawn as liquid from the surface temperature down, which
+put 384 °C water under 198 bar (it boils at 365) and 985 °C "liquid" under 557
+bar. A liquid surface cannot be hotter than its boiling point at the pressure
+on it, and past 220.6 bar there is no surface at all. So the layer is drawn in
+the phases it is in: **steam** from the surface to the boiling point when the
+pressure is under critical, **supercritical fluid** down to 374 °C when it is
+over, then **liquid** to the pool. Each part carries the same flux with its own
+conductivity (steam and supercritical fluid ~0.05–0.5 W/m/K by temperature and
+density, fitted to IAPWS 2011 within ~20%; liquid 0.6), and each is weighed
+with IAPWS-95 density, tabulated by `tools/watereos.py`. The boiling point is
+taken at the total pressure: that is the limit past which the water boils,
+whatever share of the sky is hydrogen.
+
 ### September 21, later: what a lid is, and what melts
 
 Four faults reported from play, all in the water column, all fixed against the

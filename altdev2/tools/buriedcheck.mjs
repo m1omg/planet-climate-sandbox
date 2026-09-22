@@ -84,7 +84,7 @@ const drawnBelowLid = (w) => {
   const dg = w.diag;
   const L = columnLayers(w, dg, 5*scaleHeight(dg), scaleHeight(dg));
   const i = L.findIndex((l) => l.kind === 'interface' || l.kind === 'ocean'
-    || /^ice/.test(l.kind));
+    || /^boundary|^ice/.test(l.kind));
   return i < 0 ? 0 : L.slice(i).filter((l) => l.kind !== 'rock')
     .reduce((a, l) => a + l.metres, 0);
 };

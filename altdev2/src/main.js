@@ -1067,7 +1067,12 @@ const LAYER_STYLE = {
   iceVI:         ['#9fc6d8', 'ice VI'],
   iceVII:        ['#7fa8bd', 'ice VII'],
   iceHP:         ['#8bb7cb', 'high-pressure ice'],
-  interface:     ['#7a6fc4', 'thermal boundary'],
+  // The boundary under a hot sky, named for the phase each part is in: steam
+  // above the boiling point, supercritical fluid past the critical pressure,
+  // liquid below. It was one band called liquid from 985 °C down.
+  boundarySteam: ['#a98ad4', 'thermal boundary (steam)'],
+  boundarySuper: ['#8e66c2', 'thermal boundary (supercritical)'],
+  interface:     ['#7a6fc4', 'thermal boundary (liquid)'],
   rock:          ['#6b5a4a', 'rock'],
 };
 

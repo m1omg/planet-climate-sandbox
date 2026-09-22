@@ -24,6 +24,8 @@ import { floodedFraction, waterForFlooded, MIN_SEA_DEPTH,
          MAX_BASIN_DEPTH } from './physics/hypsometry.js';
 import { surfaceGravity, waterShareOfMass, waterForShareOfMass, MAX_WATER_FRACTION } from './physics/planet.js';
 import { sanitizeParams } from './game/validation.js';
+import { waterDensityAt, boilingPoint } from './physics/watereos.js';
+import { EOS_REFERENCE } from './physics/watereos-table.js';
 import { methaneLifetime, photosynthesis, carbonBudget, FOSSIL_TOTAL, meltBoost } from './physics/volatiles.js';
 import { atmosphereLook, cloudLook, scaleHeight, surfaceHidden,
          buriedOceanCover } from './render/atmosphere.js';
@@ -115,7 +117,7 @@ export function run() {
 // water rather than assume it is second.
 function waterBands(L) {
   const i = L.findIndex((l) => l.kind === 'interface' || l.kind === 'ocean'
-    || /^ice|^seaice/.test(l.kind));
+    || /^boundary|^ice|^seaice/.test(l.kind));
   return { sky: i < 0 ? L.filter((l) => l.kind !== 'rock') : L.slice(0, i),
     water: (i < 0 ? [] : L.slice(i)).filter((l) => l.kind !== 'rock') };
 }
@@ -860,10 +862,12 @@ function runChecks() {
       // keep the rest -- which was right while the sky was one band. It is two
       // now, a cool one over the supercritical part, and dropping only the first
       // counted a hundred and forty kilometres of atmosphere as ocean.
-      const firstWater = kinds.findIndex((k) => k === 'interface' || k === 'ocean');
+      // The boundary is water too, whichever phase its hot part is in.
+      const firstWater = kinds.findIndex((k) => k === 'interface' || k === 'ocean'
+        || /^boundary/.test(k));
       const water = (firstWater < 0 ? [] : layers.slice(firstWater))
         .filter((l) => l.kind === 'ocean' || l.kind === 'supercritical'
-          || l.kind === 'interface');
+          || l.kind === 'interface' || /^boundary/.test(l.kind));
       const waterM = water.reduce((a, l) => a + l.metres, 0);
       check('A buried ocean is drawn with the water it is named for',
         !!cp && cp.liquidDepth > 1e3 && waterM > 1e3
@@ -873,9 +877,16 @@ function runChecks() {
           : 'no path reached buriedOcean');
       // Lid, then the conductive boundary that carries the flux across the jump,
       // then the water. Nothing at 800 °C sits directly on water at 30.
+      // The boundary's hot part is its own band now, named for its phase, so
+      // the lid is the last supercritical band ABOVE the boundary, not simply
+      // the band before the liquid one.
       const iFace = kinds.indexOf('interface');
+      const iHot = kinds.findIndex((k) => /^boundary/.test(k));
+      const iTop = iHot >= 0 && iHot < iFace ? iHot : iFace;
+      const iLid = iTop - 1;
       check('…with the hot lid above it, and a boundary layer between them',
-        iFace > 0 && kinds[iFace - 1] === 'supercritical' && kinds[iFace + 1] === 'ocean',
+        iFace > 0 && kinds[iLid] === 'supercritical' && kinds[iFace + 1] === 'ocean'
+          && kinds.slice(iTop, iFace).every((k) => /^boundary/.test(k)),
         kinds.join(' → '));
       // The sky gets HOTTER going down, and only part of it is supercritical.
       // Both of those were wrong: the band read 1621 → 374 °C top to bottom, an
@@ -883,7 +894,7 @@ function runChecks() {
       // though supercritical needs 220.6 bar as well as 647 K. On this world the
       // critical pressure is a couple of scale heights up, so the sky is cool
       // steam over a supercritical base, and the base is the hot end.
-      const lidB = layers[iFace - 1], coolB = layers[iFace - 2];
+      const lidB = layers[iLid], coolB = layers[iLid - 1];
       check('…and the sky is cooler at the top, with only its base supercritical',
         !!lidB && lidB.T[1] > lidB.T[0] && Math.abs(lidB.T[0] - T_CRIT_H2O) < 1
           // Named for what it is made of, not merely "one of the three sky
@@ -1060,7 +1071,7 @@ function runChecks() {
       // way, what is drawn has to add up to what the solver reports.
       const col = (dgs && dgs.coldPool) || (dgs && dgs.oceanBase) || {};
       const fluid = waterBands(layers).water.filter((l) => l.kind === 'ocean'
-        || l.kind === 'supercritical' || l.kind === 'interface')
+        || l.kind === 'supercritical' || l.kind === 'interface' || /^boundary/.test(l.kind))
         .reduce((a, l) => a + l.metres, 0);
       const iced = layers.filter((l) => /^ice/.test(l.kind)).reduce((a, l) => a + l.metres, 0);
       check('…and everything under the lid is drawn, in the phase it is in',
@@ -5923,6 +5934,65 @@ function runChecks() {
         `285 K surface → ${cold.baseTemperature.toFixed(0)} K floor, ${cold.basePhase}; `
           + `400 K → ${warm.baseTemperature.toFixed(0)} K, ${warm.basePhase}`);
     }
+  }
+
+  // ---- 7i2. what the boundary under a hot sky is made of ---------------------
+  {
+    // The density the boundary is weighed with. It was the cold-ocean law, 1000
+    // kg/m^3 at any temperature, on a layer whose top is supercritical fluid a
+    // tenth as dense. The table is IAPWS-95; these are the equation's own values.
+    const off = EOS_REFERENCE.map(([T, P, ph, r]) => [T, P, ph, waterDensityAt(T, P, ph) / r - 1])
+      .filter(([, , , e]) => Math.abs(e) > 0.02);
+    check('Water density matches IAPWS-95 from cold liquid to supercritical fluid',
+      off.length === 0,
+      off.length ? off.map(([T, P, ph, e]) => `${ph} ${T} K ${(P / 1e5).toPrecision(3)} bar `
+        + `${(e * 100).toFixed(1)}%`).join('; ')
+        : `${EOS_REFERENCE.length} states within 2%, 298-1787 K, 1-2550 bar`);
+    check('Water boils at 100 °C at one atmosphere, and has no boiling point past the critical pressure',
+      near(boilingPoint(101325), 373.12, 0.1) && boilingPoint(P_CRIT_H2O) === T_CRIT_H2O
+        && boilingPoint(1e8) === T_CRIT_H2O,
+      `${(boilingPoint(101325) - 273.15).toFixed(2)} °C at 1 atm`);
+
+    // Reported from play, on a 2.58 M⊕ ocean under 20 bar of hydrogen at 0.094
+    // S⊕: the boundary under the lid was drawn as one liquid band from the
+    // surface temperature down -- 384 °C at 198 bar, where water boils at 365,
+    // and 985 °C at 557 bar later, which is no liquid at all. A liquid surface
+    // cannot be hotter than its boiling point; what sits on it above that is
+    // steam, and past the critical pressure it is supercritical fluid grading
+    // into the water with no surface between them.
+    const sim = new Simulation({ ...EARTH, mass: 2.58, landFraction: 0, water: 500,
+      insolation: 0.094, n2Bar: 0, o2Bar: 0, biosphere: 0, co2Bar: 0, ch4Bar: 0, h2Bar: 20,
+      emissions: 0, fossilUsed: 0, startT: 300, realisticGeology: false, xuvDecay: false });
+    const seen = [];
+    for (const t of [1.6e6, 1.9e6, 2.5e6]) {
+      sim.runYears(t - sim.world.time);
+      const dg = sim.world.diag;
+      seen.push({ t, g: dg.g, L: columnLayers(sim.world, dg, 5 * scaleHeight(dg), scaleHeight(dg)) });
+    }
+    const liquidOver = seen.flatMap(({ t, L }) => L
+      .filter((l) => (l.kind === 'interface' || l.kind === 'ocean') && l.P?.length && l.T?.length
+        && l.T[0] > boilingPoint(l.P[0]) + 0.5)
+      .map((l) => `${(t / 1e6).toFixed(1)} Myr ${l.kind} ${(l.T[0] - 273.15).toFixed(0)} °C at `
+        + `${(l.P[0] / 1e5).toFixed(0)} bar (boils at ${(boilingPoint(l.P[0]) - 273.15).toFixed(0)})`));
+    check('No liquid is drawn hotter than water boils at its pressure',
+      liquidOver.length === 0, liquidOver.join('; ') || 'every liquid band at or below boiling');
+    const at = (t) => seen.find((s) => s.t === t).L;
+    const next = (L, kind) => { const i = L.findIndex((l) => l.kind === kind); return i < 0 ? null : L[i + 1]; };
+    const steam = at(1.9e6).find((l) => l.kind === 'boundarySteam');
+    const superB = at(2.5e6).find((l) => l.kind === 'boundarySuper');
+    check('…the hot part of the boundary is steam under the critical pressure and supercritical over it',
+      !!steam && steam.P[0] < P_CRIT_H2O && next(at(1.9e6), 'boundarySteam')?.kind === 'interface'
+        && !!superB && superB.P[0] >= P_CRIT_H2O && superB.T[1] === T_CRIT_H2O
+        && next(at(2.5e6), 'boundarySuper')?.kind === 'interface',
+      seen.map(({ t, L }) => `${(t / 1e6).toFixed(1)} Myr: ${L.map((l) => l.kind).join(' → ')}`).join('; '));
+    // Weighed with what it is. 985 °C fluid at 557 bar is ~150 kg/m^3.
+    const rhoOf = (l, g) => (l.P[1] - l.P[0]) / (g * l.metres);
+    const g25 = seen.find((s) => s.t === 2.5e6).g;
+    const face = next(at(2.5e6), 'boundarySuper');
+    const rSuper = superB ? rhoOf(superB, g25) : NaN, rFace = face ? rhoOf(face, g25) : NaN;
+    check('…and each part weighs what its density says: supercritical light, liquid dense',
+      rSuper > 50 && rSuper < 400 && rFace > 600 && rFace < 1100,
+      `supercritical ${rSuper.toFixed(0)} kg/m³, liquid boundary ${rFace.toFixed(0)} kg/m³`);
   }
 
   // ---- 7j. convective inhibition -------------------------------------------
