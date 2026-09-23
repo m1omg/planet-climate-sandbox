@@ -199,42 +199,84 @@ try {
   // Every control has to be ON the screen and not under something else, at the
   // window sizes people actually have. This is here because the language button
   // spent a while ten pixels inside the clock: the rail was pinned to a
-  // hard-coded 70px while the clock owns 80 on one row and 126 on two, so it
+  // hard-coded 70px while the clock owns 80 on one row and more on two, so it
   // was wrong at every desktop size and invisible at the one it was written on.
   //
   // Hit-tested rather than measured. A button can be inside the viewport, fully
   // painted, and still unreachable because another element is over it, and
   // elementFromPoint is the only test that knows the difference.
-  for (const [W, H] of [[1920, 1080], [1920, 969], [1536, 790], [1280, 700]]) {
+  //
+  // Both languages, because the second failure this caught was Slovak-only: the
+  // clock's wrap breakpoint had been measured with English labels, and at 1280
+  // the longer Slovak ones clipped the fast button off the end of the bar.
+  //
+  // And a fresh load at every size, in both of the states a person meets. The
+  // first version of this resized one page and passed with the Slovak clip still
+  // in place, for two reasons worth keeping. Resizing is not opening: the page
+  // decides at load whether to fold the side panels. And the setup above clicks
+  // both panels open so the checks below can read them, which writes that
+  // choice to storage -- so every later load came up with the panels open, the
+  // stage was narrow, the wrap query fired, and the clip never appeared. A
+  // first visit has nothing stored: at 1280 the panels fold away, the clock
+  // gets the whole window, and that is where the fast button was cut off.
+  const HIDE = 'planetclimate.altdev2.hidePanels.v1';
+  const setLang = (want) => evaluate(`(() => {
+    const b = document.getElementById('btn-lang');
+    if (b.textContent.trim() !== '${want}') b.click();
+    return b.textContent.trim();
+  })()`);
+  const openAt = async (W, H) => {
     await call('Emulation.setDeviceMetricsOverride',
       { width: W, height: H, deviceScaleFactor: 1, mobile: false }, sessionId);
-    await delay(250);
-    const out = await evaluate(`(() => {
-      const rail = document.getElementById('view-controls');
-      const unreachable = [...rail.children].filter((c) => {
-        const q = c.getBoundingClientRect();
-        if (q.bottom > innerHeight || q.right > innerWidth || q.top < 0 || q.left < 0) return true;
-        const hit = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
-        return !hit || !(hit === c || c.contains(hit));
-      }).map((c) => c.id || c.tagName);
-      // ...and the clock must not lay its own controls out past its edge.
-      const bar = document.getElementById('timebar');
-      const bb = bar.getBoundingClientRect();
-      const clipped = [...bar.querySelectorAll('.rate > *, #timebar > *')].filter((c) => {
-        const q = c.getBoundingClientRect();
-        return q.right > bb.right + 1 || q.left < bb.left - 1;
-      }).map((c) => c.className || c.tagName);
-      return { unreachable, clipped, n: rail.children.length };
-    })()`);
-    ok(out.unreachable.length === 0 && out.clipped.length === 0,
-      `Every view control is reachable at ${W}x${H}`,
-      out.unreachable.length || out.clipped.length
-        ? `unreachable: ${out.unreachable.join(', ') || 'none'} · clipped: ${out.clipped.join(', ') || 'none'}`
-        : `${out.n} controls, and the clock keeps its own inside it`);
+    await call('Page.navigate', { url }, sessionId);
+    await waitFor("document.readyState === 'complete' && !!window.__app?.view");
+    await waitFor('window.__app.view.ready || window.__app.view.software', 30_000);
+  };
+  const openPanels = () => evaluate(`(() => {
+    for (const side of ['left', 'right']) {
+      if (document.body.classList.contains('hide-' + side)) document.querySelector('#panel-' + side).click();
+    }
+    return true;
+  })()`);
+  const layout = () => evaluate(`(() => {
+    const rail = document.getElementById('view-controls');
+    const unreachable = [...rail.children].filter((c) => {
+      const q = c.getBoundingClientRect();
+      if (q.bottom > innerHeight || q.right > innerWidth || q.top < 0 || q.left < 0) return true;
+      const hit = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
+      return !hit || !(hit === c || c.contains(hit));
+    }).map((c) => c.id || c.tagName);
+    // ...and the clock must not lay its own controls out past its edge.
+    const bar = document.getElementById('timebar');
+    const bb = bar.getBoundingClientRect();
+    const clipped = [...bar.querySelectorAll('.rate > *, #timebar > *')].filter((c) => {
+      const q = c.getBoundingClientRect();
+      return q.right > bb.right + 1 || q.left < bb.left - 1 || q.right > innerWidth;
+    }).map((c) => c.className || c.tagName);
+    return { unreachable, clipped, n: rail.children.length };
+  })()`);
+  const judge = (out, label) => ok(out.unreachable.length === 0 && out.clipped.length === 0, label,
+    out.unreachable.length || out.clipped.length
+      ? `unreachable: ${out.unreachable.join(', ') || 'none'} · clipped: ${out.clipped.join(', ') || 'none'}`
+      : `${out.n} controls, and the clock keeps its own inside it`);
+  for (const lang of ['EN', 'SK']) {
+    for (const [W, H] of [[1920, 1080], [1920, 969], [1536, 790], [1280, 700]]) {
+      await evaluate(`localStorage.removeItem('${HIDE}')`);
+      await openAt(W, H);
+      await setLang(lang);
+      await delay(300);
+      judge(await layout(), `Every view control is reachable at ${W}x${H} in ${lang}, first visit`);
+      await openPanels();
+      await delay(450);
+      judge(await layout(), `…and with both side panels open`);
+    }
   }
-  await call('Emulation.setDeviceMetricsOverride',
-    { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false }, sessionId);
-  await delay(250);
+  // Put the page back exactly as the checks below expect to find it: 1280x800,
+  // English, both panels open and that choice stored.
+  await openAt(1280, 800);
+  await openPanels();
+  await setLang('EN');
+  await delay(450);
 
   const pauseRotation = await evaluate(`(() => {
     const play = document.querySelector('#btn-play');

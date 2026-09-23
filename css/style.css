@@ -267,7 +267,7 @@ body.software-render #planet{image-rendering:auto}
 /* ---------------- time bar ---------------- */
 #timebar{
   position:absolute;left:16px;right:16px;bottom:16px;z-index:4;
-  display:flex;align-items:center;gap:10px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   background:var(--panel);backdrop-filter:blur(18px);
   border:1px solid var(--line);border-radius:var(--radius);padding:9px 12px;
   box-shadow:0 10px 34px rgba(0,0,0,.45);
@@ -308,7 +308,20 @@ body.software-render #planet{image-rendering:auto}
 #since-row .t-label{color:var(--accent-2);opacity:.75}
 .mark-btn{flex:none;padding:0 9px;font-size:14px;line-height:1}
 .mark-btn.has-mark{color:var(--accent-2);border-color:var(--accent-2)}
-.rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+/* The container query further down wraps the clock below 1250px of stage, and
+   1250 was measured in English. Slovak labels are longer -- "spomaliť",
+   "rýchlo", "ZRÝCHLENIE ČASU" -- so at 1280, which is what a 1080p laptop at 150%
+   scaling actually gives you, one row stopped fitting before the query fired and
+   the fast button was clipped off the end of the bar. A breakpoint is a guess at
+   when the content will not fit, and the content is language-dependent.
+
+   So this asks the content instead. The minimum is what the row really needs,
+   capped at the bar's width: whenever it does not fit, the bar wraps and this
+   takes a row of its own, in any language, at any width. Below 1250 the query
+   still sets it full-width and nothing changes; min() rather than a bare
+   max-content because min-width beats max-width in flex sizing and would
+   otherwise push the row back out over the edge on a narrow stage. */
+.rate{display:flex;align-items:center;gap:9px;flex:1;min-width:min(100%,max-content)}
 .rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
 /* 60px was a nub. On one row at 760px of stage the slider is the only thing in
    .rate that can give, so it gave everything: label 113 + entry 140 + stops 229
