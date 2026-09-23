@@ -586,6 +586,33 @@ function enFormat(s, ...args) {
   return s.replace(/\{(\d+)\}/g, (m, i) => (args[i] === undefined ? m : args[i]));
 }
 
+// Whether the sky holds enough of the water for its trend to be the sea's fate.
+//
+// The vapour column follows saturation, so on any warming world it grows, and
+// on a cooling one it shrinks. Modern Earth, 175 years in, was reported as
+// "evaporating 52 oceans/Gyr": true as a derivative, and a rate nothing can
+// happen at, because the whole sky holds 5e-5 of an ocean and the exchange
+// stops the moment the warming does. It is the sea going into the sky only once
+// the sky is a reservoir in its own right -- a twentieth of a percent of the
+// water, which on an Earth-sized inventory is a sea surface near 60 °C, where
+// the moist greenhouse begins. On a world carrying hundreds of oceans the same
+// share would be a steam runaway already, so the bound is on one ocean's worth.
+export const SKY_SHARE = 5e-4;
+export function skyHoldsSea(w, dg) {
+  const total = dg.totalWater ?? 0;
+  return total > 0 && (w.water?.vapour ?? 0) >= SKY_SHARE * Math.min(1, total);
+}
+
+// Whether the liquid-water rate is worth a readout: it is moving, and it is
+// moving for one of the three reasons the number exists for -- into a sky that
+// can hold it, under a lid, or off the planet. A warming Earth's humidity is
+// none of those, and neither is a glaciation growing on land.
+export function seaIsGoing(w, dg) {
+  if (!(Math.abs(dg.liquidRate ?? 0) * 1e6 > 0.01)) return false;
+  const escGyr = (w.escape?.water ?? 0) * 1e9 / Math.max(dg.d?.eoColumn ?? 1, 1e-9);
+  return skyHoldsSea(w, dg) || !!dg.lidded || escGyr > 1e-3;
+}
+
 export function reasonText(w, st, tr = enFormat) {
   // Declared up here rather than beside the clause that uses it: a const is in
   // the temporal dead zone until its own line runs, so a helper defined halfway
@@ -780,7 +807,7 @@ export function reasonText(w, st, tr = enFormat) {
     const perYear = w.escape.water / dg.d.eoColumn;
     if (perYear * 1e9 > 1e-3) {
       const [n, u] = perTime(perYear);
-      bits.push(tr('losing {0} oceans/{1}', n, u));
+      bits.push(tr('losing {0} oceans/{1}', n, tr(u)));
     }
   }
   // Where the sea is going, next to how much of it is going for good. Losing
@@ -794,12 +821,16 @@ export function reasonText(w, st, tr = enFormat) {
   // with the inventory: a hundredth of an ocean a gigayear is news on Earth and
   // noise on a world carrying five hundred, and a fixed threshold put a line on
   // the banner for both.
+  // And only once the sky is a reservoir the sea can go INTO. Modern Earth,
+  // warming, read "evaporating 52 oceans/Gyr" here: the humidity catching up
+  // with the temperature, real and bounded by a sky that holds 5e-5 of the
+  // ocean. See skyHoldsSea.
   const evap = dg.vapourRate ?? 0;
   const evapFloor = Math.max(1e-11, 5e-12 * (dg.totalWater ?? 0));
-  if ((dg.totalWater ?? 0) > 0.005 && Math.abs(evap) > evapFloor) {
+  if ((dg.totalWater ?? 0) > 0.005 && Math.abs(evap) > evapFloor && skyHoldsSea(w, dg)) {
     const [n, u] = perTime(Math.abs(evap));
-    bits.push(evap > 0 ? tr('evaporating {0} oceans/{1}', n, u)
-      : tr('condensing {0} oceans/{1}', n, u));
+    bits.push(evap > 0 ? tr('evaporating {0} oceans/{1}', n, tr(u))
+      : tr('condensing {0} oceans/{1}', n, tr(u)));
   }
   // And the ice at the bottom of a deep column, which on a big water world is
   // most of the inventory and is the answer to "where is all that water". Only
@@ -812,7 +843,7 @@ export function reasonText(w, st, tr = enFormat) {
     // floor melts in sixty-five megayears, so megayears is the unit the world is
     // actually living in. Same number, said in a length of time it fits into.
     const [n, u] = perTime(dg.iceRate ?? 0);
-    bits.push(tr('deep ice melting {0} oceans/{1}', n, u));
+    bits.push(tr('deep ice melting {0} oceans/{1}', n, tr(u)));
   }
   if (w.co2Frozen > 1e-3) {
     // Where it froze matters, and on a locked world the answer is not "here".

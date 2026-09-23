@@ -1,5 +1,36 @@
 # Review fixes — September 2026
 
+## September 23: a warming Earth is not evaporating its ocean, and Slovak units
+
+- **"Evaporating 52 oceans/Gyr" on modern Earth.** Reported from play, 175
+  years into the Earth preset with emissions on, with "Liquid water
+  −0.05 EO/Myr" in the readout beside it. The number is real — the vapour
+  column follows saturation, so a warming sky holds about 7% more water per
+  kelvin — but it is a bounded exchange, not a trend: Earth's whole sky holds
+  5e-5 of an ocean, and the rate stops the moment the warming does. Per
+  gigayear is a unit nothing about it can happen at. The banner line and the
+  readout tile now appear only once the sky holds a twentieth of a percent of
+  the water (`skyHoldsSea`: a sea surface near 60 °C on an Earth-sized
+  inventory, where the moist greenhouse begins), or the world is under a lid,
+  or water is leaving the planet. Over the Edge, a moist greenhouse heading
+  for its runaway, keeps its line. Self-test 3b2; the first draft of it also
+  blamed the ice sheets for the readout and was wrong — sea ice melting into
+  the ocean leaves their sum unchanged, and the tile was the same humidity
+  trend as the banner.
+- **Units in Slovak.** A Slovak page read "4.57 Gyr", "175 yr", "1 Myr / s",
+  "EO/Gyr", "30 % high ground", "1.00× Earth", "gravity … escape v". Every
+  time and rate the page composes at runtime goes through the dictionary now
+  (`r.`, `tis. r.`, `mil. r.`, `mld. r.`; the rate menu and its unit menu;
+  the readout's `EO/mld. r.`), the slider formatters' few English words are
+  swapped in `fmtValue`, and the numbers the page composes outside `tp()` —
+  readout tiles, value boxes, the cross-section, the derived line — take the
+  decimal comma through `localiseNumbers`, which leaves style attributes
+  alone. What the page prints parses back: "2 mil. r." in the rate box,
+  "40 % pevniny", "1,50 mld. r.", "2,5× Zem", "mŕtve". A language switch
+  rewrites the value boxes and the rate readout, which it did not before
+  (they were rewritten only when their value moved). Checked in a real
+  browser both ways.
+
 ## September 22, fifth push: Slovak that reads like Slovak
 
 - **The Slovak tables rewritten** in `altdev2` and `altdev`: shorter sentences,

@@ -6,7 +6,7 @@ import { SCENARIOS } from './game/scenarios.js';
 import { SLOTS, buildSaveFile, parseSaveFile, planImport } from './game/saves.js';
 import { RESTORE_CAP, pushRestore, findRestore, truncateAfter } from './game/timeline.js';
 import { captureWorld, applyWorld } from './game/snapshot.js';
-import { classify, reasonText, STATES } from './physics/classify.js';
+import { classify, reasonText, seaIsGoing, STATES } from './physics/classify.js';
 import { derive, maxWaterEO, waterForShareOfMass } from './physics/planet.js';
 import { scaleHeight } from './render/atmosphere.js';
 import { iceFraction } from './physics/radiation.js';
@@ -21,7 +21,7 @@ import { drawHistory, drawProfile, drawWater, drawPhase, historyTimeAtX, history
 import { loadDiscovered, saveDiscovered, buildLogUI, markFound } from './game/log.js';
 import { NS } from './game/storage.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
-import { t, tp, tx, applyStatic, setLang, currentLang, nextLang, onLang, LANGS } from './game/i18n.js';
+import { t, tp, tx, localiseNumbers, applyStatic, setLang, currentLang, nextLang, onLang, LANGS } from './game/i18n.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -373,7 +373,7 @@ function buildSliders() {
         c.type = 'button'; c.className = 'stop';
         c.textContent = st.n;
         c.dataset.v = String(stopValue(d, st));
-        c.title = `${t(d.label)}: ${d.fmt(stopValue(d, st), params)}`;
+        c.title = `${t(d.label)}: ${fmtValue(d, stopValue(d, st))}`;
         c.addEventListener('click', () => {
           // Through the same ceiling the slider and the typed box go through.
           // A stop wrote its number straight into params, which is how "10%
@@ -383,7 +383,7 @@ function buildSliders() {
           syncSliders();
           applyParams(d.key);
           markTouched();
-          toast(`${t(d.label)} — ${t(st.n)}, ${d.fmt(v, params)}`);
+          toast(`${t(d.label)} — ${t(st.n)}, ${fmtValue(d, v)}`);
         });
         row.appendChild(c);
       }
@@ -469,7 +469,7 @@ function commitTyped(d) {
   if (Math.abs(clamped - v) > Math.abs(v) * 1e-6) {
     e.out.classList.add('bad');
     setTimeout(() => e.out.classList.remove('bad'), 900);
-    toast(tp('{0} limited to {1}', t(d.label), d.fmt(clamped, params)));
+    toast(tp('{0} limited to {1}', t(d.label), fmtValue(d, clamped)));
   }
   applyParams(d.key);
 }
@@ -509,7 +509,7 @@ function markStops(d) {
     const st = d.stops[i];
     if (st?.share != null) {
       b.dataset.v = String(stopValue(d, st));
-      b.title = `${t(d.label)}: ${d.fmt(stopValue(d, st), params)}`;
+      b.title = `${t(d.label)}: ${fmtValue(d, stopValue(d, st))}`;
     }
   });
   for (const b of row.children) {
@@ -528,7 +528,7 @@ function markStops(d) {
 function writeControl(d, v) {
   const e = els[d.key];
   if (!e) return;
-  e.out.value = d.fmt(v, params);
+  e.out.value = fmtValue(d, v);
   if (!d.sub) return;
   const el = $(`#sub-${d.key}`);
   if (el) el.textContent = d.sub(v, params) || '';
@@ -654,7 +654,7 @@ function applyParams(key) {
           w.water.ocean *= f; w.water.seaIce *= f; w.water.landIce *= f; w.water.vapour *= f;
         }
         syncSliders();
-        toast(tp('{0} limited to {1}', t(wd.label), wd.fmt(cap, params)));
+        toast(tp('{0} limited to {1}', t(wd.label), fmtValue(wd, cap)));
       }
     }
     // The control shows the water still present: setWaterInventory scales the
@@ -926,15 +926,30 @@ function showRate(v) {
   const out = $('#rate-out'), unit = $('#rate-unit');
   if (!out || !unit) return;
   const { mult, n } = splitRate(v);
-  out.value = String(n);
+  out.value = localiseNumbers(String(n));
   unit.value = String(mult);
 }
 
+// Through tp(), so a Slovak page reads "4,57 mld. r." rather than "4.57 Gyr":
+// the unit is a word of the page's language and the decimal its convention.
 function fmtTime(y) {
-  if (y < 1e3) return `${y.toFixed(y < 10 ? 1 : 0)} yr`;
-  if (y < 1e6) return `${(y / 1e3).toFixed(y < 1e5 ? 1 : 0)} kyr`;
-  if (y < 1e9) return `${(y / 1e6).toFixed(y < 1e8 ? 1 : 0)} Myr`;
-  return `${(y / 1e9).toFixed(2)} Gyr`;
+  if (y < 1e3) return tp('{0} yr', y.toFixed(y < 10 ? 1 : 0));
+  if (y < 1e6) return tp('{0} kyr', (y / 1e3).toFixed(y < 1e5 ? 1 : 0));
+  if (y < 1e9) return tp('{0} Myr', (y / 1e6).toFixed(y < 1e8 ? 1 : 0));
+  return tp('{0} Gyr', (y / 1e9).toFixed(2));
+}
+// A slider's value box, in the page's language. The formatters in controls.js
+// speak English and know nothing of languages, which keeps the round-trip
+// checks on them simple; the few words they append are swapped here, and the
+// parser accepts both spellings back.
+const VALUE_WORDS = ['% high ground', 'Gyr from start', '× Earth', '× Sun', 'Gyr'];
+function fmtValue(d, v) {
+  let s = d.fmt(v, params);
+  if (s === 'none' || s === 'never' || s === 'dead') return t(s);
+  for (const word of VALUE_WORDS) {
+    if (s.endsWith(word)) { s = s.slice(0, -word.length) + t(word); break; }
+  }
+  return localiseNumbers(s);
 }
 // What the air is made of, by volume -- which for an ideal gas is just the
 // partial pressures over the total. Water vapour is in it, because on a warm
@@ -1029,7 +1044,7 @@ function lifeText(w) {
 // quantity. The label is what fits; the tooltip is what it means.
 function stat(k, v, cls = '', tip = '') {
   const title = tip ? ` title="${tip.replace(/"/g, '&quot;')}"` : '';
-  return `<div class="stat ${cls}"${title}><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  return `<div class="stat ${cls}"${title}><div class="k">${k}</div><div class="v">${localiseNumbers(v)}</div></div>`;
 }
 
 // A cross-section of the world, top to bottom, drawn from the same numbers the
@@ -1113,11 +1128,11 @@ function drawStructure(w, d, dg) {
     const [colour, label] = LAYER_STYLE[l.kind];
     const h = px[i];
     const bits = [l.kind === 'rock' ? '' : fmt(l.metres), temp(l.T),
-      l.note ? tp(l.note, ...l.noteArgs) : ''].filter(Boolean);
+      l.note ? tp(l.note, ...l.noteArgs) : ''].filter(Boolean).map(localiseNumbers);
     // Give pressure its own visible line rather than hiding it in a tooltip.
     // Minimum height, not fixed height: translated details can wrap safely.
-    const pressureText = l.P?.length>1 ? l.P.map(pressure).join(' → ')
-      : l.P?.length ? `${t('at rock top')}: ${pressure(l.P[0])}` : '';
+    const pressureText = localiseNumbers(l.P?.length>1 ? l.P.map(pressure).join(' → ')
+      : l.P?.length ? `${t('at rock top')}: ${pressure(l.P[0])}` : '');
     const full = [t(label), ...bits, pressureText].join(' · ').replace(/"/g, '&quot;');
     return `<div class="layer" title="${full}" style="min-height:${h.toFixed(1)}px;background:${colour}">`
       + `<span class="layer-name">${t(label)}</span>`
@@ -1173,7 +1188,7 @@ function updateReadout() {
   $('#stats').innerHTML =
     (dg.smallWaterworld ?
       stat(t(dg.hasWater ? 'Water lifetime' : 'Vapour residence time'), dg.totalWater <= 0 ? t('no water')
-        : dg.smallWaterworld.lifetime > 1e12 ? '> 1000 Gyr' : fmtTime(dg.smallWaterworld.lifetime), '',
+        : dg.smallWaterworld.lifetime > 1e12 ? t('> 1000 Gyr') : fmtTime(dg.smallWaterworld.lifetime), '',
         t('Remaining inventory divided by its current loss rate; not a promise of a liquid ocean.')) +
       stat(t('Water phase'), t(dg.totalWater <= 0 ? 'Dry'
         : !dg.hasWater ? 'Trace vapour'
@@ -1262,7 +1277,7 @@ function updateReadout() {
     // control is set in ages and not in elapsed time.
     ((w.params.realisticGeology || w.params.resurfacingAge > 0
       || (w.params.startAge ?? 4.567) !== 4.567)
-      ? stat(t('Planet age'), `${((w.params.startAge ?? 4.567) + w.time / 1e9).toFixed(3)}<small> Gyr</small>`)
+      ? stat(t('Planet age'), `${((w.params.startAge ?? 4.567) + w.time / 1e9).toFixed(3)}<small> ${t('Gyr')}</small>`)
       : '') +
     // Who lives here. Only shown once there is something to say -- a bare rock
     // does not need a line telling it that it is sterile.
@@ -1276,11 +1291,11 @@ function updateReadout() {
     // Earth's interior, enough to keep Io permanently molten.
     stat(t('Internal heat'), (() => {
       const f = dg.Fint, rel = f / 0.092;
-      const mag = f <= 0 ? 'none'
+      const mag = f <= 0 ? t('none')
         : f >= 1 ? `${f.toFixed(f < 10 ? 2 : 0)}<small> W/m²</small>`
         : `${(f * 1e3).toFixed(f * 1e3 < 10 ? 1 : 0)}<small> mW/m²</small>`;
       if (f <= 0) return mag;
-      return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}× Earth</small>`;
+      return `${mag}<small> · ${rel < 10 ? rel.toFixed(1) : rel.toFixed(0)}${t('× Earth')}</small>`;
     })(), dg.Fint > 20 ? 'warn' : '') +
     stat(t('Radiation model'), t(dg.smallWaterworld
       ? dg.smallWaterworld.weight<1 ? 'Blended atmosphere · automatic'
@@ -1296,7 +1311,7 @@ function updateReadout() {
       t('How far below the Simpson–Nakajima limit this world is running. Past it, no temperature balances and the runaway greenhouse begins.'))) +
     stat(t('Water left'), `${(dg.totalWater).toFixed(dg.totalWater < 1 ? 3 : 2)}<small> EO</small>`,
       w.water.lost > 0.02 ? 'warn' : '') +
-    stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/Gyr</small>` : t('negligible'),
+    stat(t('Water loss'), lossGyr > 1e-4 ? `${lossGyr.toFixed(3)}<small> EO/${t('Gyr')}</small>` : t('negligible'),
       lossGyr > 0.05 ? 'bad' : lossGyr > 1e-3 ? 'warn' : '') +
     (dg.smallWaterworld ? stat(t('Water supply'), t(dg.totalWater <= 0 ? 'None'
       : !dg.hasWater ? 'Residual vapour' : dg.Tmean < 273.15 ? 'Ice sublimation' : 'Evaporation'), '',
@@ -1308,10 +1323,12 @@ function updateReadout() {
     // different clock: a moist world loses it to space, a runaway boils it, a
     // buried ocean has it converted from above, and on the worlds where any of
     // that is happening the question a player has is how long the sea has. Only
-    // shown while it is actually moving -- on Earth it is noise around zero.
-    (Math.abs(dg.liquidRate ?? 0) * 1e6 > 0.01
+    // shown while it is actually moving somewhere: on Earth it is noise around
+    // zero, and on a warming Earth it is the humidity following the temperature
+    // -- which read "-0.05 EO/Myr" here, a bounded exchange quoted as a trend.
+    (seaIsGoing(w, dg)
       ? stat(t('Liquid water'), `${((dg.liquidRate > 0 ? -1 : 1) * Math.abs(dg.liquidRate) * 1e6)
-          .toFixed(Math.abs(dg.liquidRate) * 1e6 < 10 ? 2 : 0)}<small> EO/Myr</small>`,
+          .toFixed(Math.abs(dg.liquidRate) * 1e6 < 10 ? 2 : 0)}<small> EO/${t('Myr')}</small>`,
         dg.liquidRate > 0 ? 'warn' : '',
         t('How fast the liquid water is going — boiled, converted under a hot layer, or lost to space. Negative while the sea is disappearing, positive while it is coming back.'))
       : '');
@@ -1336,19 +1353,19 @@ function updateReadout() {
     + w.water.landIce + w.water.vapour);
   const layers = drawStructure(w, d, dg);
   const structure = columnSummary(layers);
-  $('#derived').innerHTML =
-    `<div>gravity <b>${d.g.toFixed(2)} m/s²</b></div>` +
-    `<div>radius <b>${(d.R / 6.371e6).toFixed(2)} R⊕</b></div>` +
+  $('#derived').innerHTML = localiseNumbers(
+    `<div>${t('gravity')} <b>${d.g.toFixed(2)} m/s²</b></div>` +
+    `<div>${t('radius')} <b>${(d.R / 6.371e6).toFixed(2)} R⊕</b></div>` +
     (rTr > d.R * 1.005
       ? `<div>${t('with envelope')} <b>${(rTr / 6.371e6).toFixed(2)} R⊕</b></div>` : '') +
     (xWater > 0
       ? `<div>${t('water by mass')} <b>${(xWater * 100).toFixed(0)}%</b></div>` : '') +
-    `<div>escape v <b>${(d.vesc / 1000).toFixed(1)} km/s</b></div>` +
+    `<div>${t('escape v')} <b>${(d.vesc / 1000).toFixed(1)} km/s</b></div>` +
     (structure.shellDepth > 0 ? `<div>${t('ice shell')} <b>${fmtDepth(structure.shellDepth)}</b></div>` : '') +
     `<div>${t('ocean')} <b>${fmtDepth(structure.liquidDepth)}</b></div>` +
     (structure.iceDepth > 0
       ? `<div>${t('then')} <b>${fmtDepth(structure.iceDepth)} ${t(structure.basePhase)}</b></div>` : '') +
-    (structure.superDepth > 0 ? `<div>${t('supercritical')} <b>${fmtDepth(structure.superDepth)}</b></div>` : '');
+    (structure.superDepth > 0 ? `<div>${t('supercritical')} <b>${fmtDepth(structure.superDepth)}</b></div>` : ''));
 
   syncLiveControls();
   $('#simtime').textContent = fmtTime(w.time);
@@ -1510,7 +1527,7 @@ adoptOldAutosave();
 function syncClocks(w) {
   const age = (w.params.startAge ?? 0) * 1e9 + w.time;
   const el = $('#worldage');
-  if (el) el.textContent = age >= 1e8 ? `${(age / 1e9).toFixed(2)} Gyr` : fmtTime(age);
+  if (el) el.textContent = age >= 1e8 ? tp('{0} Gyr', (age / 1e9).toFixed(2)) : fmtTime(age);
   const row = $('#since-row'), last = marks[marks.length - 1];
   if (!row) return;
   row.hidden = !last;
@@ -2262,7 +2279,7 @@ function syncBio() {
   left.classList.toggle('spent', dead);
   left.textContent = want <= 0 ? 'none'
     : dead ? 'dead'
-    : `${(alive).toFixed(alive < 0.1 ? 3 : 2)}× alive`;
+    : localiseNumbers(`${(alive).toFixed(alive < 0.1 ? 3 : 2)}× ${t('alive')}`);
 }
 
 // What is still dissolved in the mantle and crust, shown the same way the
@@ -2571,7 +2588,12 @@ function bindControls() {
   // because that is the unit the control is named in.
   const RATE_UNITS = { yr: 1, y: 1, a: 1, kyr: 1e3, ky: 1e3, ka: 1e3,
                        myr: 1e6, my: 1e6, ma: 1e6, gyr: 1e9, gy: 1e9, ga: 1e9,
-                       byr: 1e9, b: 1e9 };
+                       byr: 1e9, b: 1e9,
+                       // ...and what the Slovak page prints, dots and spaces
+                       // already stripped: "2 mil. r." arrives as "milr".
+                       r: 1, rok: 1, roky: 1, rokov: 1, tis: 1e3, tisr: 1e3, tisrokov: 1e3,
+                       mil: 1e6, milr: 1e6, milrokov: 1e6, mld: 1e9, mldr: 1e9, mldrokov: 1e9,
+                       mrd: 1e9 };
   const parseRate = (raw) => {
     const txt = String(raw).trim().toLowerCase().replace(',', '.').replace(/\/\s*s(ec(ond)?s?)?$/, '').trim();
     const m = txt.match(/^([-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?)\s*(.*)$/);
@@ -3193,7 +3215,7 @@ function relabel() {
         const st = d.stops[i];
         if (!st) return;
         c.textContent = t(st.n);
-        c.title = `${t(d.label)}: ${d.fmt(stopValue(d, st), params)}`;
+        c.title = `${t(d.label)}: ${fmtValue(d, stopValue(d, st))}`;
       });
     }
   }
@@ -3219,6 +3241,11 @@ function relabel() {
   // in whatever language it was opened in -- a Slovak blurb sitting under an
   // English heading on an English page. Re-run it for whatever is open.
   if (selectedState) selectState(selectedState);
+  // The value boxes and the rate readout carry units in the page's language
+  // and are rewritten only when their value moves, so a switch left "40 %
+  // pevniny" in an English box until the slider was next touched.
+  syncSliders();
+  showRate(sim.rate);
   renderMarks();
   renderEpochs();
   syncSlots();

@@ -5,7 +5,7 @@ import { EARTH, PREINDUSTRIAL, PRESETS } from './game/presets.js';
 import { volcanicActivity, derive, transitRadius, condensedRadius, radiusFromMass,
          waterRadiusFactor, waterMassFraction } from './physics/planet.js';
 import { volcanoLook } from './render/atmosphere.js';
-import { classify, reasonText } from './physics/classify.js';
+import { classify, reasonText, skyHoldsSea, seaIsGoing } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
          planetaryAlbedo, inhibitionMoleFraction, inhibitionFactor } from './physics/radiation.js';
 import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
@@ -395,6 +395,37 @@ function runChecks() {
     const hot = held(280 * 100);
     check('CO₂ alone does not run away at 100× pre-industrial (Ramirez 2014)',
       hot.diag.Tmean < 400, `${(hot.diag.Tmean - 273.15).toFixed(0)} °C at 2.8 % CO₂`);
+  }
+
+  // ---- 3b2. a warming Earth is not evaporating its ocean ---------------------
+  {
+    // Reported from play: modern Earth, 175 years in, read "evaporating 52
+    // oceans/Gyr" on the banner and "Liquid water -0.05 EO/Myr" in the readout.
+    // The number is real -- a warming sky holds about 7% more water per kelvin,
+    // and the model's vapour column follows saturation -- but it is a bounded
+    // exchange, not a trend: the whole sky holds 5e-5 of an ocean, so the rate
+    // stops the moment the warming does, and "per gigayear" is a unit nothing
+    // about it can happen at. The sea is going somewhere only when the sky
+    // holds enough of the water for its trend to be the sea's fate.
+    const spy = (str, ...a) => String(str).replace(/\{(\d+)\}/g, (m, i) => a[i]);
+    const modern = new Simulation({ ...PRESETS.earth.params });
+    for (const y of [10, 50, 100, 175, 300, 500]) modern.runYears(y - modern.world.time);
+    const w = modern.world, dg = w.diag;
+    const line = reasonText(w, classify(w), spy);
+    check('A warming Earth is not reported as evaporating its ocean',
+      !/evaporating|condensing/.test(line) && !skyHoldsSea(w, dg) && !seaIsGoing(w, dg),
+      `sky holds ${((w.water.vapour ?? 0) / dg.totalWater).toExponential(1)} of the water, `
+        + `humidity trend ${((dg.vapourRate ?? 0) * 1e9).toFixed(0)} EO/Gyr; "${line}"`);
+    // The line still comes back where the sea really is going into the sky:
+    // Over the Edge is a moist greenhouse heading for a runaway, its sky holds
+    // a thousandth of the ocean and grows, and that is a fate worth a sentence.
+    const edge = new Simulation({ ...PRESETS.brink.params });
+    edge.runYears(1e3);
+    const we = edge.world, dge = we.diag;
+    const edgeLine = reasonText(we, classify(we), spy);
+    check('\u2026while a runaway in progress still says where its sea is going',
+      /evaporating/.test(edgeLine) && skyHoldsSea(we, dge) && seaIsGoing(we, dge),
+      `sky holds ${((we.water.vapour ?? 0) / dge.totalWater).toExponential(1)}; "${edgeLine}"`);
   }
 
   // ---- 3c. ice sheets have inertia, and water has a critical point ----------

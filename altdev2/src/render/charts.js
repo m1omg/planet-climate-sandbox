@@ -5,7 +5,7 @@ import { waterworldFlux } from '../physics/waterworld.js';
 import { temperatureHistory } from '../physics/surface.js';
 // Chart furniture is prose too: axis ends, the legend and the two empty-state
 // lines were the last English left on a Slovak page.
-import { t } from '../game/i18n.js';
+import { t, tp } from '../game/i18n.js';
 
 const CSS = getComputedStyle(document.documentElement);
 const col = (n, fb) => (CSS.getPropertyValue(n) || fb).trim() || fb;
@@ -65,12 +65,13 @@ export const HISTORY_PAD = { l: 38, r: 8, t: 10, b: 18 };
 // resolution lost by going linear is given back where it is wanted: at full
 // zoom a pixel on a 4.567 Gyr world is 9 Myr, and at 64x it is 140 kyr.
 // Years, in as few characters as an axis end can spare.
+// Through tp(), so the unit is the page's and the decimal is its convention.
 function fmtSpan(yr) {
   const a = Math.abs(yr);
-  if (a >= 1e9) return `${(yr / 1e9).toFixed(2)} Gyr`;
-  if (a >= 1e6) return `${(yr / 1e6).toFixed(a >= 1e7 ? 0 : 1)} Myr`;
-  if (a >= 1e3) return `${(yr / 1e3).toFixed(0)} kyr`;
-  return `${yr.toFixed(0)} yr`;
+  if (a >= 1e9) return tp('{0} Gyr', (yr / 1e9).toFixed(2));
+  if (a >= 1e6) return tp('{0} Myr', (yr / 1e6).toFixed(a >= 1e7 ? 0 : 1));
+  if (a >= 1e3) return tp('{0} kyr', (yr / 1e3).toFixed(0));
+  return tp('{0} yr', yr.toFixed(0));
 }
 
 export function historyWindow(tMax, zoom = 1, pan = 1) {
