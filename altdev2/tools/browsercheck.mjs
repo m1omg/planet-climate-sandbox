@@ -560,17 +560,17 @@ try {
   // Any of the openings, because which one the line takes is a fact about the
   // world this check happens to be looking at: a planet with water describes the
   // descent through it ("atmosféra … oceán v priemere …"), a dry one reads
-  // "priemer na povrchu", and one whose sea has finished boiling reads
-  // "obloha … voda …". What is being checked is that none of them is in English.
+  // "povrch v priemere", and one whose sea has finished boiling reads
+  // "povrch … voda …". What is being checked is that none of them is in English.
   ok(slovak.lang === 'sk'
     && !/mean surface|sky \d|water \d|atmosphere \d|envelope \d|fluid \d/.test(slovak.reason)
     && !/boundary|ocean averages|equator|poles|imbalance/.test(slovak.reason)
-    && /priemer na povrchu|obloha .* voda |atmosféra |obal |tekutina |oceán v priemere /
+    && /povrch v priemere|povrch .* voda |atmosféra |obálka |tekutina |oceán v priemere /
       .test(slovak.reason),
     'The state banner’s subtitle is translated, not just its title', slovak.reason);
   ok(slovak.option === '0,5×' && /0,5×/.test(slovak.title || ''),
     'The pan-speed menu uses a Slovak decimal comma', `${slovak.option} · ${slovak.title}`);
-  ok(slovak.save.idle === 'Uložiť…' && slovak.save.armed === 'vyberte pozíciu',
+  ok(slovak.save.idle === 'Uložiť…' && slovak.save.armed === 'vyberte slot',
     'The Save button is Slovak in both of its states',
     `"${slovak.save.idle}" / "${slovak.save.armed}"`);
   // A label the panel cannot show is a label that names nothing. Slovak is
