@@ -869,7 +869,9 @@ if (created < 20) {
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
   const writes = [...src.matchAll(/\be\.out\.value\s*=/g)].length;
-  const inHelper = /function writeControl\(d, v\) \{[\s\S]*?e\.out\.value = d\.fmt\(v, params\);[\s\S]*?\n\}/.test(src);
+  // ...through fmtValue, which puts the formatter's few English words and its
+  // decimal point into the page's language.
+  const inHelper = /function writeControl\(d, v\) \{[\s\S]*?e\.out\.value = fmtValue\(d, v\);[\s\S]*?\n\}/.test(src);
   const both = (src.match(/writeControl\(d, /g) || []).length >= 2;
   if (writes !== 1 || !inHelper || !both) {
     console.log(`\x1b[31mFAIL\x1b[0m  a control's value is written in ${writes} places, `

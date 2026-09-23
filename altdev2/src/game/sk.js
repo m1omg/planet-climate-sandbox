@@ -608,10 +608,54 @@ export const SK = {
     'the fastest this goes — a planet’s whole life in ten seconds':
       'najvyššia rýchlosť — celý život planéty za desať sekúnd',
 
+    // ---- jednotky --------------------------------------------------------
+    // Čas a rýchlosť: rok, tisíc, milión a miliarda rokov. Skratky, lebo
+    // v hodinách a v ponuke rýchlosti je miesta málo; „r.“ je bežná skratka
+    // roka. To isté sa dá napísať späť do poľa rýchlosti („2 mil. r.“).
+    '{0} yr': '{0} r.',
+    '{0} kyr': '{0} tis. r.',
+    '{0} Myr': '{0} mil. r.',
+    '{0} Gyr': '{0} mld. r.',
+    'yr': 'r.',
+    'kyr': 'tis. r.',
+    'Myr': 'mil. r.',
+    'Gyr': 'mld. r.',
+    '> 1000 Gyr': '> 1000 mld. r.',
+    'yr / s': 'r./s',
+    'kyr / s': 'tis. r./s',
+    'Myr / s': 'mil. r./s',
+    'Gyr / s': 'mld. r./s',
+    '1 yr / s': '1 rok/s',
+    '10 yr / s': '10 rokov/s',
+    '100 yr / s': '100 rokov/s',
+    '1 kyr / s': '1 tis. r./s',
+    '10 kyr / s': '10 tis. r./s',
+    '100 kyr / s': '100 tis. r./s',
+    '500 kyr / s': '500 tis. r./s',
+    '1 Myr / s': '1 mil. r./s',
+    '5 Myr / s': '5 mil. r./s',
+    '10 Myr / s': '10 mil. r./s',
+    '25 Myr / s': '25 mil. r./s',
+    '50 Myr / s': '50 mil. r./s',
+    '100 Myr / s': '100 mil. r./s',
+    '250 Myr / s': '250 mil. r./s',
+    '500 Myr / s': '500 mil. r./s',
+    // Slová, ktoré formátovače posuvníkov pridávajú za číslo.
+    '× Earth': '× Zem',
+    '× Sun': '× Slnko',
+    '% high ground': '% pevniny',
+    'Gyr from start': 'mld. r. od začiatku',
+    'never': 'nikdy',
+    // Odvodené hodnoty pod posuvníkmi telesa.
+    'gravity': 'gravitácia',
+    'radius': 'polomer',
+    'escape v': 'úniková rýchlosť',
+
     // ---- pomenované hodnoty na posuvníkoch --------------------------------
     'dry': 'sucho',
     'none': 'nič',
-    'dead': 'bez života',
+    // Aj hodnota „mŕtvy“ vulkanizmus, nielen biosféra, preto stredný rod.
+    'dead': 'mŕtve',
     'ocean world': 'oceánsky svet',
     '10% water': '10 % vody',
     'Hycean': 'hyceánsky',

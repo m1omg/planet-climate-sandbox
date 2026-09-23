@@ -93,8 +93,18 @@ export function t(s) {
 // a full stop passes through as it is.
 const DECIMAL_COMMA = new Set(['sk']);
 function localiseNumber(a) {
-  return DECIMAL_COMMA.has(lang) && typeof a === 'string' && /^-?\d+\.\d+$/.test(a)
+  // A sign is part of a number: the imbalance arrives as "+0.7".
+  return DECIMAL_COMMA.has(lang) && typeof a === 'string' && /^[-+]?\d+\.\d+$/.test(a)
     ? a.replace('.', ',') : a;
+}
+
+// The same convention for text composed outside tp(): a readout tile, a
+// slider's value box, a layer of the cross-section. Only the digits are
+// touched, and only between tags, so a width in a style attribute stays CSS.
+export function localiseNumbers(s) {
+  if (!DECIMAL_COMMA.has(lang) || typeof s !== 'string') return s;
+  return s.split(/(<[^>]*>)/).map((part, i) => (i % 2 ? part
+    : part.replace(/(\d)\.(\d)/g, '$1,$2'))).join('');
 }
 
 export function tp(s, ...args) {

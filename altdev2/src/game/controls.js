@@ -339,7 +339,7 @@ export const SLIDERS = [
       </div>` },
   { g: 'surface', key: 'resurfacingAge', label: 'Resurfacing after', min: 0, max: 10, step: 0.01,
     fmt: (v) => v <= 0 ? 'never' : `${v.toFixed(2)} Gyr from start`,
-    units: { gyr: 1, gy: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
+    units: { gyr: 1, gy: 1, ga: 1, myr: 1e-3, my: 1e-3, mld: 1, mil: 1e-3 }, unitFor: () => ' Gyr',
     note: 'When the mantle turns over and everything dissolved in it comes up at once. Counted from <em>the start of the run</em>, not from the planet\u2019s formation — so it is always ahead of you and never behind. Venus\u2019s repaving is dated to roughly 700 Myr ago, an age of 3.85 Gyr; Early Venus starts at an age of 1.67, which is why that preset asks for 2.18 from its own start.' },
   { g: 'surface', key: 'resurfacingBoost', label: 'Resurfacing size', min: 1, max: 5000,
     log: true, fmt: (v) => `${v < 9.995 ? v.toFixed(2) : v.toFixed(0)}×`,
@@ -347,7 +347,7 @@ export const SLIDERS = [
     note: 'How much it multiplies volcanic outgassing by at its peak. Shaped as a smooth pulse so nothing in the solver meets a step change.' },
   { g: 'surface', key: 'startAge', label: 'Age at start', min: 0, max: 10, step: 0.01,
     fmt: (v) => `${v.toFixed(2)} Gyr`,
-    units: { gyr: 1, gy: 1, byr: 1, ga: 1, myr: 1e-3, my: 1e-3 }, unitFor: () => ' Gyr',
+    units: { gyr: 1, gy: 1, byr: 1, ga: 1, myr: 1e-3, my: 1e-3, mld: 1, mil: 1e-3 }, unitFor: () => ' Gyr',
     note: 'How old the planet already is when the clock starts — so a preset set in the deep past begins part-way along its own life rather than at the beginning of it. This is what the elapsed clock counts on from, and what the resurfacing age below is measured against. The solar system is 4.567 Gyr old.' },
 
   { g: 'surface', key: 'outgassing', label: 'Volcanic outgassing', min: 0, max: 20, log: true, zero: true,
@@ -391,7 +391,8 @@ export const SLIDERS = [
 export function parseValue(d, raw, current, p) {
   let t = String(raw).trim().toLowerCase().replace(',', '.');
   if (!t) return null;
-  if (t === 'none' || t === 'dead' || t === 'never' || t === '-') return 0;
+  // ...in either language the box can be showing.
+  if (['none', 'dead', 'never', '-', 'nič', 'mŕtve', 'nikdy', 'žiadne', 'žiadny'].includes(t)) return 0;
   const m = t.match(/^([-+]?(?:[0-9]*\.)?[0-9]+(?:e[-+]?[0-9]+)?)\s*(.*)$/);
   if (!m) return null;
   const n = parseFloat(m[1]);
