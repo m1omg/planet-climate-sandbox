@@ -208,7 +208,30 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
    browser smooth it rather than showing the pixels */
 body.software-render #planet{image-rendering:auto}
 
-#view-controls{position:absolute;right:16px;bottom:70px;z-index:4;display:flex;flex-direction:column;gap:6px}
+/* The rail stacks up the right-hand side, above the clock. Where "above the
+   clock" is has to be measured, not guessed: the clock sits 16px off the bottom
+   and is 64px tall on one row, so it owns 80px -- and the old hard-coded 70px
+   put the bottom of the rail ten pixels INSIDE it. The language button lost its
+   chrome and its lower half at every desktop size, which is how it was found.
+   The clock also wraps to two rows when the centre column is narrow, so even a
+   corrected constant would only have been right at one width.
+
+   --bar is the clock's measured height, kept current by a ResizeObserver in
+   main.js. The narrow-screen rule below has used it since the renderer button
+   was clipped the same way; this is the same fix for the layout that bug was
+   never noticed in.
+
+   The column deliberately does NOT wrap. Letting it wrap seemed like a free
+   safety net for a short window and cost the rail its right edge: a wrapping
+   flex box stops shrink-to-fitting to one button's width, so the column landed
+   in the middle of the planet. The short-window case already has an answer --
+   the rule below turns the rail horizontal under 600px tall -- and above that
+   the column and the clock fit together, which browsercheck hit-tests at four
+   window sizes. */
+#view-controls{
+  position:absolute;right:16px;bottom:calc(var(--bar,64px) + 26px);z-index:4;
+  display:flex;flex-direction:column;gap:6px;
+}
 #view-controls .icon-btn{width:32px;font-size:15px;line-height:1}
 #view-controls .icon-btn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
 #view-controls .icon-btn:disabled{opacity:.4}
@@ -262,7 +285,7 @@ body.software-render #planet{image-rendering:auto}
 /* ---------------- time bar ---------------- */
 #timebar{
   position:absolute;left:16px;right:16px;bottom:16px;z-index:4;
-  display:flex;align-items:center;gap:10px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   background:var(--panel);backdrop-filter:blur(18px);
   border:1px solid var(--line);border-radius:var(--radius);padding:9px 12px;
   box-shadow:0 10px 34px rgba(0,0,0,.45);
@@ -303,7 +326,20 @@ body.software-render #planet{image-rendering:auto}
 #since-row .t-label{color:var(--accent-2);opacity:.75}
 .mark-btn{flex:none;padding:0 9px;font-size:14px;line-height:1}
 .mark-btn.has-mark{color:var(--accent-2);border-color:var(--accent-2)}
-.rate{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+/* The container query further down wraps the clock below 1250px of stage, and
+   1250 was measured in English. Slovak labels are longer -- "spomaliť",
+   "rýchlo", "ZRÝCHLENIE ČASU" -- so at 1280, which is what a 1080p laptop at 150%
+   scaling actually gives you, one row stopped fitting before the query fired and
+   the fast button was clipped off the end of the bar. A breakpoint is a guess at
+   when the content will not fit, and the content is language-dependent.
+
+   So this asks the content instead. The minimum is what the row really needs,
+   capped at the bar's width: whenever it does not fit, the bar wraps and this
+   takes a row of its own, in any language, at any width. Below 1250 the query
+   still sets it full-width and nothing changes; min() rather than a bare
+   max-content because min-width beats max-width in flex sizing and would
+   otherwise push the row back out over the edge on a narrow stage. */
+.rate{display:flex;align-items:center;gap:9px;flex:1;min-width:min(100%,max-content)}
 .rate label{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-faint);flex:none}
 /* 60px was a nub. On one row at 760px of stage the slider is the only thing in
    .rate that can give, so it gave everything: label 113 + entry 140 + stops 229
