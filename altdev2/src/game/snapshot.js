@@ -89,6 +89,9 @@ export function captureWorld(w) {
     landIceMass: w.landIceMass,
     life: w.life ? { ...w.life } : null,
     co2Frozen: w.co2Frozen,
+    // The other gases condense too, and a save that dropped these would
+    // resume a frozen-out world with its air gone for good.
+    n2Frozen: w.n2Frozen, o2Frozen: w.o2Frozen, ch4Frozen: w.ch4Frozen,
     fossil: w.fossil,
     // The two industrial reservoirs. The aerosol clears in a decade and the
     // gases do not, and a save that dropped them would resume every world in
@@ -127,6 +130,7 @@ export function applyWorld(sim, s, params = s.params) {
   w.landIceMass = s.landIceMass ?? null;
   w.life = s.life ? { ...s.life } : { pro: 0, euk: 0 };
   w.co2Frozen = s.co2Frozen ?? 0;
+  w.n2Frozen = s.n2Frozen ?? 0; w.o2Frozen = s.o2Frozen ?? 0; w.ch4Frozen = s.ch4Frozen ?? 0;
   w.fossil = s.fossil ?? null;
   w.otherGHG = s.otherGHG ?? w.otherGHG;
   w.aerosol = s.aerosol ?? w.aerosol;

@@ -1,5 +1,27 @@
 # Review fixes — September 2026
 
+## September 25: nitrogen, oxygen and methane condense
+
+- **A bar of nitrogen in the air at 36 K.** Reported from play: a Titan-like
+  world moved out to no star at all, held at −234 °C by its interior, still
+  carried its 1000 mbar of N₂ in the atmosphere. Nitrogen boils at 77 K under
+  a bar and freezes at 63 K; only CO₂ had a vapour curve, so nothing else
+  could leave the air however cold the ground got. Nitrogen, oxygen and
+  methane now have the same two-branch curve CO₂ has (sublimation below the
+  triple point, liquid up to the critical point, pinned through the triple,
+  normal-boiling and critical points; within 3% of the measured curves, and
+  Pluto's 38 K ground sits under 1.8 Pa of nitrogen against the ~1 Pa
+  observed), and the polar-cap condensation step runs for all four gases,
+  each into its own reservoir (`n2Frozen`, `o2Frozen`, `ch4Frozen`), which
+  saves carry and the gas sliders reset. The reported world freezes its bar of
+  nitrogen out in a few thousand years and reads "1.000 bar N₂ frozen out"
+  instead of Titan-like; given a dim star that warms it past 77 K the air
+  comes back. Between 63 and 77 K the summary says "pooled as liquid" — the
+  coldest ground, where it collects, decides the phase. Titan itself, at 94 K
+  under 1.5 bar, keeps its nitrogen and its methane to four decimals. The
+  collapse state counts every condensed gas, and its blurb says so. Self-test
+  3j-4b (fails four ways with the loop restricted to CO₂).
+
 ## September 23: a warming Earth is not evaporating its ocean, and Slovak units
 
 - **"Evaporating 52 oceans/Gyr" on modern Earth.** Reported from play, 175
