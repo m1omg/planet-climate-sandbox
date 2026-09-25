@@ -33,10 +33,10 @@ export function applyLikeThePage(s, patch) {
   for (const [key, v] of Object.entries(patch)) {
     s.setParams({ [key]: v });
     const g = w.diag.d.g;
-    if (key === 'n2Bar') w.n2 = v * 1e5 / g;
-    if (key === 'o2Bar') w.o2 = v * 1e5 / g;
+    if (key === 'n2Bar') { w.n2 = v * 1e5 / g; w.n2Frozen = 0; }
+    if (key === 'o2Bar') { w.o2 = v * 1e5 / g; w.o2Frozen = 0; }
     if (key === 'co2Bar') { w.co2 = v * 1e5 / g; w.co2Frozen = 0; }
-    if (key === 'ch4Bar') w.ch4 = v * 1e5 / g;
+    if (key === 'ch4Bar') { w.ch4 = v * 1e5 / g; w.ch4Frozen = 0; }
     if (key === 'water') setWaterInventory(w, v);
     s.setParams({});
   }

@@ -1,6 +1,6 @@
 import { NBANDS, X, lockFactor } from './climate.js';
 import { iceFraction } from './radiation.js';
-import { clamp, T_CRIT_H2O as T_CRIT, P_CRIT_H2O } from './constants.js';
+import { clamp, T_CRIT_H2O as T_CRIT, P_CRIT_H2O, CONDENSIBLES, FROZEN_KEY } from './constants.js';
 
 // Every state the game can recognise, with the real science behind it.
 export const STATES = {
@@ -21,7 +21,7 @@ export const STATES = {
   waterbelt:  { name: 'Waterbelt / Slushball', color: '#8fd8d0', blurb: 'Ice reaches deep into the tropics but a narrow band of open equatorial ocean survives. A genuine stable state, and a far softer landing than a hard snowball.' },
   subglacial: { name: 'Ice-Covered Ocean',    color: '#6fa8c4', blurb: 'Frozen shut at the top and liquid underneath. The interior heat has to escape through the ice, and the only way out is a temperature gradient running from the surface up to the melting point at the base — which is what sets how thick the shell is: d = 651·ln(T_base/T_surface)/F (Ojakangas & Stevenson 1989). Everything below that stays liquid. Europa carries roughly 13 km of ice over 100 km of ocean on tidal heat alone, and a snowball Earth keeps about a kilometre of ice over a live ocean on radiogenic heat. The surface is dead; the sea is not. Note that ice Ih melts COLDER under pressure, so the warmest place in the shell is the bottom of it.' },
   snowball:   { name: 'Hard Snowball',        color: '#cfe8f5', blurb: 'Runaway ice–albedo feedback has frozen the planet pole to pole. Weathering stops, so volcanic CO2 accumulates unopposed for 5–50 Myr until 0.1–0.3 bar finally breaks the ice.' },
-  marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'The air itself has frozen onto the ground. Below the CO2 frost point the atmosphere condenses onto the winter pole faster than volcanoes can resupply it, and the pressure falls until what is left is in equilibrium with the caps. It is escapable: enough outgassing thickens the air, warms the poles above the frost point and puts the atmosphere back where it belongs.' },
+  marslike:   { name: 'Mars-Like Collapse',   color: '#c1785a', blurb: 'The air itself has condensed onto the ground. Below its frost point — CO2 on a Mars, nitrogen as frost or lakes on a world as cold as Pluto or Triton — the atmosphere condenses onto the winter pole faster than volcanoes can resupply it, and the pressure falls until what is left is in equilibrium with the caps. It is escapable: enough outgassing thickens the air, warms the poles above the frost point and puts the atmosphere back where it belongs.' },
   nightfrost: { name: 'Partial Nightside Freeze-Out', color: '#8c6fa8', blurb: 'The atmosphere is snowing out onto the dark side. A tidally locked world has a hemisphere that never sees its star, and if that face falls below the CO2 frost point the air condenses there permanently — no season ever brings it back, which is exactly what separates this from a Mars. The pressure falls until what is left balances against the night-side deposit, and the day side is still warm, wet and habitable while it happens: this is a planet with a working ocean under its sun and its atmosphere quietly draining away behind it. That sea is part of the state rather than a likely accompaniment to it — when the last of it goes the freeze-out is complete, and the world is a Nightside Freeze-Out. What stops it is heat transport. Thick enough air carries enough warmth to the night side to hold it above the frost point, so the collapse is self-limiting on a massive atmosphere and a trap for a thin one (Joshi et al. 1997; Wordsworth 2015; Turbet et al. 2018 for the TRAPPIST-1 planets).' },
   nightfrozen:{ name: 'Nightside Freeze-Out', color: '#6f6a8f', blurb: 'The collapse has finished. Most of the atmosphere is lying on the hemisphere that never sees the star as dry ice, and what water the planet has is frozen beside it — so there is no liquid water anywhere, and the day side is a bare desert under whatever thin remnant of air is left. It is the end state of a Partial Nightside Freeze-Out rather than a different mechanism, and the difference between the two is the sea: while there is one, the world is habitable and quietly losing its air behind it; once it is gone, there is nothing left to lose. Distinct from a Nightside-Trapped Desert, where the air is intact and only the water has migrated.' },
   titan:      { name: 'Titan-Like',         color: '#c9a86a', blurb: 'A frigid world under a thick nitrogen–methane haze, far too cold for liquid water but warm enough for other liquids to run on the surface.' },
@@ -318,7 +318,11 @@ export function classify(w) {
   let id;
   // A real collapse means a good part of the air is lying on the ground as
   // dry ice -- not merely that the atmosphere is thin and cold.
-  const collapsed = w.co2Frozen > 0.25 * (w.co2 + w.co2Frozen + 1e-12) && w.co2Frozen > 1e-3;
+  // Any of the gases: CO2 onto a Martian pole, or nitrogen onto a world that
+  // has cooled past 77 K -- Pluto's air collapses the same way.
+  const frozenAir = (w.co2Frozen ?? 0) + (w.n2Frozen ?? 0) + (w.o2Frozen ?? 0) + (w.ch4Frozen ?? 0);
+  const airborne0 = w.co2 + w.n2 + w.o2 + w.ch4;
+  const collapsed = frozenAir > 0.25 * (airborne0 + frozenAir + 1e-12) && frozenAir > 1e-3;
   // Buried Ocean goes above magma, and it is the only member of the Hycean
   // group that has to. The others are all cooler than 1400 K by construction,
   // but this one is a hot surface BY DEFINITION -- past the critical point is
@@ -845,17 +849,30 @@ export function reasonText(w, st, tr = enFormat) {
     const [n, u] = perTime(dg.iceRate ?? 0);
     bits.push(tr('deep ice melting {0} oceans/{1}', n, tr(u)));
   }
-  if (w.co2Frozen > 1e-3) {
-    // Where it froze matters, and on a locked world the answer is not "here".
-    // TRAPPIST-1b runs a 237 °C day side against a −186 °C night side: the CO2
-    // is frozen on ground that never sees the star, while the sunlit half is
-    // hot enough to melt lead. "Frozen out" on its own reads as a frozen
-    // planet, which is the opposite of what half of this one is.
-    const bar = (w.co2Frozen * dg.g) / 1e5;
-    const amount = bar >= 100 ? bar.toFixed(0) : bar >= 1 ? bar.toFixed(1) : bar.toFixed(3);
+  // Where it froze matters, and on a locked world the answer is not "here".
+  // TRAPPIST-1b runs a 237 °C day side against a −186 °C night side: the CO2
+  // is frozen on ground that never sees the star, while the sunlit half is
+  // hot enough to melt lead. "Frozen out" on its own reads as a frozen
+  // planet, which is the opposite of what half of this one is.
+  // And whether it is frost or a lake: above the triple point what condenses
+  // is liquid -- nitrogen between 63 and 77 K under a bar, methane in Titan's
+  // lakes -- and below it, ice. The coldest ground is where it collects, so
+  // that is the temperature that decides.
+  const Tcold = Math.min(...w.T);
+  const held = Object.keys(CONDENSIBLES)
+    .map((gas) => [gas, (w[FROZEN_KEY[gas]] ?? 0) * dg.g / 1e5])
+    .filter(([, bar]) => bar >= 1e-4)
+    .sort((a, b) => b[1] - a[1]);
+  for (const [gas, bar] of held) {
+    const cur = CONDENSIBLES[gas];
+    const amount = bar >= 100 ? bar.toFixed(0) : bar >= 1 ? bar.toFixed(1)
+      : bar >= 0.01 ? bar.toFixed(3) : bar.toPrecision(2);
+    const liquid = Tcold >= cur.tripleT;
     bits.push(dg.lam > 0.5
-      ? tr('{0} bar CO₂ frozen onto the night side', amount)
-      : tr('{0} bar CO₂ frozen out', amount));
+      ? (liquid ? tr('{0} bar {1} pooled as liquid on the night side', amount, cur.symbol)
+                : tr('{0} bar {1} frozen onto the night side', amount, cur.symbol))
+      : (liquid ? tr('{0} bar {1} pooled as liquid', amount, cur.symbol)
+                : tr('{0} bar {1} frozen out', amount, cur.symbol)));
   }
   return bits.join(' · ');
 }

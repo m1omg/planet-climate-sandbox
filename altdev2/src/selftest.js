@@ -8,7 +8,7 @@ import { volcanoLook } from './render/atmosphere.js';
 import { classify, reasonText, skyHoldsSea, seaIsGoing } from './physics/classify.js';
 import { runawayLimit, olr, hazeOpacity, hazeShortwave, ch4Shortwave, cloudWhiteness,
          planetaryAlbedo, inhibitionMoleFraction, inhibitionFactor } from './physics/radiation.js';
-import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep } from './physics/constants.js';
+import { T_CRIT_H2O, P_CRIT_H2O, steamOpacity, psatCO2, frostPointCO2, smoothstep, CONDENSIBLES } from './physics/constants.js';
 import { NBANDS, maxStep, lockFactor, slowRotation, insolationProfile,
          createWorld, update, supercriticalShare, setWaterInventory } from './physics/climate.js';
 import { SLIDERS, INTERIOR_BODIES, parseValue, toSlider, fromSlider, snapToDisplay } from './game/controls.js';
@@ -3774,6 +3774,81 @@ function runChecks() {
       `${frostPointCO2(600).toFixed(1)} K at 6 mbar`);
   }
 
+  // ---- 3j-4b. nitrogen, oxygen and methane condense too ---------------------
+  // A world that had cooled to 36 K on its own interior was still carrying a
+  // bar of nitrogen in the air, because only CO2 had a vapour curve. Nitrogen
+  // boils at 77 K under a bar and freezes at 63 K; the ground was forty
+  // kelvin colder than that and the air stayed up.
+  {
+    const nbp = [['n2', 77.355], ['o2', 90.188], ['ch4', 111.67]];
+    let worst = 0, at = '';
+    for (const [gas, Tb] of nbp) {
+      const err = Math.abs(CONDENSIBLES[gas].frostPoint(101325) - Tb);
+      if (err > worst) { worst = err; at = gas; }
+    }
+    check('Nitrogen, oxygen and methane boil where the tables say they do',
+      worst < 0.1, `worst ${worst.toFixed(2)} K (${at})`);
+    // Mid-range anchors off the NIST curves, all on the liquid branch.
+    const mid = [['n2', 100, 7.78], ['n2', 70, 0.386], ['o2', 120, 10.22], ['o2', 100, 2.54],
+                 ['ch4', 150, 10.4], ['ch4', 100, 0.344]];
+    let worstP = 0, atP = '';
+    for (const [gas, T, bar] of mid) {
+      const err = Math.abs(CONDENSIBLES[gas].psat(T) / 1e5 - bar) / bar;
+      if (err > worstP) { worstP = err; atP = `${gas} at ${T} K`; }
+    }
+    check('…and their vapour curves match the measured ones between',
+      worstP < 0.04, `worst ${(worstP * 100).toFixed(1)}% (${atP})`);
+    const pluto = CONDENSIBLES.n2.psat(38);
+    check('…Pluto’s nitrogen ice sits under about a pascal of its own vapour',
+      pluto > 0.5 && pluto < 5, `${pluto.toFixed(2)} Pa at 38 K, against ~1 Pa observed`);
+    check('…and above the critical point nothing condenses',
+      CONDENSIBLES.n2.psat(130) > 1e8 && CONDENSIBLES.n2.frostPoint(50e5) <= 126.2);
+
+    // The reported world: Titan-like, moved out to no star at all, a bar of
+    // nitrogen over ground held at 36 K by its interior.
+    const cold = { ...PRESETS.titan.params, mass: 0.81, insolation: 0, water: 0.06,
+                   landFraction: 0.8, n2Bar: 1, ch4Bar: 0, co2Bar: 33e-6, startT: 95 };
+    const s = new Simulation({ ...cold });
+    s.runYears(1e5);
+    const w = s.world, g = w.diag.g;
+    const bar = (col) => (col ?? 0) * g / 1e5;
+    check('A bar of nitrogen over ground at 36 K freezes onto it',
+      w.diag.Tmean < 60 && bar(w.n2) < 1e-3 && bar(w.n2Frozen) > 0.99,
+      `${w.diag.Tmean.toFixed(0)} K, ${bar(w.n2).toExponential(1)} bar in the air, ` +
+      `${bar(w.n2Frozen).toFixed(3)} bar on the ground`);
+    check('…the world is no longer called Titan-like',
+      classify(w, w.diag).id !== 'titan', classify(w, w.diag).id);
+    check('…and the summary says where the air went',
+      /1\.000 bar N₂ frozen out/.test(reasonText(w, w.diag)), reasonText(w, w.diag));
+    // Give it a dim star and the air comes back out of the frost.
+    s.setParams({ insolation: 0.02 });
+    s.runYears(1e5);
+    check('…and it comes back into the air when the ground warms past 77 K',
+      w.diag.Tmean > 80 && bar(w.n2) > 0.99 && bar(w.n2Frozen) < 1e-3,
+      `${w.diag.Tmean.toFixed(0)} K, ${bar(w.n2).toFixed(3)} bar in the air`);
+
+    // Between the triple point and the boiling point what condenses is liquid.
+    const lake = new Simulation({ ...cold, realisticGeology: false, internalHeat: 1.0 });
+    lake.runYears(1e5);
+    const lw = lake.world;
+    check('Between 63 and 77 K the nitrogen pools as liquid, and the summary says so',
+      lw.diag.Tmean > 63.2 && lw.diag.Tmean < 77 && bar(lw.n2Frozen) > 0.5
+        && /N₂ pooled as liquid/.test(reasonText(lw, lw.diag)),
+      `${lw.diag.Tmean.toFixed(1)} K, ${bar(lw.n2Frozen).toFixed(3)} bar condensed: ` +
+      reasonText(lw, lw.diag));
+
+    // Titan itself is warmer than its nitrogen's boiling point at 1.5 bar, and
+    // its methane is well under saturation: nothing there should move.
+    const t = new Simulation({ ...PRESETS.titan.params });
+    t.runYears(1e5);
+    const tw = t.world, tg = tw.diag.g;
+    check('…while Titan keeps its 1.5 bar of nitrogen and its methane',
+      Math.abs(tw.n2 * tg / 1e5 - 1.5) < 0.01 && tw.ch4 * tg / 1e5 > 0.045
+        && (tw.n2Frozen ?? 0) * tg / 1e5 < 1e-4 && (tw.ch4Frozen ?? 0) * tg / 1e5 < 1e-4,
+      `${(tw.n2 * tg / 1e5).toFixed(3)} bar N2, ${(tw.ch4 * tg / 1e5).toFixed(4)} bar CH4 ` +
+      `at ${tw.diag.Tmean.toFixed(0)} K`);
+  }
+
   // ---- 3j-5. internal heat ---------------------------------------------------
   // The model used to be heated by starlight alone. GJ 1132 b is modelled at
   // 80 W/m2 of tidal flux, ~1000x Earth's, which puts a magma ocean under a few
@@ -3966,7 +4041,8 @@ function runChecks() {
     {
       const totalC = (w) => {
         const k = w.weathering?.kappa ?? 1;
-        return (k * w.co2 + (w.co2Frozen ?? 0) + (w.ch4 ?? 0) * 44 / 16 + (w.carbonDeep ?? 0))
+        return (k * w.co2 + (w.co2Frozen ?? 0) + ((w.ch4 ?? 0) + (w.ch4Frozen ?? 0)) * 44 / 16
+          + (w.carbonDeep ?? 0))
           * w.diag.g / 1e5;
       };
       const budget = carbonBudget(1) * 9.81 / 1e5;

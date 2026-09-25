@@ -141,7 +141,7 @@ export function createWorld(params) {
     // The primordial envelope, captured from the disc rather than outgassed,
     // and zero on every world this model could build before now.
     h2: 0, he: 0,
-    co2Frozen: 0,
+    co2Frozen: 0, n2Frozen: 0, o2Frozen: 0, ch4Frozen: 0,
     water: { ocean: 0, ice: 0, vapour: 0, lost: 0 },  // Earth oceans
     diag: null,
     history: [],
@@ -167,7 +167,7 @@ export function resetWorld(w, params) {
   const fHe = clamp(params.heliumFrac ?? 0, 0, 1);
   w.h2 = pEnv * (1 - fHe) * 1e5 / d.g;
   w.he = pEnv * fHe * 1e5 / d.g;
-  w.co2Frozen = 0;
+  w.co2Frozen = 0; w.n2Frozen = 0; w.o2Frozen = 0; w.ch4Frozen = 0;
   w.water = params.startWithSteam
     ? { ocean: 0, seaIce: 0, landIce: 0, vapour: params.water, lost: 0 }
     : { ocean: params.water, seaIce: 0, landIce: 0, vapour: 0, lost: 0 };
