@@ -26,7 +26,7 @@ export function sanitizeParams(p) {
   return out;
 }
 export const NUMERIC_FIELDS = ['time','waterInitial','iceSheet','hotLayer','coldT',
-  'landIceMass','co2Frozen','otherGHG','aerosol','carbonDeep','bio','fossil',
+  'landIceMass','co2Frozen','n2Frozen','o2Frozen','ch4Frozen','otherGHG','aerosol','carbonDeep','bio','fossil',
   'industrial','co2','n2','o2','ch4','h2','he','euk','eukReady','ch4Escape','h2Rate','dtPrev'];
 const runtimeScalars = new Set(['dtPrev','trustOver','ringing','lastMove','insolationTarget',
   'insolationRate','o2Rate','ch4Source','ch4Tau','iceDeep','iceRate',

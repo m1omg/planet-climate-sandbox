@@ -130,3 +130,54 @@ export function frostPointCO2(pPa) {
   if (pPa >= CO2_TRIPLE_P) return CO2_LIQ_B / (CO2_LIQ_A - Math.log(pPa));
   return 3167.8 / Math.log(1.2264e12 / pPa);
 }
+
+// --- the other gases condense too ------------------------------------------
+// Nitrogen boils at 77 K under a bar and freezes at 63 K; oxygen and methane
+// are not far off. A world that had cooled to 36 K on its own interior was
+// still carrying a bar of nitrogen in the air, because only CO2 had a vapour
+// curve. Each gas gets the same two-branch treatment as CO2 above: a
+// Clausius-Clapeyron sublimation curve below the triple point (Pluto at 38 K
+// sits at about 2 Pa of nitrogen on it, against the ~1 Pa observed), and a
+// liquid branch above it pinned through the triple point, the normal boiling
+// point and the critical point. Against the measured curves that is within 2%
+// over most of the liquid range and 3% at the worst (methane at 150 K); more
+// than good enough to say whether a bar of air is on the ground or in the sky.
+// Hydrogen and helium are left out: an envelope is modelled as an envelope,
+// and hydrogen at 20 K is not a world this model reaches.
+const ATM = 101325;
+function twoPoint(T1, P1, T2, P2) {
+  const B = Math.log(P2 / P1) / (1 / T1 - 1 / T2);
+  return [Math.log(P1) + B / T1, B];
+}
+function condensible(symbol, Tt, Pt, Tb, Tc, Pc, hSub) {
+  const [aLow, bLow] = twoPoint(Tt, Pt, Tb, ATM);
+  const [aHigh, bHigh] = twoPoint(Tb, ATM, Tc, Pc);
+  const kSub = hSub / 8.314;
+  return {
+    symbol, tripleT: Tt, tripleP: Pt, boilT: Tb, critT: Tc, critP: Pc,
+    psat(T) {
+      if (T >= Tc) return 1e9;
+      if (T >= Tb) return Math.exp(aHigh - bHigh / T);
+      if (T >= Tt) return Math.exp(aLow - bLow / T);
+      return Pt * Math.exp(-kSub * (1 / T - 1 / Tt));
+    },
+    frostPoint(pPa) {
+      if (pPa <= 0) return 0;
+      if (pPa >= Pc) return Tc;
+      if (pPa >= ATM) return bHigh / (aHigh - Math.log(pPa));
+      if (pPa >= Pt) return bLow / (aLow - Math.log(pPa));
+      return 1 / (1 / Tt - Math.log(pPa / Pt) / kSub);
+    },
+  };
+}
+// Triple point, normal boiling point, critical point (NIST), and the enthalpy
+// of sublimation near the triple point in J/mol (vaporisation plus fusion).
+export const CONDENSIBLES = {
+  co2: { symbol: 'CO₂', tripleT: CO2_TRIPLE_T, tripleP: CO2_TRIPLE_P, boilT: 194.7,
+         critT: CO2_CRIT_T, critP: CO2_CRIT_P, psat: psatCO2, frostPoint: frostPointCO2 },
+  n2:  condensible('N₂',  63.151, 12.52e3,  77.355, 126.19, 3.3958e6, 7.0e3),
+  o2:  condensible('O₂',  54.361, 146.3,    90.188, 154.58, 5.043e6,  7.7e3),
+  ch4: condensible('CH₄', 90.694, 11.696e3, 111.67, 190.56, 4.599e6,  9.6e3),
+};
+// Where each gas's condensed reservoir lives on the world object.
+export const FROZEN_KEY = { co2: 'co2Frozen', n2: 'n2Frozen', o2: 'o2Frozen', ch4: 'ch4Frozen' };

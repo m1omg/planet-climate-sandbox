@@ -1,5 +1,5 @@
 import {
-  clamp, smoothstep, psatH2O, psatCO2, frostPointCO2, YEAR,
+  clamp, smoothstep, psatH2O, CONDENSIBLES, FROZEN_KEY, YEAR,
   OUTGAS_EARTH, CARBON_RESERVOIR_FACTOR, CO2_EARTH_COL, XUV_FRACTION_SUN, G_EARTH, M_EARTH,
 } from './constants.js';
 import { iceFraction } from './radiation.js';
@@ -1117,24 +1117,38 @@ export function stepVolatiles(w, dtYears) {
     }
   }
 
-  // --- CO2 condensation onto polar caps (Mars-like collapse) ---------------
-  let coldFrac = 0, Tcold = 1e9;
+  // --- condensation onto the cold ground (Mars-like collapse) ---------------
+  // CO2 onto Mars's winter pole is the familiar case, but nitrogen, oxygen and
+  // methane have frost points too, and a world that has cooled far enough
+  // freezes them out the same way: each gas comes out of the air wherever a
+  // band is below its frost point at the current partial pressure, until what
+  // is left is in equilibrium with the coldest ground, and goes back into the
+  // air when that ground warms. Pluto's atmosphere does exactly this over its
+  // year. What has condensed is held per gas, so a warming world gives back
+  // the right one.
+  let Tcold = 1e9;
   for (let i = 0; i < NBANDS; i++) { if (w.T[i] < Tcold) Tcold = w.T[i]; }
-  const pCO2Pa = w.co2 * dg.g;
-  const pEq = psatCO2(Tcold);
   const tau = 2000; // years
   const relax = 1 - Math.exp(-dtYears / tau);
-  if (pCO2Pa > pEq * 1.001) {
-    for (let i = 0; i < NBANDS; i++) if (w.T[i] < frostPointCO2(pCO2Pa)) coldFrac += 1 / NBANDS;
-    if (coldFrac > 0) {
-      const target = pEq / dg.g;
-      const move = (w.co2 - target) * relax * clamp(coldFrac * 3, 0, 1);
-      w.co2 -= move; w.co2Frozen += move;
+  for (const gas of Object.keys(CONDENSIBLES)) {
+    const key = FROZEN_KEY[gas];
+    const cur = CONDENSIBLES[gas];
+    const pPa = w[gas] * dg.g;
+    const pEq = cur.psat(Tcold);
+    if (pPa > pEq * 1.001) {
+      const frost = cur.frostPoint(pPa);
+      let coldFrac = 0;
+      for (let i = 0; i < NBANDS; i++) if (w.T[i] < frost) coldFrac += 1 / NBANDS;
+      if (coldFrac > 0) {
+        const target = pEq / dg.g;
+        const move = (w[gas] - target) * relax * clamp(coldFrac * 3, 0, 1);
+        w[gas] -= move; w[key] = (w[key] ?? 0) + move;
+      }
+    } else if (w[key] > 0) {
+      const target = Math.min(w[key], (pEq / dg.g - w[gas]));
+      const move = Math.max(0, target) * relax;
+      w[gas] += move; w[key] -= move;
     }
-  } else if (w.co2Frozen > 0) {
-    const target = Math.min(w.co2Frozen, (pEq / dg.g - w.co2));
-    const move = Math.max(0, target) * relax;
-    w.co2 += move; w.co2Frozen -= move;
   }
 
   // --- atmospheric escape of the background gas ---------------------------
