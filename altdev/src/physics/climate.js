@@ -88,7 +88,7 @@ export function createWorld(params) {
     T: new Float64Array(NBANDS),
     time: 0,                    // years
     co2: 0, n2: 0, ch4: 0, o2: 0,   // column masses, kg/m^2
-    co2Frozen: 0,
+    co2Frozen: 0, n2Frozen: 0, o2Frozen: 0, ch4Frozen: 0,
     water: { ocean: 0, ice: 0, vapour: 0, lost: 0 },  // Earth oceans
     diag: null,
     history: [],
@@ -105,7 +105,7 @@ export function resetWorld(w, params) {
   w.co2 = params.co2Bar * 1e5 / d.g;
   w.ch4 = params.ch4Bar * 1e5 / d.g;
   w.o2 = (params.o2Bar ?? 0) * 1e5 / d.g;
-  w.co2Frozen = 0;
+  w.co2Frozen = 0; w.n2Frozen = 0; w.o2Frozen = 0; w.ch4Frozen = 0;
   w.water = params.startWithSteam
     ? { ocean: 0, seaIce: 0, landIce: 0, vapour: params.water, lost: 0 }
     : { ocean: params.water, seaIce: 0, landIce: 0, vapour: 0, lost: 0 };

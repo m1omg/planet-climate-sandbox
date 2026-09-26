@@ -551,10 +551,12 @@ function applyParams(key) {
   sim.setParams({ [key]: params[key] });
   if (RESERVOIR_KEYS.has(key)) {
     const d = derive(w.params);
-    if (key === 'n2Bar') w.n2 = params.n2Bar * 1e5 / d.g;
-    if (key === 'o2Bar') w.o2 = params.o2Bar * 1e5 / d.g;
+    // Setting a gas sets the whole of it: what had condensed onto the
+    // ground is part of the inventory the slider replaces.
+    if (key === 'n2Bar') { w.n2 = params.n2Bar * 1e5 / d.g; w.n2Frozen = 0; }
+    if (key === 'o2Bar') { w.o2 = params.o2Bar * 1e5 / d.g; w.o2Frozen = 0; }
     if (key === 'co2Bar') { w.co2 = params.co2Bar * 1e5 / d.g; w.co2Frozen = 0; }
-    if (key === 'ch4Bar') w.ch4 = params.ch4Bar * 1e5 / d.g;
+    if (key === 'ch4Bar') { w.ch4 = params.ch4Bar * 1e5 / d.g; w.ch4Frozen = 0; }
     if (key === 'mass') {
       w.n2 = params.n2Bar * 1e5 / d.g; w.co2 = params.co2Bar * 1e5 / d.g;
       w.o2 = params.o2Bar * 1e5 / d.g;

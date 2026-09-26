@@ -21,6 +21,9 @@
   under 1.5 bar, keeps its nitrogen and its methane to four decimals. The
   collapse state counts every condensed gas, and its blurb says so. Self-test
   3j-4b (fails four ways with the loop restricted to CO₂).
+- **The same in `altdev`**, which shares the CO₂-only condensation step:
+  the vapour curves, the per-gas reservoirs, the collapse state, the summary
+  line and its Slovak, and self-test 3j-4b, ported unchanged.
 
 ## September 23: a warming Earth is not evaporating its ocean, and Slovak units
 
